@@ -2,6 +2,7 @@ import { useRef, useCallback } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import SitePlan, { COLORS } from './components/SitePlan.jsx'
+import ProgramElements from './components/ProgramElements.jsx'
 import Panel from './components/Panel.jsx'
 import { LOT_CENTROID } from './data/survey.js'
 
@@ -31,7 +32,7 @@ export default function App() {
     <div className="app">
       <header className="titlebar">
         <span className="title">LOT 514 · VILLA-RAMA EAST PHASE V · PALMVIEW, TX</span>
-        <span className="subtitle">SITE PLAN REVIEW — PHASE 1: BOUNDARY / STREETS / SETBACKS</span>
+        <span className="subtitle">SITE PLAN REVIEW — PHASE 2: PROGRAM LAYOUT (FOOTPRINTS ESTIMATED)</span>
         <nav className="views">
           {Object.keys(VIEW_PRESETS).map((name) => (
             <button key={name} onClick={() => applyView(name)}>
@@ -46,7 +47,10 @@ export default function App() {
           gl={{ antialias: true, preserveDrawingBuffer: true }}
         >
           <color attach="background" args={[COLORS.bg]} />
+          <ambientLight intensity={2.1} />
+          <directionalLight position={[-150, 300, -200]} intensity={1.4} />
           <SitePlan />
+          <ProgramElements />
           <OrbitControls
             ref={controlsRef}
             makeDefault

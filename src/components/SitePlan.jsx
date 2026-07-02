@@ -73,12 +73,13 @@ function SetbackEnvelope() {
       {SETBACK_CORNERS.map(([ax, az], i) => {
         const [bx, bz] = SETBACK_CORNERS[(i + 1) % 4]
         const angle = Math.atan2(bz - az, bx - ax)
-        // nudge the label toward lot interior so it sits inside the dashed line
+        // nudge the label outward so it sits between the dashed line and the
+        // property line, clear of the buildable area
         const nx = -(bz - az)
         const nz = bx - ax
         const l = Math.hypot(nx, nz)
         const toC = (LOT_CENTROID[0] - (ax + bx) / 2) * nx + (LOT_CENTROID[1] - (az + bz) / 2) * nz
-        const s = (toC > 0 ? 1 : -1) * 6
+        const s = (toC > 0 ? -1 : 1) * 4
         return (
           <FlatLabel
             key={i}
@@ -214,11 +215,11 @@ export default function SitePlan() {
       <PropertyLine />
       <SetbackEnvelope />
 
-      {/* Lot identity */}
-      <FlatLabel x={LOT_CENTROID[0]} z={LOT_CENTROID[1] - 4} size={11} bold>
+      {/* Lot identity — kept clear of the program layout */}
+      <FlatLabel x={150} z={27} angle={Math.atan2(19.22, 220.76)} size={7} bold>
         LOT 514
       </FlatLabel>
-      <FlatLabel x={LOT_CENTROID[0]} z={LOT_CENTROID[1] + 7} size={4.5} color="#5a6069">
+      <FlatLabel x={151} z={33} angle={Math.atan2(19.22, 220.76)} size={3.2} color="#5a6069">
         ±{Math.round(LOT_AREA_SF).toLocaleString()} SF · {(LOT_AREA_SF / 43560).toFixed(2)} AC
       </FlatLabel>
 

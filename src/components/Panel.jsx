@@ -4,6 +4,7 @@ import {
   LOT_AREA_SF,
   STREET_WIDTH_ILLUSTRATIVE,
 } from '../data/survey.js'
+import { PROGRAM, COVERED_AREA_SF } from '../data/program.js'
 
 function Row({ k, v }) {
   return (
@@ -31,6 +32,15 @@ export default function Panel() {
         <div className="legend-item">
           <span className="swatch fill-lot" /> Lot 514
         </div>
+        <div className="legend-item">
+          <span className="swatch fill-bldg" /> Structure (est. footprint)
+        </div>
+        <div className="legend-item">
+          <span className="swatch fill-water" /> Pool water
+        </div>
+        <div className="legend-item">
+          <span className="swatch fill-green" /> Muro verde / kids play
+        </div>
       </section>
 
       <section>
@@ -53,6 +63,22 @@ export default function Panel() {
         <p className="note">
           Arc fit through recorded PC/PT at R=50'. Small residual vs recorded Δ/L
           reflects rounding in the plat coordinates.
+        </p>
+      </section>
+
+      <section>
+        <h2>PROGRAM — ESTIMATED</h2>
+        {PROGRAM.map((e) => (
+          <Row key={e.id} k={e.name} v={`${e.w}'×${e.d}'`} />
+        ))}
+        <Row k="MURO VERDE" v="arc · 9' tall" />
+        <div className="row total">
+          <span className="k">Covered area (roofed)</span>
+          <span className="v">{COVERED_AREA_SF.toLocaleString()} sf</span>
+        </div>
+        <p className="note">
+          Footprints from an undimensioned architect plan — treat as editable.
+          Building heights assumed for visualization. Pool deck width assumed 8'.
         </p>
       </section>
 

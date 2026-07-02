@@ -78,6 +78,10 @@ html, body, #root { height: 100%; margin: 0; }
 .line-green-dash { border-top: 2px dashed var(--green); height: 0; }
 .fill-street { background: #c7ccd2; border: 1px solid var(--hair); }
 .fill-lot { background: #f8f7f2; border: 1px solid var(--hair); }
+.fill-bldg { background: #ece7dc; border: 1px solid var(--ink); }
+.fill-water { background: #8fd8e2; border: 1px solid #2b7a8c; }
+.fill-green { background: #7fae7a; border: 1px solid #3e5c3a; }
+.row.total { border-top: 1px solid var(--hair); margin-top: 4px; padding-top: 4px; }
 
 /* ── in-scene labels (drei Html transform) ─────────────── */
 .lbl {
