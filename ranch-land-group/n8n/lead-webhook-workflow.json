@@ -1,0 +1,86 @@
+{
+  "name": "Ranch Land Group — Lead Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ranch-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-in",
+      "name": "Webhook (form landing)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "ranch-lead"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body ?? $input.first().json;\nconst telefono = String(b.tel ?? b.telefono ?? '').replace(/\\D/g, '');\nconst interes = b.interes ?? b.proposito ?? '';\nlet tag = b.tag;\nif (!['inversionista','cazador','lista_espera'].includes(tag)) {\n  if (interes === 'inversion' || interes === 'ambos') tag = 'inversionista';\n  else if (interes === 'caza') tag = 'cazador';\n  else tag = 'lista_espera';\n}\nif (!b.nombre || telefono.length < 10) {\n  throw new Error('nombre y tel son obligatorios');\n}\nreturn [{ json: {\n  nombre: String(b.nombre).trim(),\n  telefono,\n  email: (b.email ?? '').trim() || null,\n  fuente: (b.fuente ?? 'landing-568').trim(),\n  tag,\n  proposito: interes || null\n}}];"
+      },
+      "id": "map-lead",
+      "name": "Normalizar lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/buyer_leads?on_conflict=telefono,fuente",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "supabase-insert",
+      "name": "Guardar en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "fromEmail": "leads@ranchlandgroup.com",
+        "toEmail": "rolando@alto-realtygroup.com",
+        "subject": "=🤠 Nuevo lead {{ $('Normalizar lead').item.json.tag }}: {{ $('Normalizar lead').item.json.nombre }}",
+        "text": "=Nuevo lead ({{ $('Normalizar lead').item.json.fuente }})\nNombre: {{ $('Normalizar lead').item.json.nombre }}\nWhatsApp: +{{ $('Normalizar lead').item.json.telefono }}\nCorreo: {{ $('Normalizar lead').item.json.email }}\nTag: {{ $('Normalizar lead').item.json.tag }}\nResponder: https://wa.me/{{ $('Normalizar lead').item.json.telefono }}",
+        "options": {}
+      },
+      "id": "notify-email",
+      "name": "Avisar a Rolando (email)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Webhook (form landing)": { "main": [[{ "node": "Normalizar lead", "type": "main", "index": 0 }]] },
+    "Normalizar lead": { "main": [[{ "node": "Guardar en Supabase", "type": "main", "index": 0 }]] },
+    "Guardar en Supabase": { "main": [[{ "node": "Avisar a Rolando (email)", "type": "main", "index": 0 }]] },
+    "Avisar a Rolando (email)": { "main": [[{ "node": "Responder 200", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
