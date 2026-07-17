@@ -1,0 +1,183 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: radial-gradient(ellipse at 50% -10%, #3a2414 0%, #1c130c 45%, #0e0a07 100%);
+  color: #f4ead9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#beerApp {
+  position: relative;
+  height: 100dvh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+}
+
+.bb-header {
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.bb-header h1 {
+  margin: 0;
+  font-size: clamp(20px, 6vw, 28px);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.bb-sub {
+  margin: 4px 0 0;
+  font-size: clamp(11px, 3vw, 13px);
+  color: #c9b393;
+  max-width: 320px;
+}
+
+.bb-stage {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+#beerSvg {
+  height: 100%;
+  max-height: 60vh;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.45));
+}
+
+.bb-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.bb-empty.hidden {
+  opacity: 0;
+}
+
+.bb-empty-text {
+  background: rgba(12, 9, 6, 0.72);
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: clamp(16px, 5vw, 20px);
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.bb-hud {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 18px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #d8c4a2;
+  opacity: 0.85;
+  margin-top: 6px;
+}
+
+.bb-controls {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.bb-controls button,
+.bb-start-card button {
+  font: inherit;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: linear-gradient(180deg, #ffcf52, #e79b0e);
+  color: #2b1a05;
+  box-shadow: 0 3px 0 #a8690a, 0 6px 14px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.bb-controls button:active,
+.bb-start-card button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #a8690a, 0 3px 8px rgba(0, 0, 0, 0.35);
+}
+
+#muteBtn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4ead9;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.bb-start {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 7, 4, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.bb-start.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.bb-start-card {
+  text-align: center;
+  max-width: 320px;
+  padding: 28px 26px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #241811, #17100a);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bb-start-emoji {
+  font-size: 46px;
+  margin-bottom: 4px;
+}
+
+.bb-start-card h2 {
+  margin: 0 0 8px;
+}
+
+.bb-start-card p {
+  margin: 0 0 18px;
+  color: #c9b393;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.bb-note {
+  margin-top: 12px !important;
+  font-size: 12px !important;
+  color: #9a8567 !important;
+  min-height: 14px;
+}
+
+#liquidRect {
+  transition: fill 0.3s ease;
+}

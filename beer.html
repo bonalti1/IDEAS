@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <title>Tilt &amp; Chug 🍺</title>
+    <link rel="stylesheet" href="/src/beer/beer.css" />
+  </head>
+  <body>
+    <div id="beerApp">
+      <header class="bb-header">
+        <h1>🍺 Tilt &amp; Chug</h1>
+        <p class="bb-sub">Tilt your phone like you're drinking — watch the beer go down.</p>
+      </header>
+
+      <div class="bb-stage">
+        <svg id="beerSvg" viewBox="0 0 200 440" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <clipPath id="glassClip"><path id="glassPathClip" d="" /></clipPath>
+            <linearGradient id="liquidGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ffd35c" />
+              <stop offset="100%" stop-color="#e6890a" />
+            </linearGradient>
+          </defs>
+
+          <g id="tiltGroup">
+            <g clip-path="url(#glassClip)">
+              <rect id="glassShadow" x="0" y="0" width="200" height="440" fill="#0c0c10" opacity="0.18" />
+              <g id="laceGroup"></g>
+              <g id="liquidPivot">
+                <g id="liquidRotate">
+                  <rect id="liquidRect" x="-160" y="0" width="420" height="650" fill="url(#liquidGrad)" />
+                  <g id="foamGroup"></g>
+                  <g id="bubbleGroup"></g>
+                </g>
+              </g>
+            </g>
+            <path id="glassOutline" d="" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="4" stroke-linejoin="round" />
+            <path id="glassHighlight" d="" fill="rgba(255,255,255,0.16)" />
+          </g>
+        </svg>
+
+        <div id="emptyOverlay" class="bb-empty hidden">
+          <div class="bb-empty-text">Bottoms up! 🍻</div>
+        </div>
+      </div>
+
+      <div class="bb-hud">
+        <span id="tiltReadout">tilt 0°</span>
+        <span id="fillReadout">100% full</span>
+      </div>
+
+      <div class="bb-controls">
+        <button id="newBeerBtn">New Beer 🍺</button>
+        <button id="muteBtn" aria-label="Toggle sound">🔊</button>
+      </div>
+
+      <div id="startOverlay" class="bb-start">
+        <div class="bb-start-card">
+          <div class="bb-start-emoji">🍺</div>
+          <h2>Tilt &amp; Chug</h2>
+          <p>Hold your phone up like a glass, then tip it toward you like you're drinking.</p>
+          <button id="startBtn">Tap to Start</button>
+          <p id="startNote" class="bb-note"></p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/beer/beer.js"></script>
+  </body>
+</html>
