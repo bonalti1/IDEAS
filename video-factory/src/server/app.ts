@@ -113,7 +113,11 @@ export function createApp(svc: Services) {
     await wf.editPrompt(pid(c), sid(c), prompt)
     return view(c)
   })
-  app.post('/api/projects/:projectId/stages/:stageId/prompt/approve', async (c) => (await wf.approvePrompt(pid(c), sid(c)), view(c)))
+  app.post('/api/projects/:projectId/stages/:stageId/prompt/approve', async (c) => {
+    const body = await json<{ generate?: boolean; providers?: string[] }>(c)
+    await wf.approvePrompt(pid(c), sid(c), body)
+    return view(c)
+  })
   app.post('/api/projects/:projectId/stages/:stageId/candidates', async (c) => {
     const { providers } = await json<{ providers?: string[] }>(c)
     await wf.generateCandidates(pid(c), sid(c), providers)

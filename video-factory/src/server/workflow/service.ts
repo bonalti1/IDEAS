@@ -15,6 +15,7 @@ import type {
   PlanStageInput,
   Project,
   ProjectSnapshot,
+  ProjectSummaryDTO,
   ProjectViewDTO,
   SceneAnalysis,
   Stage,
@@ -117,9 +118,14 @@ export class WorkflowService {
     return { ...s, jobs, assets: assetMap, assetUrls, gates: G.summarizeGates(s) }
   }
 
-  async listProjects() {
-    const ps = await this.d.store.list('projects')
-    return ps.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  async listProjects(): Promise<ProjectSummaryDTO[]> {
+    const ps = (await this.d.store.list('projects')).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return Promise.all(
+      ps.map(async (p) => {
+        const a = p.normalizedAssetId ? await this.d.store.get('assets', p.normalizedAssetId) : null
+        return { ...p, thumbUrl: a ? await this.d.storage.url(a.storageKey) : null }
+      }),
+    )
   }
 
   // ---- assets --------------------------------------------------------------------
@@ -226,7 +232,22 @@ export class WorkflowService {
     const meta = await sharp(i.photo).metadata()
     const original = await this.putAsset(projectId, 'original', i.photo, `image/${meta.format}`, { width: meta.width ?? null, height: meta.height ?? null })
     const normalized = await this.putAsset(projectId, 'normalized', norm.bytes, norm.mimeType, { width: norm.width, height: norm.height })
-    return this.d.store.update('projects', projectId, { originalAssetId: original.id, normalizedAssetId: normalized.id, updatedAt: now() })
+    const p = await this.d.store.update('projects', projectId, { originalAssetId: original.id, normalizedAssetId: normalized.id, updatedAt: now() })
+    await this.auto(() => this.analyzeScene(projectId))
+    return p
+  }
+
+  /**
+   * Auto-advance: start preparing the next proposal so the user only has to
+   * review. Best effort — a gate that is not open simply means "not now".
+   */
+  private async auto(fn: () => Promise<unknown>) {
+    if (!this.d.cfg.autoAdvance) return
+    try {
+      await fn()
+    } catch (e) {
+      if (!(e instanceof GateError)) throw e
+    }
   }
 
   private touch(projectId: string, patch: Partial<Project> = {}) {
@@ -250,7 +271,9 @@ export class WorkflowService {
 
   async approveScene(projectId: string) {
     assertGate(G.canApproveScene(await this.snapshot(projectId)))
-    return this.touch(projectId, { sceneApprovedAt: now() })
+    const p = await this.touch(projectId, { sceneApprovedAt: now() })
+    if (!p.maskAssetId) await this.auto(() => this.autoMask(projectId))
+    return p
   }
 
   // ---- mask ----------------------------------------------------------------------
@@ -270,8 +293,11 @@ export class WorkflowService {
   }
 
   async approveMask(projectId: string) {
-    assertGate(G.canApproveMask(await this.snapshot(projectId)))
-    return this.touch(projectId, { maskApprovedAt: now() })
+    const s = await this.snapshot(projectId)
+    assertGate(G.canApproveMask(s))
+    const p = await this.touch(projectId, { maskApprovedAt: now() })
+    if (!s.stages.length) await this.auto(() => this.proposePlan(projectId))
+    return p
   }
 
   // ---- plan ----------------------------------------------------------------------
@@ -327,8 +353,11 @@ export class WorkflowService {
   }
 
   async approvePlan(projectId: string) {
-    assertGate(G.canApprovePlan(await this.snapshot(projectId)))
-    return this.touch(projectId, { planApprovedAt: now() })
+    const s = await this.snapshot(projectId)
+    assertGate(G.canApprovePlan(s))
+    const p = await this.touch(projectId, { planApprovedAt: now() })
+    await this.autoPrompt(projectId, G.sortedStages(s)[0])
+    return p
   }
 
   // ---- reopen (explicit, cascading invalidation) ------------------------------------
@@ -374,6 +403,10 @@ export class WorkflowService {
     return this.startJob(projectId, 'compose_prompt', stage.id)
   }
 
+  private async autoPrompt(projectId: string, stage: Stage | undefined) {
+    if (stage && !stage.prompt) await this.auto(() => this.composePrompt(projectId, stage.id))
+  }
+
   async editPrompt(projectId: string, stageId: string, prompt: string) {
     const { s, stage } = await this.stageCtx(projectId, stageId)
     assertGate(G.canEditPrompt(s, stage))
@@ -381,11 +414,14 @@ export class WorkflowService {
     return this.d.store.update('stages', stage.id, { prompt: prompt.trim(), promptSource: 'user', promptApprovedAt: null, updatedAt: now() })
   }
 
-  async approvePrompt(projectId: string, stageId: string) {
+  /** Approves the prompt; with `generate`, immediately starts the chosen image providers. */
+  async approvePrompt(projectId: string, stageId: string, o: { generate?: boolean; providers?: string[] } = {}) {
     const { s, stage } = await this.stageCtx(projectId, stageId)
     assertGate(G.canApprovePrompt(s, stage))
     if (G.hasActiveJob(s, 'compose_prompt', stage.id)) throw new GateError('Prompt is being composed.')
-    return this.d.store.update('stages', stage.id, { promptApprovedAt: now(), updatedAt: now() })
+    const out = await this.d.store.update('stages', stage.id, { promptApprovedAt: now(), updatedAt: now() })
+    if (o.generate) await this.generateCandidates(projectId, stageId, o.providers)
+    return out
   }
 
   // ---- stages: candidates -----------------------------------------------------------
@@ -430,7 +466,11 @@ export class WorkflowService {
     assertGate(G.canApproveCandidate(s, stage, cand))
     // Defensive: nothing downstream may survive a change to this stage.
     await this.invalidateStagesFrom(s, stage.index + 1, { clearPrompts: true })
-    return this.d.store.update('stages', stage.id, { approvedCandidateId: cand.id, approvedAt: now(), updatedAt: now() })
+    const out = await this.d.store.update('stages', stage.id, { approvedCandidateId: cand.id, approvedAt: now(), updatedAt: now() })
+    const next = G.sortedStages(s).find((x) => x.index === stage.index + 1)
+    if (next) await this.autoPrompt(projectId, next)
+    else await this.auto(() => this.prepareTransitions(projectId))
+    return out
   }
 
   async reopenStage(projectId: string, stageId: string) {

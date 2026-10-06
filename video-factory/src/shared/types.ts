@@ -240,6 +240,10 @@ export interface AppConfigDTO {
   jobs: string
 }
 
+export interface ProjectSummaryDTO extends Project {
+  thumbUrl: string | null
+}
+
 export interface ProjectViewDTO extends ProjectSnapshot {
   assetUrls: Record<string, string>
   assets: Record<string, Asset>

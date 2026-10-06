@@ -80,9 +80,10 @@ export class FakeImageGenerator implements ImageGenerator {
       .joinChannel(maskAlpha, { raw: { width: w, height: h, channels: 1 } })
       .png()
       .toBuffer()
-    const fs = Math.round(Math.min(w, h) * 0.045)
+    const fs = Math.round(Math.min(w, h) * 0.035)
+    const text = `DEMO · ${title.replace(/[<&>]/g, '')}`
     const label = Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="${fs}" y="${fs}" width="${fs * (title.length * 0.62 + 6)}" height="${fs * 1.8}" rx="${fs * 0.3}" fill="#000" fill-opacity="0.6"/><text x="${fs * 1.6}" y="${fs * 2.2}" font-family="DejaVu Sans, sans-serif" font-size="${fs}" fill="#fff">FAKE · ${title.replace(/[<&>]/g, '')} · ${this.info.id}</text></svg>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="${fs}" y="${fs}" width="${fs * (text.length * 0.62 + 1.6)}" height="${fs * 1.8}" rx="${fs * 0.3}" fill="#000" fill-opacity="0.6"/><text x="${fs * 1.8}" y="${fs * 2.2}" font-family="DejaVu Sans, sans-serif" font-size="${fs}" fill="#fff">${text}</text></svg>`,
     )
     const bytes = await sharp(base.bytes)
       .resize(w, h)

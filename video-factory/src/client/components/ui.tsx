@@ -1,148 +1,140 @@
-import type { ReactNode } from 'react'
-import type { ClipReview, GateResult, ImageReview, Job, ProviderInfo, Verdict } from '../../shared/types.ts'
+import { useState, type ReactNode } from 'react'
+import type { ClipReview, ImageReview, ProviderInfo } from '../../shared/types.ts'
 
-export function Button(p: {
+export function Btn(p: {
   children: ReactNode
   onClick?: () => void
   disabled?: boolean
-  kind?: 'primary' | 'approve' | 'danger' | 'ghost'
+  kind?: 'primary' | 'danger'
+  big?: boolean
   title?: string
-  gate?: GateResult
-  busy?: boolean
   type?: 'button' | 'submit'
 }) {
-  const blocked = p.gate && !p.gate.ok
   return (
-    <button
-      type={p.type ?? 'button'}
-      className={`btn ${p.kind ?? ''}`}
-      onClick={p.onClick}
-      disabled={p.disabled || blocked || p.busy}
-      title={blocked ? (p.gate as { reason: string }).reason : p.title}
-    >
+    <button type={p.type ?? 'button'} className={`btn ${p.kind ?? ''} ${p.big ? 'big' : ''}`} onClick={p.onClick} disabled={p.disabled} title={p.title}>
       {p.children}
     </button>
   )
 }
 
-export function GateNote({ gate }: { gate: GateResult }) {
-  if (gate.ok) return null
-  return <p className="gate">🔒 {gate.reason}</p>
-}
-
-const VERDICT_LABEL: Record<Verdict, string> = { pass: 'Pass', warn: 'Check', fail: 'Fail' }
-
-export function VerdictBadge({ verdict, score }: { verdict: Verdict; score?: number }) {
+export function LinkBtn(p: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
   return (
-    <span className={`badge v-${verdict}`}>
-      {VERDICT_LABEL[verdict]}
-      {score !== undefined ? ` · ${Math.round(score)}` : ''}
-    </span>
+    <button type="button" className="link" onClick={p.onClick} disabled={p.disabled}>
+      {p.children}
+    </button>
   )
 }
 
-export function Chip({ children, tone }: { children: ReactNode; tone?: 'ok' | 'warn' | 'muted' | 'fake' | 'info' }) {
-  return <span className={`chip ${tone ?? ''}`}>{children}</span>
-}
-
-function Check({ label, c }: { label: string; c: { ok: boolean; notes: string } }) {
+export function Working({ children }: { children: ReactNode }) {
   return (
-    <li className={c.ok ? 'ok' : 'bad'}>
-      <strong>{c.ok ? '✓' : '✗'} {label}</strong> {c.notes}
-    </li>
-  )
-}
-
-export function ImageReviewView({ r, error }: { r: ImageReview | null; error: string | null }) {
-  if (error) return <p className="err small">Review failed: {error}</p>
-  if (!r) return <p className="muted small">Review pending…</p>
-  return (
-    <div className="review">
-      <div className="review-head">
-        <VerdictBadge verdict={r.verdict} score={r.score} />
-        <span className="muted small">
-          {r.reviewer.provider} · {r.reviewer.model}
-        </span>
-      </div>
-      <p className="small">{r.summary}</p>
-      <ul className="checks">
-        <Check label="Stage present" c={r.stagePresent} />
-        <Check label="Scene unchanged" c={r.sceneConsistent} />
-        <Check label="Camera unchanged" c={r.cameraConsistent} />
-        <Check label="No artifacts" c={r.artifacts} />
-      </ul>
+    <div className="working" role="status">
+      <span className="spinner" />
+      <span>{children}</span>
     </div>
   )
 }
 
-export function ClipReviewView({ r, error }: { r: ClipReview | null; error: string | null }) {
-  if (error) return <p className="err small">Review failed: {error}</p>
-  if (!r) return <p className="muted small">Review pending…</p>
+export function Screen({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
-    <div className="review">
-      <div className="review-head">
-        <VerdictBadge verdict={r.verdict} score={r.score} />
-        <span className="muted small">
-          {r.reviewer.provider} · {r.reviewer.model}
-        </span>
+    <section className="screen">
+      <div className="screen-head">
+        <h2>{title}</h2>
+        {subtitle && <p>{subtitle}</p>}
       </div>
-      <p className="small">{r.summary}</p>
-      <ul className="checks">
-        <Check label="Starts on approved frame" c={r.startMatches} />
-        <Check label="Ends on approved frame" c={r.endMatches} />
-        <Check label="Scene stable" c={r.sceneConsistent} />
-        <Check label="No artifacts" c={r.artifacts} />
-      </ul>
+      {children}
+    </section>
+  )
+}
+
+export function DoneBanner({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="done-banner">
+      <span>✓</span>
+      <span className="grow">{children}</span>
+      {action}
     </div>
   )
 }
 
-export function JobLine({ job }: { job: Job }) {
-  const pct = Math.round(job.progress * 100)
+const VERDICT = { pass: 'Looks good', warn: 'Check closely', fail: 'Problems found' } as const
+
+/** Compact AI quality check; click to see what the reviewer looked at. */
+export function AiCheck({ review, error, kind }: { review: ImageReview | ClipReview | null; error: string | null; kind: 'image' | 'clip' }) {
+  const [open, setOpen] = useState(false)
+  if (error) return <span className="aicheck warn" title={error}>AI check unavailable</span>
+  if (!review) return <span className="aicheck pending">AI checking…</span>
+  const rows =
+    kind === 'image'
+      ? [
+          ['Shows the right stage', (review as ImageReview).stagePresent],
+          ['Rest of the scene unchanged', (review as ImageReview).sceneConsistent],
+          ['Same camera angle', (review as ImageReview).cameraConsistent],
+          ['No glitches', review.artifacts],
+        ]
+      : [
+          ['Starts on the right picture', (review as ClipReview).startMatches],
+          ['Ends on the right picture', (review as ClipReview).endMatches],
+          ['Background stays steady', review.sceneConsistent],
+          ['No glitches', review.artifacts],
+        ]
   return (
-    <div className={`job ${job.status}`}>
-      <span className="job-type">{job.type.replace(/_/g, ' ')}</span>
-      {job.status === 'failed' ? (
-        <span className="err small">{job.error}</span>
-      ) : (
+    <div>
+      <button type="button" className={`aicheck ${review.verdict}`} onClick={() => setOpen(!open)} aria-expanded={open}>
+        {review.verdict === 'pass' ? '✓' : '!'} AI check: {VERDICT[review.verdict]}
+      </button>
+      {open && (
         <>
-          <span className="bar">
-            <span style={{ width: `${Math.max(4, pct)}%` }} />
-          </span>
-          <span className="muted small">{job.message}</span>
+          <ul className="check-list">
+            {rows.map(([label, c]) => {
+              const r = c as { ok: boolean; notes: string }
+              return (
+                <li key={label as string} className={r.ok ? 'good' : 'bad'}>
+                  <b>{r.ok ? '✓' : '✗'} {label as string}</b> <span className="muted">{r.notes}</span>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="tiny muted" style={{ marginTop: 6 }}>
+            Score {Math.round(review.score)} · {review.reviewer.model}
+          </p>
         </>
       )}
     </div>
   )
 }
 
-export function ProviderPicker(p: {
-  providers: ProviderInfo[]
-  value: string[]
-  onChange: (ids: string[]) => void
-}) {
+export function ProviderChips({ providers, value, onChange, label }: { providers: ProviderInfo[]; value: string[]; onChange: (v: string[]) => void; label: string }) {
+  if (providers.length < 2) return null
   return (
-    <div className="providers">
-      {p.providers.map((pr) => (
-        <label key={pr.id} className="provider">
-          <input
-            type="checkbox"
-            checked={p.value.includes(pr.id)}
-            onChange={(e) => p.onChange(e.target.checked ? [...p.value, pr.id] : p.value.filter((x) => x !== pr.id))}
-          />
-          <span>
-            {pr.label}
-            {pr.primary ? <Chip tone="info">primary</Chip> : null}
-          </span>
-          <span className="muted small mono">{pr.model}</span>
-        </label>
-      ))}
+    <div className="chips">
+      <span className="muted small">{label}</span>
+      {providers.map((p) => {
+        const on = value.includes(p.id)
+        return (
+          <button
+            key={p.id}
+            type="button"
+            className={`chip-toggle ${on ? 'on' : ''}`}
+            onClick={() => onChange(on ? value.filter((x) => x !== p.id) : [...value, p.id])}
+            title={p.model}
+          >
+            {shortName(p.label)}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-export function Spinner() {
-  return <span className="spinner" aria-label="working" />
+/** "Gemini Nano Banana Pro (fake)" → "Gemini" etc. — full name stays in the tooltip. */
+export function shortName(label: string) {
+  const l = label.replace(/\s*\(.*?\)\s*/g, ' ').trim()
+  if (/gemini/i.test(l)) return 'Google Gemini'
+  if (/gpt image|openai/i.test(l)) return 'OpenAI'
+  if (/veo/i.test(l)) return 'Google Veo'
+  if (/kling/i.test(l)) return 'Kling'
+  if (/seedance/i.test(l)) return 'Seedance'
+  return l
 }
 
 export const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean)

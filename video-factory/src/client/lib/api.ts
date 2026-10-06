@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppConfigDTO, Project, ProjectViewDTO } from '../../shared/types.ts'
+import type { AppConfigDTO, Project, ProjectSummaryDTO, ProjectViewDTO } from '../../shared/types.ts'
 
 const TOKEN_KEY = 'vf.apiToken'
 
@@ -34,7 +34,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 
 export const api = {
   config: () => request<AppConfigDTO>('GET', '/api/config'),
-  projects: () => request<Project[]>('GET', '/api/projects'),
+  projects: () => request<ProjectSummaryDTO[]>('GET', '/api/projects'),
   createProject: (form: FormData) => request<Project>('POST', '/api/projects', form),
   project: (id: string) => request<ProjectViewDTO>('GET', `/api/projects/${id}`),
   /** Mutations on a project return the refreshed project view. */

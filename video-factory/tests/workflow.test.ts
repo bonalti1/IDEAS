@@ -20,7 +20,7 @@ import { FileStore } from '../src/server/store/file-store.ts'
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vf-test-'))
 for (const k of ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'FAL_KEY', 'SUPABASE_URL', 'R2_ACCOUNT_ID', 'INNGEST_ENABLED']) delete process.env[k]
 const base = loadConfig()
-const cfg = { ...base, dataDir: tmp, fakeMissingProviders: true, video: { ...base.video, pollIntervalSec: 0.1, durationSec: 4 } }
+const cfg = { ...base, dataDir: tmp, fakeMissingProviders: true, autoAdvance: false, video: { ...base.video, pollIntervalSec: 0.1, durationSec: 4 } }
 const svc = buildServices(cfg, { store: new FileStore(null), storage: new LocalStorage(path.join(tmp, 'media')) })
 const app = createApp(svc)
 const runner = svc.runner as InProcessRunner

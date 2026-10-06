@@ -1,4 +1,4 @@
-// Drives the running app (npm run dev) through the whole workflow in a
+// Drives the running app (npm run dev) through the whole guided flow in a
 // headless browser and saves screenshots. Usage:
 //   node scripts/ui-walkthrough.mjs <photo.jpg> [outDir]
 import fs from 'node:fs'
@@ -9,112 +9,95 @@ const BASE = process.env.APP_URL ?? 'http://localhost:5174'
 fs.mkdirSync(outDir, { recursive: true })
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium' })
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+const page = await browser.newPage({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 1 })
 page.on('pageerror', (e) => console.log('PAGE ERROR:', e.message))
-page.on('console', (m) => m.type() === 'error' && console.log('CONSOLE:', m.text()))
+page.on('console', (m) => m.type() === 'error' && !m.text().includes('404') && console.log('CONSOLE:', m.text()))
 page.on('dialog', (d) => d.accept())
 
 let n = 0
-const shot = async (name, full = true) => {
+const shot = async (name, full = false) => {
   const f = `${outDir}/${String(++n).padStart(2, '0')}-${name}.png`
   await page.screenshot({ path: f, fullPage: full })
   console.log('saved', f)
 }
-const btn = (name) => page.getByRole('button', { name, exact: true })
-const click = async (name, idx = 0) => {
-  const b = btn(name).nth(idx)
-  await b.waitFor({ state: 'visible', timeout: 15000 })
+const click = async (name) => {
+  const b = page.getByRole('button', { name, exact: true }).first()
+  await b.waitFor({ state: 'visible', timeout: 60000 })
   await b.click()
 }
 const idle = async () => {
-  await page.waitForTimeout(400)
-  await page.waitForFunction(() => !document.querySelector('.job.running, .job.queued'), null, { timeout: 120000 })
-  await page.waitForTimeout(1600) // allow the next poll to refresh
+  await page.waitForTimeout(500)
+  await page.waitForFunction(() => !document.querySelector('.working, .shimmer'), null, { timeout: 180000 })
+  await page.waitForTimeout(700)
 }
-const tab = (name) => page.locator('.step', { hasText: name }).click()
 
 await page.goto(BASE)
-await shot('home', false)
+await page.waitForTimeout(800)
+await shot('home-empty')
 
-await click('+ New project')
-await page.getByPlaceholder('e.g. Smith residence driveway').fill('Smith residence driveway')
-await page.locator('input[type=file]').setInputFiles(photo)
-await shot('new-project', false)
-await click('Create project')
+await click('Start your first video')
+await page.locator('.drop input[type=file]').setInputFiles(photo)
+await page.getByPlaceholder('e.g. Smith driveway').fill('Smith driveway')
+await page.waitForTimeout(300)
+await shot('new-video')
+await click('Start')
 
-await click('Analyze photo')
 await idle()
-await shot('scene-analyzed')
-await click('Approve scene')
-await page.waitForTimeout(500)
+await shot('1-photo')
+await click('Looks right')
 
-await tab('Work area')
-await click('Automatic mask (SAM 2)')
 await idle()
-await shot('mask-auto')
-// Manual correction: paint a stroke onto the canvas, then save.
-const c = await page.locator('canvas.mask-canvas').boundingBox()
-await page.mouse.move(c.x + c.width * 0.25, c.y + c.height * 0.5)
-await page.mouse.down()
-await page.mouse.move(c.x + c.width * 0.75, c.y + c.height * 0.52, { steps: 12 })
-await page.mouse.up()
-await click('Save manual mask')
+await shot('2-work-area')
+await click('Fix the area')
+await page.waitForTimeout(300)
+await shot('2b-fix-area')
+await click('Yes, looks right')
+
+await idle()
+await shot('3-plan')
+await click('Looks good')
+
+for (let i = 0; i < 4; i++) {
+  await idle()
+  if (i === 0) await shot('4-instructions')
+  await click('Create pictures')
+  await idle()
+  if (i === 0) await shot('4b-pick-best')
+  await click('Use this one')
+  await page.waitForTimeout(600)
+  if (i === 0) await shot('4c-next-step-starts')
+}
+
+await idle()
+await shot('5-clips-start')
+await page.getByRole('button', { name: /^Animate all/ }).click()
 await page.waitForTimeout(1500)
-await shot('mask-manual')
-await click('Approve mask')
-await page.waitForTimeout(500)
-
-await tab('Stage plan')
-await click('Propose stages with AI')
 await idle()
-await shot('plan')
-await click('Approve plan')
-await page.waitForTimeout(500)
-
-await tab('Stage images')
+await shot('5b-clips-review', true)
 for (let i = 0; i < 4; i++) {
-  await click('Compose prompt')
-  await idle()
-  if (i === 0) await shot('stage1-prompt')
-  await click('Approve prompt')
-  await page.waitForTimeout(400)
-  if (i === 0) {
-    // Side-by-side: tick the second image provider.
-    await page.locator('.gen-box .provider input').nth(1).check()
-  }
-  await click(i === 0 ? 'Generate 2 candidates' : 'Generate candidate')
-  await idle()
-  if (i === 0) await shot('stage1-candidates')
-  await click('Approve this image')
-  await page.waitForTimeout(1200)
+  await click('Use this clip')
+  await page.waitForTimeout(700)
 }
-await shot('stages-approved')
-
-await tab('Clips')
-await click('Prepare clips from approved images')
-await page.waitForTimeout(800)
-for (let i = 0; i < 4; i++) await click('Animate', 0)
 await idle()
-await shot('clips-generated')
-for (let i = 0; i < 4; i++) {
-  await click('Approve this clip', 0)
-  await page.waitForTimeout(900)
-}
-
-await tab('Export')
-await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Smith Residence')
-await click('Save branding')
-await page.waitForTimeout(600)
-await click('Render final video')
+await shot('6-make-video')
+await click('Make my video')
+await page.waitForTimeout(1000)
 await idle()
-await page.waitForTimeout(800)
-await shot('export')
+await shot('6b-video-ready')
 
-// Mobile layout check.
+await page.goto(BASE)
+await page.waitForTimeout(800)
+await shot('home-projects')
+
+// Phone
 await page.setViewportSize({ width: 390, height: 844 })
-await tab('Stage images')
-await page.waitForTimeout(800)
-await shot('mobile-stages', false)
+await page.goto(`${BASE}/#/new`)
+await page.waitForTimeout(600)
+await shot('phone-new')
+const pid = (await page.evaluate(() => fetch('/api/projects').then((r) => r.json())))[0].id
+await page.goto(`${BASE}/#/p/${pid}/pictures`)
+await page.waitForTimeout(1200)
+await shot('phone-pictures', true)
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 console.log('horizontal overflow at 390px:', overflow)
 await browser.close()

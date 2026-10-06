@@ -1,96 +1,104 @@
 import { useEffect, useState } from 'react'
-import type { AppConfigDTO, Project } from '../shared/types.ts'
+import type { AppConfigDTO, ProjectSummaryDTO } from '../shared/types.ts'
 import { NewProject } from './components/NewProject.tsx'
 import { ProjectView } from './components/ProjectView.tsx'
-import { Chip } from './components/ui.tsx'
+import { Btn } from './components/ui.tsx'
 import { api, useHashRoute } from './lib/api.ts'
 
 export function App() {
   const [route, go] = useHashRoute()
   const [config, setConfig] = useState<AppConfigDTO | null>(null)
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<ProjectSummaryDTO[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const loadProjects = () => api.projects().then(setProjects).catch((e) => setError(e.message))
-  useEffect(() => {
-    api.config().then(setConfig).catch((e) => setError(e.message))
-    loadProjects()
-  }, [])
-
-  const fakes = config?.providers.filter((p) => p.fake) ?? []
   const [section, id, tab] = route
 
+  useEffect(() => {
+    api.config().then(setConfig).catch((e) => setError(e.message))
+  }, [])
+  useEffect(() => {
+    if (!section) api.projects().then(setProjects).catch((e) => setError(e.message))
+  }, [section])
+
+  const fakes = config?.providers.filter((p) => p.fake).length ?? 0
+
   return (
-    <div className="app">
-      <aside className="sidebar">
+    <>
+      <header className="topbar">
         <a className="brand" href="#/">
           <span className="brand-mark">ALTO</span> Video Factory
         </a>
-        <button className="btn primary block" onClick={() => go('new')}>
-          + New project
-        </button>
-        <nav className="projects">
-          {projects.map((p) => (
-            <a key={p.id} href={`#/p/${p.id}`} className={id === p.id ? 'active' : ''}>
-              <span>{p.name}</span>
-              <span className="muted small">{new Date(p.createdAt).toLocaleDateString()}</span>
-            </a>
-          ))}
-          {!projects.length && <p className="muted small">No projects yet.</p>}
-        </nav>
-        {config && (
-          <div className="sys small">
-            <div>
-              Store: <span className="mono">{config.store}</span>
-            </div>
-            <div>
-              Media: <span className="mono">{config.storage}</span>
-            </div>
-            <div>
-              Jobs: <span className="mono">{config.jobs}</span>
-            </div>
-            {fakes.length > 0 && (
-              <div className="fake-note">
-                <Chip tone="fake">{fakes.length} fake provider(s)</Chip>
-                <span>Set API keys in .env for real output.</span>
-              </div>
-            )}
+        <span className="spacer" />
+        {fakes > 0 && (
+          <span className="tiny muted" title="Add API keys in .env to use the real AI models">
+            Demo mode
+          </span>
+        )}
+        {section !== 'new' && (
+          <Btn kind="primary" onClick={() => go('new')}>
+            + New video
+          </Btn>
+        )}
+      </header>
+      <main className="page">
+        {error && (
+          <div className="toast" onClick={() => setError(null)}>
+            {error}
           </div>
         )}
-      </aside>
-      <main className="content">
-        {error && <div className="toast err">{error}</div>}
-        {section === 'new' && config && (
-          <NewProject
-            config={config}
-            onCreated={(p) => {
-              loadProjects()
-              go(`p/${p.id}/scene`)
-            }}
-          />
-        )}
+        {section === 'new' && config && <NewProject config={config} onCreated={(p) => go(`p/${p.id}`)} />}
         {section === 'p' && id && config && <ProjectView key={id} id={id} tab={tab} config={config} go={go} />}
-        {!section && (
-          <div className="empty">
-            <h1>Alto Video Factory</h1>
-            <p>
-              Turn one real project photo into an approved, stage-by-stage construction video. Every prompt, image and clip is reviewed and
-              approved before the next step can use it.
-            </p>
-            <ol className="steps-list">
-              <li>Upload a photo and pick the trade</li>
-              <li>Approve scene constraints and the work-area mask</li>
-              <li>Approve the stage plan</li>
-              <li>For each stage: approve the prompt, then one generated image</li>
-              <li>Animate between approved images and approve each clip</li>
-              <li>Render with Alto branding and export</li>
-            </ol>
-            <button className="btn primary" onClick={() => go('new')}>
-              Start a project
-            </button>
-          </div>
-        )}
+        {!section && <Home projects={projects} onNew={() => go('new')} />}
       </main>
-    </div>
+    </>
+  )
+}
+
+function Home({ projects, onNew }: { projects: ProjectSummaryDTO[] | null; onNew: () => void }) {
+  if (!projects) return null
+  if (!projects.length) {
+    return (
+      <div className="screen empty-state">
+        <h1>Turn one job-site photo into a build video</h1>
+        <p className="muted">You approve every picture and clip. Nothing moves on without you.</p>
+        <div className="how">
+          <div>
+            <b>1. Upload a photo</b>
+            <span className="muted small">One real photo of the site, as it is today.</span>
+          </div>
+          <div>
+            <b>2. Approve each stage</b>
+            <span className="muted small">The AI draws each step of the build. You pick the best one.</span>
+          </div>
+          <div>
+            <b>3. Get your video</b>
+            <span className="muted small">Approved pictures become a smooth, branded video.</span>
+          </div>
+        </div>
+        <Btn kind="primary" big onClick={onNew}>
+          Start your first video
+        </Btn>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="hero">
+        <div>
+          <h1>Your videos</h1>
+          <p>Pick up where you left off, or start a new one.</p>
+        </div>
+      </div>
+      <div className="cards">
+        {projects.map((p) => (
+          <a key={p.id} className="pcard" href={`#/p/${p.id}`}>
+            {p.thumbUrl ? <img src={p.thumbUrl} alt="" /> : <div className="ph" />}
+            <div className="body">
+              <strong>{p.name}</strong>
+              <span className="small muted">{p.finalAssetId ? '✓ Video ready' : 'In progress'} · {new Date(p.createdAt).toLocaleDateString()}</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </>
   )
 }

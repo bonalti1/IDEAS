@@ -70,6 +70,9 @@ export function loadConfig() {
       browserExecutable: env('REMOTION_BROWSER_EXECUTABLE') || undefined,
       logoFile: env('ALTO_LOGO_FILE') || undefined,
     },
+    // After each approval, start preparing the next proposal (analysis, mask,
+    // plan, next prompt). Approvals themselves always stay manual.
+    autoAdvance: bool('AUTO_ADVANCE', true),
     apiToken: env('API_TOKEN'), // optional shared bearer token for the internal API
   }
 }
