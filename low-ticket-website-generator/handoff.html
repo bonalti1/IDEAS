@@ -1,0 +1,311 @@
+<title>ALTO Pro Website Generator Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one 1100px reading column; galleries break into phone-shaped strips; findings as a severity list. ALTO brand: navy + amber. */
+:root{
+  --bg:#F6F7FA; --surface:#FFFFFF; --ink:#101B30; --muted:#5A6478; --line:#E3E7EF;
+  --amber:#F8B408; --amber-ink:#7A5A00; --amber-wash:#FEF6DC; --navy:#101B30; --on-navy:#FFFFFF;
+  --hi:#C0392B; --med:#B76E00; --low:#3D6FB0; --info:#6B7488;
+  --display:'Barlow Condensed',Impact,'Arial Narrow',sans-serif;
+  --body:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0B1222; --surface:#121C31; --ink:#E8ECF4; --muted:#9AA5BC; --line:#24314D;
+  --amber:#F8B408; --amber-ink:#F8CD5A; --amber-wash:#2A2410; --navy:#1A2744; --on-navy:#FFFFFF;
+  --hi:#FF7A6B; --med:#F2A93B; --low:#7FA8E6; --info:#9AA5BC; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0B1222; --surface:#121C31; --ink:#E8ECF4; --muted:#9AA5BC; --line:#24314D;
+  --amber:#F8B408; --amber-ink:#F8CD5A; --amber-wash:#2A2410; --navy:#1A2744; --on-navy:#FFFFFF;
+  --hi:#FF7A6B; --med:#F2A93B; --low:#7FA8E6; --info:#9AA5BC; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--body);margin:0;padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:1100px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01em;line-height:1.05;text-wrap:balance;margin:0}
+h2{font-size:clamp(28px,4vw,38px)}
+h3{font-size:21px}
+p{margin:0}
+a{color:inherit;text-decoration-color:var(--amber);text-underline-offset:3px;text-decoration-thickness:2px}
+code{font:13px var(--mono);background:var(--amber-wash);color:var(--amber-ink);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.top{background:var(--navy);color:var(--on-navy);margin-inline:-16px;padding:40px 16px 34px}
+.top .wrap{display:grid;gap:14px}
+.eyebrow{font:600 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--amber)}
+.top h1{font-size:clamp(40px,7vw,68px)}
+.top h1 em{font-style:normal;color:var(--amber)}
+.top p{max-width:68ch;color:#C7CFDF;font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{font:600 12.5px var(--mono);padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.08);color:#E8ECF4;border:1px solid rgba(255,255,255,.14);text-decoration:none}
+.chip.cta{background:var(--amber);color:#101B30;border-color:var(--amber)}
+section{padding-block:44px 0;display:grid;gap:18px}
+.lede{color:var(--muted);max-width:70ch}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.rule{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:4px;min-width:0}
+.rule b{font-family:var(--display);font-size:19px;text-transform:uppercase;letter-spacing:.02em}
+.rule span{color:var(--muted);font-size:14px}
+.flow{display:flex;flex-wrap:wrap;gap:0;counter-reset:s;list-style:none;padding:0;margin:0}
+.flow li{counter-increment:s;flex:1 1 150px;min-width:0;padding:12px 14px 12px 0;display:grid;gap:3px;border-top:3px solid var(--line)}
+.flow li:first-child{border-top-color:var(--amber)}
+.flow li::before{content:counter(s);font:600 12px var(--mono);color:var(--amber-ink)}
+.flow li b{font-size:14px}
+.flow li span{font-size:13px;color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button{font:600 13px var(--body);padding:8px 14px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tabs button:focus-visible,.shot:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.strip.wide{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.shot{all:unset;cursor:zoom-in;display:grid;gap:7px;min-width:0}
+.shot .frame{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--surface);aspect-ratio:390/700;max-width:100%}
+.strip.wide .shot .frame{aspect-ratio:16/10}
+.shot img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.shot .cap{font-size:12.5px;color:var(--muted);line-height:1.4}
+.shot .cap b{color:var(--ink);font-weight:600;display:block;font-size:13px}
+.tall{font:600 10.5px var(--mono);color:var(--amber-ink);letter-spacing:.06em}
+.findings{display:grid;gap:10px}
+.f{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:78px 1fr;gap:4px 14px;min-width:0}
+.f .sev{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding-top:3px}
+.f .sev.high{color:var(--hi)}.f .sev.med{color:var(--med)}.f .sev.low{color:var(--low)}.f .sev.info{color:var(--info)}
+.f b{font-size:15px}
+.f p{grid-column:2;color:var(--muted);font-size:14px;min-width:0}
+.f .where{grid-column:2;font:12px var(--mono);color:var(--muted)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+td:first-child{font-family:var(--mono);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+pre{margin:0;background:var(--navy);color:#E8ECF4;border-radius:12px;padding:16px;overflow-x:auto;font:12.5px/1.6 var(--mono)}
+.note{background:var(--amber-wash);border-radius:12px;padding:12px 16px;font-size:14px;color:var(--ink)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.two>*{min-width:0}
+ol.gaps{margin:0;padding-left:22px;display:grid;gap:4px;color:var(--muted)}
+ol.gaps b{color:var(--ink);font-weight:600}
+#lb{position:fixed;inset:0;z-index:50;background:rgba(6,10,20,.88);display:grid;grid-template-rows:auto 1fr;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(10px + env(safe-area-inset-bottom,0px))}
+#lb header{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#fff;padding-bottom:8px;max-width:1100px;width:100%;margin:0 auto}
+#lb header span{font:600 13px var(--mono);overflow-wrap:anywhere;min-width:0}
+#lb header button{font:600 13px var(--body);background:#fff;color:#101B30;border:0;border-radius:99px;padding:8px 14px;cursor:pointer;flex-shrink:0}
+#lb .scroll{overflow:auto;display:flex;justify-content:center;align-items:flex-start}
+#lb img{max-width:min(100%,1100px);height:auto;border-radius:8px}
+#lb img.phone{max-width:min(100%,430px)}
+@media (prefers-reduced-motion:no-preference){.shot .frame{transition:transform .15s}.shot:hover .frame{transform:translateY(-2px)}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Engineering handoff · ALTO Pro low-ticket · 2026-10-07</p>
+    <h1>The $49 <em>website generator</em></h1>
+    <p>A roofer or fence contractor taps an ad, fills in six fields, and sees their own finished website in under a minute. If they like it, they pay $49 and it goes live, with no human involved. This page covers what we want, every frontend screen, where the code lives, and the issues found while running it end to end.</p>
+    <div class="chips">
+      <a class="chip cta" href="https://github.com/bonalti1/IDEAS/tree/claude/elegant-gauss-rl5j25/low-ticket-website-generator">Code + screenshots on GitHub ↗</a>
+      <a class="chip" href="https://github.com/bonalti1/IDEAS/blob/claude/elegant-gauss-rl5j25/low-ticket-website-generator/HANDOFF.md">HANDOFF.md ↗</a>
+      <span class="chip">Route: /pagina</span>
+      <span class="chip">Flag: PAGINA_ENABLED=1</span>
+      <span class="chip">83 screenshots</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section id="want">
+  <h2>What we want</h2>
+  <div class="rules">
+    <div class="rule"><b>$49 once, final</b><span>Hosting is $19/mo from month 2, and that is disclosed on the form, the claim bar, and the welcome page.</span></div>
+    <div class="rule"><b>The preview is the product</b><span>It uses the same <code>renderSite()</code> as paying clients, so whatever the visitor customizes is exactly what gets published.</span></div>
+    <div class="rule"><b>Lead first</b><span>The lead is saved to <code>alto-ventas</code> before the preview renders, so setters can call people who don't buy.</span></div>
+    <div class="rule"><b>Zero-touch</b><span>Stripe webhook → account → published site → <code>/bienvenida</code> with a live link and an editor link.</span></div>
+    <div class="rule"><b>Live quote widget</b><span>Every site embeds <code>/w/&lt;slug&gt;</code>, which quotes by satellite 24/7. This is the core value.</span></div>
+    <div class="rule"><b>Techos + cercas, Spanish</b><span>Ads pre-select the trade with <code>?t=cercas</code> or <code>?t=techos</code>. No fake reviews or AI images posing as the client's work.</span></div>
+    <div class="rule"><b>Upsell the $67 app</b><span>Plan <code>pagina</code> is site-only, and <code>clientLocked()</code> refuses the measuring APIs.</span></div>
+  </div>
+  <ol class="flow" aria-label="Funnel steps">
+    <li><b>Ad → /pagina</b><span>6-field form</span></li>
+    <li><b>Lead + draft</b><span>kv <code>pgdraft:&lt;id&gt;</code></span></li>
+    <li><b>Build animation</b><span>~4.6 s interstitial</span></li>
+    <li><b>Preview</b><span>Real render + claim bar</span></li>
+    <li><b>6-step wizard</b><span>PATCH → reload</span></li>
+    <li><b>Pay $49</b><span>Stripe link, ref <code>pagina-&lt;id&gt;</code></span></li>
+    <li><b>Live</b><span>Webhook publishes, /bienvenida</span></li>
+  </ol>
+</section>
+
+<section id="screens">
+  <h2>Every screen</h2>
+  <p class="lede">These were captured from a local run of the real code at 390px (mobile, the ad traffic) and 1440px (desktop). Tap any screen to open it at full size. Full-page captures scroll.</p>
+  <div class="tabs" role="tablist" id="flowTabs"></div>
+  <div class="strip" id="flowStrip"></div>
+</section>
+
+<section id="templates">
+  <h2>The six templates</h2>
+  <p class="lede">Templates 1 to 3 serve existing paying clients, and their output must stay byte-identical. Templates 4 to 6 were added later. The "customized" set uses a draft with a logo, four job photos, a color, a license, services, AI copy, and socials.</p>
+  <div class="tabs" role="tablist" id="tplTabs"></div>
+  <div class="strip wide" id="tplStrip"></div>
+</section>
+
+<section id="buy">
+  <h2>Purchase → live site</h2>
+  <p class="lede">These come from a real HMAC-signed <code>checkout.session.completed</code> webhook for $4900 with <code>client_reference_id=pagina-&lt;id&gt;</code>, sent to the local server.</p>
+  <div class="strip" id="buyStrip"></div>
+  <p class="note">Local-run caveats: the widget's satellite map is black because no Google key was set. The hero is a gradient because <code>hero-fence.jpg</code> and <code>hero-roof.jpg</code> are not in the snapshot. The AI copy is a canned variant because no AI key was set.</p>
+</section>
+
+<section id="findings">
+  <h2>Findings from this run</h2>
+  <p class="lede">Each one was confirmed in the code. Number 1 was also reproduced with a second purchase.</p>
+  <div class="findings">
+    <div class="f"><span class="sev high">High</span><b>An existing customer who buys the $49 page is downgraded and gets no site.</b>
+      <p>The webhook matches existing accounts by Stripe customer, email, or phone. On a match it sets <code>plan = "pagina"</code>, so a $67 app customer becomes site-only and loses measuring, and the draft is never published. <code>/api/checkout-result</code> stays <code>ready:false</code>, so <code>/bienvenida</code> times out to WhatsApp.</p>
+      <span class="where">server/index.mjs L444–560</span></div>
+    <div class="f"><span class="sev med">Medium</span><b>The published phone is not the phone the buyer approved.</b>
+      <p>The profile merges <code>{...fromDraft.profile, phone}</code>, so the Stripe checkout phone overwrites the draft phone. The preview showed (956) 555-0188, and the live site showed the checkout number.</p>
+      <span class="where">server/index.mjs L481</span></div>
+    <div class="f"><span class="sev med">Medium</span><b>Fence sites say "Techos en …".</b>
+      <p>The zone headings are hard-coded instead of using <code>TRADE_WORDS</code>. This is visible in the published fence site's "Zonas que cubrimos" section.</p>
+      <span class="where">server/templates.mjs L397, 443, 511, 627, 670</span></div>
+    <div class="f"><span class="sev low">Low</span><b>Accented names produce broken slugs.</b>
+      <p>"González Fencing" becomes <code>/site/gonz-lez-fencing</code>. Run <code>normalize("NFD")</code> and strip diacritics before slugifying. This affects most of the target market.</p>
+      <span class="where">server/db.mjs L139</span></div>
+    <div class="f"><span class="sev low">Low</span><b>The Clásica hero has no side gutter on mobile.</b>
+      <p>The headline and the city pill touch the screen edges at 390px.</p>
+      <span class="where">server/templates.mjs, template 1 hero CSS</span></div>
+    <div class="f"><span class="sev low">Low</span><b>Hero photos are missing from the snapshot.</b>
+      <p>Add <code>public/landing/hero-fence.jpg</code> and <code>hero-roof.jpg</code>. The code is file-gated and falls back to a gradient.</p>
+      <span class="where">server/index.mjs L7643</span></div>
+    <div class="f"><span class="sev info">Info</span><b>The style picker costs 12 page loads on a phone.</b>
+      <p>Six <code>bare=1</code> renders each load the widget iframe as soon as step 1 opens. Consider suppressing the widget in bare mode.</p>
+      <span class="where">server/index.mjs L7705</span></div>
+  </div>
+  <div class="two">
+    <div style="display:grid;gap:10px">
+      <h3>Still to build</h3>
+      <ol class="gaps">
+        <li><b>$19/mo hosting subscription</b> and a pause on non-payment. Today the $49 is one-time only.</li>
+        <li><b>Detalles section</b>: hours, Google reviews link, second phone, payment methods, badges, email.</li>
+        <li><b>"Cambia esto…" AI edit box</b> and a custom hero field.</li>
+        <li><b>Buyer site editor</b> with the 6-template picker.</li>
+        <li><b>SMS delivery</b> of the access link, plus recovery by phone.</li>
+        <li><b>Draft TTL and cleanup</b>. Drafts reach ~1.5 MB and never expire.</li>
+        <li><b>Shared rate limits</b>. <code>overQuota</code> is in-memory and per instance.</li>
+        <li><b>English /pagina</b>, a $50/yr domain bump, and an app-trial offer with $49 credit.</li>
+      </ol>
+    </div>
+    <div style="display:grid;gap:10px">
+      <h3>Do not break</h3>
+      <ol class="gaps">
+        <li><b>Templates 1–3 output stays byte-identical.</b></li>
+        <li><b>Everything goes behind flags</b>, and roofing output for existing accounts doesn't change.</li>
+        <li><b>Every draft field is attacker-controlled HTML.</b> Keep PATCH validation, <code>esc()</code> at render, and <code>esc2()</code> in the panel.</li>
+        <li><b>No fake content.</b></li>
+        <li><b>Spanish first.</b></li>
+        <li><b><code>npm run regression</code> is green before every commit.</b></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="code">
+  <h2>Where the code lives</h2>
+  <p class="lede">The generator is not a separate package. It lives inside the Express monolith. Line numbers were verified against the snapshot.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>File : line</th><th>What</th></tr></thead>
+    <tbody>
+      <tr><td>index.mjs:70</td><td><code>PAGINA_ENABLED</code> flag. When off, <code>/pagina</code> redirects to <code>/app</code>.</td></tr>
+      <tr><td>index.mjs:379</td><td><code>PLAN_BY_AMOUNT[4900] = "pagina"</code></td></tr>
+      <tr><td>index.mjs:396</td><td>Stripe webhook: account match (L444), pagina auto-provision (L469–490)</td></tr>
+      <tr><td>index.mjs:7000–7009</td><td><code>/api/checkout-result</code> and <code>/bienvenida</code></td></tr>
+      <tr><td>index.mjs:7240</td><td>Whitelists: <code>PG_COLORS</code>, <code>PG_TPL_IDS</code>, <code>PG_SVC</code></td></tr>
+      <tr><td>index.mjs:7255</td><td><code>paginaSiteFromDraft()</code>: draft → published account</td></tr>
+      <tr><td>index.mjs:7290</td><td><code>POST /api/pagina/draft</code>: create (20/IP/day)</td></tr>
+      <tr><td>index.mjs:7309</td><td><code>POST /api/pagina/draft/:id</code>: the PATCH, where all validation lives</td></tr>
+      <tr><td>index.mjs:7371</td><td><code>POST /api/pagina/copy/:id</code>: AI copywriter (6 per draft)</td></tr>
+      <tr><td>index.mjs:7402</td><td><code>POST /api/pagina/voice/:id</code>: voice → Whisper → copy</td></tr>
+      <tr><td>index.mjs:7447</td><td><code>paginaPage()</code>: form, interstitial, client JS</td></tr>
+      <tr><td>index.mjs:7620–7935</td><td><code>GET /pagina/preview</code>: render, wizard and panel, claim bar, <code>?tpl=N&amp;bare=1</code></td></tr>
+      <tr><td>index.mjs:7987</td><td><code>GET /site/:slug</code>: the published site</td></tr>
+      <tr><td>templates.mjs:50</td><td><code>TRADE_WORDS</code> per-trade copy pack</td></tr>
+      <tr><td>templates.mjs:97</td><td><code>SVC_LOOKUP</code>: service chip → card</td></tr>
+      <tr><td>templates.mjs:278</td><td><code>widgetSpotBits()</code>: preview-only widget glow</td></tr>
+      <tr><td>templates.mjs:1292</td><td><code>TEMPLATES</code> and <code>renderSite(data, opts)</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="two">
+    <div style="display:grid;gap:10px">
+      <h3>Draft shape</h3>
+<pre>pgdraft:&lt;12-hex&gt; = {
+  trade: "fence" | "roofing",
+  biz, name, phone, city, years,     // 1..60
+  template: "1".."6", color,         // PG_COLORS or ""
+  logo,       // data:image/png|jpeg ≤300KB
+  tagline,    // ≤140
+  about,      // ≤450
+  area, license, services[≤8],
+  photos[≤6], // ≤320KB each, ≤1.5MB total
+  facebook, instagram,               // https only
+  aiN, vN, created
+}</pre>
+    </div>
+    <div style="display:grid;gap:10px">
+      <h3>Run it locally</h3>
+<pre>cd code
+npm install          # npm ci fails: lock drift
+npm run build && npm run seed:test
+ADMIN_KEY=testadmin CS_KEY=testcs \
+CLOSER_KEY=testcloser DEMO_PASS=testpass \
+HQ_KEY=testhq FENCE_ENABLED=1 \
+PAGINA_ENABLED=1 STRIPE_WEBHOOK_SECRET=whsec_test \
+PORT=5959 node server/index.mjs &amp;
+open localhost:5959/pagina?t=cercas
+npm run regression   # must be ALL GREEN</pre>
+    </div>
+  </div>
+</section>
+</main>
+
+<div id="lb" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
+  <header><span id="lbName"></span><button id="lbClose" type="button">Close ✕</button></header>
+  <div class="scroll"><img id="lbImg" alt=""></div>
+</div>
+
+<script>
+var S='screenshots/';
+var steps=[['01-form-landing','Form landing','/pagina',1],['02-form-filled','Form filled',''],['03-form-phone-error','Phone validation',''],
+ ['04-construction-interstitial','Build animation','~4.6 s while the draft saves'],['05-preview-reveal-toast','Preview reveal','Toast, then the wizard opens itself'],
+ ['06-preview-fullpage','Full preview','Ribbon + claim bar',1],['07-wizard-step1-estilo','Wizard 1 · Estilo','6 live thumbnails'],['07-wizard-step2-color','Wizard 2 · Color','6 swatches + Auto'],
+ ['07-wizard-step3-negocio','Wizard 3 · Negocio','Name, phone, city, area, services'],['07-wizard-step4-logo','Wizard 4 · Logo','Canvas-resized ≤300KB'],['07-wizard-step5-fotos','Wizard 5 · Fotos','Up to 6 of their jobs'],
+ ['07-wizard-step6-texto','Wizard 6 · Texto','Manual, AI, or voice'],['08-wizard-done-toast','Wizard done',''],['09-claim-bar','Claim bar','ESTRENARLA $49'],
+ ['10-full-panel-top','🎨 Full panel','Re-edit everything'],['11-full-panel-bottom','🎨 Panel bottom','Socials (panel only)']];
+var flows={
+ 'Mobile · Cercas':steps.map(function(s){return ['m-fence-'+s[0],s[1],s[2],s[3]]}).concat([['c-fence-01-wizard-photos-uploaded','Photos uploaded','Real file input'],['c-fence-02-wizard-text-after-ai','After AI copy','Logo now in header'],['c-fence-03-customized-preview-mobile','Customized page','Full page',1],['m-legacy-querystring-preview','Legacy preview','Fallback, no customizer'],['widget-alto-cercas','Quote widget','/w/alto-cercas',1]]),
+ 'Mobile · Techos':steps.map(function(s){return ['m-roof-'+s[0],s[1],s[2],s[3]]}).concat([['widget-alto-demo','Quote widget','/w/alto-demo']]),
+ 'Desktop · Cercas':steps.map(function(s){return ['d-fence-'+s[0],s[1],s[2],s[3]||(s[0].indexOf('06')===0?1:0)]})
+};
+var TN=['Clásica','Moderna','Bold','Elegante','Vivo','Sencilla'],TS=['clasica','moderna','bold','elegante','vivo','sencilla'];
+var tpls={
+ 'Cercas · desktop':TN.map(function(n,i){return ['tpl-fence-'+(i+1)+'-'+TS[i]+'-desktop',(i+1)+' · '+n,'',1]}),
+ 'Techos · desktop':TN.map(function(n,i){return ['tpl-roof-'+(i+1)+'-'+TS[i]+'-desktop',(i+1)+' · '+n,'',1]}),
+ 'Cercas · mobile':TN.map(function(n,i){return ['tpl-fence-'+(i+1)+'-'+TS[i]+'-mobile',(i+1)+' · '+n,'',1]}),
+ 'Customized':TN.map(function(n,i){return ['c-fence-04-customized-tpl'+(i+1)+'-'+TS[i]+'-desktop',(i+1)+' · '+n,'Logo, photos, AI copy',1]})
+};
+var buy=[['m-buy-01-bienvenida','/bienvenida','The site is live: view or edit'],['m-buy-02-published-site','Published site · mobile','/site/<slug>',1],
+ ['m-buy-03-buyer-app-siteonly','Buyer app','Opens as editor, site-only plan'],['d-buy-01-bienvenida','/bienvenida · desktop',''],['d-buy-02-published-site','Published site · desktop','/site/<slug>',1]];
+function card(it){var b=document.createElement('button');b.className='shot';b.type='button';
+  b.innerHTML='<div class="frame"><img loading="lazy" src="'+S+it[0]+'.jpg" alt="'+it[1]+'"></div><div class="cap"><b>'+it[1]+'</b>'+(it[2]?it[2].replace(/</g,'&lt;'):'')+(it[3]?' <span class="tall">· FULL PAGE</span>':'')+'</div>';
+  b.onclick=function(){openLb(it)};return b}
+function fill(el,list){el.innerHTML='';list.forEach(function(it){el.appendChild(card(it))})}
+function tabs(tabEl,strip,groups,key){var names=Object.keys(groups),cur=names[0];
+  try{var saved=localStorage.getItem(key);if(saved&&groups[saved])cur=saved}catch(e){}
+  function sel(n){cur=n;[].forEach.call(tabEl.children,function(b){b.setAttribute('aria-selected',b.textContent===n?'true':'false')});fill(strip,groups[n]);try{localStorage.setItem(key,n)}catch(e){}}
+  names.forEach(function(n){var b=document.createElement('button');b.type='button';b.role='tab';b.textContent=n;b.onclick=function(){sel(n)};tabEl.appendChild(b)});sel(cur)}
+tabs(document.getElementById('flowTabs'),document.getElementById('flowStrip'),flows,'hf_flow');
+tabs(document.getElementById('tplTabs'),document.getElementById('tplStrip'),tpls,'hf_tpl');
+fill(document.getElementById('buyStrip'),buy);
+var lb=document.getElementById('lb'),lbImg=document.getElementById('lbImg');
+function openLb(it){lbImg.src=S+it[0]+'.jpg';lbImg.alt=it[1];lbImg.className=/^(m-|c-fence-0[123]|widget|tpl-.*-mobile)/.test(it[0])?'phone':'';
+  document.getElementById('lbName').textContent=it[0]+'.jpg';lb.hidden=false;lb.querySelector('.scroll').scrollTop=0;document.getElementById('lbClose').focus()}
+function closeLb(){lb.hidden=true;lbImg.src=''}
+document.getElementById('lbClose').onclick=closeLb;
+lb.addEventListener('click',function(e){if(e.target===lb||e.target.classList.contains('scroll'))closeLb()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!lb.hidden)closeLb()});
+</script>
