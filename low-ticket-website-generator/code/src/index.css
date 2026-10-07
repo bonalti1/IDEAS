@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Lock the OUTER frame to the viewport like a native app: the page itself never
+   drags (no browser pull-to-refresh, no white gaps behind the app). */
+html, body, #root { height: 100%; }
+body { margin: 0; overflow: hidden; overscroll-behavior: none; }
+#root { overflow: hidden; }
+
+/* ...but the INNER content scrolls with real iOS momentum and a gentle bounce,
+   the way native apps do — feels alive and premium, never broken. The bounce is
+   contained to this element so it can't leak out to the locked page. */
+.app-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* Only ever scroll vertically — never let the page pan left/right. */
+  overflow-x: hidden;
+}
+
+/* Soft, slow "breathing" glow for the one money button (Medir techo): pulls the
+   eye without strobing. Respects users who ask for reduced motion. */
+@keyframes altoGlow {
+  0%, 100% { box-shadow: 0 4px 16px rgba(248, 180, 8, .22); }
+  50%      { box-shadow: 0 8px 30px rgba(248, 180, 8, .55); }
+}
+.alto-glow { animation: altoGlow 2.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .alto-glow { animation: none; } }
+
+/* Satellite "scanning the roof" sweep — used while a measurement runs. */
+@keyframes altoScan {
+  0%   { top: -20%; opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.alto-scanbar {
+  position: absolute; left: 0; right: 0; height: 46px; top: -20%;
+  background: linear-gradient(180deg, rgba(248,180,8,0), rgba(248,180,8,.30) 65%, rgba(248,180,8,.5));
+  border-bottom: 2.5px solid #F8B408; pointer-events: none;
+  animation: altoScan 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .alto-scanbar { animation: none; top: 42%; } }
+
+/* Editable fields in the inline editor: a calm tinted box with a soft orange ring
+   so it clearly reads as "tap to change" — without any distracting motion. */
+.alto-editfield { background: #FFF7E6; box-shadow: inset 0 0 0 1.5px rgba(248,180,8,.55); }
+
+/* One-time "zoom into the real image" reveal when a measurement result appears. */
+@keyframes altoReveal {
+  from { transform: scale(1.14); opacity: .35; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.alto-reveal { animation: altoReveal .8s cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .alto-reveal { animation: none; } }
