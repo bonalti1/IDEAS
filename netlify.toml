@@ -1,0 +1,22 @@
+# Netlify build for the Draft House client app (Vite). Set these in Site settings, Environment variables:
+#   VITE_API_URL = https://drafthouse-office.onrender.com   (the Render service URL, no trailing slash)
+#   VITE_API_KEY = the DRAFTHOUSE_APP_KEY value from Render
+[build]
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# hash routing (#/admin) needs no redirects, but a deep link to /anything still gets the app
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

@@ -12,6 +12,8 @@ import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
 
 const API = (process.argv[2] || 'http://localhost:8787').replace(/\/$/, '')
+const KEY = process.env.DRAFTHOUSE_APP_KEY || ''
+const AUTH = KEY ? { 'x-api-key': KEY } : {}
 const MODEL = process.env.INTERPRET_MODEL || 'claude-opus-5-5'
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const program = { ...KIT.reference.program }
@@ -64,7 +66,7 @@ if (key) {
 }
 
 // 3. the office API and its interpreter
-const health = await fetch(API + '/api/health').then((r) => r.json()).catch(() => null)
+const health = await fetch(API + '/api/health', { headers: AUTH }).then((r) => r.json()).catch(() => null)
 const interp = health?.checks?.find((c) => c.id === 'interpreter')
 console.log(`office   ${API}: ${health ? 'up' : 'DOWN'}; interpreter: ${interp ? (interp.ok ? interp.detail : 'NOT READY (' + interp.detail + ')') : 'unknown'}`)
 if (!health || !interp?.ok) {
@@ -82,7 +84,7 @@ for (const req of REQUESTS) {
   const t0 = Date.now()
   let res
   try {
-    const r = await fetch(API + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: req.text, rooms: summarizeRooms(rooms), program, kit: kitMeta, client: 'try-interpret' }) })
+    const r = await fetch(API + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json', ...AUTH }, body: JSON.stringify({ text: req.text, rooms: summarizeRooms(rooms), program, kit: kitMeta, client: 'try-interpret' }) })
     res = { status: r.status, body: await r.json() }
   } catch (e) {
     res = { status: 0, body: { error: String(e.message || e) } }
@@ -107,7 +109,7 @@ for (const req of REQUESTS) {
   console.log(`RULES    ${verdict}: ${detail}`)
   console.log(`REPLY    ${out.reply}`)
   console.log(`RESULT   ${ok ? 'RIGHT' : 'WRONG'} (wanted ${req.refuse ? 'a refusal' : 'the change applied'})`)
-  await fetch(API + '/api/interpret/verdict',{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: req.text, client: 'try-interpret', source: 'claude', applied: out.applied, reasons: out.reasons || [], reply: out.reply, ops: out.ops }) }).catch(() => null)
+  await fetch(API + '/api/interpret/verdict',{ method: 'POST', headers: { 'content-type': 'application/json', ...AUTH }, body: JSON.stringify({ text: req.text, client: 'try-interpret', source: 'claude', applied: out.applied, reasons: out.reasons || [], reply: out.reply, ops: out.ops }) }).catch(() => null)
   summary.push({ text: req.text, verdict, ms, cost, ok })
 }
 line('═')

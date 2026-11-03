@@ -198,3 +198,4 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .undo { align-self: flex-end; margin: 6px 0 0; color: var(--brand-brown); }
 .jobs td.bad { color: var(--status-bad, #A33A2D); }
 .jobs td.warn { color: var(--status-warning, #9A6B12); }
+.card-head .row { display: flex; gap: 8px; }

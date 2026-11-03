@@ -14,6 +14,9 @@ import json, os, sys, time, shutil, socket, subprocess, platform, traceback, url
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(HERE, 'config.json')))
 API = CFG['api'].rstrip('/')
+WORKER_KEY = (CFG.get('workerKey') or os.environ.get('DRAFTHOUSE_WORKER_KEY') or '').strip()
+if API.startswith('http://') and 'localhost' not in API and '127.0.0.1' not in API:
+    print('WARNING: api is not https; the worker key would travel in the clear')
 WORKER_ID = CFG.get('id') or socket.gethostname().lower()
 NAME = CFG.get('name', 'Office Revit')
 REVIT_YEAR = str(CFG.get('revitYear', '2024'))
@@ -36,11 +39,15 @@ def api(method, path, body=None, raw=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
     req = urllib.request.Request(API + path, data=data, method=method)
     req.add_header('content-type', 'application/octet-stream' if raw is not None else 'application/json')
+    if WORKER_KEY:
+        req.add_header('x-api-key', WORKER_KEY)
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             txt = r.read().decode()
             return r.status, (json.loads(txt) if txt else {})
     except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            log('API refused the worker key (%s). Check workerKey in config.json against DRAFTHOUSE_WORKER_KEY on the server.' % e.code)
         return e.code, {}
     except Exception as e:
         return 0, {'error': str(e)}
@@ -153,7 +160,7 @@ def run_job(job):
         api('POST', '/api/jobs/%s/fail' % jid, {'error': str(e), 'log': traceback.format_exc()[-5000:]})
 
 def main():
-    log('worker %s starting, api %s' % (WORKER_ID, API))
+    log('worker %s starting, api %s, key %s' % (WORKER_ID, API, ('%d chars' % len(WORKER_KEY)) if WORKER_KEY else 'NONE (only works against an open office API)'))
     smoke_test()
     last_hb = 0
     last_smoke_t = time.time()

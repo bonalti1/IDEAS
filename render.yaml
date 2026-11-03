@@ -1,0 +1,42 @@
+# Render blueprint for the Draft House office API.
+# Dashboard: New, Blueprint, pick this repo. Secrets (sync: false) are entered once in the Render UI.
+# The client app is on Netlify (netlify.toml); the Revit worker runs at the office (worker/INSTALL.md).
+services:
+  - type: web
+    name: drafthouse-office
+    runtime: node
+    plan: starter            # always on; the free plan sleeps and the worker would see it offline
+    region: ohio             # closest Render region to Texas
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.mjs
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL        # Supabase, Project Settings, Database, connection string (Transaction pooler, port 6543)
+        sync: false
+      - key: SUPABASE_URL        # https://<project>.supabase.co
+        sync: false
+      - key: SUPABASE_SERVICE_KEY # service_role key; never in the browser
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: drafthouse
+      - key: DRAFTHOUSE_CLAUDE_KEY
+        sync: false
+      - key: DRAFTHOUSE_APP_KEY   # same value goes to Netlify as VITE_API_KEY
+        generateValue: true
+      - key: DRAFTHOUSE_WORKER_KEY # same value goes to worker/config.json as workerKey
+        generateValue: true
+      - key: DRAFTHOUSE_APP_ORIGIN # the Netlify site, e.g. https://drafthouse.netlify.app (comma separated for more)
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ALERT_EMAIL_TO
+        sync: false
+      - key: ALERT_EMAIL_FROM     # on a domain verified in Resend, e.g. alerts@drafthouse.com
+        sync: false
+      - key: BACKUP_HOUR_UTC      # 08:00 UTC is 2 am in Texas
+        value: "8"
+      - key: INTERPRET_MODEL
+        value: claude-opus-5-5

@@ -1,5 +1,6 @@
 {
-  "api": "https://office.drafthouse.example/api-root-without-trailing-slash",
+  "api": "https://drafthouse-office.onrender.com",
+  "workerKey": "paste DRAFTHOUSE_WORKER_KEY from the Render service here",
   "id": "office-revit-1",
   "name": "Office Revit",
   "revitYear": "2024",

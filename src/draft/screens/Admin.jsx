@@ -123,11 +123,16 @@ export default function Admin() {
         <div className="card">
           <div className="card-head">
             <h3>Health checks</h3>
-            {worker && (
-              <Button small ghost onClick={() => api.command(worker.id, 'smoke').then(refresh)}>
-                Run Revit check
+            <span className="row">
+              <Button small ghost onClick={() => api.backup().then(refresh)}>
+                Back up now
               </Button>
-            )}
+              {worker && (
+                <Button small ghost onClick={() => api.command(worker.id, 'smoke').then(refresh)}>
+                  Run Revit check
+                </Button>
+              )}
+            </span>
           </div>
           <table className="tbl">
             <tbody>

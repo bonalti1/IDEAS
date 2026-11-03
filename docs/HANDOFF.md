@@ -74,7 +74,7 @@ npm run office:demo-worker       # pretend Revit machine
 node scripts/shot-flow.mjs out   # screenshots of every step, dev server running
 ```
 
-Environment: `VITE_API_URL` for the office API address (default `http://localhost:8787`). The server takes `PORT` and `DATA_DIR`, and the Claude key for the change interpreter from `DRAFTHOUSE_CLAUDE_KEY`, falling back to `ANTHROPIC_API_KEY` (some hosts blank the latter). Only the key's length is ever printed. At start the server checks that api.anthropic.com is reachable and says so in its log and in the health check, including when network access blocks it. `node scripts/try-interpret.mjs` runs ten live requests and grades them; see `docs/change-diff.md`.
+Environment: `VITE_API_URL` for the office API address (default `http://localhost:8787`) and `VITE_API_KEY` (the app key, empty locally). The server takes `PORT`, `DATA_DIR`, `DATABASE_URL`, the Supabase and key settings listed in `docs/DEPLOY.md`, and the Claude key for the change interpreter from `DRAFTHOUSE_CLAUDE_KEY`, falling back to `ANTHROPIC_API_KEY` (some hosts blank the latter). Only the key's length is ever printed. At start the server checks that api.anthropic.com is reachable and says so in its log and in the health check, including when network access blocks it. `node scripts/try-interpret.mjs` runs ten live requests and grades them; see `docs/change-diff.md`.
 
 Tooling in this repo's development environment: Node 22, Python 3.11 for scripts, Python 3.13 with `ifcopenshell` for IFC validation (`pip install ifcopenshell`), Playwright with Chromium for screenshots.
 
@@ -175,7 +175,11 @@ Standalone 3D page: `scripts/export-boxes.mjs` dumps JSON; a dependency-free can
 | `GET /api/health` | Aggregate checks: API, store, queue (stuck jobs over 20 min), worker online within 90 s, plus every worker check. |
 | `GET /api/admin/overview` | Everything the dashboard shows. |
 
-Store: `server/data/db.json` written debounced, files under `server/data/files/<design>/`. CORS open. No auth. Replace the JSON store with Postgres and add an API key before any client-facing deployment.
+Store: `server/store/` behind one interface. Postgres (`postgres.mjs`, migrations in `server/migrations/`, run at start) when `DATABASE_URL` is set; otherwise the JSON file (`json.mjs`, `server/data/db.json`) for laptops and tests. Files: `server/files/` the same way, Supabase Storage (`supabase.mjs`, private bucket, REST, no SDK) when `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are set, else `server/data/files/`. Downloads always go through the API (`/files/:design/:name`), so the bucket stays private.
+
+Auth (`server/auth.mjs`): two keys. `DRAFTHOUSE_APP_KEY` for the client app and dashboard, `DRAFTHOUSE_WORKER_KEY` for the office worker; each route states which it needs (`app`, `worker`, `any`, `public`). Keys travel in `x-api-key`, `Authorization: Bearer`, or `?key=` for file links opened in a tab. With no keys set the API is open and the health row says so. CORS is locked to `DRAFTHOUSE_APP_ORIGIN` when set. `/api/health` without a key returns only the verdict (for the hosting health probe).
+
+Alerts (`server/alerts.mjs`): every minute, a worker silent for more than 10 minutes gets one email through Resend and one more when it is back; the flag lives on the worker row so a restart does not resend. Backups (`server/backup.mjs`): nightly gzip JSON dump of every table to the file store under `backups/`, last 30 kept, also on demand from the dashboard and `scripts/backup-db.mjs`; restore or import with `scripts/migrate-json-to-pg.mjs`. Deployment: `render.yaml` (API), `netlify.toml` (app), `docs/DEPLOY.md` (every setting and where it goes).
 
 ### Worker, `worker/draft_house_worker.py`
 
@@ -195,7 +199,7 @@ See `docs/design-contract.md`. Version 1. The worker refuses other versions.
 
 ## 13. Tests and checks
 
-- `npm test`: `garza.test.mjs` checks areas, takeoff, schedules, plan counts, roof masses and ridge heights, no buried roof vertices, IFC well-formedness including door, window, void, and roof panel counts. `server.test.mjs` starts the API on a random port and runs a full job.
+- `npm test`: `garza.test.mjs` checks areas, takeoff, schedules, plan counts, roof masses and ridge heights, no buried roof vertices, IFC well-formedness including door, window, void, and roof panel counts. `server.test.mjs` starts the API on a random port and runs the full pipeline on the JSON store, then again with API keys and CORS; with `TEST_DATABASE_URL` set it also runs on a throwaway Postgres database and checks that eight workers claiming at once get three distinct jobs. `alerts.test.mjs` covers the offline email logic with a fake clock and the backup rotation. `interpret.test.mjs` covers the interpreter and rules.
 - Screenshots: `scripts/shot-flow.mjs` walks every step including Send and the dashboard; it expects the API and a worker running for the last two.
 - IFC geometry: the IfcOpenShell check described in section 11. Not automated in `npm test` because it needs Python 3.13.
 
@@ -217,9 +221,9 @@ See `docs/design-contract.md`. Version 1. The worker refuses other versions.
 1. **Get the build script running on the office machine.** Install per `worker/INSTALL.md`, enable Remote Control, run the Garza design, fix API calls, fill the real type and family names into `kit.revit`.
 2. **Kit extraction from Revit.** Drafter exports each style's model to IFC4; a script reads spaces, walls, openings, fixtures, roofs into the kit shape. Replaces tracing. Unlocks the other nine styles.
 3. **Real change interpreter.** Claude turns a request plus the current plan into a structured diff; a rules engine (setbacks, minimum room sizes, egress, plumbing stacking, buildability) accepts or rejects with a plain-language reason.
-4. **Persistence and accounts.** Postgres, saved versions with rollback, credits that survive reload, client logins, drafter review queue.
+4. **Accounts.** Saved versions with rollback, credits that survive reload, client logins, drafter review queue. (Postgres, keys, deploy files, backups and alerts are done; see section 12.)
 5. **Survey and city intake.** Plat PDF to lot polygon with Claude plus a drafter confirmation step; county GIS, zoning, FEMA layers for the top cities.
-6. **Production hardening.** API auth, HTTPS, worker watchdog as a Windows service, backups, monitoring on the dashboard checks.
+6. **Production hardening.** Worker watchdog as a Windows service. (API keys, HTTPS through Render, backups and offline alerts are done.)
 7. **Renders and sales assets** once a layout is approved.
 
 ## 16. Decisions and why

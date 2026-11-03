@@ -7,7 +7,7 @@ One Windows machine with Revit. Nobody needs to sit at it.
 3. Install Python 3.11 or newer from python.org, ticking "Add to PATH".
 4. Copy the `worker` folder to `C:\DraftHouse\worker`.
 5. Put the office template at `C:\DraftHouse\templates\` and the family library at `C:\DraftHouse\families\`.
-6. Copy `config.example.json` to `config.json` and fill in the API address and paths.
+6. Copy `config.example.json` to `config.json` and fill in the API address (the Render URL, https), the worker key (`DRAFTHOUSE_WORKER_KEY` from the Render service, Environment tab) and the paths.
 7. Test by hand: `python draft_house_worker.py`. Within a minute the dashboard shows the machine online with its checks.
 8. Make it start at logon: Task Scheduler, new task, trigger "At log on", action `python C:\DraftHouse\worker\draft_house_worker.py`, "Run whether user is logged on or not". Set Windows to log the office account in automatically and never sleep.
 
@@ -17,7 +17,8 @@ Every 30 seconds: Revit installed, pyRevit CLI, template present, family count, 
 
 ## When something breaks
 
-- Dashboard says offline: the machine is asleep, the task is not running, or the API address in config is wrong.
+- Dashboard says offline: the machine is asleep, the task is not running, or the API address in config is wrong. After 10 minutes offline the office gets an alert email, and another when the worker is back.
+- worker.log says the API refused the key (401 or 403): `workerKey` in config.json does not match `DRAFTHOUSE_WORKER_KEY` on the server.
 - "Revit responds" fails: open Revit by hand on that machine and clear any dialog (license, update, recovery). The worker kills Revit after a failed job, but a dialog on first launch blocks it.
 - A job fails twice: it stays failed with the Revit log attached. Retry from the dashboard after fixing the cause.
 

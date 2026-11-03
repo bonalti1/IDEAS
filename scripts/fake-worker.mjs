@@ -3,7 +3,9 @@
 // usage: node scripts/fake-worker.mjs [api]
 const API = (process.argv[2] || 'http://localhost:8787').replace(/\/$/, '')
 const id = 'office-demo'
-const post = (p, body) => fetch(API + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+const KEY = process.env.DRAFTHOUSE_WORKER_KEY || ''
+const H = KEY ? { 'x-api-key': KEY } : {}
+const post = (p, body) => fetch(API + p, { method: 'POST', headers: { 'content-type': 'application/json', ...H }, body: JSON.stringify(body) })
 const now = () => new Date().toISOString()
 let smokeAt = now()
 async function heartbeat(current = null) {
@@ -36,10 +38,10 @@ async function loop() {
       await post(`/api/jobs/${job.id}/progress`, { step, message, pct })
       await new Promise((res) => setTimeout(res, 700))
     }
-    const design = await (await fetch(API + job.designUrl)).json()
+    const design = await (await fetch(API + job.designUrl, { headers: H })).json()
     const report = { ok: true, counts: { walls: design.walls?.length, doors: design.doors?.length, windows: design.windows?.length, rooms: design.rooms?.length }, warnings: ['type "Sliding-Barn : 30" x 96"" not in template, using Single-Flush'] }
-    await fetch(API + `/api/jobs/${job.id}/files/report.json`, { method: 'PUT', body: JSON.stringify(report, null, 2) })
-    await fetch(API + `/api/jobs/${job.id}/files/model.rvt`, { method: 'PUT', body: 'demo' })
+    await fetch(API + `/api/jobs/${job.id}/files/report.json`, { method: 'PUT', headers: H, body: JSON.stringify(report, null, 2) })
+    await fetch(API + `/api/jobs/${job.id}/files/model.rvt`, { method: 'PUT', headers: H, body: 'demo' })
     await post(`/api/jobs/${job.id}/complete`, { outputs: [{ name: 'model.rvt', url: `/files/${job.designId}/model.rvt` }, { name: 'report.json', url: `/files/${job.designId}/report.json` }], warnings: report.warnings, log: 'DH_PROGRESS 100 done ok' })
     console.log('done', job.id)
     await heartbeat()
