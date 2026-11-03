@@ -5,7 +5,7 @@
 import { LOT_ANGLE } from '../../data/program.js'
 import { SETBACK_CORNERS } from '../../data/survey.js'
 import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
-import { roofPrisms } from './roof.js'
+import { roofSurfaces, dormerWalls } from './roof.js'
 
 const ENVELOPE_CENTER = [
   SETBACK_CORNERS.reduce((s, p) => s + p[0], 0) / 4,
@@ -169,7 +169,7 @@ export function fromPlan(program, kit) {
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the rest scale with the plan
     const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
-    placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], prisms: roofPrisms(masses, k, [cx, cy]) })
+    placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, faces: roofSurfaces(masses, k, [cx, cy]), dormers: dormerWalls(masses, k, [cx, cy]) })
   }
   return placed
 }

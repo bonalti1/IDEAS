@@ -40,13 +40,20 @@ test('plan has the traced rooms, openings, and fixtures', () => {
 })
 test('roof follows sheet 100', () => {
   const roof = rooms.find((r) => r.kind === 'roof')
-  assert.equal(roof.prisms.length, KIT.plan.roof.length)
-  const main = roof.prisms.find((p) => p.id === 'main')
-  const ridge = Math.max(...main.profile.map(([, v]) => v))
-  assert.ok(ridge > 20 && ridge < 24, `main ridge ${ridge.toFixed(1)} ft at 10:12 over an 11 ft plate`)
-  for (const id of ['leftwing', 'office', 'pantry', 'master', 'frontPorch', 'rearPorch', 'dormer']) assert.ok(roof.prisms.some((p) => p.id === id), `roof mass ${id}`)
-  const left = roof.prisms.find((p) => p.id === 'leftwing')
-  assert.ok(Math.max(...left.profile.map(([, v]) => v)) > 19, 'left wing gable peaks near 20 ft like the front elevation')
+  assert.equal(roof.masses.length, KIT.plan.roof.length)
+  const top = (id) => Math.max(...roof.faces.filter((f) => f.mass === id && f.kind === 'slope').flatMap((f) => f.rings[0].map((p) => p[1])))
+  assert.ok(top('main') > 21 && top('main') < 24, `main ridge ${top('main').toFixed(1)} ft`)
+  assert.ok(top('leftwing') > 19, 'left wing gable peaks near 20 ft like the front elevation')
+  for (const id of ['leftwing', 'office', 'pantry', 'master', 'frontPorch', 'rearPorch', 'dormer']) assert.ok(roof.faces.some((f) => f.mass === id), `roof mass ${id} is visible`)
+  // valleys: no visible slope of one mass sits under another mass's plane
+  const slopes = roof.faces.filter((f) => f.kind === 'slope')
+  const hAt = (p, x, z) => p.a * x + p.b * z + p.c
+  let under = 0
+  // a vertex counts as buried only if it is clearly inside the other face, not on its boundary
+  const strictly = (g, x, z) => [[0.15, 0], [-0.15, 0], [0, 0.15], [0, -0.15]].every(([dx, dz]) => inside(g.rings[0], x + dx, z + dz) && !g.rings.slice(1).some((h) => inside(h, x + dx, z + dz)))
+  slopes.forEach((f) => f.rings[0].forEach(([x, y, z]) => slopes.forEach((g) => { if (g.mass !== f.mass && g.plane && hAt(g.plane, x, z) > y + 0.5 && strictly(g, x, z)) under++ })))
+  function inside(r, x, z) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { if (r[i][2] > z !== r[j][2] > z && x < ((r[j][0] - r[i][0]) * (z - r[i][2])) / (r[j][2] - r[i][2]) + r[i][0]) c = !c } return c }
+  assert.equal(under, 0, 'visible roof vertices buried under another roof')
 })
 test('IFC export is well formed', () => {
   const ifc = toIFC({ rooms, program, kit: KIT, style, lot: { address: 'Lot 514' } })
@@ -56,7 +63,8 @@ test('IFC export is well formed', () => {
   assert.equal((ifc.match(/IFCWINDOW\(/g) || []).length, KIT.plan.windows.filter((w) => !w.dormer).length)
   assert.equal((ifc.match(/IFCRELVOIDSELEMENT\(/g) || []).length, (ifc.match(/IFCOPENINGELEMENT\(/g) || []).length)
   assert.ok(!/\\'/.test(ifc), 'no backslash-escaped quotes in STEP text')
-  assert.equal((ifc.match(/IFCROOF\(/g) || []).length, KIT.plan.roof.length)
+  assert.equal((ifc.match(/IFCROOF\(/g) || []).length, 1)
+  assert.ok((ifc.match(/IFCSLAB\([^\n]*\.ROOF\.\)/g) || []).length > 20, 'roof panels')
   // every quoted string must have apostrophes doubled: no odd lone apostrophe inside a line
   ifc.split('\n').forEach((line) => assert.ok(((line.match(/'/g) || []).length % 2) === 0, 'unbalanced quote: ' + line.slice(0, 80)))
   assert.ok(wallsFrom(rooms, KIT).some((w) => w.plumbing), 'plumbing walls present')

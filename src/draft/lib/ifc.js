@@ -102,11 +102,9 @@ export function wallsFrom(rooms, kit) {
   }))
   // shed dormer faces are walls too: they sit above the roof, so they carry a base height
   const roof = rooms.find((r) => r.kind === 'roof')
-  ;(roof?.prisms || [])
-    .filter((p) => p.kind === 'dormer')
-    .forEach((p) => {
-      walls.push({ a: [p.O[0], p.O[1]], b: [p.O[0] + p.len, p.O[1]], plate: p.profile[0][1] + 0.4, base: p.base ?? 10, plumbing: false, exterior: true, dormer: true, rooms: ['Dormer'], thicknessIn: kit.walls.exterior.thicknessIn })
-    })
+  ;(roof?.dormers || []).forEach((d) => {
+    walls.push({ a: [d.x0, d.face], b: [d.x1, d.face], plate: d.top + 0.3, base: d.base, plumbing: false, exterior: true, dormer: true, rooms: ['Dormer'], thicknessIn: kit.walls.exterior.thicknessIn })
+  })
   return walls
 }
 
@@ -243,34 +241,67 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       return add(`${cls}(${g()},#${oh},'${name}',$,'${name}',#${pl},#${shape},$,${type})`)
     })
 
-  // ── roof: one IfcRoof per mass, as a profile extruded along the ridge ───
-  const up = [0, 0, 1]
+  // ── roof: one IfcRoof, made of IfcSlab roof panels, one per visible plane ─
+  // Each panel is its polygon (with holes) drawn in the plane of the panel and
+  // extruded 6" down its normal. Valleys and hips are where panels meet.
   const roofIds = []
-  rooms
-    .filter((r) => r.kind === 'roof')
-    .flatMap((r) => r.prisms)
-    .forEach((p) => {
-      // local (x, y up, z south) → IFC (x, -z, y); extrusion axis along the ridge
-      const axis = [p.dir[0], -p.dir[1], 0]
-      const xref = [-axis[1], axis[0], 0] // up × axis, horizontal, so local Y comes out vertical
-      const perp = [-p.dir[1], p.dir[0]]
-      const o = add(`IFCCARTESIANPOINT((${m(p.O[0])},${m(-p.O[1])},0.))`)
-      const ax = add(`IFCDIRECTION((${axis[0].toFixed(6)},${axis[1].toFixed(6)},0.))`)
-      const rx = add(`IFCDIRECTION((${xref[0].toFixed(6)},${xref[1].toFixed(6)},0.))`)
-      const place = add(`IFCAXIS2PLACEMENT3D(#${o},#${ax},#${rx})`)
-      const pl = add(`IFCLOCALPLACEMENT(#${sPl},#${place})`)
-      const pts = p.profile.map(([u, v]) => {
-        const off = [perp[0] * u, -perp[1] * u, v] // IFC offset of this profile point
-        const pu = off[0] * xref[0] + off[1] * xref[1]
-        return add(`IFCCARTESIANPOINT((${(pu * FT).toFixed(4)},${(v * FT).toFixed(4)}))`)
+  const roofEl = rooms.find((r) => r.kind === 'roof')
+  if (roofEl?.faces?.length) {
+    const V = ([x, y, z]) => [x * FT, -z * FT, y * FT] // local → IFC metres
+    const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]]
+    const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]]
+    const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2]
+    const norm = (p) => {
+      const l = Math.hypot(...p) || 1
+      return p.map((v) => v / l)
+    }
+    const panelIds = []
+    roofEl.faces
+      .filter((f) => f.kind !== 'fascia')
+      .forEach((f, i) => {
+        const outer = f.rings[0].map(V)
+        if (outer.length < 3) return
+        // Newell normal
+        let n = [0, 0, 0]
+        for (let j = 0; j < outer.length; j++) {
+          const p = outer[j]
+          const q = outer[(j + 1) % outer.length]
+          n[0] += (p[1] - q[1]) * (p[2] + q[2])
+          n[1] += (p[2] - q[2]) * (p[0] + q[0])
+          n[2] += (p[0] - q[0]) * (p[1] + q[1])
+        }
+        n = norm(n)
+        if (f.kind === 'slope' && n[2] < 0) n = n.map((v) => -v) // slopes face up
+        const X = Math.abs(n[2]) > 0.999 ? [1, 0, 0] : norm(cross([0, 0, 1], n))
+        const Y = cross(n, X)
+        const O = outer[0]
+        const uv = (p) => [dot(sub(p, O), X), dot(sub(p, O), Y)]
+        const ringPts = (ring) => {
+          const ids = ring.map((p) => {
+            const [u, v] = uv(p)
+            return add(`IFCCARTESIANPOINT((${u.toFixed(4)},${v.toFixed(4)}))`)
+          })
+          return add(`IFCPOLYLINE((${[...ids, ids[0]].map((id) => '#' + id).join(',')}))`)
+        }
+        const outerPl = ringPts(outer)
+        const holes = f.rings.slice(1).map((r) => ringPts(r.map(V)))
+        const prof = holes.length ? add(`IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#${outerPl},(${holes.map((h) => '#' + h).join(',')}))`) : add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${outerPl})`)
+        const o = add(`IFCCARTESIANPOINT((${O[0].toFixed(4)},${O[1].toFixed(4)},${O[2].toFixed(4)}))`)
+        const ax = add(`IFCDIRECTION((${n.map((v) => v.toFixed(6)).join(',')}))`)
+        const rx = add(`IFCDIRECTION((${X.map((v) => v.toFixed(6)).join(',')}))`)
+        const place = add(`IFCAXIS2PLACEMENT3D(#${o},#${ax},#${rx})`)
+        const pl = add(`IFCLOCALPLACEMENT(#${sPl},#${place})`)
+        const down = add(`IFCDIRECTION((0.,0.,-1.))`)
+        const solid = add(`IFCEXTRUDEDAREASOLID(#${prof},#${wcs},#${down},${(0.5 * FT).toFixed(4)})`)
+        const rep = add(`IFCSHAPEREPRESENTATION(#${body},'Body','SweptSolid',(#${solid}))`)
+        const shape = add(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`)
+        panelIds.push(add(`IFCSLAB(${g()},#${oh},'Roof ${esc(f.id)}','${esc(f.material)}; ${f.kind === 'end' ? 'gable end' : esc(kit.roof.pitch) + ' or 4:12 at metal'}',$,#${pl},#${shape},$,.ROOF.)`))
       })
-      const poly = add(`IFCPOLYLINE((${[...pts, pts[0]].map((i) => '#' + i).join(',')}))`)
-      const prof = add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${poly})`)
-      const solid = add(`IFCEXTRUDEDAREASOLID(#${prof},#${wcs},#${zDir},${(p.len * FT).toFixed(4)})`)
-      const rep = add(`IFCSHAPEREPRESENTATION(#${body},'Body','SweptSolid',(#${solid}))`)
-      const shape = add(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`)
-      roofIds.push(add(`IFCROOF(${g()},#${oh},'Roof ${p.id}','${esc(p.material)}; ${p.kind === 'gable' ? esc(kit.roof.pitch) : '4:12'}, ${esc(kit.roof.overhang)} overhang',$,#${pl},#${shape},$,.${p.kind === 'gable' ? 'GABLE_ROOF' : p.kind === 'dormer' ? 'SHED_ROOF' : 'SHED_ROOF'}.)`))
-    })
+    const roofPl = add(`IFCLOCALPLACEMENT(#${sPl},#${wcs})`)
+    const roofId = add(`IFCROOF(${g()},#${oh},'Roof','${esc(kit.roof.material)}; ${esc(kit.roof.overhang)} overhang',$,#${roofPl},$,$,.FREEFORM.)`)
+    add(`IFCRELAGGREGATES(${g()},#${oh},$,$,#${roofId},(${panelIds.map((i) => '#' + i).join(',')}))`)
+    roofIds.push(roofId)
+  }
 
   // ── slabs: one per solid room footprint, 4" below finished floor ──────
   const slabT = (4 / 12) * FT

@@ -12,7 +12,6 @@ import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
-import { roofFaces } from './lib/roof.js'
 
 const [CX, CZ] = LOT_CENTROID
 export const CAMERAS = {
@@ -120,29 +119,48 @@ function Fixture({ e, centre }) {
 }
 
 function Roof({ roof, centre }) {
-  const { geom, edges } = useMemo(() => {
-    const faces = roofFaces(roof.prisms)
-    const pos = []
-    const lines = []
+  const { shingles, metal, siding, edges } = useMemo(() => {
     const cos = Math.cos(LOT_ANGLE)
     const sin = Math.sin(LOT_ANGLE)
     const W = ([x, y, z]) => [centre[0] + x * cos - z * sin, y, centre[1] + x * sin + z * cos]
-    faces.forEach((f) => {
-      const pts = f.pts.map(W)
-      for (let i = 1; i < pts.length - 1; i++) pos.push(...pts[0], ...pts[i], ...pts[i + 1])
-      if (f.kind !== 'under') for (let i = 0; i < pts.length; i++) lines.push(...pts[i], ...pts[(i + 1) % pts.length])
+    const buckets = { shingles: [], metal: [], siding: [] }
+    const lines = []
+    roof.faces.forEach((f) => {
+      const bucket = f.kind === 'end' ? 'siding' : f.kind === 'fascia' ? 'siding' : /metal/.test(f.material) ? 'metal' : 'shingles'
+      // triangulate in the face's own 2D frame: plan (x, z) for slopes, (along, y) for vertical faces
+      const is2d = f.kind === 'slope' ? (p) => new THREE.Vector2(p[0], p[2]) : Math.abs(f.rings[0][0][0] - f.rings[0][1][0]) < 0.01 && Math.abs(f.rings[0][0][0] - f.rings[0][2][0]) < 0.01 ? (p) => new THREE.Vector2(p[2], p[1]) : (p) => new THREE.Vector2(p[0], p[1])
+      const contour = f.rings[0].map(is2d)
+      const holes = f.rings.slice(1).map((r) => r.map(is2d))
+      const all3d = f.rings.flat()
+      let tris
+      try {
+        tris = THREE.ShapeUtils.triangulateShape(contour, holes)
+      } catch (e) {
+        tris = []
+      }
+      tris.forEach((t) => t.forEach((i) => buckets[bucket].push(...W(all3d[i]))))
+      if (f.kind !== 'fascia') for (let i = 0; i < f.rings[0].length; i++) lines.push(...W(f.rings[0][i]), ...W(f.rings[0][(i + 1) % f.rings[0].length]))
     })
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-    g.computeVertexNormals()
+    const geo = (arr) => {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+      g.computeVertexNormals()
+      return g
+    }
     const e = new THREE.BufferGeometry()
     e.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
-    return { geom: g, edges: e }
+    return { shingles: geo(buckets.shingles), metal: geo(buckets.metal), siding: geo(buckets.siding), edges: e }
   }, [roof, centre])
   return (
     <group>
-      <mesh geometry={geom}>
+      <mesh geometry={shingles}>
         <meshLambertMaterial color="#6f655c" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={metal}>
+        <meshLambertMaterial color="#8e8a84" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={siding}>
+        <meshLambertMaterial color="#efe9df" side={THREE.DoubleSide} />
       </mesh>
       <lineSegments geometry={edges}>
         <lineBasicMaterial color={INK} />

@@ -179,7 +179,10 @@ export const KIT = {
     // 'ends' lists which ends are gables; the other end dies into a neighbour.
     roof: [
       // main body: one east-west ridge, gable ends both sides
-      { id: 'main', kind: 'gable', x0: 19.75, x1: 72, y0: 12.25, y1: 38, ridge: 'ew', plate: 12, pitch: 10, ends: ['w', 'e'] },
+      // main body: one east-west ridge, 9.5 ft eave at the rear, 14 ft plate at the front wall (the entry),
+      // gable ends both sides. The office and pantry gables sit in front of it, so their footprints are cut out.
+      { id: 'main', kind: 'gable', x0: 19.75, x1: 72, y0: 12.25, y1: 38, ridge: 'ew', plate: 9.5, plate2: 14, pitch: 10, ends: ['w', 'e'],
+        cuts: [{ x0: 25.25, x1: 35.5, y0: 30.75, y1: 39.5 }, { x0: 44.5, x1: 56.5, y0: 30.75, y1: 39.5 }] },
       // left wing: bath 1 and the mini primary share one tall gable facing the street
       { id: 'leftwing', kind: 'gable', x0: 0, x1: 25.25, y0: 38, y1: 52.25, ridge: 'ns', plate: 9.5, pitch: 10, ends: ['s'] },
       { id: 'bedwing', kind: 'gable', x0: 3.75, x1: 19.75, y0: 2.75, y1: 40, ridge: 'ns', plate: 9, pitch: 10, ends: ['n'] },
@@ -189,7 +192,7 @@ export const KIT = {
       { id: 'office', kind: 'gable', x0: 25.25, x1: 35.5, y0: 30.75, y1: 38, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
       { id: 'pantry', kind: 'gable', x0: 44.5, x1: 56.5, y0: 30.75, y1: 38, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
       // shed dormer over the entry: vertical face at the front wall up to the 18 ft plate, metal roof rising back
-      { id: 'dormer', kind: 'dormer', x0: 35.5, x1: 44.5, face: 38, plate: 18, base: 10, depth: 6, pitch: 4, material: 'metal roof' },
+      { id: 'dormer', kind: 'dormer', x0: 35.5, x1: 44.5, face: 38, plate: 18, base: 13, depth: 9, pitch: 4, material: 'metal roof' },
       // porch roof between the two gables, and metal awnings over the windows
       { id: 'frontPorch', kind: 'shed', x0: 35.5, x1: 44.5, y0: 38, y1: 43, high: 'n', plate: 8, pitch: 4, material: 'metal roof' },
       { id: 'rearPorch', kind: 'shed', x0: 19.75, x1: 56.5, y0: 7.75, y1: 12.25, high: 's', plate: 8, pitch: 4, material: 'metal roof' },
