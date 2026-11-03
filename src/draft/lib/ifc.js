@@ -52,7 +52,7 @@ export function wallsFrom(rooms, kit) {
       const len = Math.hypot(nx, nz)
       const probe = (s) => [mid[0] + (nx / len) * s, mid[1] + (nz / len) * s]
       // One probe lands inside this room; the other tells us what is beyond the edge.
-      const neighbor = solid.find((o) => o !== r && (inside(probe(0.5), o) || inside(probe(-0.5), o)))
+      const neighbor = solid.find((o) => o !== r && (inside(probe(1.25), o) || inside(probe(-1.25), o)))
       const exterior = !neighbor
       const prev = seen.get(k)
       const plumbing = !!r.plumbing || !!neighbor?.plumbing

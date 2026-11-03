@@ -87,6 +87,9 @@ export const KIT = {
     laundry: ['B'],
     mud: [],
     foyer: ['B'],
+    hall: [],
+    wic: [],
+    mwic: [],
     pantry: [],
   },
 
@@ -110,6 +113,7 @@ export const KIT = {
     laundry: { name: 'Laundry', w: 6.7, d: 11, zone: 'service', plumbing: true },
     mud: { name: 'Mud Room', w: 7.3, d: 5.5, zone: 'service' },
     wic: { name: 'Closet', w: 4.5, d: 9, zone: 'private' },
+    hall: { name: 'Hall', w: 4, d: 12, zone: 'private' },
     garage: { name: 'Garage', w: 22, d: 22, zone: 'service', perCar: 11 }, // CONFIRM: Garza plan has no garage
     frontPorch: { name: 'Front Porch', w: 31.3, d: 5.2, zone: 'front', open: true },
     rearPorch: { name: 'Rear Porch', w: 36.2, d: 4.8, zone: 'rear', open: true },
@@ -133,6 +137,42 @@ export const KIT = {
   ],
   // Private rooms sit on the opposite side from the primary suite (Garza: beds west, primary east).
   layoutRules: ['primary suite away from secondary bedrooms', 'plumbing rooms share 6" walls where possible', 'porches span the public rooms'],
+
+
+  // ── Reference plan, traced from sheet 200 (feet, x from the left, y from the
+  //    rear wall toward the street). This is what the layout engine starts from.
+  //    Hallways are real rooms here so the walls come out where the set has them.
+  plan: {
+    footprint: { w: 72, d: 53 },
+    facing: 'street', // front porch faces the lot's front street
+    rooms: [
+      { id: 'bed2', kind: 'bed', name: 'Bedroom 2', x: 3.75, y: 2.75, w: 12.25, d: 12.5 },
+      { id: 'closet2', kind: 'wic', name: 'Closet', x: 15.75, y: 2.75, w: 4.0, d: 7.5 },
+      { id: 'linen', kind: 'wic', name: 'Linen', x: 15.75, y: 10.25, w: 4.0, d: 5.0 },
+      { id: 'jackjill', kind: 'jackjill', name: 'Jack & Jill', x: 3.75, y: 16.0, w: 12.25, d: 7.75 },
+      { id: 'closet1', kind: 'wic', name: 'Closet', x: 3.75, y: 24.25, w: 6.5, d: 3.75 },
+      { id: 'hall', kind: 'hall', name: 'Hallway', x: 15.75, y: 15.25, w: 4.0, d: 24.25 },
+      { id: 'bed1', kind: 'bed', name: 'Bedroom 1', x: 3.75, y: 28.0, w: 12.25, d: 12.0 },
+      { id: 'bath1', kind: 'bath', name: 'Bath 1', x: 0.0, y: 39.75, w: 12.25, d: 6.0 },
+      { id: 'suite2', kind: 'suite2', name: 'Mini Primary', x: 12.25, y: 39.75, w: 13.0, d: 12.5 },
+      { id: 'wic2', kind: 'wic', name: 'Closet', x: 19.75, y: 31.0, w: 5.25, d: 8.75 },
+      { id: 'rearPorch', kind: 'rearPorch', name: 'Rear Porch', x: 19.75, y: 7.75, w: 36.5, d: 4.5 },
+      { id: 'living', kind: 'living', name: 'Living', x: 19.75, y: 12.25, w: 15.5, d: 18.5 },
+      { id: 'dining', kind: 'dining', name: 'Dining', x: 35.5, y: 12.25, w: 11.0, d: 18.5 },
+      { id: 'kitchen', kind: 'kitchen', name: 'Kitchen', x: 46.5, y: 12.25, w: 10.0, d: 18.5 },
+      { id: 'office', kind: 'office', name: 'Office', x: 25.25, y: 30.75, w: 10.25, d: 7.25 },
+      { id: 'foyer', kind: 'foyer', name: 'Foyer', x: 35.5, y: 30.75, w: 9.0, d: 7.25 },
+      { id: 'pantry', kind: 'pantry', name: 'Pantry', x: 44.5, y: 30.75, w: 12.0, d: 7.25 },
+      { id: 'frontPorch', kind: 'frontPorch', name: 'Front Porch', x: 25.25, y: 38.0, w: 31.25, d: 5.0 },
+      { id: 'laundry', kind: 'laundry', name: 'Laundry', x: 64.25, y: 0.5, w: 7.75, d: 14.75 },
+      { id: 'mud', kind: 'mud', name: 'Mud Room', x: 57.0, y: 9.75, w: 7.5, d: 5.5 },
+      { id: 'halfbath', kind: 'halfbath', name: 'Half Bath', x: 60.0, y: 15.25, w: 4.25, d: 8.0 },
+      { id: 'mwic', kind: 'mwic', name: 'Primary Closet', x: 64.25, y: 15.25, w: 7.75, d: 8.5 },
+      { id: 'mbath', kind: 'mbath', name: 'Primary Bath', x: 60.0, y: 23.75, w: 12.0, d: 7.75 },
+      { id: 'mhall', kind: 'hall', name: 'Hall', x: 57.0, y: 15.25, w: 3.25, d: 16.25 },
+      { id: 'master', kind: 'master', name: 'Primary Bedroom', x: 57.0, y: 31.5, w: 15.0, d: 16.25 },
+    ],
+  },
 
   // ── Reference program: the Garza house, for comparing app output to sheet 200
   reference: {

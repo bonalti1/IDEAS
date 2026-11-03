@@ -15,7 +15,7 @@ const ENVELOPE_CENTER = [
 // plan they are about 22% of the conditioned area, so the kit's room sizes
 // are scaled against that.
 export const CIRCULATION = 1.22
-const ZONES = ['front', 'public', 'private', 'service', 'rear']
+const ZONES = ['rear', 'service', 'private', 'public', 'front']
 
 export const DEFAULT_PROGRAM = {
   beds: 4, baths: 3, halfBath: true, suite2: false, office: true,
@@ -69,6 +69,7 @@ export function roomsFor(program, kit) {
 
 export function generateRooms(program, style) {
   const kit = kitFor(style)
+  if (kit.plan) return fromPlan(program, kit)
   const rooms = roomsFor(program, kit)
   // Scale conditioned rooms so the plan lands on the requested square footage.
   const cond = rooms.filter(isConditioned)
@@ -82,6 +83,91 @@ export function generateRooms(program, style) {
 }
 
 export const isConditioned = (r) => !r.open && r.kind !== 'garage'
+
+/**
+ * Start from the kit's traced plan and adjust it to the program:
+ * drop extras that are off, add or remove bedrooms and baths at the wing
+ * ends, add a garage beside the service wing, then scale to the square
+ * footage. Positions stay where the drafter put them.
+ */
+export function fromPlan(program, kit) {
+  const ref = kit.reference?.program || {}
+  const T = kit.plan
+  let rooms = T.rooms.map((r) => ({ ...r, zone: kit.rooms[r.kind]?.zone || 'private', open: !!kit.rooms[r.kind]?.open, plumbing: !!kit.rooms[r.kind]?.plumbing, fill: kit.rooms[r.kind]?.open ? '#e6e1d8' : r.kind === 'garage' ? '#dcd7cf' : undefined, h: kit.rooms[r.kind]?.open ? 0.6 : undefined }))
+
+  const drop = (kind, n = 1) => {
+    for (let i = 0; i < n; i++) {
+      const idx = rooms.map((r) => r.kind).lastIndexOf(kind)
+      if (idx >= 0) rooms.splice(idx, 1)
+    }
+  }
+  if (!program.office) drop('office')
+  if (!program.suite2) { drop('suite2'); rooms = rooms.filter((r) => r.id !== 'wic2') }
+  if (!program.halfBath) drop('halfbath')
+  if (!program.frontPorch) drop('frontPorch')
+  if (!program.rearPorch) drop('rearPorch')
+
+  // Bedrooms: the plan has (ref.beds - 1) secondary bedrooms. Add below the bed wing, remove from the bottom.
+  const want = program.beds - 1
+  const have = rooms.filter((r) => r.kind === 'bed').length
+  if (want < have) drop('bed', have - want)
+  for (let i = have; i < want; i++) addBelow(rooms, kit, 'bed', `Bedroom ${i + 1}`, 'bed')
+
+  // Full baths: plan has mbath + jackjill + bath1 (+ suite2's bath is bath1 here).
+  const wantB = program.baths - 1
+  const haveB = rooms.filter((r) => r.kind === 'bath' || r.kind === 'jackjill').length
+  if (wantB < haveB) drop('bath', haveB - wantB)
+  for (let i = haveB; i < wantB; i++) addBelow(rooms, kit, 'bath', `Bath ${i + 1}`, 'bed')
+
+  if (program.garage > 0) {
+    const g = kit.rooms.garage
+    const anchor = rooms.find((r) => r.kind === 'laundry') || rooms.find((r) => r.kind === 'mud')
+    const w = g.perCar * program.garage
+    rooms.push({ id: 'garage', kind: 'garage', name: `${program.garage}-Car Garage`, x: anchor ? anchor.x + anchor.w : T.footprint.w, y: anchor ? anchor.y : 0, w, d: g.d, zone: 'service', fill: '#dcd7cf' })
+  }
+
+  // Scale to the requested square footage about the plan centre.
+  const cond = rooms.filter(isConditioned)
+  const base = cond.reduce((a, r) => a + r.w * r.d, 0) * program.stories
+  const k = Math.sqrt(program.sqft / base)
+  const cx = T.footprint.w / 2
+  const cy = T.footprint.d / 2
+  rooms.forEach((r) => {
+    r.x = cx + (r.x - cx) * k
+    r.y = cy + (r.y - cy) * k
+    r.w *= k
+    r.d *= k
+  })
+  return placeLocal(rooms, program.stories, kit, [cx, cy])
+}
+
+function addBelow(rooms, kit, kind, name, belowKind) {
+  const t = kit.rooms[kind]
+  const col = rooms.filter((r) => r.kind === belowKind || r.kind === 'bath' || r.kind === 'suite2')
+  const bottom = col.reduce((m, r) => Math.max(m, r.y + r.d), 0)
+  const left = Math.min(...col.map((r) => r.x))
+  rooms.push({ id: `${kind}-${rooms.length}`, kind, name, x: left, y: bottom, w: t.w, d: t.d, zone: t.zone, plumbing: !!t.plumbing })
+}
+
+/** Rooms with plan coordinates (x, y from the rear-left corner) → placed on the lot. */
+export function placeLocal(rooms, stories, kit, centre) {
+  const cos = Math.cos(LOT_ANGLE)
+  const sin = Math.sin(LOT_ANGLE)
+  return rooms.map((r) => {
+    const lx = r.x + r.w / 2 - centre[0]
+    const lz = r.y + r.d / 2 - centre[1] // y grows toward the street, which is +z (south) on this lot
+    const plate = r.open ? 0.6 : r.kind === 'garage' ? 11 : kit.plates.byRoom[r.kind] || kit.plates.default
+    return {
+      ...r,
+      w: Math.round(r.w * 4) / 4,
+      d: Math.round(r.d * 4) / 4,
+      h: r.h ?? plate * stories,
+      plate,
+      center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos],
+      local: [lx, lz],
+    }
+  })
+}
 
 /** Lay zone rows front to back, centered on the envelope, rotated to the lot. */
 export function place(rooms, stories = 1, kit = FARMHOUSE) {
@@ -116,17 +202,43 @@ export function place(rooms, stories = 1, kit = FARMHOUSE) {
 
 /** Conditioned floor area including the circulation allowance. */
 export function floorArea(rooms, stories = 1) {
-  return rooms.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0) * CIRCULATION * stories
+  const planBased = rooms.some((r) => r.kind === 'hall')
+  return rooms.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0) * (planBased ? 1 : CIRCULATION) * stories
 }
 
-/** Outline of the stacked zone rows: perimeter and front width, in feet. */
+/** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */
 export function outline(rooms) {
-  const rows = ZONES.map((z) => rooms.filter((r) => r.zone === z && !r.open)).filter((r) => r.length)
-  const W = rows.map((r) => r.reduce((s, x) => s + x.w, 0))
-  const D = rows.map((r) => Math.max(...r.map((x) => x.d)))
-  let perimeter = W[0] + W[W.length - 1] + D.reduce((a, b) => a + 2 * b, 0)
-  for (let i = 0; i < W.length - 1; i++) perimeter += Math.abs(W[i] - W[i + 1])
-  return { perimeter, frontWidth: W[0], depth: D.reduce((a, b) => a + b, 0), maxWidth: Math.max(...W) }
+  const solid = rooms.filter((r) => !r.open)
+  const inside = (pt, r) => Math.abs(pt[0] - r.local[0]) < r.w / 2 - 0.01 && Math.abs(pt[1] - r.local[1]) < r.d / 2 - 0.01
+  let perimeter = 0
+  solid.forEach((r) => {
+    const [cx, cz] = r.local
+    const edges = [
+      [[cx - r.w / 2, cz - r.d / 2], [cx + r.w / 2, cz - r.d / 2]],
+      [[cx + r.w / 2, cz - r.d / 2], [cx + r.w / 2, cz + r.d / 2]],
+      [[cx + r.w / 2, cz + r.d / 2], [cx - r.w / 2, cz + r.d / 2]],
+      [[cx - r.w / 2, cz + r.d / 2], [cx - r.w / 2, cz - r.d / 2]],
+    ]
+    edges.forEach(([a, b]) => {
+      // sample the edge in 1 ft steps; a sample with no neighbour on the far side is exterior
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const nx = -(b[1] - a[1]) / len
+      const nz = (b[0] - a[0]) / len
+      const steps = Math.max(1, Math.round(len))
+      for (let i = 0; i < steps; i++) {
+        const t = (i + 0.5) / steps
+        const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+        const out1 = [p[0] + nx * 1.25, p[1] + nz * 1.25] // past a wall or tracing gap
+        const out2 = [p[0] - nx * 1.25, p[1] - nz * 1.25]
+        const probe = inside(out1, r) ? out2 : out1
+        if (!solid.some((o) => o !== r && inside(probe, o))) perimeter += len / steps
+      }
+    })
+  })
+  const xs = solid.flatMap((r) => [r.local[0] - r.w / 2, r.local[0] + r.w / 2])
+  const zs = solid.flatMap((r) => [r.local[1] - r.d / 2, r.local[1] + r.d / 2])
+  const maxWidth = Math.max(...xs) - Math.min(...xs)
+  return { perimeter, frontWidth: maxWidth, depth: Math.max(...zs) - Math.min(...zs), maxWidth }
 }
 
 /**
@@ -198,5 +310,22 @@ export function applyRequest(text, rooms, stories, style) {
 }
 
 function relayout(flat, stories, kit, reply) {
+  if (flat.some((r) => r.x !== undefined)) {
+    // plan-based: positions are kept; new rooms (no x yet) go below the bedroom wing
+    const centre = [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2]
+    flat.forEach((r) => {
+      if (r.x === undefined) {
+        const col = flat.filter((o) => o.x !== undefined && ['bed', 'bath', 'suite2'].includes(o.kind))
+        r.x = Math.min(...col.map((o) => o.x))
+        r.y = col.reduce((m, o) => Math.max(m, o.y + o.d), 0)
+      }
+      // keep the room centred where it was after a size change
+      if (r.local) {
+        r.x = r.local[0] + centre[0] - r.w / 2
+        r.y = r.local[1] + centre[1] - r.d / 2
+      }
+    })
+    return { rooms: placeLocal(flat, stories, kit, centre), reply, applied: true }
+  }
   return { rooms: place(flat, stories, kit), reply, applied: true }
 }

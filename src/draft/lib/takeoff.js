@@ -44,8 +44,9 @@ export function takeoff(rooms, program, kit) {
   const cond = rooms.filter(isConditioned)
   const avgPlate = cond.reduce((s, r) => s + r.plate * r.w * r.d, 0) / cond.reduce((s, r) => s + r.w * r.d, 0)
   const wallSf = o.perimeter * avgPlate * program.stories
-  // Two gable ends at the main roof: triangle = width * (width/2 * pitch) / 2 at 10:12.
-  const gableSf = (2 * (o.depth * ((o.depth / 2) * (10 / 12)))) / 2 // both ends gabled, as on sheets 300 and 301
+  // Gable ends: four wing gables about 16 ft wide at 10:12, as on sheets 300 and 301.
+  const gableW = 16
+  const gableSf = 4 * ((gableW * ((gableW / 2) * (10 / 12))) / 2)
   const windowSf = windows.reduce((s, w) => s + sfOf(w) * w.count, 0)
   const extDoorSf = doors.filter((d) => d.key.startsWith('exterior')).reduce((s, d) => s + sfOf(d) * (d.pair ? 2 : 1) * d.count, 0)
   const stoneSf = o.frontWidth * kit.exterior.stoneWainscotFt
