@@ -23,6 +23,24 @@ node scripts/shot-flow.mjs shots/flow   # screenshots of every step (dev server 
 
 `#/lot514` opens the original drafter-side site plan review.
 
+## IFC export
+
+The Send step's drafter package has a **Download IFC** button. The file is IFC4
+with walls (exterior, interior, plumbing thickness from the kit), floor slabs,
+and every room as an IfcSpace, placed on the lot and rotated to it. A property
+set on the building carries the style, kit, program, roof, plates, and
+foundation notes. Verified with IfcOpenShell: all elements build geometry.
+
+To check the export outside the browser:
+
+```
+node scripts/export-ifc.mjs draft.ifc
+python3.13 scripts/ifc-to-obj.py draft.ifc public/ifc-preview.obj   # pip install ifcopenshell
+npm run dev && node scripts/shot-ifc.mjs ifc.png                     # renders ifc-preview.html
+```
+
+Style kits live in `src/kits/`. Only Modern Farmhouse is extracted so far.
+
 ## What the backend phase replaces
 
 - Survey parsing and city setback lookup (`screens/Start.jsx`, `screens/Lot.jsx`)

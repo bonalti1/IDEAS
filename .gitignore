@@ -2,3 +2,7 @@ node_modules
 dist
 shots
 *.local
+
+# IFC preview artifacts
+public/ifc-preview.obj
+*.ifc

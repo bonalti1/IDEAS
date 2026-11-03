@@ -23,6 +23,7 @@ export const DEFAULT_PROGRAM = {
 }
 
 export const kitFor = (style) => style?.kit || FARMHOUSE
+export { ENVELOPE_CENTER }
 
 let uid = 0
 function mk(kit, kind, overrides = {}) {
@@ -103,6 +104,7 @@ export function place(rooms, stories = 1, kit = FARMHOUSE) {
         h: x.h ?? plate * stories,
         plate,
         center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos],
+        local: [lx, lz], // before rotation; x along the front, z front to back
         row: ri,
       })
       xCursor += x.w

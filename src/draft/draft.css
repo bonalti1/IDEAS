@@ -139,3 +139,6 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .tbl td:nth-child(2) { font-weight: 600; white-space: nowrap; }
 .tbl tr.total td { border-top: 1px solid var(--brand-hair); border-bottom: 0; font-weight: 600; }
 .tbl .cmp, .cmp { color: var(--brand-muted); font-weight: 400; font-size: 12px; }
+
+.card.ifc { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.card.ifc .muted { font-size: 13px; line-height: 1.5; }

@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>IFC preview</title>
+<style>html,body{margin:0;height:100%;background:#f7f7f7;font-family:Montserrat,sans-serif}#tag{position:fixed;left:16px;top:14px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6560}</style>
+</head><body><div id="tag">Exported IFC · opened with IfcOpenShell · rendered with three.js</div>
+<script type="module">
+import * as THREE from 'three'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#f7f7f7')
+const cam = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 0.1, 1000)
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement)
+scene.add(new THREE.AmbientLight(0xffffff, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 1.4); dl.position.set(-40, 80, 60); scene.add(dl)
+const mats = { slab: new THREE.MeshLambertMaterial({ color: '#dcd7cf' }), wall: new THREE.MeshLambertMaterial({ color: '#f1ede6' }), space: new THREE.MeshLambertMaterial({ color: '#4e3c30', transparent: true, opacity: 0.06 }) }
+new OBJLoader().load('/ifc-preview.obj', (obj) => {
+  obj.rotation.x = -Math.PI / 2 // IFC z-up → three y-up
+  obj.traverse((m) => { if (m.isMesh) { const k = m.name.startsWith('IfcSlab') ? 'slab' : m.name.startsWith('IfcWall') ? 'wall' : 'space'; m.material = mats[k]; if (k === 'wall') m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 20), new THREE.LineBasicMaterial({ color: '#2a2520' }))) } })
+  scene.add(obj)
+  const box = new THREE.Box3().setFromObject(obj); const c = box.getCenter(new THREE.Vector3()); const s = box.getSize(new THREE.Vector3())
+  cam.position.set(c.x - s.x * 0.9, c.y + s.x * 0.7, c.z + s.z * 1.6); const ctl = new OrbitControls(cam, r.domElement); ctl.target.copy(c); ctl.update()
+  const grid = new THREE.GridHelper(400, 80, '#d9d6d1', '#e9e7e3'); grid.position.set(c.x, box.min.y - 0.01, c.z); scene.add(grid)
+  window.__ready = true
+})
+function loop(){ r.render(scene, cam); requestAnimationFrame(loop) } loop()
+</script></body></html>

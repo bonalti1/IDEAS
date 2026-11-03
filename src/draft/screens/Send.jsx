@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
 import { kitFor } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
+import { downloadIFC } from '../lib/ifc.js'
 
 const n = (x) => Math.round(x).toLocaleString()
 const pct = (a, b) => (b ? `${a - b >= 0 ? '+' : ''}${Math.round(((a - b) / b) * 100)}%` : '')
@@ -125,6 +126,13 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
                 <tr className="total"><td colSpan={2}>Interior / exterior</td><td>{t.counts.interiorDoors} / {t.counts.exteriorDoors}{isRef && <span className="cmp"> · set: {ref.takeoff.interiorDoors} / {ref.takeoff.exteriorDoors}</span>}</td></tr>
               </tbody>
             </table>
+          </div>
+          <div className="card ifc">
+            <h3>3D model for Revit</h3>
+            <p className="muted">
+              Walls, floor slabs, and rooms as an IFC file, placed on the lot. Opens in Revit, Archicad, or any free IFC viewer.
+            </p>
+            <Button onClick={() => downloadIFC({ rooms, program, kit, style, lot })}>Download IFC</Button>
           </div>
           <div className="card">
             <h3>Sheet set the drafter receives</h3>

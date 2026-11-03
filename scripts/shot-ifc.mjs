@@ -1,0 +1,11 @@
+import { chromium } from 'playwright-core'
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] })
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } })
+p.on('pageerror', (e) => console.log('PAGE ERROR:', e.message))
+p.on('console', (m) => m.type() === 'error' && console.log('CONSOLE ERROR:', m.text()))
+await p.goto('http://localhost:5173/ifc-preview.html', { waitUntil: 'domcontentloaded' })
+await p.waitForFunction(() => window.__ready, null, { timeout: 30000 })
+await p.waitForTimeout(1500)
+await p.screenshot({ path: process.argv[2] })
+console.log('saved', process.argv[2])
+await b.close()
