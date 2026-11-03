@@ -41,3 +41,11 @@ Checked on the plan as it would be after the ops (`src/draft/lib/rules.js`). Any
 5. Wet rooms (baths, kitchen, laundry) stay within `kit.rules.wetDistanceFt` of another wet room.
 6. The footprint stays within the lot-fit limit: the smaller of the buildable area and the lot area times the city's maximum coverage.
 7. The house keeps a kitchen, a living room, a bedroom and a bathroom.
+
+## Live path, logging, time limit
+
+- `POST /api/interpret` waits at most 8 s on Claude (`INTERPRET_TIMEOUT_MS`). On timeout it answers 504 with `timeout: true`; the app then runs the regex fallback and labels the reply "basic rules, assistant took too long". The browser side gives up at 8.5 s on its own.
+- Every call is appended to `server/data/interpret-log.jsonl`: request, diff, verdict (`diff` / `unsure` / `refusal` / `no-diff` / `timeout` / `error`), ms, token usage, cost in dollars (`INTERPRET_PRICES` overrides the per-million-token prices; default Opus 5.5 list: in 4, out 20, cache read 0.2, cache write 5). The app posts its own verdict (`applied` / `rejected` with reasons, and which path answered) to `POST /api/interpret/verdict`, so each request has two lines: what Claude said, and what the rules did with it.
+- `GET /api/interpret/log` returns the last 50 entries plus totals (calls, cost, cost per call, average ms). The office dashboard shows it under "Client requests".
+- `node scripts/try-interpret.mjs` runs the ten named requests against the live endpoint and prints the diff, the rules verdict, the reply, the time and the cost for each.
+- Undo in the Draft step restores the plan and the credit of the last applied change. A rejected change never costs a credit.

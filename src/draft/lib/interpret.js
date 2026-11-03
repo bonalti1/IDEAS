@@ -33,8 +33,15 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
     diff = await interpreter({ text, rooms, program, kit })
   } catch (e) {
     diff = regexOps(text, rooms, kit)
-    source = 'fallback'
+    source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
+  const result = decide(diff, rooms, program, style, kit, source)
+  if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
+  return result
+}
+
+/** The deterministic part: confidence gate, shape check, apply, rules. */
+export function decide(diff, rooms, program, style, kit, source) {
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }

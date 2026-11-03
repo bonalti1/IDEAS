@@ -11,6 +11,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const [view, setView] = useState('3d')
   const [highlight, setHighlight] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [undo, setUndo] = useState([]) // snapshots before each applied change: { rooms, credits, text }
   const [roof, setRoof] = useState(true)
   const controls = useRef()
   const logRef = useRef()
@@ -44,12 +45,22 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     setBusy(false)
     setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied }])
     if (res.applied) {
+      setUndo((u) => [...u, { rooms, credits, text: q }])
       setRooms(res.rooms)
       setCredits((c) => c - 1)
       const kind = res.ops?.[0]?.op === 'add' ? res.ops[0].kind : rooms.find((r) => r.id === res.ops?.[0]?.room)?.kind
       setHighlight(kind || null)
       setTimeout(() => setHighlight(null), 1800)
     }
+  }
+
+  const undoLast = () => {
+    const snap = undo[undo.length - 1]
+    if (!snap) return
+    setUndo((u) => u.slice(0, -1))
+    setRooms(snap.rooms)
+    setCredits(snap.credits) // the credit comes back
+    setHistory((h) => [...h, { who: 'house', text: `Undid "${snap.text}". Credit returned.`, applied: true, source: 'undo' }])
   }
 
   const area = floorArea(rooms, program.stories)
@@ -97,6 +108,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '')}>
               {m.text}
               {m.who === 'house' && m.source === 'fallback' && <span className="src"> · basic rules, assistant offline</span>}
+              {m.who === 'house' && m.source === 'timeout' && <span className="src"> · basic rules, assistant took too long</span>}
             </div>
           ))}
           {busy && <div className="msg house thinking">Working on it…</div>}
@@ -125,6 +137,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             Change
           </Button>
         </form>
+        {undo.length > 0 && (
+          <button className="linkish undo" onClick={undoLast} disabled={busy}>
+            Undo last change
+          </button>
+        )}
         <div className="actions">
           <Button ghost onClick={onBack}>
             Back

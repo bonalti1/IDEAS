@@ -50,9 +50,11 @@ export default function Admin() {
   const [offline, setOffline] = useState(false)
   const [at, setAt] = useState(null)
   const [open, setOpen] = useState(null)
+  const [ilog, setIlog] = useState(null)
   const refresh = async () => {
     try {
       setOv(await api.overview())
+      setIlog(await api.interpretLog().catch(() => null))
       setOffline(false)
     } catch {
       setOffline(true)
@@ -220,6 +222,40 @@ export default function Admin() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="card">
+        <h3>Client requests</h3>
+        <p className="muted small">
+          Every change request the assistant was asked for, with what it cost.{' '}
+          {ilog?.calls ? `${ilog.calls} assistant call${ilog.calls === 1 ? '' : 's'} · $${ilog.cost.toFixed(4)} total · $${ilog.perCall.toFixed(4)} per request · ${ilog.avgMs} ms avg` : 'No assistant calls yet (fallback rules only).'}
+        </p>
+        {ilog?.recent?.length ? (
+          <table className="jobs">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Request</th>
+                <th>Path</th>
+                <th>Verdict</th>
+                <th>Time</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ilog.recent.slice(0, 20).map((r, i) => (
+                <tr key={i}>
+                  <td className="cmp">{fmtAgo(r.at)}</td>
+                  <td>“{r.request}”{r.reasons?.[0] ? <div className="muted small">{r.reasons[0]}</div> : null}</td>
+                  <td>{r.source || (r.cost !== undefined ? 'assistant' : '')}</td>
+                  <td className={r.verdict === 'rejected' || r.verdict === 'error' || r.verdict === 'timeout' ? 'bad' : r.verdict === 'unsure' ? 'warn' : ''}>{r.verdict}</td>
+                  <td>{r.ms ? `${r.ms} ms` : ''}</td>
+                  <td>{r.cost !== undefined ? `$${r.cost.toFixed(4)}` : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
       </div>
 
       <div className="card">

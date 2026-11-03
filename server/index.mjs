@@ -249,13 +249,20 @@ Rules:
 - Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
 - If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.
 - The reply is one or two friendly sentences in past tense describing what you did, as if talking to the buyer.`
-const interpreterClient = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
+const INTERPRET_TIMEOUT_MS = +(process.env.INTERPRET_TIMEOUT_MS || 8000)
+// $ per million tokens; Claude Opus 5.5 list prices. Override with INTERPRET_PRICES='{"in":4,"out":20,"cacheRead":0.2,"cacheWrite":5}'
+const PRICES = process.env.INTERPRET_PRICES ? JSON.parse(process.env.INTERPRET_PRICES) : { in: 4, out: 20, cacheRead: 0.2, cacheWrite: 5 }
+const costOf = (u) => ((u?.input_tokens || 0) * PRICES.in + (u?.output_tokens || 0) * PRICES.out + (u?.cache_read_input_tokens || 0) * PRICES.cacheRead + (u?.cache_creation_input_tokens || 0) * PRICES.cacheWrite) / 1e6
+const INTERPRET_LOG = path.join(DATA, 'interpret-log.jsonl')
+const logInterpret = (rec) => fs.appendFileSync(INTERPRET_LOG, JSON.stringify({ at: now(), ...rec }) + '\n')
+const interpreterClient = process.env.ANTHROPIC_API_KEY ? new Anthropic({ timeout: INTERPRET_TIMEOUT_MS, maxRetries: 0 }) : null
 
 route('POST', '/api/interpret', async (req, res) => {
   if (!interpreterClient) return json(res, 503, { error: 'interpreter not configured on this server (ANTHROPIC_API_KEY missing)' })
   const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
   if (!body.text || !Array.isArray(body.rooms)) return json(res, 400, { error: 'text and rooms required' })
   const input = { request: String(body.text).slice(0, 500), program: body.program, kit: body.kit, rooms: body.rooms }
+  const t0 = Date.now()
   try {
     const message = await interpreterClient.messages.parse({
       model: INTERPRET_MODEL,
@@ -264,16 +271,41 @@ route('POST', '/api/interpret', async (req, res) => {
       output_config: { effort: 'low', format: jsonSchemaOutputFormat(DIFF_SCHEMA) },
       messages: [{ role: 'user', content: JSON.stringify(input) }],
     })
-    if (message.stop_reason === 'refusal') return json(res, 502, { error: 'interpreter declined', category: message.stop_details?.category || null })
+    const ms = Date.now() - t0
+    const cost = costOf(message.usage)
+    if (message.stop_reason === 'refusal') {
+      logInterpret({ request: input.request, client: body.client || null, verdict: 'refusal', category: message.stop_details?.category || null, ms, usage: message.usage, cost, model: INTERPRET_MODEL })
+      return json(res, 502, { error: 'interpreter declined', category: message.stop_details?.category || null })
+    }
     const out = message.parsed_output
-    if (!out || !Array.isArray(out.ops)) return json(res, 502, { error: 'interpreter returned no diff' })
-    event('interpret', `"${input.request.slice(0, 60)}" → ${out.ops.length} op${out.ops.length === 1 ? '' : 's'} (${INTERPRET_MODEL})`)
-    json(res, 200, { ...out, model: INTERPRET_MODEL, usage: message.usage })
+    if (!out || !Array.isArray(out.ops)) {
+      logInterpret({ request: input.request, client: body.client || null, verdict: 'no-diff', ms, usage: message.usage, cost, model: INTERPRET_MODEL })
+      return json(res, 502, { error: 'interpreter returned no diff' })
+    }
+    logInterpret({ request: input.request, client: body.client || null, rooms: body.rooms?.length, diff: out, verdict: out.confidence < 0.5 || !out.ops.length ? 'unsure' : 'diff', ms, usage: message.usage, cost, model: INTERPRET_MODEL })
+    event('interpret', `"${input.request.slice(0, 60)}" → ${out.ops.length} op${out.ops.length === 1 ? '' : 's'}, ${ms} ms, $${cost.toFixed(4)}`)
+    json(res, 200, { ...out, model: INTERPRET_MODEL, usage: message.usage, cost, ms })
   } catch (e) {
-    const status = e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
-    event('error', `interpreter: ${e.message || e}`)
-    json(res, status, { error: String(e.message || e) })
+    const ms = Date.now() - t0
+    const timeout = e instanceof Anthropic.APIConnectionTimeoutError || /timed? ?out/i.test(e.message || '')
+    const status = timeout ? 504 : e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
+    logInterpret({ request: input.request, client: body.client || null, verdict: timeout ? 'timeout' : 'error', error: String(e.message || e).slice(0, 200), ms, model: INTERPRET_MODEL })
+    event('error', `interpreter: ${timeout ? `no answer in ${INTERPRET_TIMEOUT_MS} ms` : e.message || e}`)
+    json(res, status, { error: timeout ? `interpreter timed out after ${INTERPRET_TIMEOUT_MS} ms` : String(e.message || e), timeout })
   }
+})
+
+route('POST', '/api/interpret/verdict', async (req, res) => {
+  const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
+  logInterpret({ request: String(body.text || '').slice(0, 500), client: body.client || null, source: body.source, verdict: body.applied ? 'applied' : 'rejected', reasons: body.reasons || [], reply: body.reply, ops: body.ops })
+  json(res, 200, { ok: true })
+})
+route('GET', '/api/interpret/log', (req, res) => {
+  const lines = fs.existsSync(INTERPRET_LOG) ? fs.readFileSync(INTERPRET_LOG, 'utf8').trim().split('\n').filter(Boolean) : []
+  const recs = lines.slice(-200).map((l) => JSON.parse(l))
+  const calls = recs.filter((r) => r.cost !== undefined)
+  const cost = calls.reduce((s, r) => s + (r.cost || 0), 0)
+  json(res, 200, { count: recs.length, calls: calls.length, cost, perCall: calls.length ? cost / calls.length : 0, avgMs: calls.length ? Math.round(calls.reduce((s, r) => s + (r.ms || 0), 0) / calls.length) : 0, recent: recs.slice(-50).reverse() })
 })
 
 // ── health & admin ─────────────────────────────────────────────────────────

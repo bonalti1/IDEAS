@@ -144,3 +144,14 @@ test('validateOps and regexOps shapes', () => {
   const res = applyOps(r.ops, rooms, KIT, 1)
   assert.ok(res.rooms.filter((x) => isRoom(x) && x.kind === 'halfbath').length === 2)
 })
+
+test('a timeout on the Claude call falls back and is labelled', async () => {
+  const slow = async () => {
+    const e = new Error('The operation was aborted')
+    e.name = 'AbortError'
+    throw e
+  }
+  const res = await ask('make the kitchen bigger', fresh(), slow)
+  assert.equal(res.source, 'timeout')
+  assert.equal(res.applied, true, res.reply)
+})
