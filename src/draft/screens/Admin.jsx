@@ -208,7 +208,7 @@ export default function Admin() {
                       </button>
                     )}
                     {open === j.id && (
-                      <pre className="log">
+                      <pre className="joblog">
                         {j.error ? `error: ${j.error}\n` : ''}
                         {(j.warnings || []).map((w) => `warning: ${w}`).join('\n')}
                         {j.log ? `\n${j.log}` : ''}

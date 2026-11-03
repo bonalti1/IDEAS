@@ -185,7 +185,7 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .tbl.jobs td { vertical-align: middle; }
 .tbl .out { display: inline-block; margin-right: 8px; color: var(--brand-brown); font-weight: 600; }
 .linkish { font: inherit; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; border: 0; background: transparent; color: var(--brand-muted); cursor: pointer; padding: 4px 6px; }
-.log { font-family: var(--brand-font-mono); font-size: 11px; white-space: pre-wrap; background: #faf9f7; border: 1px solid var(--brand-hair); border-radius: 8px; padding: 10px; margin: 8px 0 0; max-height: 220px; overflow: auto; max-width: 520px; }
+.joblog { font-family: var(--brand-font-mono); font-size: 11px; white-space: pre-wrap; background: #faf9f7; border: 1px solid var(--brand-hair); border-radius: 8px; padding: 10px; margin: 8px 0 0; max-height: 220px; overflow: auto; max-width: 520px; }
 .events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .events li { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid #efedea; font-size: 13px; }
 .events li.error span:last-child { color: #a33a2d; }
