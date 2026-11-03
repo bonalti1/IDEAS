@@ -96,10 +96,18 @@ export function wallsFrom(rooms, kit) {
       })
     }
   })
-  return [...seen.values()].map((w) => ({
+  const walls = [...seen.values()].map((w) => ({
     ...w,
     thicknessIn: w.exterior ? kit.walls.exterior.thicknessIn : w.plumbing ? kit.walls.plumbing.thicknessIn : kit.walls.interior.thicknessIn,
   }))
+  // shed dormer faces are walls too: they sit above the roof, so they carry a base height
+  const roof = rooms.find((r) => r.kind === 'roof')
+  ;(roof?.prisms || [])
+    .filter((p) => p.kind === 'dormer')
+    .forEach((p) => {
+      walls.push({ a: [p.O[0], p.O[1]], b: [p.O[0] + p.len, p.O[1]], plate: p.profile[0][1] + 0.4, base: p.base ?? 10, plumbing: false, exterior: true, dormer: true, rooms: ['Dormer'], thicknessIn: kit.walls.exterior.thicknessIn })
+    })
+  return walls
 }
 
 export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft House' }) {
@@ -175,8 +183,9 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     // start at a, offset half thickness to the left so the wall is centred on the line
     const sx = X(w.a[0]) - dir[1] * (t / 2)
     const sy = Y(w.a[1]) + dir[0] * (t / 2)
-    const { pl, shape } = box(sx.toFixed(4), sy.toFixed(4), '0.', len, t, w.plate * FT, dir)
-    return add(`IFCWALL(${g()},#${oh},'${w.exterior ? 'Exterior' : w.plumbing ? 'Plumbing' : 'Interior'} wall ${i + 1}','${w.thicknessIn}" ${w.exterior ? kit.walls.exterior.studs : w.plumbing ? kit.walls.plumbing.studs : kit.walls.interior.studs}',$,#${pl},#${shape},$,.STANDARD.)`)
+    const base = w.base || 0
+    const { pl, shape } = box(sx.toFixed(4), sy.toFixed(4), (base * FT).toFixed(4), len, t, (w.plate - base) * FT, dir)
+    return add(`IFCWALL(${g()},#${oh},'${w.dormer ? 'Dormer face' : w.exterior ? 'Exterior' : w.plumbing ? 'Plumbing' : 'Interior'} wall ${i + 1}','${w.thicknessIn}" ${w.exterior ? kit.walls.exterior.studs : w.plumbing ? kit.walls.plumbing.studs : kit.walls.interior.studs}',$,#${pl},#${shape},$,.STANDARD.)`)
   })
 
   // ── doors and windows: opening voids the host wall, door or window fills it
@@ -196,8 +205,8 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const host = hostWall(walls, e)
       if (!host) return
       const w = walls[host.i]
-      const sill = e.kind === 'window' ? WINDOW_SILL[e.mark] ?? 2 : 0
-      const head = e.kind === 'window' ? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
+      const sill = e.kind === 'window' ? e.sill ?? WINDOW_SILL[e.mark] ?? 2 : 0
+      const head = e.kind === 'window' ? e.head ?? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
       const t0 = Math.max(0, host.t - e.span / 2)
       const t1 = Math.min(host.len, host.t + e.span / 2)
       const op = wallBox(w, t0, t1, sill, head - sill)
@@ -260,7 +269,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const solid = add(`IFCEXTRUDEDAREASOLID(#${prof},#${wcs},#${zDir},${(p.len * FT).toFixed(4)})`)
       const rep = add(`IFCSHAPEREPRESENTATION(#${body},'Body','SweptSolid',(#${solid}))`)
       const shape = add(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`)
-      roofIds.push(add(`IFCROOF(${g()},#${oh},'Roof ${p.id}','${esc(p.material)}; ${p.kind === 'gable' ? esc(kit.roof.pitch) : '4:12'}, ${esc(kit.roof.overhang)} overhang',$,#${pl},#${shape},$,.${p.kind === 'gable' ? 'GABLE_ROOF' : 'SHED_ROOF'}.)`))
+      roofIds.push(add(`IFCROOF(${g()},#${oh},'Roof ${p.id}','${esc(p.material)}; ${p.kind === 'gable' ? esc(kit.roof.pitch) : '4:12'}, ${esc(kit.roof.overhang)} overhang',$,#${pl},#${shape},$,.${p.kind === 'gable' ? 'GABLE_ROOF' : p.kind === 'dormer' ? 'SHED_ROOF' : 'SHED_ROOF'}.)`))
     })
 
   // ── slabs: one per solid room footprint, 4" below finished floor ──────

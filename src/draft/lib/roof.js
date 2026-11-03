@@ -45,6 +45,30 @@ export function roofPrisms(masses, k, centre) {
           [-hw - oh, eave - t],
         ],
       })
+    } else if (m.kind === 'dormer') {
+      // shed dormer: metal roof from the face top rising away from the street
+      const face = centre[1] + (m.face - centre[1]) * k - centre[1]
+      const dir = [1, 0]
+      const O = [x0, face]
+      const len = x1 - x0
+      const top = m.plate
+      const back = top + m.depth * s
+      out.push({
+        id: m.id,
+        kind: 'dormer',
+        base: m.base,
+        material: m.material || 'metal roof',
+        O,
+        dir,
+        len,
+        // u runs along +z (toward the street); the roof goes north, so u is negative
+        profile: [
+          [oh, top - oh * s],
+          [-m.depth, back],
+          [-m.depth, back - 0.4],
+          [oh, top - oh * s - 0.4],
+        ],
+      })
     } else {
       // shed: high side at the house wall, slopes down away from it
       const alongX = m.high === 'n' || m.high === 's'

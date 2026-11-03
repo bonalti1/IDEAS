@@ -97,8 +97,8 @@ function Window({ e, centre }) {
   if (e.dormer) return null
   const [x, z] = toWorld(e.local[0], e.local[1], centre)
   const rot = LOT_ANGLE + (e.axis === 'h' ? 0 : Math.PI / 2)
-  const sill = WINDOW_SILL[e.mark] ?? 2
-  const head = WINDOW_HEAD[e.mark] ?? 7
+  const sill = e.sill ?? WINDOW_SILL[e.mark] ?? 2
+  const head = e.head ?? WINDOW_HEAD[e.mark] ?? 7
   return (
     <group position={[x, 0, z]} rotation-y={-rot}>
       <mesh position={[0, (sill + head) / 2, 0]}>

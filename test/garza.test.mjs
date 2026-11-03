@@ -44,7 +44,9 @@ test('roof follows sheet 100', () => {
   const main = roof.prisms.find((p) => p.id === 'main')
   const ridge = Math.max(...main.profile.map(([, v]) => v))
   assert.ok(ridge > 20 && ridge < 24, `main ridge ${ridge.toFixed(1)} ft at 10:12 over an 11 ft plate`)
-  assert.equal(roof.prisms.filter((p) => p.kind === 'shed').length, 2)
+  for (const id of ['leftwing', 'office', 'pantry', 'master', 'frontPorch', 'rearPorch', 'dormer']) assert.ok(roof.prisms.some((p) => p.id === id), `roof mass ${id}`)
+  const left = roof.prisms.find((p) => p.id === 'leftwing')
+  assert.ok(Math.max(...left.profile.map(([, v]) => v)) > 19, 'left wing gable peaks near 20 ft like the front elevation')
 })
 test('IFC export is well formed', () => {
   const ifc = toIFC({ rooms, program, kit: KIT, style, lot: { address: 'Lot 514' } })

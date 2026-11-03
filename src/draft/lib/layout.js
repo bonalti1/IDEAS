@@ -168,7 +168,7 @@ export function fromPlan(program, kit) {
   const placed = placeLocal(rooms, program.stories, kit, [cx, cy])
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the rest scale with the plan
-    const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id))
+    const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
     placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], prisms: roofPrisms(masses, k, [cx, cy]) })
   }
   return placed

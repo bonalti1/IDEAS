@@ -32,8 +32,8 @@ export function splitWalls(walls, elements) {
     .forEach((e) => {
       const h = hostWall(walls, e)
       if (!h) return
-      const sill = e.kind === 'window' ? WINDOW_SILL[e.mark] ?? 2 : 0
-      const head = e.kind === 'window' ? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
+      const sill = e.kind === 'window' ? e.sill ?? WINDOW_SILL[e.mark] ?? 2 : 0
+      const head = e.kind === 'window' ? e.head ?? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
       cuts[h.i].push({ t0: Math.max(0, h.t - e.span / 2), t1: Math.min(h.len, h.t + e.span / 2), sill, head })
       // a near-duplicate wall on the other side of a tracing gap gets the same cut
       walls.forEach((w, j) => {
@@ -48,6 +48,7 @@ export function splitWalls(walls, elements) {
     const ux = (w.b[0] - w.a[0]) / len
     const uz = (w.b[1] - w.a[1]) / len
     const at = (t) => [w.a[0] + ux * t, w.a[1] + uz * t]
+    const base = w.base || 0
     const seg = (t0, t1, y0, h, kind) => {
       if (t1 - t0 < 0.05 || h < 0.05) return
       out.push({ ...w, a: at(t0), b: at(t1), y0, h, kind })
@@ -56,13 +57,13 @@ export function splitWalls(walls, elements) {
     let t = 0
     list.forEach((c) => {
       if (c.t0 <= t && c.t1 <= t) return
-      seg(t, Math.max(t, c.t0), 0, w.plate, 'wall')
+      seg(t, Math.max(t, c.t0), base, w.plate - base, 'wall')
       const s0 = Math.max(t, c.t0)
-      if (c.sill > 0) seg(s0, c.t1, 0, c.sill, 'sill')
+      if (c.sill > base) seg(s0, c.t1, base, c.sill - base, 'sill')
       seg(s0, c.t1, c.head, w.plate - c.head, 'header')
       t = Math.max(t, c.t1)
     })
-    seg(t, len, 0, w.plate, 'wall')
+    seg(t, len, base, w.plate - base, 'wall')
   })
   return out
 }

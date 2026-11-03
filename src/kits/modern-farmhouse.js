@@ -178,15 +178,25 @@ export const KIT = {
     // ridge direction, plate height at the eave, pitch rise per 12.
     // 'ends' lists which ends are gables; the other end dies into a neighbour.
     roof: [
-      { id: 'main', kind: 'gable', x0: 19.75, x1: 72, y0: 12.25, y1: 38, ridge: 'ew', plate: 11, pitch: 10, ends: ['w', 'e'] },
-      { id: 'bedwing', kind: 'gable', x0: 3.75, x1: 19.75, y0: 2.75, y1: 40, ridge: 'ns', plate: 9, pitch: 10, ends: ['n', 's'] },
-      { id: 'bath1', kind: 'gable', x0: 0, x1: 12.25, y0: 38, y1: 45.75, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
-      { id: 'suite2', kind: 'gable', x0: 12.25, x1: 25.25, y0: 38, y1: 52.25, ridge: 'ns', plate: 10, pitch: 10, ends: ['s'] },
+      // main body: one east-west ridge, gable ends both sides
+      { id: 'main', kind: 'gable', x0: 19.75, x1: 72, y0: 12.25, y1: 38, ridge: 'ew', plate: 12, pitch: 10, ends: ['w', 'e'] },
+      // left wing: bath 1 and the mini primary share one tall gable facing the street
+      { id: 'leftwing', kind: 'gable', x0: 0, x1: 25.25, y0: 38, y1: 52.25, ridge: 'ns', plate: 9.5, pitch: 10, ends: ['s'] },
+      { id: 'bedwing', kind: 'gable', x0: 3.75, x1: 19.75, y0: 2.75, y1: 40, ridge: 'ns', plate: 9, pitch: 10, ends: ['n'] },
       { id: 'laundry', kind: 'gable', x0: 64.25, x1: 72, y0: 0.5, y1: 15.25, ridge: 'ns', plate: 9, pitch: 10, ends: ['n'] },
       { id: 'master', kind: 'gable', x0: 57, x1: 72, y0: 31.5, y1: 47.75, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
-      { id: 'dormer', kind: 'gable', x0: 32.5, x1: 45.5, y0: 24, y1: 38, ridge: 'ns', plate: 18, pitch: 10, ends: ['s'], overhang: 1.33 },
-      { id: 'frontPorch', kind: 'shed', x0: 25.25, x1: 56.5, y0: 38, y1: 43, high: 'n', plate: 8, pitch: 4, material: 'metal roof' },
+      // the two stone gables flanking the entry, 9 ft plate
+      { id: 'office', kind: 'gable', x0: 25.25, x1: 35.5, y0: 30.75, y1: 38, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
+      { id: 'pantry', kind: 'gable', x0: 44.5, x1: 56.5, y0: 30.75, y1: 38, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
+      // shed dormer over the entry: vertical face at the front wall up to the 18 ft plate, metal roof rising back
+      { id: 'dormer', kind: 'dormer', x0: 35.5, x1: 44.5, face: 38, plate: 18, base: 10, depth: 6, pitch: 4, material: 'metal roof' },
+      // porch roof between the two gables, and metal awnings over the windows
+      { id: 'frontPorch', kind: 'shed', x0: 35.5, x1: 44.5, y0: 38, y1: 43, high: 'n', plate: 8, pitch: 4, material: 'metal roof' },
       { id: 'rearPorch', kind: 'shed', x0: 19.75, x1: 56.5, y0: 7.75, y1: 12.25, high: 's', plate: 8, pitch: 4, material: 'metal roof' },
+      { id: 'awning-office', kind: 'shed', x0: 26.5, x1: 34.5, y0: 38, y1: 40.5, high: 'n', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
+      { id: 'awning-pantry', kind: 'shed', x0: 45.5, x1: 55.5, y0: 38, y1: 40.5, high: 'n', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
+      { id: 'awning-suite2', kind: 'shed', x0: 15, x1: 24, y0: 52.25, y1: 54.75, high: 'n', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
+      { id: 'awning-master', kind: 'shed', x0: 58.5, x1: 66.5, y0: 47.75, y1: 50.25, high: 'n', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
     ],
     // Rooms that share an edge with no wall between them (one open space).
     open: [
@@ -237,8 +247,8 @@ export const KIT = {
       { mark: 'A', room: 'master', axis: 'h', x: 68.5, y: 47.75, w: 3 },
       { mark: 'D', room: 'kitchen', axis: 'h', x: 51, y: 12.25, w: 6 },
       { mark: 'C', room: 'mbath', axis: 'v', x: 72, y: 25.5, w: 2 },
-      { mark: 'B', room: 'dormer', dormer: true, w: 3.5 },
-      { mark: 'B', room: 'dormer', dormer: true, w: 3.5 },
+      { mark: 'B', room: 'dormer', axis: 'h', x: 38.25, y: 38, w: 3.5, sill: 14.5, head: 17.5 },
+      { mark: 'B', room: 'dormer', axis: 'h', x: 41.75, y: 38, w: 3.5, sill: 14.5, head: 17.5 },
     ],
     // Fixtures and furniture: x, y top-left in plan feet. Heights by kind in FIXTURE_H.
     fixtures: [
