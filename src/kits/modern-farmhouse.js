@@ -173,6 +173,14 @@ export const KIT = {
       { id: 'mhall', kind: 'hall', name: 'Hall', x: 57.0, y: 15.25, w: 3.25, d: 16.25 },
       { id: 'master', kind: 'master', name: 'Primary Bedroom', x: 57.0, y: 31.5, w: 15.0, d: 16.25 },
     ],
+    // Rooms that share an edge with no wall between them (one open space).
+    open: [
+      ['living', 'dining'],
+      ['dining', 'kitchen'],
+      ['dining', 'foyer'],
+      ['hall', 'vest'],
+      ['mud', 'mhall'],
+    ],
     // Doors: centre on the wall line. axis 'h' = wall runs along x, 'v' = along y.
     // swing +1 opens toward +y (h) or +x (v); hinge 'start' = lower x or y end.
     doors: [
@@ -191,7 +199,8 @@ export const KIT = {
       { id: 'd-rear', room: 'dining', axis: 'h', x: 35.5, y: 12.25, w: 6, swing: 1, pair: true, size: 'exteriorPair', exterior: true },
       { id: 'd-pantry', room: 'pantry', axis: 'h', x: 51.75, y: 30.75, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
       { id: 'd-kit-hall', room: 'kitchen', axis: 'v', x: 56.75, y: 17.5, w: 3, cased: true },
-      { id: 'd-mud-hall', room: 'mud', axis: 'h', x: 58.6, y: 15.25, w: 3, cased: true },
+      { id: 'd-hall-liv-n', room: 'living', axis: 'v', x: 19.75, y: 14.75, w: 2.5, cased: true },
+      { id: 'd-hall-liv-s', room: 'living', axis: 'v', x: 19.75, y: 28.75, w: 3.5, cased: true },
       { id: 'd-mud-ext', room: 'mud', axis: 'h', x: 59.5, y: 9.75, w: 3, swing: 1, hinge: 'start', size: 'exteriorSingle', exterior: true },
       { id: 'd-laundry', room: 'laundry', axis: 'v', x: 64.25, y: 11.5, w: 3, swing: 1, hinge: 'start', size: 'pantry' },
       { id: 'd-halfbath', room: 'halfbath', axis: 'v', x: 60, y: 18, w: 2, swing: 1, hinge: 'start', size: 'closet' },

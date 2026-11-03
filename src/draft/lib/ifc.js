@@ -25,15 +25,23 @@ export function ifcGuid() {
   return out
 }
 
-/** Wall segments from the room blocks, in local feet. Shared edges become one wall. */
+/**
+ * Wall segments from the room blocks, in local feet. Each room edge is sampled
+ * every half foot; runs with a neighbour become interior walls, runs with no
+ * neighbour exterior walls, and runs facing a room the kit lists as open to
+ * this one get no wall at all. Exact shared edges are emitted once.
+ */
 export function wallsFrom(rooms, kit) {
   const solid = rooms.filter((r) => !r.open && !r.element)
+  const openPairs = new Set((kit.plan?.open || []).flatMap(([a, b]) => [a + '|' + b, b + '|' + a]))
+  const isOpen = (r, o) => openPairs.has(r.id + '|' + o.id) || openPairs.has(r.kind + '|' + o.kind)
+  const inside = (pt, r) => Math.abs(pt[0] - r.local[0]) < r.w / 2 - 0.01 && Math.abs(pt[1] - r.local[1]) < r.d / 2 - 0.01
   const key = (a, b) => {
     const p = [a, b].sort((u, v) => u[0] - v[0] || u[1] - v[1])
-    return p.map((q) => q.map((v) => v.toFixed(2)).join(',')).join('|')
+    return p.map((q) => q.map((v) => v.toFixed(1)).join(',')).join('|')
   }
-  const inside = (pt, r) => Math.abs(pt[0] - r.local[0]) < r.w / 2 - 0.01 && Math.abs(pt[1] - r.local[1]) < r.d / 2 - 0.01
   const seen = new Map()
+  const STEP = 0.5
   solid.forEach((r) => {
     const [cx, cz] = r.local
     const hw = r.w / 2
@@ -47,24 +55,43 @@ export function wallsFrom(rooms, kit) {
     for (let i = 0; i < 4; i++) {
       const a = corners[i]
       const b = corners[(i + 1) % 4]
-      const k = key(a, b)
-      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-      const nx = -(b[1] - a[1])
-      const nz = b[0] - a[0]
-      const len = Math.hypot(nx, nz)
-      const probe = (s) => [mid[0] + (nx / len) * s, mid[1] + (nz / len) * s]
-      // One probe lands inside this room; the other tells us what is beyond the edge.
-      const neighbor = solid.find((o) => o !== r && (inside(probe(1.25), o) || inside(probe(-1.25), o)))
-      const exterior = !neighbor
-      const prev = seen.get(k)
-      const plumbing = !!r.plumbing || !!neighbor?.plumbing
-      if (prev) {
-        prev.plate = Math.max(prev.plate, r.plate)
-        prev.plumbing = prev.plumbing || plumbing
-        prev.exterior = false
-      } else {
-        seen.set(k, { a, b, plate: r.plate, plumbing: plumbing && !exterior, exterior, rooms: [r.name] })
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const ux = (b[0] - a[0]) / len
+      const uz = (b[1] - a[1]) / len
+      const nx = -uz
+      const nz = ux
+      const n = Math.max(1, Math.round(len / STEP))
+      // classify each sample: 'ext', 'open', or the neighbour room
+      const runs = []
+      for (let k = 0; k < n; k++) {
+        const t = ((k + 0.5) / n) * len
+        const p = [a[0] + ux * t, a[1] + uz * t]
+        const out = inside([p[0] + nx * 0.6, p[1] + nz * 0.6], r) ? -1.25 : 1.25
+        const probe = [p[0] + nx * out, p[1] + nz * out]
+        const o = solid.find((x) => x !== r && inside(probe, x))
+        const status = !o ? 'ext' : isOpen(r, o) ? 'open' : 'wall'
+        const plumbing = !!r.plumbing || !!o?.plumbing
+        const last = runs[runs.length - 1]
+        if (last && last.status === status && last.plumbing === plumbing) last.k1 = k + 1
+        else runs.push({ status, plumbing, k0: k, k1: k + 1 })
       }
+      runs.forEach((run) => {
+        if (run.status === 'open') return
+        const t0 = (run.k0 / n) * len
+        const t1 = (run.k1 / n) * len
+        const pa = [a[0] + ux * t0, a[1] + uz * t0]
+        const pb = [a[0] + ux * t1, a[1] + uz * t1]
+        const kk = key(pa, pb)
+        const exterior = run.status === 'ext'
+        const prev = seen.get(kk)
+        if (prev) {
+          prev.plate = Math.max(prev.plate, r.plate)
+          prev.plumbing = prev.plumbing || (run.plumbing && !exterior)
+          prev.exterior = prev.exterior && exterior
+        } else {
+          seen.set(kk, { a: pa, b: pb, plate: r.plate, plumbing: run.plumbing && !exterior, exterior, rooms: [r.name] })
+        }
+      })
     }
   })
   return [...seen.values()].map((w) => ({
