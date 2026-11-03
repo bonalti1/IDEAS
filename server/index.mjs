@@ -50,7 +50,7 @@ function health() {
     { id: 'api', name: 'Office API', ok: true, detail: `v${VERSION}, up ${Math.round((t - started) / 60000)} min`, at: now() },
     { id: 'store', name: 'File store', ok: storeOk, detail: storeOk ? `${countFiles()} files` : 'not writable', at: now() },
     { id: 'queue', name: 'Job queue', ok: stuck === 0, detail: `${queued} queued, ${running} running${stuck ? `, ${stuck} stuck` : ''}`, at: now() },
-    { id: 'interpreter', name: 'Change interpreter', ok: !!interpreterClient, detail: interpreterClient ? INTERPRET_MODEL : 'no API key, clients get the basic rules', at: now() },
+    { id: 'interpreter', name: 'Change interpreter', ok: !!interpreterClient && interpreterReach.ok !== false, detail: interpreterClient ? interpreterReach.detail : 'no API key, clients get the basic rules', at: now() },
     { id: 'worker', name: 'Revit worker', ok: workers.some((w) => w.online), detail: workers.length ? workers.map((w) => `${w.name}: ${w.online ? 'online' : 'offline'}`).join(', ') : 'none registered', at: now() },
   ]
   workers.forEach((w) => (w.checks || []).forEach((c) => checks.push({ ...c, id: `${w.id}:${c.id}`, worker: w.name })))
@@ -243,8 +243,10 @@ const INTERPRET_SYSTEM = `You turn a home buyer's plain-language request into a 
 You get the current rooms (id, kind, name, width w and depth d in feet, position x y in feet from the rear-left corner, y grows toward the street) and the kit's room kinds with typical sizes.
 Rules:
 - Use only ids and kinds that appear in the input. Never invent ids.
-- "Bigger" means about 15% larger in both directions, "much bigger" about 30%. "Wider" changes w only, "deeper" or "longer" changes d only. A number in feet is exact.
-- Keep dimensions in quarter-foot steps and within reason: bedrooms 10 to 20 feet, kitchens 9 to 22, no room over 40.
+- "Bigger" means about 15% larger in both directions, "much bigger" about 30%. "Wider" changes w only, "deeper" or "longer" changes d only.
+- A size or distance the client states is exact. Use it as given, even when it is under a minimum, crosses the lot, or looks like a bad idea. A plan checker runs after you, enforces minimums, setbacks and overlaps, and explains the problem to the client; never substitute a different number and never ask back just because a stated number breaks a rule.
+- Keep dimensions in quarter-foot steps. When you choose a size yourself, keep it within reason: bedrooms 10 to 20 feet, kitchens 9 to 22, no room over 40.
+- "Add" always means one more room of that kind, even when the plan already has one (a second office, a third bedroom). Do not ask whether they meant to resize the existing one.
 - A new room gets the kit's template size unless the client gives one. Put it near the room they mention with "near".
 - Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
 - If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.
@@ -255,10 +257,42 @@ const PRICES = process.env.INTERPRET_PRICES ? JSON.parse(process.env.INTERPRET_P
 const costOf = (u) => ((u?.input_tokens || 0) * PRICES.in + (u?.output_tokens || 0) * PRICES.out + (u?.cache_read_input_tokens || 0) * PRICES.cacheRead + (u?.cache_creation_input_tokens || 0) * PRICES.cacheWrite) / 1e6
 const INTERPRET_LOG = path.join(DATA, 'interpret-log.jsonl')
 const logInterpret = (rec) => fs.appendFileSync(INTERPRET_LOG, JSON.stringify({ at: now(), ...rec }) + '\n')
-const interpreterClient = process.env.ANTHROPIC_API_KEY ? new Anthropic({ timeout: INTERPRET_TIMEOUT_MS, maxRetries: 0 }) : null
+// DRAFTHOUSE_CLAUDE_KEY first (some hosts blank ANTHROPIC_API_KEY), then ANTHROPIC_API_KEY.
+// Only the length is ever printed or reported.
+const KEY_VARS = ['DRAFTHOUSE_CLAUDE_KEY', 'ANTHROPIC_API_KEY']
+const keyVar = KEY_VARS.find((v) => (process.env[v] || '').trim())
+const claudeKey = keyVar ? process.env[keyVar].trim() : ''
+const interpreterClient = claudeKey ? new Anthropic({ apiKey: claudeKey, timeout: INTERPRET_TIMEOUT_MS, maxRetries: 0 }) : null
+// the innermost network error code (ECONNREFUSED, ENOTFOUND, ...) behind the SDK's connection error
+const netCause = (e) => {
+  for (let c = e.cause; c; c = c.cause) if (c.code) return c.code
+  return e.cause?.message || e.message
+}
+// Can this machine reach api.anthropic.com with this key? Checked at start and kept current by real calls; health shows it.
+let interpreterReach = { ok: null, detail: 'checking api.anthropic.com' }
+async function probeInterpreter() {
+  if (!interpreterClient) return
+  try {
+    await interpreterClient.models.retrieve(INTERPRET_MODEL, { timeout: 10000 })
+    interpreterReach = { ok: true, detail: `${INTERPRET_MODEL}, api.anthropic.com reachable` }
+  } catch (e) {
+    const blocked = e instanceof Anthropic.APIConnectionError
+    const detail = blocked
+      ? `api.anthropic.com is blocked or unreachable from this machine (network access): ${netCause(e)}`
+      : e instanceof Anthropic.AuthenticationError
+        ? `api.anthropic.com rejected the key from ${keyVar} (401)`
+        : e instanceof Anthropic.PermissionDeniedError
+          ? `api.anthropic.com refused access (403): ${e.message}`
+          : e instanceof Anthropic.NotFoundError
+            ? `model ${INTERPRET_MODEL} not available to this key`
+            : `api.anthropic.com check failed: ${e.message}`
+    interpreterReach = { ok: false, detail }
+  }
+  console.log(`interpreter: ${interpreterReach.detail}`)
+}
 
 route('POST', '/api/interpret', async (req, res) => {
-  if (!interpreterClient) return json(res, 503, { error: 'interpreter not configured on this server (ANTHROPIC_API_KEY missing)' })
+  if (!interpreterClient) return json(res, 503, { error: 'interpreter not configured on this server (no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY)' })
   const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
   if (!body.text || !Array.isArray(body.rooms)) return json(res, 400, { error: 'text and rooms required' })
   const input = { request: String(body.text).slice(0, 500), program: body.program, kit: body.kit, rooms: body.rooms }
@@ -273,6 +307,7 @@ route('POST', '/api/interpret', async (req, res) => {
     })
     const ms = Date.now() - t0
     const cost = costOf(message.usage)
+    interpreterReach = { ok: true, detail: `${INTERPRET_MODEL}, api.anthropic.com reachable` }
     if (message.stop_reason === 'refusal') {
       logInterpret({ request: input.request, client: body.client || null, verdict: 'refusal', category: message.stop_details?.category || null, ms, usage: message.usage, cost, model: INTERPRET_MODEL })
       return json(res, 502, { error: 'interpreter declined', category: message.stop_details?.category || null })
@@ -288,10 +323,13 @@ route('POST', '/api/interpret', async (req, res) => {
   } catch (e) {
     const ms = Date.now() - t0
     const timeout = e instanceof Anthropic.APIConnectionTimeoutError || /timed? ?out/i.test(e.message || '')
-    const status = timeout ? 504 : e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
-    logInterpret({ request: input.request, client: body.client || null, verdict: timeout ? 'timeout' : 'error', error: String(e.message || e).slice(0, 200), ms, model: INTERPRET_MODEL })
-    event('error', `interpreter: ${timeout ? `no answer in ${INTERPRET_TIMEOUT_MS} ms` : e.message || e}`)
-    json(res, status, { error: timeout ? `interpreter timed out after ${INTERPRET_TIMEOUT_MS} ms` : String(e.message || e), timeout })
+    const blocked = !timeout && e instanceof Anthropic.APIConnectionError
+    const status = timeout ? 504 : blocked ? 503 : e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
+    const error = timeout ? `interpreter timed out after ${INTERPRET_TIMEOUT_MS} ms` : blocked ? `api.anthropic.com is blocked or unreachable from this machine (network access): ${netCause(e)}` : String(e.message || e)
+    if (blocked) interpreterReach = { ok: false, detail: error }
+    logInterpret({ request: input.request, client: body.client || null, verdict: timeout ? 'timeout' : 'error', error: error.slice(0, 200), ms, model: INTERPRET_MODEL })
+    event('error', `interpreter: ${timeout ? `no answer in ${INTERPRET_TIMEOUT_MS} ms` : error}`)
+    json(res, status, { error, timeout, blocked })
   }
 })
 
@@ -338,4 +376,8 @@ http
       json(res, 500, { error: String(e.message || e) })
     }
   })
-  .listen(PORT, () => console.log(`Draft House office API on :${PORT}, data in ${DATA}`))
+  .listen(PORT, () => {
+    console.log(`Draft House office API on :${PORT}, data in ${DATA}`)
+    console.log(keyVar ? `interpreter: key from ${keyVar} (${claudeKey.length} chars), model ${INTERPRET_MODEL}` : 'interpreter: no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY, clients get the basic rules')
+    probeInterpreter()
+  })

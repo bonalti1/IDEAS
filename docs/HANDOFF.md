@@ -74,7 +74,7 @@ npm run office:demo-worker       # pretend Revit machine
 node scripts/shot-flow.mjs out   # screenshots of every step, dev server running
 ```
 
-Environment: `VITE_API_URL` for the office API address (default `http://localhost:8787`). The server takes `PORT` and `DATA_DIR`.
+Environment: `VITE_API_URL` for the office API address (default `http://localhost:8787`). The server takes `PORT` and `DATA_DIR`, and the Claude key for the change interpreter from `DRAFTHOUSE_CLAUDE_KEY`, falling back to `ANTHROPIC_API_KEY` (some hosts blank the latter). Only the key's length is ever printed. At start the server checks that api.anthropic.com is reachable and says so in its log and in the health check, including when network access blocks it. `node scripts/try-interpret.mjs` runs ten live requests and grades them; see `docs/change-diff.md`.
 
 Tooling in this repo's development environment: Node 22, Python 3.11 for scripts, Python 3.13 with `ifcopenshell` for IFC validation (`pip install ifcopenshell`), Playwright with Chromium for screenshots.
 
@@ -116,7 +116,7 @@ Items a drafter must confirm are listed in `src/kits/README.md`.
 
 `placeLocal` converts plan coordinates to the lot: local x along the front, z toward the street (positive z is south, the front street), then rotates by the lot angle about the setback envelope centre. Every room and element keeps `local: [x, z]`; everything downstream uses local feet.
 
-`applyRequest(text, rooms, stories, style)` is a **mock** interpreter: regexes for bigger, smaller, add, remove over a list of room kinds. It resizes in place, appends new rooms below the bedroom wing, removes a room and its elements. The real version sends the request and the current rooms to Claude and gets a structured diff, then validates it with a rules engine. Neither exists yet.
+Plain-language changes go through `src/draft/lib/interpret.js`: the office API asks Claude for a structured diff (`docs/change-diff.md`), `ops.js` checks and applies it, and `rules.js` accepts or rejects the result with a reason the client can read. When the office API or Claude is unavailable, `regexOps` in `ops.js` produces the diff from keywords instead.
 
 `outline(rooms)` samples room edges to get exterior perimeter and footprint for the takeoff.
 
@@ -203,7 +203,7 @@ See `docs/design-contract.md`. Version 1. The worker refuses other versions.
 
 - Survey upload does nothing. Lot and city rules are Lot 514 and Palmview constants.
 - Only one kit. Everything was traced from a PDF at screen resolution; positions can be off by a foot. The right fix is to extract kits from the drafter's Revit export (IFC from Revit, parsed with IfcOpenShell into the kit shape). Not built.
-- The plain-language interpreter is regex. No Claude call, no rules engine, no price model beyond dollars per square foot by style.
+- The change interpreter calls Claude through the office API, with a regex fallback and a rules engine. On 2026-11-03 the ten named requests came out right 10 of 10 in three consecutive live runs, at about $0.012 and 2.2 s per request. There is no price model beyond dollars per square foot by style.
 - Credits, accounts, saving, and payments do not exist.
 - Changing a room does not move its fixtures or openings.
 - Roof: see section 9 limits. Revit's footprint roofs in the build script do not reproduce the clipped valleys; Revit joins roofs its own way.
