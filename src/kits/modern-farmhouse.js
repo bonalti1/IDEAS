@@ -173,6 +173,21 @@ export const KIT = {
       { id: 'mhall', kind: 'hall', name: 'Hall', x: 57.0, y: 15.25, w: 3.25, d: 16.25 },
       { id: 'master', kind: 'master', name: 'Primary Bedroom', x: 57.0, y: 31.5, w: 15.0, d: 16.25 },
     ],
+
+    // Roof masses from sheet 100. Rectangles in plan feet (x0..x1, y0..y1),
+    // ridge direction, plate height at the eave, pitch rise per 12.
+    // 'ends' lists which ends are gables; the other end dies into a neighbour.
+    roof: [
+      { id: 'main', kind: 'gable', x0: 19.75, x1: 72, y0: 12.25, y1: 38, ridge: 'ew', plate: 11, pitch: 10, ends: ['w', 'e'] },
+      { id: 'bedwing', kind: 'gable', x0: 3.75, x1: 19.75, y0: 2.75, y1: 40, ridge: 'ns', plate: 9, pitch: 10, ends: ['n', 's'] },
+      { id: 'bath1', kind: 'gable', x0: 0, x1: 12.25, y0: 38, y1: 45.75, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
+      { id: 'suite2', kind: 'gable', x0: 12.25, x1: 25.25, y0: 38, y1: 52.25, ridge: 'ns', plate: 10, pitch: 10, ends: ['s'] },
+      { id: 'laundry', kind: 'gable', x0: 64.25, x1: 72, y0: 0.5, y1: 15.25, ridge: 'ns', plate: 9, pitch: 10, ends: ['n'] },
+      { id: 'master', kind: 'gable', x0: 57, x1: 72, y0: 31.5, y1: 47.75, ridge: 'ns', plate: 9, pitch: 10, ends: ['s'] },
+      { id: 'dormer', kind: 'gable', x0: 32.5, x1: 45.5, y0: 24, y1: 38, ridge: 'ns', plate: 18, pitch: 10, ends: ['s'], overhang: 1.33 },
+      { id: 'frontPorch', kind: 'shed', x0: 25.25, x1: 56.5, y0: 38, y1: 43, high: 'n', plate: 8, pitch: 4, material: 'metal roof' },
+      { id: 'rearPorch', kind: 'shed', x0: 19.75, x1: 56.5, y0: 7.75, y1: 12.25, high: 's', plate: 8, pitch: 4, material: 'metal roof' },
+    ],
     // Rooms that share an edge with no wall between them (one open space).
     open: [
       ['living', 'dining'],

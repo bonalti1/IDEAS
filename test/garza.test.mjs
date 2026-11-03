@@ -38,6 +38,14 @@ test('plan has the traced rooms, openings, and fixtures', () => {
   assert.equal(rooms.filter((r) => r.kind === 'door').length, KIT.plan.doors.length)
   assert.equal(rooms.filter((r) => r.kind === 'fixture').length, KIT.plan.fixtures.length)
 })
+test('roof follows sheet 100', () => {
+  const roof = rooms.find((r) => r.kind === 'roof')
+  assert.equal(roof.prisms.length, KIT.plan.roof.length)
+  const main = roof.prisms.find((p) => p.id === 'main')
+  const ridge = Math.max(...main.profile.map(([, v]) => v))
+  assert.ok(ridge > 20 && ridge < 24, `main ridge ${ridge.toFixed(1)} ft at 10:12 over an 11 ft plate`)
+  assert.equal(roof.prisms.filter((p) => p.kind === 'shed').length, 2)
+})
 test('IFC export is well formed', () => {
   const ifc = toIFC({ rooms, program, kit: KIT, style, lot: { address: 'Lot 514' } })
   assert.ok(ifc.startsWith('ISO-10303-21;'))
@@ -46,5 +54,8 @@ test('IFC export is well formed', () => {
   assert.equal((ifc.match(/IFCWINDOW\(/g) || []).length, KIT.plan.windows.filter((w) => !w.dormer).length)
   assert.equal((ifc.match(/IFCRELVOIDSELEMENT\(/g) || []).length, (ifc.match(/IFCOPENINGELEMENT\(/g) || []).length)
   assert.ok(!/\\'/.test(ifc), 'no backslash-escaped quotes in STEP text')
+  assert.equal((ifc.match(/IFCROOF\(/g) || []).length, KIT.plan.roof.length)
+  // every quoted string must have apostrophes doubled: no odd lone apostrophe inside a line
+  ifc.split('\n').forEach((line) => assert.ok(((line.match(/'/g) || []).length % 2) === 0, 'unbalanced quote: ' + line.slice(0, 80)))
   assert.ok(wallsFrom(rooms, KIT).some((w) => w.plumbing), 'plumbing walls present')
 })

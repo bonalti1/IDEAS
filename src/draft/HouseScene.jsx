@@ -12,6 +12,7 @@ import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
+import { roofFaces } from './lib/roof.js'
 
 const [CX, CZ] = LOT_CENTROID
 export const CAMERAS = {
@@ -118,6 +119,38 @@ function Fixture({ e, centre }) {
   return <Box cx={x} cz={z} w={e.w} d={e.d} h={e.h} rot={LOT_ANGLE} color={FIX_COLOR[e.fixture] || '#cfc4b6'} />
 }
 
+function Roof({ roof, centre }) {
+  const { geom, edges } = useMemo(() => {
+    const faces = roofFaces(roof.prisms)
+    const pos = []
+    const lines = []
+    const cos = Math.cos(LOT_ANGLE)
+    const sin = Math.sin(LOT_ANGLE)
+    const W = ([x, y, z]) => [centre[0] + x * cos - z * sin, y, centre[1] + x * sin + z * cos]
+    faces.forEach((f) => {
+      const pts = f.pts.map(W)
+      for (let i = 1; i < pts.length - 1; i++) pos.push(...pts[0], ...pts[i], ...pts[i + 1])
+      if (f.kind !== 'under') for (let i = 0; i < pts.length; i++) lines.push(...pts[i], ...pts[(i + 1) % pts.length])
+    })
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.computeVertexNormals()
+    const e = new THREE.BufferGeometry()
+    e.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
+    return { geom: g, edges: e }
+  }, [roof, centre])
+  return (
+    <group>
+      <mesh geometry={geom}>
+        <meshLambertMaterial color="#6f655c" side={THREE.DoubleSide} />
+      </mesh>
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color={INK} />
+      </lineSegments>
+    </group>
+  )
+}
+
 function Room({ r, highlight, labels }) {
   const [x, z] = r.center
   const nameSize = Math.min(2.6, Math.max(1.5, (r.w - 1) / (r.name.length * 0.62)))
@@ -144,7 +177,7 @@ function Room({ r, highlight, labels }) {
   )
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true }) {
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true }) {
   const cam = CAMERAS[view] || CAMERAS['3d']
   const kit = kitFor(style)
   const centre = useMemo(() => {
@@ -168,6 +201,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} />)}
+      {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} />)}
       <OrbitControls ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={20} maxDistance={1200} />
     </Canvas>
   )

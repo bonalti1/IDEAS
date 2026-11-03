@@ -9,6 +9,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
   const [highlight, setHighlight] = useState(null)
+  const [roof, setRoof] = useState(true)
   const controls = useRef()
   const logRef = useRef()
 
@@ -48,7 +49,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} />
+        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} />
         <div className="viewport-tag">
           {style.name} · {program.beds} bed · {program.baths}
           {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}
@@ -60,6 +61,10 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
             3D
           </button>
+          <label className={'check' + (view === 'top' ? ' off' : '')}>
+            <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} disabled={view === 'top'} />
+            Roof
+          </label>
         </div>
       </div>
       <aside className="side chat">

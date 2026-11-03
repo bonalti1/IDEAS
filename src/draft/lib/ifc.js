@@ -8,6 +8,8 @@ import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/mo
 
 const FT = 0.3048
 const m = (ft) => (ft * FT).toFixed(4)
+// STEP strings escape an apostrophe by doubling it
+const esc = (v) => String(v ?? '').replace(/'/g, "''")
 
 // 22-char IFC GUID from random bytes
 const B64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$'
@@ -232,6 +234,35 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       return add(`${cls}(${g()},#${oh},'${name}',$,'${name}',#${pl},#${shape},$,${type})`)
     })
 
+  // ── roof: one IfcRoof per mass, as a profile extruded along the ridge ───
+  const up = [0, 0, 1]
+  const roofIds = []
+  rooms
+    .filter((r) => r.kind === 'roof')
+    .flatMap((r) => r.prisms)
+    .forEach((p) => {
+      // local (x, y up, z south) → IFC (x, -z, y); extrusion axis along the ridge
+      const axis = [p.dir[0], -p.dir[1], 0]
+      const xref = [-axis[1], axis[0], 0] // up × axis, horizontal, so local Y comes out vertical
+      const perp = [-p.dir[1], p.dir[0]]
+      const o = add(`IFCCARTESIANPOINT((${m(p.O[0])},${m(-p.O[1])},0.))`)
+      const ax = add(`IFCDIRECTION((${axis[0].toFixed(6)},${axis[1].toFixed(6)},0.))`)
+      const rx = add(`IFCDIRECTION((${xref[0].toFixed(6)},${xref[1].toFixed(6)},0.))`)
+      const place = add(`IFCAXIS2PLACEMENT3D(#${o},#${ax},#${rx})`)
+      const pl = add(`IFCLOCALPLACEMENT(#${sPl},#${place})`)
+      const pts = p.profile.map(([u, v]) => {
+        const off = [perp[0] * u, -perp[1] * u, v] // IFC offset of this profile point
+        const pu = off[0] * xref[0] + off[1] * xref[1]
+        return add(`IFCCARTESIANPOINT((${(pu * FT).toFixed(4)},${(v * FT).toFixed(4)}))`)
+      })
+      const poly = add(`IFCPOLYLINE((${[...pts, pts[0]].map((i) => '#' + i).join(',')}))`)
+      const prof = add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${poly})`)
+      const solid = add(`IFCEXTRUDEDAREASOLID(#${prof},#${wcs},#${zDir},${(p.len * FT).toFixed(4)})`)
+      const rep = add(`IFCSHAPEREPRESENTATION(#${body},'Body','SweptSolid',(#${solid}))`)
+      const shape = add(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`)
+      roofIds.push(add(`IFCROOF(${g()},#${oh},'Roof ${p.id}','${esc(p.material)}; ${p.kind === 'gable' ? esc(kit.roof.pitch) : '4:12'}, ${esc(kit.roof.overhang)} overhang',$,#${pl},#${shape},$,.${p.kind === 'gable' ? 'GABLE_ROOF' : 'SHED_ROOF'}.)`))
+    })
+
   // ── slabs: one per solid room footprint, 4" below finished floor ──────
   const slabT = (4 / 12) * FT
   const slabIds = rooms
@@ -248,7 +279,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     return add(`IFCSPACE(${g()},#${oh},'${r.name}','${r.w} ft x ${r.d} ft',$,#${pl},#${shape},$,.ELEMENT.,.${r.open ? 'EXTERNAL' : 'INTERNAL'}.,$)`)
   })
   add(`IFCRELAGGREGATES(${g()},#${oh},$,$,#${storey},(${spaceIds.map((i) => '#' + i).join(',')}))`)
-  add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g()},#${oh},$,$,(${[...wallIds, ...slabIds, ...fillIds, ...fixtureIds].map((i) => '#' + i).join(',')}),#${storey})`)
+  add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g()},#${oh},$,$,(${[...wallIds, ...slabIds, ...fillIds, ...fixtureIds, ...roofIds].map((i) => '#' + i).join(',')}),#${storey})`)
 
   // ── property set: what the drafter needs to know ──────────────────────
   const props = [
