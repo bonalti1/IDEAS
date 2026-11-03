@@ -31,6 +31,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="titlebar">
+        <a className="brand" href="/" aria-label="Draft House">
+          <img src="/brand/mark.svg" alt="" />
+          <span>Draft House</span>
+        </a>
         <span className="title">LOT 514 · VILLA-RAMA EAST PHASE V · PALMVIEW, TX</span>
         <span className="subtitle">SITE PLAN REVIEW — PHASE 2: PROGRAM LAYOUT (FOOTPRINTS ESTIMATED)</span>
         <nav className="views">
