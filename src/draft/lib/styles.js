@@ -1,9 +1,12 @@
 // The ten home styles. Each has a roof silhouette for the picker card,
-// a cost band ($/sf, rough South Texas custom build), and massing hints the
-// mock layout engine uses. Real kits replace this in the backend phase.
+// a cost band ($/sf, rough South Texas custom build), and a kit. Only the
+// farmhouse has a real kit so far (src/kits); the others borrow its room
+// templates until their own sets are extracted.
+import { KIT as FARMHOUSE } from '../../kits/modern-farmhouse.js'
+
 export const STYLES = [
   { id: 'modern', name: 'Modern', blurb: 'Flat roofs, clean lines, big glass.', psf: 215, roof: 'flat', stories: 2 },
-  { id: 'farmhouse', name: 'Modern Farmhouse', blurb: 'Gables, board and batten, deep porch.', psf: 190, roof: 'gable', stories: 1 },
+  { id: 'farmhouse', name: 'Modern Farmhouse', blurb: 'Gables, board and batten, deep porch.', psf: 190, roof: 'gable', stories: 1, kit: FARMHOUSE, ready: true },
   { id: 'spanish', name: 'Spanish', blurb: 'Stucco, clay tile, arches, courtyard.', psf: 205, roof: 'hip', stories: 1 },
   { id: 'hillcountry', name: 'Hill Country', blurb: 'Limestone, standing seam, wide eaves.', psf: 200, roof: 'gable', stories: 1 },
   { id: 'ranch', name: 'Ranch', blurb: 'Long, low, single story, easy living.', psf: 175, roof: 'hip', stories: 1 },

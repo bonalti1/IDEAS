@@ -14,7 +14,9 @@ export default function Style({ style, onPick, onNext, onBack }) {
             <RoofIcon roof={s.roof} />
             <span className="style-name">{s.name}</span>
             <span className="style-blurb">{s.blurb}</span>
-            <span className="style-psf">from ${s.psf}/sf</span>
+            <span className="style-psf">
+              from ${s.psf}/sf{s.ready ? ' · kit ready' : ''}
+            </span>
           </button>
         ))}
       </div>

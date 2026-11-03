@@ -3,7 +3,7 @@ import HouseScene, { CAMERAS } from '../HouseScene.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
 import { applyRequest, floorArea } from '../lib/layout.js'
 
-const SUGGESTIONS = ['Make the kitchen bigger', 'Add an office', 'Add a bedroom', 'Remove the porch', 'Smaller garage']
+const SUGGESTIONS = ['Make the kitchen bigger', 'Add a bedroom', 'Bigger primary bath', 'Remove the rear porch', 'Add a half bath']
 
 export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack }) {
   const [text, setText] = useState('')
@@ -29,14 +29,14 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const send = (msg) => {
     const q = (msg ?? text).trim()
     if (!q || credits <= 0) return
-    const res = applyRequest(q, rooms, program.stories)
+    const res = applyRequest(q, rooms, program.stories, style)
     setHistory((h) => [...h, { who: 'you', text: q }, { who: 'house', text: res.reply }])
     if (res.applied) {
       setRooms(res.rooms)
       setCredits((c) => c - 1)
       const k = q.toLowerCase()
-      const kind = ['kitchen', 'garage', 'living', 'dining', 'laundry', 'porch', 'office', 'bath', 'bed', 'master'].find((x) => k.includes(x))
-      setHighlight(kind === 'master' ? 'master' : kind)
+      const kind = [['primary bath', 'mbath'], ['master bath', 'mbath'], ['primary', 'master'], ['master', 'master'], ['kitchen', 'kitchen'], ['garage', 'garage'], ['living', 'living'], ['dining', 'dining'], ['laundry', 'laundry'], ['rear porch', 'rearPorch'], ['front porch', 'frontPorch'], ['office', 'office'], ['half bath', 'halfbath'], ['bath', 'bath'], ['bed', 'bed']].find(([x]) => k.includes(x))?.[1]
+      setHighlight(kind)
       setTimeout(() => setHighlight(null), 1800)
     }
     setText('')
@@ -50,7 +50,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       <div className="viewport">
         <HouseScene rooms={rooms} view={view} highlightKind={highlight} controlsRef={controls} />
         <div className="viewport-tag">
-          {style.name} · {program.beds} bed · {program.baths} bath · {program.stories === 2 ? 'two story' : 'one story'}
+          {style.name} · {program.beds} bed · {program.baths}
+          {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}
         </div>
         <div className="viewport-views">
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
