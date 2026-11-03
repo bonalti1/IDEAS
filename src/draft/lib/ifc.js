@@ -3,6 +3,8 @@
 // Opens in Revit (Insert > Link IFC or Open IFC), BIMcollab Zoom, or any IFC viewer.
 import { LOT_ANGLE } from '../../data/program.js'
 import { ENVELOPE_CENTER, isConditioned } from './layout.js'
+import { hostWall } from './openings.js'
+import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 
 const FT = 0.3048
 const m = (ft) => (ft * FT).toFixed(4)
@@ -25,7 +27,7 @@ export function ifcGuid() {
 
 /** Wall segments from the room blocks, in local feet. Shared edges become one wall. */
 export function wallsFrom(rooms, kit) {
-  const solid = rooms.filter((r) => !r.open)
+  const solid = rooms.filter((r) => !r.open && !r.element)
   const key = (a, b) => {
     const p = [a, b].sort((u, v) => u[0] - v[0] || u[1] - v[1])
     return p.map((q) => q.map((v) => v.toFixed(2)).join(',')).join('|')
@@ -148,23 +150,78 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     return add(`IFCWALL(${g()},#${oh},'${w.exterior ? 'Exterior' : w.plumbing ? 'Plumbing' : 'Interior'} wall ${i + 1}','${w.thicknessIn}" ${w.exterior ? kit.walls.exterior.studs : w.plumbing ? kit.walls.plumbing.studs : kit.walls.interior.studs}',$,#${pl},#${shape},$,.STANDARD.)`)
   })
 
+  // ── doors and windows: opening voids the host wall, door or window fills it
+  const elements = rooms.filter((r) => r.element)
+  const fillIds = []
+  const wallBox = (w, t0, t1, z0, h, extra = 0.1) => {
+    const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])
+    const dir = [(X(w.b[0]) - X(w.a[0])) / (len * FT), (Y(w.b[1]) - Y(w.a[1])) / (len * FT)]
+    const t = (w.thicknessIn / 12) * FT + extra
+    const sx = X(w.a[0]) + dir[0] * t0 * FT - dir[1] * (t / 2)
+    const sy = Y(w.a[1]) + dir[1] * t0 * FT + dir[0] * (t / 2)
+    return box(sx.toFixed(4), sy.toFixed(4), (z0 * FT).toFixed(4), (t1 - t0) * FT, t, h * FT, dir)
+  }
+  elements
+    .filter((e) => (e.kind === 'door' || e.kind === 'window') && !e.dormer)
+    .forEach((e, i) => {
+      const host = hostWall(walls, e)
+      if (!host) return
+      const w = walls[host.i]
+      const sill = e.kind === 'window' ? WINDOW_SILL[e.mark] ?? 2 : 0
+      const head = e.kind === 'window' ? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
+      const t0 = Math.max(0, host.t - e.span / 2)
+      const t1 = Math.min(host.len, host.t + e.span / 2)
+      const op = wallBox(w, t0, t1, sill, head - sill)
+      const opening = add(`IFCOPENINGELEMENT(${g()},#${oh},'Opening for ${e.name}',$,$,#${op.pl},#${op.shape},$,.OPENING.)`)
+      add(`IFCRELVOIDSELEMENT(${g()},#${oh},$,$,#${wallIds[host.i]},#${opening})`)
+      if (e.cased) return
+      const fb = wallBox(w, t0, t1, sill, head - sill, -0.02)
+      const H = ((head - sill) * FT).toFixed(3)
+      const W = ((t1 - t0) * FT).toFixed(3)
+      let fill
+      if (e.kind === 'door') {
+        const op = e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
+        fill = add(`IFCDOOR(${g()},#${oh},'${e.size || 'door'} ${e.pair ? 'pair' : ''}'.trim(),'${kit.doors[e.size]?.material || ''}',$,#${fb.pl},#${fb.shape},$,${H},${W},.DOOR.,${op},$)`)
+      } else {
+        const win = kit.windows[e.mark] || {}
+        fill = add(`IFCWINDOW(${g()},#${oh},'Window ${e.mark}','${win.type || ''} ${win.material || ''}'.trim(),$,#${fb.pl},#${fb.shape},$,${H},${W},.WINDOW.,.${e.span >= 5 ? 'DOUBLE_PANEL_VERTICAL' : 'SINGLE_PANEL'}.,$)`)
+      }
+      add(`IFCRELFILLSELEMENT(${g()},#${oh},$,$,#${opening},#${fill})`)
+      fillIds.push(fill)
+    })
+
+  // ── fixtures and furniture ────────────────────────────────────────────
+  const FIX_IFC = {
+    toilet: ['IFCSANITARYTERMINAL', '.TOILETPAN.'], shower: ['IFCSANITARYTERMINAL', '.SHOWER.'], vanity: ['IFCSANITARYTERMINAL', '.WASHHANDBASIN.'], sink: ['IFCSANITARYTERMINAL', '.SINK.'],
+    fridge: ['IFCELECTRICAPPLIANCE', '.REFRIGERATOR.'], range: ['IFCELECTRICAPPLIANCE', '.ELECTRICCOOKER.'], washer: ['IFCELECTRICAPPLIANCE', '.WASHINGMACHINE.'], dryer: ['IFCELECTRICAPPLIANCE', '.TUMBLEDRYER.'],
+    bed: ['IFCFURNITURE', '.BED.'], sofa: ['IFCFURNITURE', '.SOFA.'], table: ['IFCFURNITURE', '.TABLE.'], coffee: ['IFCFURNITURE', '.TABLE.'], desk: ['IFCFURNITURE', '.DESK.'], shelves: ['IFCFURNITURE', '.SHELF.'], linen: ['IFCFURNITURE', '.SHELF.'],
+  }
+  const fixtureIds = elements
+    .filter((e) => e.kind === 'fixture')
+    .map((e) => {
+      const [cls, type] = FIX_IFC[e.fixture] || ['IFCFURNITURE', '.USERDEFINED.']
+      const { pl, shape } = box(X(e.local[0] - e.w / 2).toFixed(4), Y(e.local[1] + e.d / 2).toFixed(4), '0.', e.w * FT, e.d * FT, e.h * FT)
+      const name = FIXTURE_NAME[e.fixture] || e.fixture
+      return add(`${cls}(${g()},#${oh},'${name}',$,'${name}',#${pl},#${shape},$,${type})`)
+    })
+
   // ── slabs: one per solid room footprint, 4" below finished floor ──────
   const slabT = (4 / 12) * FT
   const slabIds = rooms
-    .filter((r) => !r.open)
+    .filter((r) => !r.open && !r.element)
     .map((r) => {
       const { pl, shape } = box(X(r.local[0] - r.w / 2).toFixed(4), Y(r.local[1] + r.d / 2).toFixed(4), (-slabT).toFixed(4), r.w * FT, r.d * FT, slabT)
       return add(`IFCSLAB(${g()},#${oh},'Slab ${r.name}','${kit.foundation.slab}',$,#${pl},#${shape},$,.FLOOR.)`)
     })
 
   // ── spaces (rooms) ────────────────────────────────────────────────────
-  const spaceIds = rooms.map((r) => {
+  const spaceIds = rooms.filter((r) => !r.element).map((r) => {
     const h = r.open ? 0.3 : r.plate * FT
     const { pl, shape } = box(X(r.local[0] - r.w / 2).toFixed(4), Y(r.local[1] + r.d / 2).toFixed(4), '0.', r.w * FT, r.d * FT, h)
     return add(`IFCSPACE(${g()},#${oh},'${r.name}','${r.w} ft x ${r.d} ft',$,#${pl},#${shape},$,.ELEMENT.,.${r.open ? 'EXTERNAL' : 'INTERNAL'}.,$)`)
   })
   add(`IFCRELAGGREGATES(${g()},#${oh},$,$,#${storey},(${spaceIds.map((i) => '#' + i).join(',')}))`)
-  add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g()},#${oh},$,$,(${[...wallIds, ...slabIds].map((i) => '#' + i).join(',')}),#${storey})`)
+  add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g()},#${oh},$,$,(${[...wallIds, ...slabIds, ...fillIds, ...fixtureIds].map((i) => '#' + i).join(',')}),#${storey})`)
 
   // ── property set: what the drafter needs to know ──────────────────────
   const props = [

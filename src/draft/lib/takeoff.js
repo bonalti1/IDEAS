@@ -6,6 +6,11 @@ const sfOf = (o) => (o.w * o.h) / 144
 
 export function windowSchedule(rooms, kit) {
   const counts = {}
+  const traced = rooms.filter((r) => r.kind === 'window')
+  if (traced.length) {
+    traced.forEach((w) => (counts[w.mark] = (counts[w.mark] || 0) + (w.span >= 5 ? 2 : 1))) // twins are two units
+    return Object.entries(counts).map(([mark, count]) => ({ mark, ...kit.windows[mark], count }))
+  }
   rooms.forEach((r) => {
     const marks = kit.windowsByRoom[r.kind] || (r.kind === 'suite2' ? kit.windowsByRoom.bed : [])
     marks.forEach((m) => (counts[m] = (counts[m] || 0) + 1))
@@ -22,6 +27,12 @@ const DOOR_FOR = {
 export function doorSchedule(rooms, kit) {
   const counts = {}
   const bump = (key, n = 1) => (counts[key] = (counts[key] || 0) + n)
+  const traced = rooms.filter((r) => r.kind === 'door' && !r.cased)
+  if (traced.length) {
+    traced.forEach((d) => bump(d.size, d.pair && d.size !== 'exteriorPair' ? 2 : 1))
+    rooms.filter((r) => r.kind === 'fixture' && r.fixture === 'shower').forEach(() => bump('showerGlass'))
+    return Object.entries(counts).map(([key, count]) => ({ key, ...kit.doors[key], count }))
+  }
   rooms.forEach((r) => {
     const k = DOOR_FOR[r.kind]
     if (k) bump(k)
@@ -52,12 +63,12 @@ export function takeoff(rooms, program, kit) {
   const stoneSf = o.frontWidth * kit.exterior.stoneWainscotFt
   const sidingSf = Math.max(0, wallSf + gableSf - windowSf - extDoorSf - stoneSf)
 
-  const showerTileSf = rooms.reduce((s, r) => {
+  const showerTileSf = rooms.filter((r) => !r.element).reduce((s, r) => {
     const sh = r.kind === 'mbath' ? kit.showers.master : r.kind === 'jackjill' ? kit.showers.jackjill : r.kind === 'bath' ? kit.showers.bath : null
     return sh ? s + sh.tileWallSf + sh.tileFloorSf : s
   }, 0)
 
-  const porch = (kind) => rooms.filter((r) => r.kind === kind).reduce((s, r) => s + r.w * r.d, 0)
+  const porch = (kind) => rooms.filter((r) => r.kind === kind && !r.element).reduce((s, r) => s + r.w * r.d, 0)
   const living = floorArea(rooms, program.stories)
   const front = porch('frontPorch')
   const rear = porch('rearPorch')

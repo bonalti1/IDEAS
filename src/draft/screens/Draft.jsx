@@ -48,7 +48,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        <HouseScene rooms={rooms} view={view} highlightKind={highlight} controlsRef={controls} />
+        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} />
         <div className="viewport-tag">
           {style.name} · {program.beds} bed · {program.baths}
           {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}

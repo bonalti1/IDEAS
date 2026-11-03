@@ -148,10 +148,11 @@ export const KIT = {
     rooms: [
       { id: 'bed2', kind: 'bed', name: 'Bedroom 2', x: 3.75, y: 2.75, w: 12.25, d: 12.5 },
       { id: 'closet2', kind: 'wic', name: 'Closet', x: 15.75, y: 2.75, w: 4.0, d: 7.5 },
-      { id: 'linen', kind: 'wic', name: 'Linen', x: 15.75, y: 10.25, w: 4.0, d: 5.0 },
+      { id: 'linen', kind: 'wic', name: 'Linen', x: 15.75, y: 10.25, w: 4.0, d: 3.0 },
       { id: 'jackjill', kind: 'jackjill', name: 'Jack & Jill', x: 3.75, y: 16.0, w: 12.25, d: 7.75 },
       { id: 'closet1', kind: 'wic', name: 'Closet', x: 3.75, y: 24.25, w: 6.5, d: 3.75 },
-      { id: 'hall', kind: 'hall', name: 'Hallway', x: 15.75, y: 15.25, w: 4.0, d: 24.25 },
+      { id: 'hall', kind: 'hall', name: 'Hallway', x: 15.75, y: 13.25, w: 4.0, d: 26.25 },
+      { id: 'vest', kind: 'hall', name: 'Vestibule', x: 10.25, y: 23.75, w: 5.5, d: 4.25 },
       { id: 'bed1', kind: 'bed', name: 'Bedroom 1', x: 3.75, y: 28.0, w: 12.25, d: 12.0 },
       { id: 'bath1', kind: 'bath', name: 'Bath 1', x: 0.0, y: 39.75, w: 12.25, d: 6.0 },
       { id: 'suite2', kind: 'suite2', name: 'Mini Primary', x: 12.25, y: 39.75, w: 13.0, d: 12.5 },
@@ -172,7 +173,88 @@ export const KIT = {
       { id: 'mhall', kind: 'hall', name: 'Hall', x: 57.0, y: 15.25, w: 3.25, d: 16.25 },
       { id: 'master', kind: 'master', name: 'Primary Bedroom', x: 57.0, y: 31.5, w: 15.0, d: 16.25 },
     ],
+    // Doors: centre on the wall line. axis 'h' = wall runs along x, 'v' = along y.
+    // swing +1 opens toward +y (h) or +x (v); hinge 'start' = lower x or y end.
+    doors: [
+      { id: 'd-bed2', room: 'bed2', axis: 'v', x: 15.75, y: 14.1, w: 2.67, swing: -1, hinge: 'end', size: 'interiorWide' },
+      { id: 'd-closet2', room: 'closet2', axis: 'v', x: 15.75, y: 6.5, w: 4, swing: -1, pair: true, size: 'closet' },
+      { id: 'd-linen', room: 'linen', axis: 'h', x: 17.75, y: 13.25, w: 2, swing: 1, hinge: 'start', size: 'closet' },
+      { id: 'd-jj-n', room: 'jackjill', axis: 'h', x: 12.25, y: 15.6, w: 2.5, swing: -1, hinge: 'end', size: 'interior' },
+      { id: 'd-jj-s', room: 'jackjill', axis: 'h', x: 12.25, y: 28, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
+      { id: 'd-closet1', room: 'closet1', axis: 'h', x: 7, y: 28, w: 4, swing: 1, pair: true, size: 'closet' },
+      { id: 'd-bed1', room: 'bed1', axis: 'v', x: 16, y: 38.2, w: 2.67, swing: -1, hinge: 'start', size: 'interiorWide' },
+      { id: 'd-bath1', room: 'bath1', axis: 'v', x: 12.25, y: 43, w: 2, swing: -1, hinge: 'start', size: 'closet' },
+      { id: 'd-suite2', room: 'suite2', axis: 'h', x: 18.3, y: 39.75, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
+      { id: 'd-wic2', room: 'wic2', axis: 'h', x: 23, y: 39.75, w: 2, swing: -1, hinge: 'end', size: 'closet' },
+      { id: 'd-office', room: 'office', axis: 'h', x: 28.75, y: 30.75, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
+      { id: 'd-front', room: 'foyer', axis: 'h', x: 40, y: 38, w: 6, swing: -1, pair: true, size: 'exteriorPair', exterior: true },
+      { id: 'd-rear', room: 'dining', axis: 'h', x: 35.5, y: 12.25, w: 6, swing: 1, pair: true, size: 'exteriorPair', exterior: true },
+      { id: 'd-pantry', room: 'pantry', axis: 'h', x: 51.75, y: 30.75, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
+      { id: 'd-kit-hall', room: 'kitchen', axis: 'v', x: 56.75, y: 17.5, w: 3, cased: true },
+      { id: 'd-mud-hall', room: 'mud', axis: 'h', x: 58.6, y: 15.25, w: 3, cased: true },
+      { id: 'd-mud-ext', room: 'mud', axis: 'h', x: 59.5, y: 9.75, w: 3, swing: 1, hinge: 'start', size: 'exteriorSingle', exterior: true },
+      { id: 'd-laundry', room: 'laundry', axis: 'v', x: 64.25, y: 11.5, w: 3, swing: 1, hinge: 'start', size: 'pantry' },
+      { id: 'd-halfbath', room: 'halfbath', axis: 'v', x: 60, y: 18, w: 2, swing: 1, hinge: 'start', size: 'closet' },
+      { id: 'd-mwic', room: 'mwic', axis: 'v', x: 64.25, y: 20.5, w: 2, swing: 1, hinge: 'end', size: 'closet' },
+      { id: 'd-mbath', room: 'mbath', axis: 'v', x: 60, y: 28.25, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
+      { id: 'd-master', room: 'master', axis: 'h', x: 58.7, y: 31.5, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
+    ],
+    // Windows: centre on the wall line, w = rough opening width (twins are 6 ft).
+    windows: [
+      { mark: 'A', room: 'bed2', axis: 'h', x: 11.5, y: 2.75, w: 6 },
+      { mark: 'A', room: 'bed1', axis: 'v', x: 3.75, y: 34, w: 3 },
+      { mark: 'A', room: 'bath1', axis: 'h', x: 7, y: 45.75, w: 3 },
+      { mark: 'A', room: 'suite2', axis: 'h', x: 20, y: 52.25, w: 6 },
+      { mark: 'A', room: 'office', axis: 'h', x: 30, y: 38, w: 6 },
+      { mark: 'A', room: 'pantry', axis: 'h', x: 51, y: 38, w: 6 },
+      { mark: 'A', room: 'living', axis: 'h', x: 26, y: 12.25, w: 6 },
+      { mark: 'A', room: 'laundry', axis: 'h', x: 67.5, y: 0.5, w: 3 },
+      { mark: 'A', room: 'master', axis: 'h', x: 62, y: 47.75, w: 6 },
+      { mark: 'A', room: 'master', axis: 'h', x: 68.5, y: 47.75, w: 3 },
+      { mark: 'D', room: 'kitchen', axis: 'h', x: 51, y: 12.25, w: 6 },
+      { mark: 'C', room: 'mbath', axis: 'v', x: 72, y: 25.5, w: 2 },
+      { mark: 'B', room: 'dormer', dormer: true, w: 3.5 },
+      { mark: 'B', room: 'dormer', dormer: true, w: 3.5 },
+    ],
+    // Fixtures and furniture: x, y top-left in plan feet. Heights by kind in FIXTURE_H.
+    fixtures: [
+      { k: 'bed', room: 'bed2', x: 4, y: 6, w: 7, d: 6.5, head: 'w' },
+      { k: 'bed', room: 'bed1', x: 4, y: 30.5, w: 7, d: 6.5, head: 'w' },
+      { k: 'bed', room: 'suite2', x: 15.5, y: 44.5, w: 6.5, d: 7, head: 's' },
+      { k: 'bed', room: 'master', x: 64.5, y: 34, w: 7, d: 6.5, head: 'e' },
+      { k: 'shower', room: 'jackjill', x: 4, y: 16.25, w: 6.5, d: 3 },
+      { k: 'toilet', room: 'jackjill', x: 4.5, y: 21, w: 1.5, d: 2.3, face: 'e' },
+      { k: 'vanity', room: 'jackjill', x: 13.5, y: 17, w: 2, d: 4, face: 'w' },
+      { k: 'shower', room: 'bath1', x: 0.5, y: 40, w: 3, d: 5.5 },
+      { k: 'toilet', room: 'bath1', x: 4.5, y: 40.25, w: 2.3, d: 1.5, face: 's' },
+      { k: 'vanity', room: 'bath1', x: 7.75, y: 40, w: 3, d: 2, face: 's' },
+      { k: 'toilet', room: 'halfbath', x: 61, y: 15.75, w: 2.3, d: 1.5, face: 's' },
+      { k: 'vanity', room: 'halfbath', x: 60.25, y: 20.75, w: 2, d: 2, face: 'e' },
+      { k: 'vanity', room: 'mbath', x: 60, y: 24, w: 2, d: 6, face: 'e' },
+      { k: 'shower', room: 'mbath', x: 66.75, y: 24, w: 5.25, d: 5.25 },
+      { k: 'toilet', room: 'mbath', x: 69.75, y: 29.25, w: 1.5, d: 2.3, face: 'w' },
+      { k: 'linen', room: 'mbath', x: 60, y: 30.25, w: 2, d: 1.25 },
+      { k: 'counter', room: 'kitchen', x: 46.5, y: 12.25, w: 10, d: 2.1 },
+      { k: 'sink', room: 'kitchen', x: 50, y: 12.5, w: 2.5, d: 1.6 },
+      { k: 'counter', room: 'kitchen', x: 54.4, y: 14.35, w: 2.1, d: 14.4 },
+      { k: 'range', room: 'kitchen', x: 54.4, y: 20.5, w: 2.1, d: 2.5 },
+      { k: 'fridge', room: 'kitchen', x: 53.5, y: 27.5, w: 3, d: 2.5 },
+      { k: 'island', room: 'kitchen', x: 46.75, y: 18.5, w: 4, d: 7 },
+      { k: 'table', room: 'dining', x: 38, y: 18.5, w: 4.5, d: 7 },
+      { k: 'tv', room: 'living', x: 20, y: 16, w: 1.5, d: 8 },
+      { k: 'sofa', room: 'living', x: 28.5, y: 15, w: 3, d: 7 },
+      { k: 'sofa', room: 'living', x: 22, y: 23, w: 7, d: 3 },
+      { k: 'coffee', room: 'living', x: 24, y: 18, w: 3.5, d: 2 },
+      { k: 'desk', room: 'office', x: 33.5, y: 32, w: 2, d: 5 },
+      { k: 'shelves', room: 'pantry', x: 44.75, y: 36.25, w: 11.5, d: 1.5 },
+      { k: 'shelves', room: 'pantry', x: 44.75, y: 31, w: 1.5, d: 5 },
+      { k: 'washer', room: 'laundry', x: 69.75, y: 7.5, w: 2.25, d: 2.5 },
+      { k: 'dryer', room: 'laundry', x: 69.75, y: 10.25, w: 2.25, d: 2.5 },
+      { k: 'wh', room: 'laundry', x: 64.5, y: 1, w: 2, d: 2 },
+      { k: 'bench', room: 'mud', x: 57.25, y: 13.5, w: 4, d: 1.5 },
+    ],
   },
+
 
   // ── Reference program: the Garza house, for comparing app output to sheet 200
   reference: {
@@ -236,5 +318,13 @@ export const KIT = {
     'Plans indicate locations only; engineering aspects should incorporate actual site conditions.',
   ],
 }
+
+// Heights (ft) and labels for fixtures, shared by the viewers and the IFC export.
+export const FIXTURE_H = { bed: 2, sofa: 2.3, coffee: 1.5, table: 2.5, desk: 2.5, tv: 2.2, counter: 3, island: 3, sink: 3.1, range: 3, fridge: 6, washer: 3, dryer: 3, wh: 5, toilet: 1.4, shower: 0.3, vanity: 2.8, linen: 6, shelves: 6, bench: 1.5 }
+export const FIXTURE_NAME = { bed: 'Bed', sofa: 'Sofa', coffee: 'Coffee table', table: 'Dining table', desk: 'Desk', tv: 'Media wall', counter: 'Counter', island: 'Island', sink: 'Sink', range: 'Range', fridge: 'Refrigerator', washer: 'Washer', dryer: 'Dryer', wh: 'Water heater', toilet: 'Water closet', shower: 'Shower', vanity: 'Vanity', linen: 'Linen cabinet', shelves: 'Shelving', bench: 'Bench' }
+// Window sill heights from the schedule heads (ft): A 7'-0" head, 60" tall, etc.
+export const WINDOW_SILL = { A: 2, B: 1.5, C: 2, D: 3.5 }
+export const WINDOW_HEAD = { A: 7, B: 4.5, C: 5, D: 7 }
+export const DOOR_HEAD = 6.67
 
 export default KIT

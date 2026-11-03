@@ -4,7 +4,7 @@
 // service, rear porch), centered on the envelope, rotated to the lot.
 import { LOT_ANGLE } from '../../data/program.js'
 import { SETBACK_CORNERS } from '../../data/survey.js'
-import { KIT as FARMHOUSE } from '../../kits/modern-farmhouse.js'
+import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 
 const ENVELOPE_CENTER = [
   SETBACK_CORNERS.reduce((s, p) => s + p[0], 0) / 4,
@@ -82,7 +82,9 @@ export function generateRooms(program, style) {
   return place(rooms, program.stories, kit)
 }
 
-export const isConditioned = (r) => !r.open && r.kind !== 'garage'
+export const isConditioned = (r) => !r.open && r.kind !== 'garage' && !r.element
+/** Rooms only: no doors, windows, or fixtures. */
+export const isRoom = (r) => !r.element
 
 /**
  * Start from the kit's traced plan and adjust it to the program:
@@ -126,6 +128,28 @@ export function fromPlan(program, kit) {
     rooms.push({ id: 'garage', kind: 'garage', name: `${program.garage}-Car Garage`, x: anchor ? anchor.x + anchor.w : T.footprint.w, y: anchor ? anchor.y : 0, w, d: g.d, zone: 'service', fill: '#dcd7cf' })
   }
 
+  // Doors, windows, fixtures ride along as elements (not rooms). Those whose
+  // room was dropped are dropped too.
+  const ids = new Set(rooms.map((r) => r.id))
+  const keep = (e) => !e.room || ids.has(e.room) || e.room === 'dormer'
+  ;(T.doors || []).filter(keep).forEach((d, i) => {
+    const w = d.axis === 'h' ? d.w : 0.6
+    const dd = d.axis === 'h' ? 0.6 : d.w
+    rooms.push({ ...d, id: d.id || `door-${i}`, kind: 'door', element: true, open: true, name: d.cased ? 'Opening' : 'Door', x: d.x - w / 2, y: d.y - dd / 2, w, d: dd, span: d.w, h: 6.67 })
+  })
+  ;(T.windows || []).filter(keep).forEach((win, i) => {
+    if (win.dormer) {
+      rooms.push({ ...win, id: `win-${i}`, kind: 'window', element: true, open: true, name: `Window ${win.mark}`, x: -100, y: -100, w: 0, d: 0, span: win.w, h: 0, dormer: true })
+      return
+    }
+    const w = win.axis === 'h' ? win.w : 0.6
+    const dd = win.axis === 'h' ? 0.6 : win.w
+    rooms.push({ ...win, id: `win-${i}`, kind: 'window', element: true, open: true, name: `Window ${win.mark}`, x: win.x - w / 2, y: win.y - dd / 2, w, d: dd, span: win.w, h: 7 })
+  })
+  ;(T.fixtures || []).filter(keep).forEach((f, i) => {
+    rooms.push({ ...f, id: `fx-${i}`, kind: 'fixture', fixture: f.k, element: true, open: true, name: FIXTURE_NAME[f.k] || f.k, h: FIXTURE_H[f.k] || 2 })
+  })
+
   // Scale to the requested square footage about the plan centre.
   const cond = rooms.filter(isConditioned)
   const base = cond.reduce((a, r) => a + r.w * r.d, 0) * program.stories
@@ -133,10 +157,12 @@ export function fromPlan(program, kit) {
   const cx = T.footprint.w / 2
   const cy = T.footprint.d / 2
   rooms.forEach((r) => {
+    if (r.dormer) return
     r.x = cx + (r.x - cx) * k
     r.y = cy + (r.y - cy) * k
     r.w *= k
     r.d *= k
+    if (r.span) r.span *= k
   })
   return placeLocal(rooms, program.stories, kit, [cx, cy])
 }
@@ -157,6 +183,8 @@ export function placeLocal(rooms, stories, kit, centre) {
     const lx = r.x + r.w / 2 - centre[0]
     const lz = r.y + r.d / 2 - centre[1] // y grows toward the street, which is +z (south) on this lot
     const plate = r.open ? 0.6 : r.kind === 'garage' ? 11 : kit.plates.byRoom[r.kind] || kit.plates.default
+    if (r.element)
+      return { ...r, plate: 0, center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos], local: [lx, lz] }
     return {
       ...r,
       w: Math.round(r.w * 4) / 4,
@@ -208,7 +236,7 @@ export function floorArea(rooms, stories = 1) {
 
 /** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */
 export function outline(rooms) {
-  const solid = rooms.filter((r) => !r.open)
+  const solid = rooms.filter((r) => !r.open && !r.element)
   const inside = (pt, r) => Math.abs(pt[0] - r.local[0]) < r.w / 2 - 0.01 && Math.abs(pt[1] - r.local[1]) < r.d / 2 - 0.01
   let perimeter = 0
   solid.forEach((r) => {
@@ -274,6 +302,7 @@ export function applyRequest(text, rooms, stories, style) {
   ]
   const kind = kinds.find(([, re]) => re.test(t))?.[0]
   const flat = rooms.map((r) => ({ ...r }))
+  const roomsOnly = flat.filter(isRoom)
 
   if (kind && add) {
     if (!kit.rooms[kind]) return { rooms, reply: `That room is not in the ${kit.name} kit yet.`, applied: false }
@@ -286,13 +315,14 @@ export function applyRequest(text, rooms, stories, style) {
     const idx = flat.map((r) => r.kind).lastIndexOf(kind)
     if (idx === -1) return { rooms, reply: `There is no ${kit.rooms[kind]?.name.toLowerCase() || kind} in the plan to remove.`, applied: false }
     const gone = flat.splice(idx, 1)[0]
-    return relayout(flat, stories, kit, `Removed ${gone.name.toLowerCase()}.`)
+    const rest = flat.filter((r) => !(r.element && r.room === gone.id))
+    return relayout(rest, stories, kit, `Removed ${gone.name.toLowerCase()} and what was in it.`)
   }
   if (kind && (grow || shrink)) {
     const f = grow ? 1.15 : 0.87
     let hit = 0
     flat.forEach((r) => {
-      if (r.kind === kind) {
+      if (r.kind === kind && !r.element) {
         r.w = Math.round(r.w * f * 2) / 2
         r.d = Math.round(r.d * f * 2) / 2
         hit++
@@ -314,8 +344,9 @@ function relayout(flat, stories, kit, reply) {
     // plan-based: positions are kept; new rooms (no x yet) go below the bedroom wing
     const centre = [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2]
     flat.forEach((r) => {
+      if (r.element) return
       if (r.x === undefined) {
-        const col = flat.filter((o) => o.x !== undefined && ['bed', 'bath', 'suite2'].includes(o.kind))
+        const col = flat.filter((o) => o.x !== undefined && !o.element && ['bed', 'bath', 'suite2'].includes(o.kind))
         r.x = Math.min(...col.map((o) => o.x))
         r.y = col.reduce((m, o) => Math.max(m, o.y + o.d), 0)
       }
