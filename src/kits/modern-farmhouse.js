@@ -341,6 +341,18 @@ export const KIT = {
     { no: '400', title: 'Electrical Plan', contents: 'fixtures, outlets, circuits, mounting heights' },
     { no: '500', title: 'Code Review Plan', contents: 'IRC keynotes, fireblocking, landing details' },
   ],
+  // Rules the change interpreter checks before any client edit is applied.
+  rules: {
+    // minimum outside dimensions in feet by room kind; habitable rooms also need 70 sf (IRC R304)
+    minSize: { bed: [10, 10], master: [12, 12], suite2: [11, 11], bath: [5, 8], mbath: [6, 8], jackjill: [5, 8], halfbath: [3, 5], kitchen: [9, 9], living: [12, 12], dining: [9, 9], office: [7, 7], laundry: [5, 6], mud: [4, 5], pantry: [3, 3], wic: [3, 3], mwic: [4, 5], foyer: [4, 4], hall: [3, 3], garage: [11, 20] },
+    habitable: ['bed', 'master', 'suite2', 'kitchen', 'living', 'dining', 'office'],
+    bedrooms: ['bed', 'master', 'suite2'],
+    wet: ['bath', 'mbath', 'jackjill', 'halfbath', 'kitchen', 'laundry'],
+    wetDistanceFt: 20,
+    required: [['kitchen'], ['living'], ['bed', 'master', 'suite2'], ['bath', 'mbath', 'jackjill']],
+    maxRoomFt: 40,
+  },
+
   // Revit names in the office template. The worker looks these up by name and
   // falls back to the template defaults when a name is missing. CONFIRM with the drafter.
   revit: {

@@ -102,6 +102,7 @@ export default function DraftApp({ admin = false }) {
             setHistory={setHistory}
             onBack={() => go(3)}
             onNext={() => go(5)}
+            lot={lot}
           />
         )}
         {!admin && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} onBack={() => go(4)} onRestart={restart} />}

@@ -27,6 +27,9 @@ export const kitFor = (style) => style?.kit || FARMHOUSE
 export { ENVELOPE_CENTER }
 
 let uid = 0
+export function makeRoom(kit, kind, overrides = {}) {
+  return mk(kit, kind, overrides)
+}
 function mk(kit, kind, overrides = {}) {
   const t = kit.rooms[kind]
   return { id: `${kind}-${uid++}`, kind, name: t.name, w: t.w, d: t.d, zone: t.zone, open: !!t.open, plumbing: !!t.plumbing, ...overrides }
@@ -169,12 +172,12 @@ export function fromPlan(program, kit) {
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the rest scale with the plan
     const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
-    placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, faces: roofSurfaces(masses, k, [cx, cy]), dormers: dormerWalls(masses, k, [cx, cy]) })
+    placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: k, centre: [cx, cy], faces: roofSurfaces(masses, k, [cx, cy]), dormers: dormerWalls(masses, k, [cx, cy]) })
   }
   return placed
 }
 
-function addBelow(rooms, kit, kind, name, belowKind) {
+export function addBelow(rooms, kit, kind, name, belowKind) {
   const t = kit.rooms[kind]
   const col = rooms.filter((r) => r.kind === belowKind || r.kind === 'bath' || r.kind === 'suite2')
   const bottom = col.reduce((m, r) => Math.max(m, r.y + r.d), 0)
@@ -274,96 +277,4 @@ export function outline(rooms) {
   const zs = solid.flatMap((r) => [r.local[1] - r.d / 2, r.local[1] + r.d / 2])
   const maxWidth = Math.max(...xs) - Math.min(...xs)
   return { perimeter, frontWidth: maxWidth, depth: Math.max(...zs) - Math.min(...zs), maxWidth }
-}
-
-/**
- * Mock interpreter for plain-language change requests.
- * Returns { rooms, reply, applied } without any network call.
- * The real version sends the request and the current rooms to Claude and
- * gets a structured diff back, then runs it through the rules engine.
- */
-export function applyRequest(text, rooms, stories, style) {
-  const kit = kitFor(style)
-  const t = text.toLowerCase()
-  const grow = /\b(bigger|larger|wider|more room|expand|increase)\b/.test(t)
-  const shrink = /\b(smaller|tighter|reduce|shrink|less)\b/.test(t)
-  const add = /\b(add|another|extra|one more)\b/.test(t)
-  const remove = /\b(remove|delete|drop|get rid of|without|no)\b/.test(t)
-
-  const kinds = [
-    ['mbath', /(primary|master) bath/],
-    ['master', /(primary|master)/],
-    ['kitchen', /kitchen/],
-    ['living', /living|family room|great room/],
-    ['dining', /dining/],
-    ['garage', /garage/],
-    ['bed', /bedroom|bed\b/],
-    ['halfbath', /half bath|powder/],
-    ['bath', /\bbath/],
-    ['laundry', /laundry|utility/],
-    ['frontPorch', /front porch/],
-    ['rearPorch', /rear porch|back porch|patio/],
-    ['office', /office|study/],
-    ['pantry', /pantry/],
-    ['mud', /mud ?room/],
-  ]
-  const kind = kinds.find(([, re]) => re.test(t))?.[0]
-  const flat = rooms.map((r) => ({ ...r }))
-  const roomsOnly = flat.filter(isRoom)
-
-  if (kind && add) {
-    if (!kit.rooms[kind]) return { rooms, reply: `That room is not in the ${kit.name} kit yet.`, applied: false }
-    const n = flat.filter((r) => r.kind === kind).length + 1
-    const room = mk(kit, kind, kind === 'bed' ? { name: `Bedroom ${n}` } : kind === 'bath' ? { name: `Bath ${n}` } : {})
-    flat.push(room)
-    return relayout(flat, stories, kit, `Added ${room.name.toLowerCase()}, ${room.w}' by ${room.d}' per the ${kit.name} kit. Area and estimate updated.`)
-  }
-  if (kind && remove) {
-    const idx = flat.map((r) => r.kind).lastIndexOf(kind)
-    if (idx === -1) return { rooms, reply: `There is no ${kit.rooms[kind]?.name.toLowerCase() || kind} in the plan to remove.`, applied: false }
-    const gone = flat.splice(idx, 1)[0]
-    const rest = flat.filter((r) => !(r.element && r.room === gone.id))
-    return relayout(rest, stories, kit, `Removed ${gone.name.toLowerCase()} and what was in it.`)
-  }
-  if (kind && (grow || shrink)) {
-    const f = grow ? 1.15 : 0.87
-    let hit = 0
-    flat.forEach((r) => {
-      if (r.kind === kind && !r.element) {
-        r.w = Math.round(r.w * f * 2) / 2
-        r.d = Math.round(r.d * f * 2) / 2
-        hit++
-      }
-    })
-    if (!hit) return { rooms, reply: `I could not find that room to change.`, applied: false }
-    const label = kit.rooms[kind]?.name.toLowerCase() || kind
-    return relayout(flat, stories, kit, `${grow ? 'Enlarged' : 'Reduced'} the ${label} by about 15 percent. Still inside the setback envelope.`)
-  }
-  return {
-    rooms,
-    applied: false,
-    reply: 'In the real app this goes to the design assistant. For now try "make the kitchen bigger", "add an office", or "remove the rear porch".',
-  }
-}
-
-function relayout(flat, stories, kit, reply) {
-  if (flat.some((r) => r.x !== undefined)) {
-    // plan-based: positions are kept; new rooms (no x yet) go below the bedroom wing
-    const centre = [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2]
-    flat.forEach((r) => {
-      if (r.element) return
-      if (r.x === undefined) {
-        const col = flat.filter((o) => o.x !== undefined && !o.element && ['bed', 'bath', 'suite2'].includes(o.kind))
-        r.x = Math.min(...col.map((o) => o.x))
-        r.y = col.reduce((m, o) => Math.max(m, o.y + o.d), 0)
-      }
-      // keep the room centred where it was after a size change
-      if (r.local) {
-        r.x = r.local[0] + centre[0] - r.w / 2
-        r.y = r.local[1] + centre[1] - r.d / 2
-      }
-    })
-    return { rooms: placeLocal(flat, stories, kit, centre), reply, applied: true }
-  }
-  return { rooms: place(flat, stories, kit), reply, applied: true }
 }

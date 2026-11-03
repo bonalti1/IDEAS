@@ -12,7 +12,7 @@ const base = `http://127.0.0.1:${port}`
 let proc
 
 test('office API end to end', async (t) => {
-  proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, PORT: String(port), DATA_DIR: dir }, stdio: 'ignore' })
+  proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ANTHROPIC_API_KEY: '', PORT: String(port), DATA_DIR: dir }, stdio: 'ignore' })
   t.after(() => proc.kill())
   for (let i = 0; i < 40; i++) {
     try {
@@ -52,4 +52,7 @@ test('office API end to end', async (t) => {
   assert.ok(ov.events.length >= 3)
   const none = await post('/api/jobs/claim', { worker: 'office-1' })
   assert.equal(none.status, 204)
+  // no ANTHROPIC_API_KEY in the test environment → 503 so the app falls back
+  const interp = await post('/api/interpret', { text: 'bigger kitchen', rooms: [], program: {}, kit: {} })
+  assert.equal(interp.status, 503)
 })

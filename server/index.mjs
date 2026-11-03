@@ -5,6 +5,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import Anthropic from '@anthropic-ai/sdk'
+import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = +(process.env.PORT || 8787)
@@ -48,10 +50,11 @@ function health() {
     { id: 'api', name: 'Office API', ok: true, detail: `v${VERSION}, up ${Math.round((t - started) / 60000)} min`, at: now() },
     { id: 'store', name: 'File store', ok: storeOk, detail: storeOk ? `${countFiles()} files` : 'not writable', at: now() },
     { id: 'queue', name: 'Job queue', ok: stuck === 0, detail: `${queued} queued, ${running} running${stuck ? `, ${stuck} stuck` : ''}`, at: now() },
+    { id: 'interpreter', name: 'Change interpreter', ok: !!interpreterClient, detail: interpreterClient ? INTERPRET_MODEL : 'no API key, clients get the basic rules', at: now() },
     { id: 'worker', name: 'Revit worker', ok: workers.some((w) => w.online), detail: workers.length ? workers.map((w) => `${w.name}: ${w.online ? 'online' : 'offline'}`).join(', ') : 'none registered', at: now() },
   ]
   workers.forEach((w) => (w.checks || []).forEach((c) => checks.push({ ...c, id: `${w.id}:${c.id}`, worker: w.name })))
-  return { ok: checks.every((c) => c.ok), version: VERSION, uptimeS: Math.round((t - started) / 1000), checks, workers, queue: { queued, running, stuck } }
+  return { ok: checks.filter((c) => c.id !== 'interpreter').every((c) => c.ok), version: VERSION, uptimeS: Math.round((t - started) / 1000), checks, workers, queue: { queued, running, stuck } }
 }
 function countFiles() {
   let n = 0
@@ -204,6 +207,73 @@ route('POST', '/api/workers/:id/commands', async (req, res, p) => {
   db.commands.push({ id: id('cmd'), worker: p.id, command: body.command, at: now(), taken: null })
   event('worker', `${p.id}: command "${body.command}" queued`, { worker: p.id })
   json(res, 200, { ok: true })
+})
+
+// ── change interpreter (Claude; the key never leaves this process) ─────────
+const INTERPRET_MODEL = process.env.INTERPRET_MODEL || 'claude-opus-5-5'
+const DIFF_SCHEMA = {
+  type: 'object',
+  properties: {
+    ops: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          op: { type: 'string', enum: ['resize', 'add', 'remove', 'move'] },
+          room: { type: 'string', description: 'room id for resize, remove, move' },
+          kind: { type: 'string', description: 'room kind for add, one of the kit kinds' },
+          name: { type: 'string' },
+          w: { type: 'number', description: 'feet, along the front' },
+          d: { type: 'number', description: 'feet, front to back' },
+          near: { type: 'string', description: 'room id to place a new room beside' },
+          dx: { type: 'number', description: 'feet east' },
+          dy: { type: 'number', description: 'feet toward the street' },
+        },
+        required: ['op'],
+        additionalProperties: false,
+      },
+    },
+    reply: { type: 'string', description: 'one or two sentences to the client, past tense, no jargon' },
+    confidence: { type: 'number', minimum: 0, maximum: 1 },
+  },
+  required: ['ops', 'reply', 'confidence'],
+  additionalProperties: false,
+}
+const INTERPRET_SYSTEM = `You turn a home buyer's plain-language request into a small list of edits to their floor plan.
+You get the current rooms (id, kind, name, width w and depth d in feet, position x y in feet from the rear-left corner, y grows toward the street) and the kit's room kinds with typical sizes.
+Rules:
+- Use only ids and kinds that appear in the input. Never invent ids.
+- "Bigger" means about 15% larger in both directions, "much bigger" about 30%. "Wider" changes w only, "deeper" or "longer" changes d only. A number in feet is exact.
+- Keep dimensions in quarter-foot steps and within reason: bedrooms 10 to 20 feet, kitchens 9 to 22, no room over 40.
+- A new room gets the kit's template size unless the client gives one. Put it near the room they mention with "near".
+- Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
+- If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.
+- The reply is one or two friendly sentences in past tense describing what you did, as if talking to the buyer.`
+const interpreterClient = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null
+
+route('POST', '/api/interpret', async (req, res) => {
+  if (!interpreterClient) return json(res, 503, { error: 'interpreter not configured on this server (ANTHROPIC_API_KEY missing)' })
+  const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
+  if (!body.text || !Array.isArray(body.rooms)) return json(res, 400, { error: 'text and rooms required' })
+  const input = { request: String(body.text).slice(0, 500), program: body.program, kit: body.kit, rooms: body.rooms }
+  try {
+    const message = await interpreterClient.messages.parse({
+      model: INTERPRET_MODEL,
+      max_tokens: 4000,
+      system: [{ type: 'text', text: INTERPRET_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: 'low', format: jsonSchemaOutputFormat(DIFF_SCHEMA) },
+      messages: [{ role: 'user', content: JSON.stringify(input) }],
+    })
+    if (message.stop_reason === 'refusal') return json(res, 502, { error: 'interpreter declined', category: message.stop_details?.category || null })
+    const out = message.parsed_output
+    if (!out || !Array.isArray(out.ops)) return json(res, 502, { error: 'interpreter returned no diff' })
+    event('interpret', `"${input.request.slice(0, 60)}" → ${out.ops.length} op${out.ops.length === 1 ? '' : 's'} (${INTERPRET_MODEL})`)
+    json(res, 200, { ...out, model: INTERPRET_MODEL, usage: message.usage })
+  } catch (e) {
+    const status = e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
+    event('error', `interpreter: ${e.message || e}`)
+    json(res, status, { error: String(e.message || e) })
+  }
 })
 
 // ── health & admin ─────────────────────────────────────────────────────────

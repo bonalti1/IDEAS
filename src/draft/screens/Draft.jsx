@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import HouseScene, { CAMERAS } from '../HouseScene.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
-import { applyRequest, floorArea } from '../lib/layout.js'
+import { floorArea } from '../lib/layout.js'
+import { interpretRequest } from '../lib/interpret.js'
 
 const SUGGESTIONS = ['Make the kitchen bigger', 'Add a bedroom', 'Bigger primary bath', 'Remove the rear porch', 'Add a half bath']
 
-export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack }) {
+export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack, lot }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
   const [highlight, setHighlight] = useState(null)
+  const [busy, setBusy] = useState(false)
   const [roof, setRoof] = useState(true)
   const controls = useRef()
   const logRef = useRef()
@@ -27,20 +29,27 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     c.update()
   }
 
-  const send = (msg) => {
+  const send = async (msg) => {
     const q = (msg ?? text).trim()
-    if (!q || credits <= 0) return
-    const res = applyRequest(q, rooms, program.stories, style)
-    setHistory((h) => [...h, { who: 'you', text: q }, { who: 'house', text: res.reply }])
+    if (!q || credits <= 0 || busy) return
+    setText('')
+    setBusy(true)
+    setHistory((h) => [...h, { who: 'you', text: q }])
+    let res
+    try {
+      res = await interpretRequest(q, rooms, program, style, { lot })
+    } catch (e) {
+      res = { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
+    }
+    setBusy(false)
+    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied }])
     if (res.applied) {
       setRooms(res.rooms)
       setCredits((c) => c - 1)
-      const k = q.toLowerCase()
-      const kind = [['primary bath', 'mbath'], ['master bath', 'mbath'], ['primary', 'master'], ['master', 'master'], ['kitchen', 'kitchen'], ['garage', 'garage'], ['living', 'living'], ['dining', 'dining'], ['laundry', 'laundry'], ['rear porch', 'rearPorch'], ['front porch', 'frontPorch'], ['office', 'office'], ['half bath', 'halfbath'], ['bath', 'bath'], ['bed', 'bed']].find(([x]) => k.includes(x))?.[1]
-      setHighlight(kind)
+      const kind = res.ops?.[0]?.op === 'add' ? res.ops[0].kind : rooms.find((r) => r.id === res.ops?.[0]?.room)?.kind
+      setHighlight(kind || null)
       setTimeout(() => setHighlight(null), 1800)
     }
-    setText('')
   }
 
   const area = floorArea(rooms, program.stories)
@@ -85,10 +94,12 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             </div>
           )}
           {history.map((m, i) => (
-            <div key={i} className={'msg ' + m.who}>
+            <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '')}>
               {m.text}
+              {m.who === 'house' && m.source === 'fallback' && <span className="src"> · basic rules, assistant offline</span>}
             </div>
           ))}
+          {busy && <div className="msg house thinking">Working on it…</div>}
         </div>
         <div className="chips">
           {SUGGESTIONS.map((s) => (
@@ -108,9 +119,9 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             placeholder={credits > 0 ? 'Move the laundry next to the primary closet…' : 'No changes left. Approve or buy more.'}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            disabled={credits <= 0}
+            disabled={credits <= 0 || busy}
           />
-          <Button primary small type="submit" disabled={!text.trim() || credits <= 0}>
+          <Button primary small type="submit" disabled={!text.trim() || credits <= 0 || busy}>
             Change
           </Button>
         </form>
