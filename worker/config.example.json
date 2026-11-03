@@ -1,0 +1,11 @@
+{
+  "api": "https://office.drafthouse.example/api-root-without-trailing-slash",
+  "id": "office-revit-1",
+  "name": "Office Revit",
+  "revitYear": "2024",
+  "revitExe": "C:\\Program Files\\Autodesk\\Revit 2024\\Revit.exe",
+  "template": "C:\\DraftHouse\\templates\\STB Residential.rte",
+  "familiesDir": "C:\\DraftHouse\\families",
+  "workDir": "C:\\DraftHouse\\work",
+  "jobTimeoutS": 900
+}

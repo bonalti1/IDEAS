@@ -3,6 +3,7 @@ import { Button, Mark } from '../ui.jsx'
 
 export default function Start({ onNext }) {
   const [address, setAddress] = useState('')
+  const [name, setName] = useState('')
   const [file, setFile] = useState(null)
   const ready = address.trim().length > 4 || file
 
@@ -20,12 +21,15 @@ export default function Start({ onNext }) {
 
       <div className="card start-card">
         <label className="field">
+          <span>Your name</span>
+          <input placeholder="First and last name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        <label className="field">
           <span>Where is the lot?</span>
           <input
             placeholder="Street address, or lot and subdivision"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            autoFocus
           />
         </label>
         <div className="or">or</div>
@@ -41,7 +45,7 @@ export default function Start({ onNext }) {
             </span>
           )}
         </label>
-        <Button primary disabled={!ready} onClick={() => onNext({ address: address || 'Lot 514, Villa-Rama East Phase V', file })}>
+        <Button primary disabled={!ready} onClick={() => onNext({ address: address || 'Lot 514, Villa-Rama East Phase V', file, client: name.trim() || 'Client' })}>
           Find my lot
         </Button>
         <p className="fine">We read the plat, pull the city setbacks, and draw your buildable area. Nothing is sent to a drafter yet.</p>

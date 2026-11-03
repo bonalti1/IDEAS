@@ -6,3 +6,6 @@ shots
 # IFC preview artifacts
 public/ifc-preview.obj
 *.ifc
+server/data/
+worker/work/
+worker/config.json

@@ -23,6 +23,21 @@ node scripts/shot-flow.mjs shots/flow   # screenshots of every step (dev server 
 
 `#/lot514` opens the original drafter-side site plan review.
 
+## Office pipeline
+
+```
+client app  →  office API (server/)  →  job queue  →  office computer with Revit (worker/)  →  model.rvt, sheets.pdf, model.ifc  →  drafters
+                      ↑ heartbeats, health checks, dashboard at #/admin
+```
+
+- `server/index.mjs`: the office API. Job queue, file store, worker heartbeats, health, dashboard data. No dependencies. `node server/index.mjs`
+- `worker/`: runs on the Windows machine with Revit. `draft_house_worker.py` polls the queue and runs `revit/build_model.py` through the pyRevit CLI. See `worker/INSTALL.md`.
+- `#/admin` in the app: the office dashboard. Every connected piece and its health, the queue, jobs with logs, activity.
+- `scripts/fake-worker.mjs`: a pretend office computer for demos.
+- `docs/design-contract.md`: the JSON the app sends.
+
+Demo: `node server/index.mjs` in one terminal, `node scripts/fake-worker.mjs` in another, `npm run dev`, approve a design, open `#/admin`.
+
 ## IFC export
 
 The Send step's drafter package has a **Download IFC** button. The file is IFC4

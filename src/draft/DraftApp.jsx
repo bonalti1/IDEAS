@@ -9,13 +9,14 @@ import Style from './screens/Style.jsx'
 import Program from './screens/Program.jsx'
 import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
+import Admin from './screens/Admin.jsx'
 import { DEFAULT_PROGRAM, generateRooms } from './lib/layout.js'
 import './draft.css'
 
 const STEPS = ['Lot', 'Style', 'Rooms', 'Draft', 'Send']
 const CREDITS = 10
 
-export default function DraftApp() {
+export default function DraftApp({ admin = false }) {
   const [step, setStep] = useState(0)
   const [lot, setLot] = useState(null)
   const [style, setStyle] = useState(null)
@@ -42,7 +43,7 @@ export default function DraftApp() {
           <Mark size={24} />
           <span>Draft House</span>
         </a>
-        {step > 0 && (
+        {!admin && step > 0 && (
           <ol className="steps">
             {STEPS.map((s, i) => {
               const n = i + 1
@@ -55,12 +56,18 @@ export default function DraftApp() {
             })}
           </ol>
         )}
-        <a className="dh-link" href="#/lot514">
-          Drafter view
-        </a>
+        <nav className="dh-links">
+          <a className="dh-link" href="#/admin">
+            Office
+          </a>
+          <a className="dh-link" href="#/lot514">
+            Drafter view
+          </a>
+        </nav>
       </header>
       <main className="dh-main">
-        {step === 0 && (
+        {admin && <Admin />}
+        {!admin && step === 0 && (
           <Start
             onNext={(l) => {
               setLot(l)
@@ -68,9 +75,9 @@ export default function DraftApp() {
             }}
           />
         )}
-        {step === 1 && <Lot lot={lot} onNext={() => go(2)} onBack={() => go(0)} />}
-        {step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
-        {step === 3 && (
+        {!admin && step === 1 && <Lot lot={lot} onNext={() => go(2)} onBack={() => go(0)} />}
+        {!admin && step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
+        {!admin && step === 3 && (
           <Program
             program={program}
             style={style}
@@ -83,7 +90,7 @@ export default function DraftApp() {
             }}
           />
         )}
-        {step === 4 && (
+        {!admin && step === 4 && (
           <Draft
             style={style}
             program={program}
@@ -97,7 +104,7 @@ export default function DraftApp() {
             onNext={() => go(5)}
           />
         )}
-        {step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} onBack={() => go(4)} onRestart={restart} />}
+        {!admin && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} onBack={() => go(4)} onRestart={restart} />}
       </main>
     </div>
   )

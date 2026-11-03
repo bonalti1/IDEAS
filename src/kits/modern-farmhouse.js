@@ -341,6 +341,19 @@ export const KIT = {
     { no: '400', title: 'Electrical Plan', contents: 'fixtures, outlets, circuits, mounting heights' },
     { no: '500', title: 'Code Review Plan', contents: 'IRC keynotes, fireblocking, landing details' },
   ],
+  // Revit names in the office template. The worker looks these up by name and
+  // falls back to the template defaults when a name is missing. CONFIRM with the drafter.
+  revit: {
+    template: 'STB Residential.rte',
+    wallTypes: { exterior: 'Exterior - 2x4 Board and Batten', interior: 'Interior - 2x4', plumbing: 'Interior - 2x6 Plumbing' },
+    floorType: 'Slab on Grade - 4in',
+    roofTypes: { shingles: 'Architectural Shingles on 2x6', 'metal roof': 'Standing Seam Metal', 'metal awning': 'Standing Seam Metal' },
+    doors: { interior: 'Single-Flush : 30" x 80"', interiorWide: 'Single-Flush : 32" x 80"', closet: 'Single-Flush : 24" x 80"', barn: 'Sliding-Barn : 30" x 96"', pantry: 'Single-Flush : 36" x 80"', utility: 'Single-Flush : 24" x 80"', exteriorSingle: 'Exterior - Single : 36" x 80"', exteriorPair: 'Exterior - French Pair : 72" x 96"' },
+    windows: { A: 'Single Hung : 36" x 60"', B: 'Fixed : 42" x 36"', C: 'Fixed : 24" x 36"', D: 'Single Hung : 36" x 42"' },
+    fixtures: { toilet: 'Toilet - Standard', shower: 'Shower Pan', vanity: 'Vanity - Single', sink: 'Sink - Kitchen', fridge: 'Refrigerator', range: 'Range', washer: 'Washer', dryer: 'Dryer', wh: 'Water Heater', bed: 'Bed - Queen', sofa: 'Sofa', table: 'Table - Dining', desk: 'Desk', counter: 'Base Cabinet - Run', island: 'Island', shelves: 'Shelving', linen: 'Linen Cabinet', bench: 'Bench', tv: 'Media Wall', coffee: 'Coffee Table' },
+    titleBlockFamily: 'STB Title Block : 24x36',
+    viewTemplates: { plan: 'Floor Plan - Residential', elevation: 'Exterior Elevation' },
+  },
   titleBlock: {
     firm: 'South Texas Builders, LLC',
     address: '4900 W Expy 83 Suite 222, McAllen, TX 78501',

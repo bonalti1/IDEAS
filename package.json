@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "office": "node server/index.mjs",
+    "office:demo-worker": "node scripts/fake-worker.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",

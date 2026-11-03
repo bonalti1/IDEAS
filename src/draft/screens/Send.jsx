@@ -1,14 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
 import { kitFor } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
-import { downloadIFC } from '../lib/ifc.js'
+import { downloadIFC, toIFC } from '../lib/ifc.js'
+import { buildDesign } from '../lib/contract.js'
+import { api } from '../lib/api.js'
 
 const n = (x) => Math.round(x).toLocaleString()
 const pct = (a, b) => (b ? `${a - b >= 0 ? '+' : ''}${Math.round(((a - b) / b) * 100)}%` : '')
 
 export default function Send({ lot, style, program, rooms, history, onRestart, onBack }) {
   const [sent, setSent] = useState(false)
+  const [job, setJob] = useState(null) // { id, status, steps, outputs } or { offline: true }
+  const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('summary')
   const kit = kitFor(style)
   const t = takeoff(rooms, program, kit)
@@ -17,12 +21,64 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
   const estimate = t.areas.living * style.psf + program.garage * 28000
 
+  useEffect(() => {
+    if (!job?.id || ['done', 'failed'].includes(job.status)) return
+    const tm = setInterval(async () => {
+      try {
+        setJob(await api.job(job.id))
+      } catch {
+        /* keep last state */
+      }
+    }, 3000)
+    return () => clearInterval(tm)
+  }, [job?.id, job?.status])
+
+  const send = async () => {
+    setSending(true)
+    const design = buildDesign({ rooms, program, style, lot, history, client: lot?.client })
+    try {
+      const res = await api.sendDesign(design, toIFC({ rooms, program, kit, style, lot }))
+      setJob(res.job)
+    } catch (e) {
+      setJob({ offline: true, error: String(e.message || e) })
+    }
+    setSending(false)
+    setSent(true)
+  }
+
   if (sent)
     return (
       <div className="screen padded narrow center">
         <Mark size={56} />
         <h2>Sent to the drafting team</h2>
         <p className="lede">We have your lot, your layout, and every change you made. A drafter will have the first set to you within 5 business days.</p>
+        {job && (
+          <div className="card job">
+            <h3>Office</h3>
+            {job.offline ? (
+              <p className="muted">The office server is not reachable right now, so your design is saved on this device. It will be sent when the office is back.</p>
+            ) : (
+              <>
+                <div className="stat">
+                  <span className="stat-k">Revit model</span>
+                  <span className={'pill ' + (job.status === 'done' ? 'good' : job.status === 'failed' ? 'bad' : 'wait')}>{job.status === 'queued' ? 'waiting for the office computer' : job.status === 'running' ? 'building in Revit' : job.status === 'done' ? 'built' : 'needs a drafter'}</span>
+                </div>
+                {job.status === 'running' && job.steps?.length > 0 && <p className="fine">{job.steps[job.steps.length - 1].message}</p>}
+                {job.status === 'done' && job.outputs?.length > 0 && (
+                  <ul className="list">
+                    {job.outputs.map((o) => (
+                      <li key={o.url}>
+                        <a href={api.fileUrl(o.url)} target="_blank" rel="noreferrer">
+                          {o.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        )}
         <div className="card stats">
           <Stat k="What happens next" v="Structure, roof, details, and code check" />
           <Stat k="You will get" v={`${kit.sheets.length} sheets: ${kit.sheets.map((s) => s.title).filter((v, i, a) => a.indexOf(v) === i).join(', ').toLowerCase()}`} />
@@ -155,8 +211,8 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
         <Button ghost onClick={onBack}>
           Keep editing
         </Button>
-        <Button primary onClick={() => setSent(true)}>
-          Send to drafters
+        <Button primary disabled={sending} onClick={send}>
+          {sending ? 'Sending…' : 'Send to drafters'}
         </Button>
       </div>
     </div>
