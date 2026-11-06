@@ -9,11 +9,11 @@
 //   supabase functions deploy lead-webhook --no-verify-jwt
 //
 // Secrets (Dashboard > Edge Functions > Secrets, o CLI):
-//   supabase secrets set NOTIFY_EMAIL=rolando@alto-realtygroup.com
+//   supabase secrets set NOTIFY_EMAIL=office.ranchland@gmail.com
 //   supabase secrets set RESEND_API_KEY=re_xxx          (opcional, para email)
 //   supabase secrets set WA_TOKEN=EAAG...               (opcional, WhatsApp Cloud API)
 //   supabase secrets set WA_PHONE_ID=1234567890         (opcional)
-//   supabase secrets set WA_NOTIFY_TO=52181XXXXXXXX     (opcional, tu número)
+//   supabase secrets set WA_NOTIFY_TO=19565866681       (opcional, tu número USA formato +1)
 //
 // SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY las inyecta Supabase solo.
 // ============================================================

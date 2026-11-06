@@ -50,10 +50,10 @@ También pendiente (marcado con comentarios en el HTML):
    ```
 4. Secrets de notificación (opcionales pero recomendados):
    ```bash
-   supabase secrets set NOTIFY_EMAIL=rolando@alto-realtygroup.com
+   supabase secrets set NOTIFY_EMAIL=office.ranchland@gmail.com
    supabase secrets set RESEND_API_KEY=re_xxx        # email vía resend.com (gratis hasta 3k/mes)
    # y/o notificación por WhatsApp Cloud API:
-   supabase secrets set WA_TOKEN=EAAG... WA_PHONE_ID=1234567890 WA_NOTIFY_TO=52181XXXXXXXX
+   supabase secrets set WA_TOKEN=EAAG... WA_PHONE_ID=1234567890 WA_NOTIFY_TO=19565866681
    ```
 5. Copia la URL de la función —
    `https://TU_PROJECT_REF.functions.supabase.co/lead-webhook` —

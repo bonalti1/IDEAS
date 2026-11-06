@@ -390,6 +390,14 @@
 </a>
 
 <script>
+// Contacto Ranch Land Group para notificaciones
+var CONTACT = {
+  email: "office.ranchland@gmail.com",
+  whatsapp: "19565866681"  // formato internacional: +1 956 586-6681
+};
+</script>
+
+<script>
 /* =====================================================================
    CONFIGURACIÓN — lo único que hay que tocar para lanzar
    ===================================================================== */
@@ -532,6 +540,15 @@ document.getElementById("leadForm").addEventListener("submit", function(e){
 });
 
 document.getElementById("year").textContent = new Date().getFullYear();
+
+/* ============ Contacto ============ */
+(function(){
+  // El webhook notificará a office.ranchland@gmail.com y (956) 586-6681 automáticamente
+  // cuando se configure:
+  // 1. RESEND_API_KEY en Supabase secrets (para email)
+  // 2. WA_TOKEN, WA_PHONE_ID, WA_NOTIFY_TO en Supabase secrets (para WhatsApp)
+  // Ver README.md para instrucciones de setup
+})();
 
 /* ============ VSL: lazy video loading ============ */
 (function(){
