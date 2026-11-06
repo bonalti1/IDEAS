@@ -12,8 +12,9 @@
 <link rel="icon" type="image/png" href="assets/logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
+  @font-face { font-family: 'Playfair Display'; font-display: fallback; }
   :root{
     --cream:#F6F1E6;
     --cream-deep:#EFE7D4;
@@ -43,7 +44,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
-  body{font-family:var(--sans);color:var(--ink);background:var(--cream);line-height:1.6;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--sans);color:var(--ink);background:var(--cream);line-height:1.6;-webkit-font-smoothing:antialiased;contain:layout style paint}
   img{max-width:100%;display:block}
   a{color:inherit}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
@@ -94,7 +95,7 @@
   .form-card .err{display:none;font-size:13px;font-weight:600;color:#9B2C2C;margin-top:10px;text-align:center}
 
   /* ---------- Section base ---------- */
-  section{padding:76px 0}
+  section{padding:76px 0;contain:content}
   @media(max-width:640px){section{padding:56px 0}}
   .kicker{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-deep);margin-bottom:14px}
   .kicker::before{content:"";display:inline-block;width:26px;height:2px;background:var(--gold);vertical-align:middle;margin-right:10px}
