@@ -124,31 +124,14 @@
   .vsl .kicker{color:var(--gold)}
   .vsl .lead{color:var(--muted-on-dark)}
   .video-shell{margin-top:36px;position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:radial-gradient(700px 360px at 50% 20%,rgba(198,161,91,.14),transparent 60%),linear-gradient(160deg,#1B3527,#122217);border:1px solid rgba(198,161,91,.3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;contain:strict}
-  .play{width:84px;height:84px;border-radius:50%;background:rgba(198,161,91,.16);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;transition:transform .2s}
+  .play{width:84px;height:84px;border-radius:50%;background:rgba(198,161,91,.16);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;transition:transform .2s;cursor:pointer;z-index:10;position:relative}
   .play:hover{transform:scale(1.1)}
   .play svg{margin-left:5px}
-  .video-shell p{font-size:14px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted-on-dark)}
-  .video-shell iframe{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:1;transition:opacity .2s}
-  .video-shell iframe[loading="lazy"]{opacity:0}
-  .video-shell.video-loaded iframe[loading="lazy"]{opacity:1}
-  /*
-    VSL: cuando el video esté grabado, reemplaza el contenido de .video-shell por:
-    <iframe src="https://www.youtube.com/embed/VIDEO_ID?rel=0&modestbranding=1&controls=1" title="Rancho 568 acres" loading="lazy" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen data-vsl-video></iframe>
-
-    Opciones por plataforma:
-
-    YouTube (más rápido):
-      https://www.youtube.com/embed/VIDEO_ID?rel=0&modestbranding=1&controls=1
-
-    Vimeo (calidad alta):
-      https://player.vimeo.com/video/VIDEO_ID?h=TOKEN
-
-    Wistia (mejor analytics):
-      https://fast.wistia.net/embed/iframe/MEDIA_ID
-
-    Hosted/propio (máxima velocidad):
-      src="assets/rancho-tour.mp4" type="video/mp4" (usa <video> en lugar de iframe)
-  */
+  .video-shell p{font-size:14px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted-on-dark);position:relative;z-index:9}
+  .video-shell video{opacity:0;transition:opacity .3s}
+  .video-shell.playing video{opacity:1}
+  .video-shell.playing .play{display:none}
+  .video-shell.playing p{display:none}
 
   /* ---------- Benefits ---------- */
   .benefits{background:var(--cream-deep)}
@@ -291,8 +274,12 @@
     <h2 class="title">Mira la propiedad antes de escribirnos</h2>
     <p class="lead">Recorrido de la propiedad: el monte, los accesos y por qué los números funcionan.</p>
     <div class="video-shell" id="vslShell">
-      <div class="play"><svg width="30" height="30" viewBox="0 0 24 24" fill="#C6A15B"><path d="M8 5v14l11-7z"/></svg></div>
-      <p>Video del rancho — próximamente</p>
+      <video id="vslVideo" preload="none" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s">
+        <source src="assets/rancho-tour.mp4" type="video/mp4" />
+        <source src="assets/rancho-tour.webm" type="video/webm" />
+      </video>
+      <div class="play" id="playBtn"><svg width="30" height="30" viewBox="0 0 24 24" fill="#C6A15B"><path d="M8 5v14l11-7z"/></svg></div>
+      <p id="playText">Haz clic para ver el rancho</p>
     </div>
   </div>
 </section>
@@ -550,22 +537,24 @@ document.getElementById("year").textContent = new Date().getFullYear();
   // Ver README.md para instrucciones de setup
 })();
 
-/* ============ VSL: lazy video loading ============ */
+/* ============ VSL: instant video playback ============ */
 (function(){
   var shell = document.getElementById("vslShell");
-  if (!shell) return;
+  var video = document.getElementById("vslVideo");
+  var playBtn = document.getElementById("playBtn");
+  if (!shell || !video || !playBtn) return;
 
-  // Observe when VSL section enters viewport
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){
-      if (e.isIntersecting && !shell.classList.contains("video-loaded")) {
-        shell.classList.add("video-loaded");
-        // Video iframe loads with lazy="true" — no extra JS needed
-      }
-    });
-  }, { rootMargin: "100px" });
+  // Click play button → start video instantly (no loading delay)
+  playBtn.addEventListener("click", function(e){
+    e.preventDefault();
+    shell.classList.add("playing");
+    video.play().catch(function(){ console.log("video play blocked or failed"); });
+  });
 
-  observer.observe(shell);
+  // When video ends, show play button again
+  video.addEventListener("ended", function(){
+    shell.classList.remove("playing");
+  });
 })();
 </script>
 </body>
