@@ -1,6 +1,7 @@
 // Office API client. The app works without the office server; every call
 // fails soft and the UI says the office is offline.
-export const API = (import.meta.env?.VITE_API_URL || 'http://localhost:8787').replace(/\/$/, '')
+// VITE_API_URL='' means same origin (the Vite dev proxy, or the app served by the API itself)
+export const API = (import.meta.env?.VITE_API_URL ?? 'http://localhost:8787').replace(/\/$/, '')
 // The app key gates the office API (DRAFTHOUSE_APP_KEY on the server, VITE_API_KEY at build time).
 // Anyone who opens the site can read it; it keeps strangers and bots out, not a determined person.
 // Client accounts (phase 2) are the real door. Empty when the office runs open on a laptop.
