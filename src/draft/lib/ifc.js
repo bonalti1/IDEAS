@@ -1,8 +1,7 @@
 // IFC4 export of the draft: walls, floor slabs, and rooms as IfcSpace, placed
 // on the lot. Written as STEP text with no library so it runs in the browser.
 // Opens in Revit (Insert > Link IFC or Open IFC), BIMcollab Zoom, or any IFC viewer.
-import { LOT_ANGLE } from '../../data/program.js'
-import { ENVELOPE_CENTER, isConditioned } from './layout.js'
+import { isConditioned, lotOf } from './layout.js'
 import { hostWall } from './openings.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 
@@ -141,9 +140,10 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
   // ── site, building (rotated to the lot), storey ───────────────────────
   const sitePl = add(`IFCLOCALPLACEMENT($,#${wcs})`)
   const site = add(`IFCSITE(${g()},#${oh},'${(lot?.address || 'Lot').replace(/'/g, '')}',$,$,#${sitePl},$,$,.ELEMENT.,$,$,$,$,$)`)
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
-  const bOrigin = add(`IFCCARTESIANPOINT((${m(ENVELOPE_CENTER[0])},${m(-ENVELOPE_CENTER[1])},0.))`)
+  const L = lotOf(lot)
+  const cos = Math.cos(L.angle)
+  const sin = Math.sin(L.angle)
+  const bOrigin = add(`IFCCARTESIANPOINT((${m(L.centre[0])},${m(-L.centre[1])},0.))`)
   const bRef = add(`IFCDIRECTION((${cos.toFixed(6)},${(-sin).toFixed(6)},0.))`)
   const bAx = add(`IFCAXIS2PLACEMENT3D(#${bOrigin},#${zDir},#${bRef})`)
   const bPl = add(`IFCLOCALPLACEMENT(#${sitePl},#${bAx})`)

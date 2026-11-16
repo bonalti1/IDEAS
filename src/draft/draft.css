@@ -242,3 +242,24 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .side.review textarea { font: inherit; font-size: 13px; padding: 10px 12px; border: 1px solid var(--brand-hair); border-radius: 8px; background: #fff; resize: vertical; text-transform: none; letter-spacing: 0; color: var(--brand-ink); }
 .side.review .list li.muted { text-decoration: line-through; }
 .side.review a { color: var(--brand-brown); }
+
+/* lot step, plat preview, city rules */
+.lot-side .tabs.small { margin-bottom: 10px; }
+.lot-side .row2 { display: flex; gap: 10px; }
+.lot-side .row2 .field { flex: 1; }
+.lot-side select, .lot-side input[type=number], .lot-side input[type=text], .lot-side input:not([type]) { font: inherit; font-size: 13px; padding: 9px 11px; border: 1px solid var(--brand-hair); border-radius: 8px; background: #fff; color: var(--brand-ink); text-transform: none; letter-spacing: 0; }
+.lot-side .field { margin-bottom: 10px; }
+.lot-side details.setbacks { margin: 4px 0 10px; font-size: 12px; }
+.lot-side details.setbacks summary { cursor: pointer; color: var(--brand-brown); letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; padding: 6px 0; }
+.lot-side details.setbacks .row2 { flex-wrap: wrap; }
+.lot-side details.setbacks .field { flex: 1 1 40%; }
+.fine.warn { color: #9a6b12; }
+.lot-view { background: #ebe9e5; overflow: auto; }
+.plat-preview { position: relative; width: 100%; height: 100%; overflow: auto; background: #d9d6d0; }
+.plat-preview canvas { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.plat-preview .plat-overlay { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 100%; max-width: 100%; height: auto; pointer-events: none; }
+.lotcard.pending { border-color: #9a6b12; }
+.lotcard .row2 { display: flex; gap: 8px; justify-content: flex-end; }
+.tblwrap { overflow-x: auto; }
+.tbl.rules input.cell { width: 64px; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--brand-hair); border-radius: 6px; text-align: right; }
+.tbl.rules td { vertical-align: middle; }

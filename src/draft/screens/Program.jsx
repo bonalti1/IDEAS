@@ -1,10 +1,5 @@
 import { Button, Stepper, Stat, money, sf } from '../ui.jsx'
-import { LOT_AREA_SF, SETBACK_CORNERS } from '../../data/survey.js'
-import { polygonArea } from '../../lib/geometry.js'
-import { CITIES } from '../lib/styles.js'
-import { kitFor } from '../lib/layout.js'
-
-const ENVELOPE_SF = Math.abs(polygonArea(SETBACK_CORNERS))
+import { kitFor, lotOf } from '../lib/layout.js'
 
 const EXTRAS = [
   ['office', 'Office'],
@@ -14,11 +9,11 @@ const EXTRAS = [
   ['rearPorch', 'Rear porch'],
 ]
 
-export default function Program({ program, style, onChange, onNext, onBack }) {
-  const city = CITIES.palmview
+export default function Program({ program, style, lot, onChange, onNext, onBack }) {
+  const L = lotOf(lot)
   const kit = kitFor(style)
   const footprint = program.sqft / program.stories + (program.garage ? 22 * kit.rooms.garage.perCar * program.garage : 0)
-  const maxFootprint = Math.min(ENVELOPE_SF, LOT_AREA_SF * city.maxCoverage)
+  const maxFootprint = Math.min(L.envelopeSf, L.areaSf * (L.rules?.maxCoverage ?? 0.5))
   const fit = footprint / maxFootprint
   const estimate = program.sqft * style.psf + program.garage * 28000
   const set = (k) => (v) => onChange({ ...program, [k]: v })

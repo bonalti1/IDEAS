@@ -3,7 +3,7 @@
 // then the plan rules, and a credit is taken only when the change is applied.
 import crypto from 'node:crypto'
 import { decide } from '../src/draft/lib/interpret.js'
-import { regexOps, summarizeRooms } from '../src/draft/lib/ops.js'
+import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 
@@ -12,7 +12,7 @@ const now = () => new Date().toISOString()
 const fail = (status, error, extra = {}) => Object.assign(new Error(error), { status, ...extra })
 export const EDITABLE = ['drafting', 'returned']
 
-export function makeProjects({ env = process.env, store, interpreter, event, logInterpret }) {
+export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots }) {
   const CREDITS = +(env.CREDITS_PER_PROJECT || 10)
 
   const styleOf = (p) => STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready)
@@ -105,7 +105,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         diff = regexOps(request, rooms, kit)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      const result = decide(diff, rooms, p.program, style, kit, source)
+      const result = decide(diff, rooms, p.program, style, kit, source, await lots.lotOfProject(p))
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], credits: p.credits, version: p.version }
       const charged = await store.projects.charge(p.id, now())
@@ -148,6 +148,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // the client hands the design to the drafters; nothing is built until a drafter approves
     async send(p, { design, ifc }, saveDesign) {
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
+      if (p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
       const d = await saveDesign({ ...design, client: design.client || p.client, projectId: p.id }, ifc, { projectId: p.id })
       p.designId = d.id
@@ -159,11 +160,35 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       return this.detail(p)
     },
 
-    // drafter inbox: waiting first, then recent decisions
+    // drafter inbox: waiting first, then recent decisions, plus plat lots nobody has confirmed
     async inbox() {
       const waiting = await store.projects.listByStatus(['in_review'])
       const recent = await store.projects.listByStatus(['returned', 'approved', 'built'], 30)
-      return { waiting, recent }
+      const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
+      const lots = open.filter((p) => p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed)
+      return { waiting, recent, lots }
+    },
+
+    // a drafter confirms the lot read from a plat, with corrected calls or setbacks when needed
+    async confirmLot(p, drafter, { confirmed = true, spec, note }) {
+      if (p.lot?.spec?.kind !== 'plat') throw fail(409, 'this lot was typed in, nothing to confirm')
+      const next = { ...p.lot.spec, ...(spec || {}), kind: 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
+      const lot = { ...(await lots.lotOfProject({ lot: { spec: next, plat: p.lot.plat } })), plat: p.lot.plat || null }
+      const changed = spec && JSON.stringify(spec) !== '{}'
+      p.lot = lot
+      p.address = lot.address || p.address
+      p.updatedAt = now()
+      if (changed) {
+        // the plan keeps its shape; its place on the lot follows the corrected lot
+        const cur = await store.versions.get(p.id, p.version)
+        const style = styleOf(p)
+        const placed = replaceOnLot(cur?.rooms || [], kitFor(style), p.program?.stories || 1, lot)
+        p.version += 1
+        await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: 'lot', text: 'Lot corrected by the drafter', credit: 0, rooms: placed })
+      }
+      await store.projects.put(p)
+      await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
+      return this.detail(p)
     },
 
     // approve → queue the Revit build; return → back to the client with a note

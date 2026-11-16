@@ -99,6 +99,28 @@ export function makeInterpreter({ env = process.env, log = console.log } = {}) {
       }
       log(`interpreter: ${reach.detail}`)
     },
+    // a PDF or image → structured JSON by a schema (plat reading)
+    async parseDocument({ data, mediaType = 'application/pdf', system, prompt, schema, maxTokens = 3000 }) {
+      if (!client) throw fail(503, 'not configured', { unconfigured: true })
+      const t0 = Date.now()
+      try {
+        const message = await client.messages.parse({
+          model,
+          max_tokens: maxTokens,
+          system,
+          output_config: { format: jsonSchemaOutputFormat(schema) },
+          messages: [{ role: 'user', content: [{ type: mediaType.startsWith('image/') ? 'image' : 'document', source: { type: 'base64', media_type: mediaType, data } }, { type: 'text', text: prompt }] }],
+        }, { timeout: 120000 })
+        if (message.stop_reason === 'refusal') throw fail(502, 'the reader declined this document', { refusal: true })
+        const out = message.parsed_output
+        if (!out) throw fail(502, 'the reader returned nothing usable', { noDiff: true })
+        return { ...out, usage: message.usage, cost: costOf(message.usage), ms: Date.now() - t0 }
+      } catch (e) {
+        if (e.status) throw e
+        const status = e instanceof Anthropic.RateLimitError ? 429 : e instanceof Anthropic.AuthenticationError ? 503 : e instanceof Anthropic.APIError ? 502 : 500
+        throw fail(status, `document reader: ${e.message}`, { ms: Date.now() - t0 })
+      }
+    },
     // input: { request, program, kit, rooms }
     async ask(input) {
       if (!client) throw fail(503, 'interpreter not configured on this server (no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY)', { unconfigured: true })

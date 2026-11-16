@@ -17,6 +17,4 @@ export const STYLES = [
   { id: 'coastal', name: 'Coastal', blurb: 'Raised, airy, metal roof, shutters.', psf: 200, roof: 'hip', stories: 2 },
 ]
 
-export const CITIES = {
-  palmview: { name: 'Palmview, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', minLot: 6000, maxCoverage: 0.5 },
-}
+

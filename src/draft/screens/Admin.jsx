@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { api, API } from '../lib/api.js'
 import { Button } from '../ui.jsx'
+import { RULE_FIELDS } from '../lib/cities.js'
 
 const fmtAgo = (iso) => {
   if (!iso) return 'never'
@@ -41,6 +42,69 @@ function Manifold({ h, offline }) {
           {i < nodes.length - 1 && <i className="node-link" />}
         </div>
       ))}
+    </div>
+  )
+}
+
+const RULE_LABELS = { front: 'Front', side: 'Side', rear: 'Rear', streetSide: 'Street side', maxCoverage: 'Max coverage', maxHeightFt: 'Max height ft', minLotSf: 'Min lot sf' }
+
+/** City setbacks and limits, editable row by row. */
+function CityRules() {
+  const [table, setTable] = useState(null)
+  const [edit, setEdit] = useState({}) // id → patch
+  const [saved, setSaved] = useState('')
+  useEffect(() => {
+    api.cities().then(setTable).catch(() => setTable({}))
+  }, [])
+  const save = async (id) => {
+    const t = await api.setCity(id, edit[id] || {})
+    setTable((x) => ({ ...x, [id]: t }))
+    setEdit((e) => ({ ...e, [id]: undefined }))
+    setSaved(id)
+    setTimeout(() => setSaved(''), 1500)
+  }
+  if (!table) return null
+  return (
+    <div className="card">
+      <h3>City rules</h3>
+      <p className="muted small">Setbacks in feet, coverage as a fraction. The Lot step reads this table. Rows start as office defaults; tick Verified once checked against the ordinance.</p>
+      <div className="tblwrap">
+        <table className="tbl rules">
+          <thead>
+            <tr>
+              <th>City</th>
+              {RULE_FIELDS.map((f) => (
+                <th key={f}>{RULE_LABELS[f]}</th>
+              ))}
+              <th>Verified</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.values(table).map((c) => (
+              <tr key={c.id}>
+                <td>
+                  <b>{c.name}</b>
+                  <div className="muted small">{c.zoning}</div>
+                </td>
+                {RULE_FIELDS.map((f) => (
+                  <td key={f}>
+                    <input className="cell" type="number" step={f === 'maxCoverage' ? 0.05 : 1} value={edit[c.id]?.[f] ?? c[f]} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), [f]: e.target.value } }))} />
+                  </td>
+                ))}
+                <td>
+                  <input type="checkbox" checked={edit[c.id]?.verified ?? !!c.verified} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), verified: e.target.checked } }))} />
+                </td>
+                <td>
+                  <Button small ghost disabled={!edit[c.id]} onClick={() => save(c.id)}>
+                    {saved === c.id ? 'Saved' : 'Save'}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -228,6 +292,8 @@ export default function Admin() {
           </table>
         )}
       </div>
+
+      <CityRules />
 
       <div className="card">
         <h3>Client requests</h3>

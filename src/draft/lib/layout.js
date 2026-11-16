@@ -2,15 +2,14 @@
 // the lot's setback envelope, using the style kit's room templates and zones.
 // Still a packer, not a solver: rows by zone (front porch, public, private,
 // service, rear porch), centered on the envelope, rotated to the lot.
-import { LOT_ANGLE } from '../../data/program.js'
-import { SETBACK_CORNERS } from '../../data/survey.js'
 import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
+import { DEFAULT_LOT, worldOf } from './lot.js'
 
-const ENVELOPE_CENTER = [
-  SETBACK_CORNERS.reduce((s, p) => s + p[0], 0) / 4,
-  SETBACK_CORNERS.reduce((s, p) => s + p[1], 0) / 4,
-]
+// the reference lot's envelope centre, kept for older call sites
+const ENVELOPE_CENTER = DEFAULT_LOT.centre
+/** A lot object, or the reference lot when none (or only an address) was given. */
+export const lotOf = (lot) => (lot && lot.envelope && lot.angle !== undefined ? lot : DEFAULT_LOT)
 
 // Halls, closets, and wall thickness are not modeled as rooms. On the Garza
 // plan they are about 22% of the conditioned area, so the kit's room sizes
@@ -71,9 +70,9 @@ export function roomsFor(program, kit) {
   return r
 }
 
-export function generateRooms(program, style) {
+export function generateRooms(program, style, lot = DEFAULT_LOT) {
   const kit = kitFor(style)
-  if (kit.plan) return fromPlan(program, kit)
+  if (kit.plan) return fromPlan(program, kit, lotOf(lot))
   const rooms = roomsFor(program, kit)
   // Scale conditioned rooms so the plan lands on the requested square footage.
   const cond = rooms.filter(isConditioned)
@@ -83,7 +82,7 @@ export function generateRooms(program, style) {
     r.w = Math.round(r.w * k * 2) / 2
     r.d = Math.round(r.d * k * 2) / 2
   })
-  return place(rooms, program.stories, kit)
+  return place(rooms, program.stories, kit, lotOf(lot))
 }
 
 export const isConditioned = (r) => !r.open && r.kind !== 'garage' && !r.element
@@ -96,7 +95,7 @@ export const isRoom = (r) => !r.element
  * ends, add a garage beside the service wing, then scale to the square
  * footage. Positions stay where the drafter put them.
  */
-export function fromPlan(program, kit) {
+export function fromPlan(program, kit, lot = DEFAULT_LOT) {
   const ref = kit.reference?.program || {}
   const T = kit.plan
   let rooms = T.rooms.map((r) => ({ ...r, zone: kit.rooms[r.kind]?.zone || 'private', open: !!kit.rooms[r.kind]?.open, plumbing: !!kit.rooms[r.kind]?.plumbing, fill: kit.rooms[r.kind]?.open ? '#e6e1d8' : r.kind === 'garage' ? '#dcd7cf' : undefined, h: kit.rooms[r.kind]?.open ? 0.6 : undefined }))
@@ -168,7 +167,7 @@ export function fromPlan(program, kit) {
     r.d *= k
     if (r.span) r.span *= k
   })
-  const placed = placeLocal(rooms, program.stories, kit, [cx, cy])
+  const placed = placeLocal(rooms, program.stories, kit, [cx, cy], lot)
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the rest scale with the plan
     const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
@@ -186,35 +185,32 @@ export function addBelow(rooms, kit, kind, name, belowKind) {
 }
 
 /** Rooms with plan coordinates (x, y from the rear-left corner) → placed on the lot. */
-export function placeLocal(rooms, stories, kit, centre) {
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
+export function placeLocal(rooms, stories, kit, centre, lot = DEFAULT_LOT) {
+  const L = lotOf(lot)
   return rooms.map((r) => {
     const lx = r.x + r.w / 2 - centre[0]
     const lz = r.y + r.d / 2 - centre[1] // y grows toward the street, which is +z (south) on this lot
     const plate = r.open ? 0.6 : r.kind === 'garage' ? 11 : kit.plates.byRoom[r.kind] || kit.plates.default
-    if (r.element)
-      return { ...r, plate: 0, center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos], local: [lx, lz] }
+    if (r.element) return { ...r, plate: 0, center: worldOf(L, lx, lz), local: [lx, lz] }
     return {
       ...r,
       w: Math.round(r.w * 4) / 4,
       d: Math.round(r.d * 4) / 4,
       h: r.h ?? plate * stories,
       plate,
-      center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos],
+      center: worldOf(L, lx, lz),
       local: [lx, lz],
     }
   })
 }
 
 /** Lay zone rows front to back, centered on the envelope, rotated to the lot. */
-export function place(rooms, stories = 1, kit = FARMHOUSE) {
+export function place(rooms, stories = 1, kit = FARMHOUSE, lot = DEFAULT_LOT) {
+  const L = lotOf(lot)
   const rows = ZONES.map((z) => rooms.filter((r) => r.zone === z)).filter((r) => r.length)
   const rowDepth = rows.map((r) => Math.max(...r.map((x) => x.d)))
   const rowWidth = rows.map((r) => r.reduce((s, x) => s + x.w, 0))
   const totalD = rowDepth.reduce((a, b) => a + b, 0)
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
   const out = []
   let zCursor = -totalD / 2
   rows.forEach((r, ri) => {
@@ -227,7 +223,7 @@ export function place(rooms, stories = 1, kit = FARMHOUSE) {
         ...x,
         h: x.h ?? plate * stories,
         plate,
-        center: [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos],
+        center: worldOf(L, lx, lz),
         local: [lx, lz], // before rotation; x along the front, z front to back
         row: ri,
       })

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import HouseScene, { CAMERAS } from '../HouseScene.jsx'
+import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
 import { floorArea } from '../lib/layout.js'
 import { interpretRequest } from '../lib/interpret.js'
@@ -26,7 +26,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     setView(name)
     const c = controls.current
     if (!c) return
-    const { position, target } = CAMERAS[name]
+    const { position, target } = camerasFor(lot)[name]
     c.object.position.set(...position)
     c.target.set(...target)
     c.update()
@@ -99,7 +99,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} />
+        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} />
         <div className="viewport-tag">
           {style.name} · {program.beds} bed · {program.baths}
           {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}

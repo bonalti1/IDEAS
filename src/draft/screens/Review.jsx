@@ -57,6 +57,19 @@ export default function Review({ user }) {
     setOpen(await api.reviewProject(id))
     setNote('')
   }
+  const [lotNote, setLotNote] = useState('')
+  const confirmLot = async (confirmed) => {
+    if (!open || busy) return
+    setBusy(true)
+    try {
+      const p = await api.confirmLot(open.id, { confirmed, note: lotNote })
+      setOpen({ ...open, ...p })
+      await refresh()
+    } catch (e) {
+      setError(e.message)
+    }
+    setBusy(false)
+  }
   const decide = async (decision) => {
     if (!open || busy) return
     setBusy(true)
@@ -78,7 +91,7 @@ export default function Review({ user }) {
     return (
       <div className="screen split">
         <div className="viewport">
-          <HouseScene rooms={open.rooms || []} style={style} view="top" />
+          <HouseScene rooms={open.rooms || []} style={style} view="top" lot={open.lot} />
           <div className="viewport-tag">
             {open.client} · {style.name} · {open.address}
           </div>
@@ -101,6 +114,47 @@ export default function Review({ user }) {
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
             <Stat k="Changes used" v={`${spent} of ${open.creditsTotal}`} />
           </div>
+          {open.lot?.spec?.kind === 'plat' && (
+            <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')}>
+              <h3>Lot from the plat {open.lot.spec.confirmed ? `· confirmed by ${open.lot.spec.confirmedBy}` : '· needs your confirmation'}</h3>
+              <p className="small">
+                {open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
+                {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf. Read with {Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.
+              </p>
+              <ol className="list small">
+                {open.lot.spec.calls?.map((c, i) => (
+                  <li key={i}>
+                    {c.curve ? `Curve R ${c.curve.radius}' ${c.curve.arcLength ? `L ${c.curve.arcLength}'` : c.curve.delta ? `Δ ${c.curve.delta}°` : ''} ${c.curve.direction}` : `${c.bearing} ${c.distance}'`}
+                    {open.lot.edges?.[i] ? ` · ${open.lot.edges[i].label.toLowerCase()}` : ''}
+                  </li>
+                ))}
+              </ol>
+              {open.lot.plat?.notes && <p className="fine">Reader: {open.lot.plat.notes}</p>}
+              {open.lot.spec.platId && (
+                <p className="fine">
+                  <a href={api.platUrl(open.lot.spec.platId)} target="_blank" rel="noreferrer">
+                    Open the plat PDF
+                  </a>
+                </p>
+              )}
+              {!open.lot.spec.confirmed && (
+                <>
+                  <label className="field">
+                    <span>Note (optional)</span>
+                    <input id="lot-note" value={lotNote} onChange={(e) => setLotNote(e.target.value)} placeholder="What you checked, or what is off" />
+                  </label>
+                  <div className="row2">
+                    <Button small ghost disabled={busy} onClick={() => confirmLot(false)}>
+                      Not right
+                    </Button>
+                    <Button small primary disabled={busy} onClick={() => confirmLot(true)}>
+                      Confirm lot
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div className="card thin">
             <h3>What the client asked for</h3>
             {changes.length === 0 ? (
@@ -196,6 +250,17 @@ export default function Review({ user }) {
           </div>
         )}
       </div>
+      {inbox?.lots?.length > 0 && (
+        <div className="card">
+          <h3>Lots to confirm ({inbox.lots.length})</h3>
+          <p className="muted small">Read from a plat by the office. Open one, compare the calls with the PDF, confirm or send it back.</p>
+          <div className="inbox-list">
+            {inbox.lots.map((p) => (
+              <Row key={p.id} p={p} onOpen={show} />
+            ))}
+          </div>
+        </div>
+      )}
       {inbox?.recent?.length > 0 && (
         <div className="card">
           <h3>Recent decisions</h3>

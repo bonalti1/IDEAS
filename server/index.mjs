@@ -15,6 +15,7 @@ import { makeBackup } from './backup.mjs'
 import { makeInterpreter } from './interpreter.mjs'
 import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
+import { makeLots } from './lots.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = +(process.env.PORT || 8787)
@@ -36,7 +37,8 @@ const alerts = makeAlerts({ store, event })
 const backup = makeBackup({ store, files, event })
 const interpreter = makeInterpreter()
 const users = makeUsers({ store, dataDir: DATA })
-const projects = makeProjects({ store, interpreter, event, logInterpret })
+const lots = makeLots({ store, files, interpreter, event })
+const projects = makeProjects({ store, interpreter, event, logInterpret, lots })
 
 // ── health ─────────────────────────────────────────────────────────────────
 async function health() {
@@ -133,10 +135,32 @@ route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => js
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req)).version), req))
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req), saveDesign), req))
 
+// ── lots: city rules, plat reading, flood zone ─────────────────────────────
+route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
+route('PUT', '/api/admin/cities/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await lots.setCity(p.id, await readJson(req), ctx.user), req))
+route('POST', '/api/lot/plat', 'app', async (req, res) => json(res, 200, await lots.readPlat(await readJson(req)), req))
+route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
+  const rec = await lots.plat(safe(p.id))
+  const ext = rec?.ext || 'pdf'
+  const f = await files.get('plats', `${safe(p.id)}.${ext}`)
+  if (!f) return json(res, 404, { error: 'not found' }, req)
+  res.writeHead(200, { 'content-type': ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg', ...auth.cors(req) })
+  if (typeof f.body.pipe === 'function') f.body.pipe(res)
+  else {
+    for await (const chunk of f.body) res.write(chunk)
+    res.end()
+  }
+})
+route('GET', '/api/lot/flood', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  json(res, 200, await lots.flood(url.searchParams.get('address')), req)
+})
+
 // ── drafter review ─────────────────────────────────────────────────────────
 route('GET', '/api/review', 'drafter', async (req, res) => json(res, 200, await projects.inbox(), req))
 route('GET', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: true })), req))
 route('POST', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.review(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req), queueJob), req))
+route('POST', '/api/review/:id/lot', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmLot(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req)), req))
 route('GET', '/api/admin/users', 'drafter', async (req, res) => json(res, 200, await store.users.list(), req))
 route('POST', '/api/admin/users/:id/role', 'drafter', async (req, res, p, ctx) => {
   if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes roles' }, req)
@@ -324,7 +348,7 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
-    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}) }, req)
+    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}) }, req)
   }
 })
 

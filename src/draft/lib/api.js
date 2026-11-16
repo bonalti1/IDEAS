@@ -47,6 +47,13 @@ export const api = {
   change: (id, text) => call(`/api/projects/${id}/change`, { method: 'POST', body: JSON.stringify({ text }) }, 20000),
   rollback: (id, version) => call(`/api/projects/${id}/rollback`, { method: 'POST', body: JSON.stringify({ version }) }, 20000),
   sendProject: (id, design, ifc) => call(`/api/projects/${id}/send`, { method: 'POST', body: JSON.stringify({ design, ifc }) }, 30000),
+  // lots
+  cities: () => call('/api/cities'),
+  setCity: (id, patch) => call(`/api/admin/cities/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  readPlat: (body) => call('/api/lot/plat', { method: 'POST', body: JSON.stringify(body) }, 150000),
+  flood: (address) => call(`/api/lot/flood?address=${encodeURIComponent(address)}`, {}, 30000),
+  confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
+  platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
   // drafter review
   inbox: () => call('/api/review'),
   reviewProject: (id) => call(`/api/review/${id}`),

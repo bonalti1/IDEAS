@@ -19,7 +19,7 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     contract: CONTRACT_VERSION,
     createdAt: new Date().toISOString(),
     client: client || null,
-    lot: lot ? { address: lot.address } : null,
+    lot: lot ? { address: lot.address, city: lot.city, cityName: lot.cityName, source: lot.source, confirmed: lot.confirmed, areaSf: lot.areaSf, boundary: lot.boundary, envelope: lot.envelope, angle: lot.angle, centre: lot.centre, setbacks: lot.edges?.map((e) => e.label), flood: lot.flood || null } : null,
     style: { id: style.id, name: style.name, kitId: kit.id, kitSource: kit.source },
     program,
     units: 'feet',

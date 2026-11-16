@@ -1,12 +1,7 @@
 // Rules engine. Checks a plan (rooms + elements) and returns reasons a client
 // can read. Run on the plan as it would be after a change, before applying it.
-import { isRoom, isConditioned, kitFor } from './layout.js'
-import { LOT_ANGLE } from '../../data/program.js'
-import { SETBACK_CORNERS, SETBACK_EDGE_LABELS, LOT_AREA_SF } from '../../data/survey.js'
-import { polygonArea } from '../../lib/geometry.js'
-import { CITIES } from './styles.js'
-
-const ENVELOPE_SF = Math.abs(polygonArea(SETBACK_CORNERS))
+import { isRoom, isConditioned, kitFor, lotOf } from './layout.js'
+import { DEFAULT_LOT } from './lot.js'
 
 function inside(poly, [x, z]) {
   let c = false
@@ -34,9 +29,9 @@ function nearestEdge(poly, [x, z]) {
   return best
 }
 /** World corners of a room from its centre on the lot. */
-function corners(r) {
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
+function corners(r, lot) {
+  const cos = Math.cos(lot.angle)
+  const sin = Math.sin(lot.angle)
   const [cx, cz] = r.center
   return [
     [-r.w / 2, -r.d / 2],
@@ -57,7 +52,8 @@ const intrusion = (a, b) => Math.min(Math.max(0, Math.min(a.x + a.w, b.x + b.w) 
 /**
  * @returns {{ ok: boolean, reasons: string[] }}
  */
-export function checkRules(rooms, program, style, city = CITIES.palmview) {
+export function checkRules(rooms, program, style, lot = DEFAULT_LOT) {
+  const L = lotOf(lot)
   const kit = kitFor(style)
   const R = kit.rules || {}
   const reasons = []
@@ -68,9 +64,9 @@ export function checkRules(rooms, program, style, city = CITIES.palmview) {
   // 1. setbacks
   solid.forEach((r) => {
     if (!r.center) return
-    const out = corners(r).find((p) => !inside(SETBACK_CORNERS, p))
+    const out = corners(r, L).find((p) => !inside(L.envelope, p))
     if (out) {
-      const edge = SETBACK_EDGE_LABELS[nearestEdge(SETBACK_CORNERS, out)] || 'the property line'
+      const edge = L.edges?.[nearestEdge(L.corners, out)]?.label || 'the property line'
       reasons.push(`${label(r)} would cross the setback at ${edge.replace(/^(\d+)' — /, '$1 ft from ').toLowerCase()}.`)
     }
   })
@@ -113,7 +109,7 @@ export function checkRules(rooms, program, style, city = CITIES.palmview) {
   const cond = roomsOnly.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0)
   const garage = roomsOnly.filter((r) => r.kind === 'garage').reduce((s, r) => s + r.w * r.d, 0)
   const footprint = cond / (program.stories || 1) + garage
-  const maxFootprint = Math.min(ENVELOPE_SF, LOT_AREA_SF * city.maxCoverage)
+  const maxFootprint = Math.min(L.envelopeSf, L.areaSf * (L.rules?.maxCoverage ?? 0.5))
   if (footprint > maxFootprint) reasons.push(`The house would cover ${Math.round(footprint).toLocaleString()} square feet of the lot; this lot allows ${Math.round(maxFootprint).toLocaleString()}.`)
 
   // 7. required rooms

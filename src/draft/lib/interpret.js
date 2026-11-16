@@ -2,7 +2,7 @@
 // Claude does the interpreting through the office API (key stays server-side);
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
-import { kitFor } from './layout.js'
+import { kitFor, lotOf } from './layout.js'
 import { validateOps, applyOps, regexOps, summarizeRooms } from './ops.js'
 import { checkRules } from './rules.js'
 
@@ -35,13 +35,14 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
     diff = regexOps(text, rooms, kit)
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
-  const result = decide(diff, rooms, program, style, kit, source)
+  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot))
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return result
 }
 
 /** The deterministic part: confidence gate, shape check, apply, rules. */
-export function decide(diff, rooms, program, style, kit, source) {
+export function decide(diff, rooms, program, style, kit, source, lot) {
+  const L = lotOf(lot)
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }
@@ -50,11 +51,11 @@ export function decide(diff, rooms, program, style, kit, source) {
 
   let next
   try {
-    next = applyOps(diff.ops, rooms, kit, program.stories || 1)
+    next = applyOps(diff.ops, rooms, kit, program.stories || 1, L)
   } catch (e) {
     return { applied: false, rooms, reply: 'That change did not work out on this plan. Try a smaller step.', source, ops: diff.ops, reasons: [String(e.message || e)] }
   }
-  const rules = checkRules(next.rooms, program, style)
+  const rules = checkRules(next.rooms, program, style, L)
   if (!rules.ok) {
     return { applied: false, rooms, reply: `I can't do that one. ${rules.reasons[0]}${rules.reasons.length > 1 ? ` (${rules.reasons.length - 1} more issue${rules.reasons.length > 2 ? 's' : ''}.)` : ''}`, source, ops: diff.ops, reasons: rules.reasons }
   }

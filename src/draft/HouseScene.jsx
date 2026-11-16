@@ -6,25 +6,37 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Edges, Line } from '@react-three/drei'
 import SitePlan from '../components/SitePlan.jsx'
 import { FlatLabel } from '../components/labels.jsx'
-import { LOT_ANGLE } from '../data/program.js'
-import { LOT_CENTROID } from '../data/survey.js'
+import { DEFAULT_LOT } from './lib/lot.js'
 import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
 
-const [CX, CZ] = LOT_CENTROID
-export const CAMERAS = {
-  top: { position: [CX, 200, CZ + 2], target: [CX, 0, CZ] },
-  '3d': { position: [CX - 95, 85, CZ + 125], target: [CX, 0, CZ] },
+/** Camera presets centred on a lot, scaled to its size. */
+export function camerasFor(lot = DEFAULT_LOT) {
+  const [CX, CZ] = lot.centroid || lot.centre
+  const xs = (lot.boundary || []).map((p) => p[0])
+  const zs = (lot.boundary || []).map((p) => p[1])
+  const extent = xs.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) : 200
+  const span = Math.max(140, extent * 1.35)
+  const cos = Math.cos(lot.angle || 0)
+  const sin = Math.sin(lot.angle || 0)
+  // the 3D view looks from the street side (local +z) toward the rear
+  const back = (lx, lz) => [CX + lx * cos - lz * sin, CZ + lx * sin + lz * cos]
+  const [px, pz] = back(-span * 0.55, span * 0.75)
+  return {
+    top: { position: [CX, span * 1.25, CZ + 2], target: [CX, 0, CZ] },
+    '3d': { position: [px, span * 0.55, pz], target: [CX, 0, CZ] },
+  }
 }
+export const CAMERAS = camerasFor(DEFAULT_LOT)
 const INK = '#2a2520'
 const FIX_COLOR = { bed: '#cfc4b6', sofa: '#c9bfb2', coffee: '#b9ad9c', table: '#b9ad9c', desk: '#b9ad9c', tv: '#8f8478', counter: '#e2ddd3', island: '#e2ddd3', sink: '#f7f7f7', range: '#8f8478', fridge: '#d6d3cd', washer: '#d6d3cd', dryer: '#d6d3cd', wh: '#b9b4ab', toilet: '#f7f7f7', shower: '#d9e6ea', vanity: '#e2ddd3', linen: '#d9d2c6', shelves: '#d9d2c6', bench: '#b9ad9c' }
 
 /** local plan feet → world. */
-function toWorld(lx, lz, centre) {
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
+function toWorld(lx, lz, centre, lot) {
+  const cos = Math.cos(lot.angle)
+  const sin = Math.sin(lot.angle)
   return [centre[0] + lx * cos - lz * sin, centre[1] + lx * sin + lz * cos]
 }
 
@@ -40,21 +52,21 @@ function Box({ cx, cz, w, d, y0 = 0, h, rot = 0, color, opacity = 1, edges = tru
   )
 }
 
-function Walls({ rooms, kit, centre }) {
+function Walls({ rooms, kit, centre, lot }) {
   const pieces = useMemo(() => splitWalls(wallsFrom(rooms, kit), rooms.filter((r) => r.element)), [rooms, kit])
   return pieces.map((w, i) => {
     const t = w.thicknessIn / 12
     const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])
     const mid = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2]
-    const [x, z] = toWorld(mid[0], mid[1], centre)
+    const [x, z] = toWorld(mid[0], mid[1], centre, lot)
     const ang = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0])
-    return <Box key={i} cx={x} cz={z} w={len} d={t} y0={w.y0} h={w.h} rot={LOT_ANGLE + ang} color={w.exterior ? '#efe9df' : '#f4f1ec'} />
+    return <Box key={i} cx={x} cz={z} w={len} d={t} y0={w.y0} h={w.h} rot={lot.angle + ang} color={w.exterior ? '#efe9df' : '#f4f1ec'} />
   })
 }
 
-function Door({ e, centre }) {
-  const [x, z] = toWorld(e.local[0], e.local[1], centre)
-  const rot = LOT_ANGLE + (e.axis === 'h' ? 0 : Math.PI / 2)
+function Door({ e, centre, lot }) {
+  const [x, z] = toWorld(e.local[0], e.local[1], centre, lot)
+  const rot = lot.angle + (e.axis === 'h' ? 0 : Math.PI / 2)
   if (e.cased) return <Box cx={x} cz={z} w={e.span} d={0.7} y0={DOOR_HEAD} h={0.4} rot={rot} color="#f4f1ec" />
   const leaves = e.pair ? 2 : 1
   const leafW = e.span / leaves
@@ -92,10 +104,10 @@ function Door({ e, centre }) {
   )
 }
 
-function Window({ e, centre }) {
+function Window({ e, centre, lot }) {
   if (e.dormer) return null
-  const [x, z] = toWorld(e.local[0], e.local[1], centre)
-  const rot = LOT_ANGLE + (e.axis === 'h' ? 0 : Math.PI / 2)
+  const [x, z] = toWorld(e.local[0], e.local[1], centre, lot)
+  const rot = lot.angle + (e.axis === 'h' ? 0 : Math.PI / 2)
   const sill = e.sill ?? WINDOW_SILL[e.mark] ?? 2
   const head = e.head ?? WINDOW_HEAD[e.mark] ?? 7
   return (
@@ -113,15 +125,15 @@ function Window({ e, centre }) {
   )
 }
 
-function Fixture({ e, centre }) {
-  const [x, z] = toWorld(e.local[0], e.local[1], centre)
-  return <Box cx={x} cz={z} w={e.w} d={e.d} h={e.h} rot={LOT_ANGLE} color={FIX_COLOR[e.fixture] || '#cfc4b6'} />
+function Fixture({ e, centre, lot }) {
+  const [x, z] = toWorld(e.local[0], e.local[1], centre, lot)
+  return <Box cx={x} cz={z} w={e.w} d={e.d} h={e.h} rot={lot.angle} color={FIX_COLOR[e.fixture] || '#cfc4b6'} />
 }
 
-function Roof({ roof, centre }) {
+function Roof({ roof, centre, lot }) {
   const { shingles, metal, siding, edges } = useMemo(() => {
-    const cos = Math.cos(LOT_ANGLE)
-    const sin = Math.sin(LOT_ANGLE)
+    const cos = Math.cos(lot.angle)
+    const sin = Math.sin(lot.angle)
     const W = ([x, y, z]) => [centre[0] + x * cos - z * sin, y, centre[1] + x * sin + z * cos]
     const buckets = { shingles: [], metal: [], siding: [] }
     const lines = []
@@ -169,11 +181,11 @@ function Roof({ roof, centre }) {
   )
 }
 
-function Room({ r, highlight, labels }) {
+function Room({ r, highlight, labels, lot }) {
   const [x, z] = r.center
   const nameSize = Math.min(2.6, Math.max(1.5, (r.w - 1) / (r.name.length * 0.62)))
   return (
-    <group position={[x, 0, z]} rotation-y={-LOT_ANGLE}>
+    <group position={[x, 0, z]} rotation-y={-lot.angle}>
       <mesh position={[0, -0.17, 0]}>
         <boxGeometry args={[r.w, 0.34, r.d]} />
         <meshLambertMaterial color={highlight ? '#e9dccf' : r.open ? '#e6e1d8' : '#efeae2'} />
@@ -181,11 +193,11 @@ function Room({ r, highlight, labels }) {
       </mesh>
       {labels && (
         <>
-          <FlatLabel x={0} z={-1.4} y={0.02} angle={LOT_ANGLE} size={nameSize} bold color={highlight ? '#4e3c30' : '#2a2520'}>
+          <FlatLabel x={0} z={-1.4} y={0.02} angle={lot.angle} size={nameSize} bold color={highlight ? '#4e3c30' : '#2a2520'}>
             {r.name.toUpperCase()}
           </FlatLabel>
           {r.w >= 8 && (
-            <FlatLabel x={0} z={1.8} y={0.02} angle={LOT_ANGLE} size={1.8} color="#7a6558">
+            <FlatLabel x={0} z={1.8} y={0.02} angle={lot.angle} size={1.8} color="#7a6558">
               {r.w}' × {r.d}'
             </FlatLabel>
           )}
@@ -195,17 +207,19 @@ function Room({ r, highlight, labels }) {
   )
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true }) {
-  const cam = CAMERAS[view] || CAMERAS['3d']
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT }) {
+  const L = lot && lot.envelope ? lot : DEFAULT_LOT
+  const cams = useMemo(() => camerasFor(L), [L])
+  const cam = cams[view] || cams['3d']
   const kit = kitFor(style)
   const centre = useMemo(() => {
     const r = rooms.find((x) => x.local && x.center && !x.element)
-    if (!r) return [CX, CZ]
+    if (!r) return L.centre
     // world centre = room centre minus its local offset, rotated
-    const cos = Math.cos(LOT_ANGLE)
-    const sin = Math.sin(LOT_ANGLE)
+    const cos = Math.cos(L.angle)
+    const sin = Math.sin(L.angle)
     return [r.center[0] - (r.local[0] * cos - r.local[1] * sin), r.center[1] - (r.local[0] * sin + r.local[1] * cos)]
-  }, [rooms])
+  }, [rooms, L])
   const roomList = rooms.filter(isRoom)
   const hasPlan = rooms.some((r) => r.element)
   return (
@@ -213,14 +227,14 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       <color attach="background" args={['#ebe9e5']} />
       <ambientLight intensity={2.0} />
       <directionalLight position={[-150, 300, -200]} intensity={1.4} />
-      <SitePlan />
-      {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels />)}
-      {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} />}
-      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} />)}
-      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} />)}
-      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} />)}
-      {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} />)}
-      <OrbitControls ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={20} maxDistance={1200} />
+      <SitePlan lot={L} />
+      {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels lot={L} />)}
+      {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
+      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} lot={L} />)}
+      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} lot={L} />)}
+      {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} lot={L} />)}
+      {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} lot={L} />)}
+      <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={20} maxDistance={1200} />
     </Canvas>
   )
 }

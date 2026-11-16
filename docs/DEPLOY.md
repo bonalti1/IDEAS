@@ -55,6 +55,7 @@ Without `SUPABASE_URL` the API runs in local sign-in mode: any email signs in at
 | Render | `SUPABASE_JWT_SECRET` | optional; verifies sign-in tokens locally instead of with the project's public keys |
 | Render | `DRAFTHOUSE_DRAFTERS`, `DRAFTHOUSE_ADMINS` | comma-separated emails that get the drafter and admin roles |
 | Render | `CREDITS_PER_PROJECT` (10) | changes a client may apply per house |
+| Render | outbound hosts | the API calls api.anthropic.com, geocoding.geo.census.gov and hazards.fema.gov; Render allows outbound traffic by default |
 | Render | `DRAFTHOUSE_CLAUDE_KEY` | Claude API key for the change interpreter. `ANTHROPIC_API_KEY` is read as a fallback. |
 | Render | `DRAFTHOUSE_APP_KEY` | generated; same value as Netlify `VITE_API_KEY` |
 | Render | `DRAFTHOUSE_WORKER_KEY` | generated; same value as `workerKey` in the office `config.json` |

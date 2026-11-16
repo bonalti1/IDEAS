@@ -51,7 +51,8 @@ export default function DraftApp({ admin = false, review = false }) {
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState(null) // the saved project, when signed in and the office is reachable
   const [step, setStep] = useState(0)
-  const [lot, setLot] = useState(null)
+  const [intake, setIntake] = useState(null) // what the start screen collected: address, file, client name
+  const [lot, setLot] = useState(null) // the built lot from the Lot step
   const [style, setStyle] = useState(null)
   const [program, setProgram] = useState(DEFAULT_PROGRAM)
   const [rooms, setRooms] = useState([])
@@ -74,6 +75,7 @@ export default function DraftApp({ admin = false, review = false }) {
   const restart = () => {
     setStep(0)
     setProject(null)
+    setIntake(null)
     setLot(null)
     setStyle(null)
     setProgram(DEFAULT_PROGRAM)
@@ -97,12 +99,12 @@ export default function DraftApp({ admin = false, review = false }) {
 
   // Rooms → Draft: a fresh layout; saved as a project (or a new free version of one) when signed in
   const enterDraft = async () => {
-    const next = generateRooms(program, style)
+    const next = generateRooms(program, style, lot)
     setRooms(next)
     setHistory([])
     if (user) {
       try {
-        const body = { lot, style: { id: style.id, name: style.name }, program, rooms: next, client: lot?.client }
+        const body = { lot, style: { id: style.id, name: style.name }, program, rooms: next, client: intake?.client || user.name }
         const p = project && EDITABLE.includes(project.status) ? await api.updateProject(project.id, { ...body, note: 'Rooms changed' }) : await api.createProject(body)
         setProject(p)
         setCredits(p.credits)
@@ -119,7 +121,8 @@ export default function DraftApp({ admin = false, review = false }) {
     try {
       const p = await api.project(id)
       setProject(p)
-      setLot(p.lot || { address: p.address, client: p.client })
+      setIntake({ address: p.address, client: p.client })
+      setLot(p.lot && p.lot.envelope ? p.lot : null)
       setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
       setProgram(p.program || DEFAULT_PROGRAM)
       setRooms(p.rooms)
@@ -197,14 +200,24 @@ export default function DraftApp({ admin = false, review = false }) {
             onSkip={() => {}}
             onResume={resume}
             onNext={(l) => {
-              setLot(l)
+              setIntake(l)
               go(1)
             }}
           />
         )}
-        {!office && step === 1 && <Lot lot={lot} onNext={() => go(2)} onBack={() => go(0)} />}
+        {!office && step === 1 && (
+          <Lot
+            intake={intake}
+            lot={lot}
+            onNext={(l) => {
+              setLot({ ...l, client: intake?.client })
+              go(2)
+            }}
+            onBack={() => go(0)}
+          />
+        )}
         {!office && step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
-        {!office && step === 3 && <Program program={program} style={style} onChange={setProgram} onBack={() => go(2)} onNext={enterDraft} />}
+        {!office && step === 3 && <Program program={program} style={style} lot={lot} onChange={setProgram} onBack={() => go(2)} onNext={enterDraft} />}
         {!office && step === 4 && (
           <Draft
             style={style}

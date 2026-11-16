@@ -1,8 +1,7 @@
 // Change ops: validate, apply, and the regex fallback that produces them.
 // Schema in docs/change-diff.md. Plan feet throughout.
-import { makeRoom, placeLocal, kitFor, isRoom, ENVELOPE_CENTER } from './layout.js'
-import { LOT_ANGLE } from '../../data/program.js'
-import { SETBACK_CORNERS } from '../../data/survey.js'
+import { makeRoom, placeLocal, kitFor, isRoom, lotOf } from './layout.js'
+import { DEFAULT_LOT, worldOf } from './lot.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
@@ -49,18 +48,14 @@ function insidePoly(poly, [x, z]) {
   return c
 }
 /** Is a plan rectangle inside the lot's setback envelope once placed on the lot? */
-function insideSetbacks(rect, centre) {
-  const cos = Math.cos(LOT_ANGLE)
-  const sin = Math.sin(LOT_ANGLE)
+function insideSetbacks(rect, centre, lot = DEFAULT_LOT) {
   return [
     [rect.x, rect.y],
     [rect.x + rect.w, rect.y],
     [rect.x + rect.w, rect.y + rect.d],
     [rect.x, rect.y + rect.d],
   ].every(([px, py]) => {
-    const lx = px - centre[0]
-    const lz = py - centre[1]
-    return insidePoly(SETBACK_CORNERS, [ENVELOPE_CENTER[0] + lx * cos - lz * sin, ENVELOPE_CENTER[1] + lx * sin + lz * cos])
+    return insidePoly(lot.envelope, worldOf(lot, px - centre[0], py - centre[1]))
   })
 }
 
@@ -71,9 +66,9 @@ const PUBLIC = ['living', 'dining', 'kitchen', 'foyer', 'office', 'pantry', 'mud
  * A spot for a new room: against the house, no collision, inside the setbacks.
  * Tries beside `near` first, then beside rooms of the same zone, then any room.
  */
-function findSpot(rooms, near, w, d, kind, centre) {
+function findSpot(rooms, near, w, d, kind, centre, lot = DEFAULT_LOT) {
   const solid = rooms.filter((r) => isRoom(r) && !r.open)
-  const fits = (c) => !solid.some((o) => intrusion({ ...c, w, d }, o) > 1) && insideSetbacks({ ...c, w, d }, centre)
+  const fits = (c) => !solid.some((o) => intrusion({ ...c, w, d }, o) > 1) && insideSetbacks({ ...c, w, d }, centre, lot)
   const around = (nb) => [
     { x: nb.x + nb.w, y: nb.y }, // east
     { x: nb.x - w, y: nb.y }, // west
@@ -93,7 +88,7 @@ function findSpot(rooms, near, w, d, kind, centre) {
 }
 
 /** Where a resized room should sit: the placement that intrudes least into its neighbours, closest to where it was. */
-function bestPlacement(r, w, d, rooms, centre) {
+function bestPlacement(r, w, d, rooms, centre, lot = DEFAULT_LOT) {
   const solid = rooms.filter((o) => isRoom(o) && !o.open && o !== r)
   const dw = w - r.w
   const dd = d - r.d
@@ -102,7 +97,7 @@ function bestPlacement(r, w, d, rooms, centre) {
   const score = (c) => {
     const bump = solid.reduce((s, o) => s + Math.max(0, intrusion(c, o) - 1), 0)
     const drift = Math.hypot(c.x + w / 2 - (r.x + r.w / 2), c.y + d / 2 - (r.y + r.d / 2))
-    return (insideSetbacks(c, centre) ? 0 : 1000) + bump * 10 + drift * 0.1
+    return (insideSetbacks(c, centre, lot) ? 0 : 1000) + bump * 10 + drift * 0.1
   }
   return cands.sort((a, b) => score(a) - score(b))[0]
 }
@@ -127,7 +122,8 @@ function edgeCentre(room, side) {
  * Apply ops to the room list. Returns the new list (rooms + elements + roof),
  * fully placed, plus plain descriptions of what happened.
  */
-export function applyOps(ops, rooms, kit, stories = 1) {
+export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT) {
+  const L = lotOf(lot)
   const { rooms: flat, centre } = withPlanCoords(rooms, kit)
   const did = []
   const byId = () => Object.fromEntries(flat.filter(isRoom).map((r) => [r.id, r]))
@@ -138,7 +134,7 @@ export function applyOps(ops, rooms, kit, stories = 1) {
       const r = rs[o.room]
       const w = q(o.w)
       const d = q(o.d)
-      const to = bestPlacement(r, w, d, flat, centre)
+      const to = bestPlacement(r, w, d, flat, centre, L)
       const sx = w / r.w
       const sy = d / r.d
       // everything in the room keeps its place relative to the room's walls
@@ -184,7 +180,7 @@ export function applyOps(ops, rooms, kit, stories = 1) {
       const w = q(o.w || t.w)
       const d = q(o.d || t.d)
       const near = o.near ? rs[o.near] : null
-      const spot = findSpot(flat, near, w, d, o.kind, centre)
+      const spot = findSpot(flat, near, w, d, o.kind, centre, L)
       const room = makeRoom(kit, o.kind, { name, w, d, x: spot.x, y: spot.y, id: `${o.kind}-${Date.now().toString(36)}-${n}` })
       flat.push(room)
       // a door on the wall shared with a neighbour, a window on an outside wall
@@ -219,7 +215,7 @@ export function applyOps(ops, rooms, kit, stories = 1) {
     roof.faces = roofSurfaces(masses, roof.scale || 1, roof.centre || centre)
     roof.dormers = dormerWalls(masses, roof.scale || 1, roof.centre || centre)
   }
-  const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre)
+  const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
   return { rooms: placed, did }
 }
@@ -249,6 +245,15 @@ const KINDS = [
 ]
 
 /** Produces ops from keywords. The fallback when the interpreter is unreachable. */
+/** The same plan placed on another lot (after a drafter confirms or corrects the lot). */
+export function replaceOnLot(rooms, kit, stories, lot) {
+  const { rooms: flat, centre } = withPlanCoords(rooms, kit)
+  const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, lotOf(lot))
+  const roof = rooms.find((r) => r.kind === 'roof')
+  if (roof) placed.push(roof)
+  return placed
+}
+
 export function regexOps(text, rooms, kit) {
   const t = text.toLowerCase()
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)

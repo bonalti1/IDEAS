@@ -16,6 +16,7 @@
     "@react-three/drei": "^9.114.0",
     "@react-three/fiber": "^8.17.10",
     "@supabase/supabase-js": "^2.119.0",
+    "pdfjs-dist": "^4.10.38",
     "pg": "^8.23.1",
     "polygon-clipping": "^0.15.7",
     "react": "^18.3.1",
