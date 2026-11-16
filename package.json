@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "node --test test/*.test.mjs",
     "office": "node server/index.mjs",
-    "office:demo-worker": "node scripts/fake-worker.mjs"
+    "office:demo-worker": "node scripts/fake-worker.mjs",
+    "launch-check": "node scripts/launch-check.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",

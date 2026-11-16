@@ -1,6 +1,6 @@
 # Draft House, engineering handoff
 
-Status as of 2026-11-03. Branch `claude/revit-workflow-optimization-vjh5id` in `bonalti1/IDEAS`, 18 commits. Everything below is in that branch. Read this top to bottom once, then use the section index to find things.
+Status as of 2026-11-03 (go-live phases 1–7 landed after; see docs/DEPLOY.md and docs/LAUNCH-CHECK.md). Branch `claude/revit-workflow-optimization-vjh5id` in `bonalti1/IDEAS`. Everything below is in that branch. Read this top to bottom once, then use the section index to find things.
 
 ## 1. What the product is
 
