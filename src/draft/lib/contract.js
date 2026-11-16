@@ -1,6 +1,7 @@
 // The design contract: the one JSON document the app hands to the Revit
 // worker. Everything the worker needs to build the model in the office
 // template is in here. Version it; the worker refuses versions it does not know.
+import polygonClipping from 'polygon-clipping'
 import { kitFor, isRoom, floorArea } from './layout.js'
 import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
@@ -31,8 +32,13 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     doors: elements.filter((e) => e.kind === 'door').map((e) => ({ id: e.id, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), height: DOOR_HEAD, swing: e.swing || null, hinge: e.hinge || null, pair: !!e.pair, cased: !!e.cased, exterior: !!e.exterior, size: e.size || null, revitFamily: kit.revit?.doors?.[e.size] || null })),
     windows: elements.filter((e) => e.kind === 'window').map((e) => ({ id: e.id, room: e.room, mark: e.mark, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), sill: e.sill ?? WINDOW_SILL[e.mark] ?? 2, head: e.head ?? WINDOW_HEAD[e.mark] ?? 7, revitFamily: kit.revit?.windows?.[e.mark] || null })),
     fixtures: elements.filter((e) => e.kind === 'fixture').map((e) => ({ id: e.id, kind: e.fixture, name: e.name, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), w: r2(e.w), d: r2(e.d), h: r2(e.h), revitFamily: kit.revit?.fixtures?.[e.fixture] || null })),
+    // the slab outline(s): the union of the solid rooms, grown a little so wall-thick gaps close; largest ring first (frame feet)
+    footprint: footprintOf(roomList)[0] || [],
+    footprints: footprintOf(roomList),
     roof: roof
       ? {
+          centre: roof.centre || null,
+          scale: roof.scale || 1,
           masses: roof.masses,
           panels: roof.faces.filter((f) => f.kind === 'slope').map((f) => ({ id: f.id, mass: f.mass, material: f.material, rings: f.rings.map((ring) => ring.map((p) => p.map(r2))) })),
           dormers: roof.dormers,
@@ -40,6 +46,7 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
           overhang: kit.roof.overhang,
         }
       : null,
+    revit: kit.revit || null,
     sheets: kit.sheets,
     titleBlock: kit.titleBlock,
     takeoff: takeoff(rooms, program, kit),
@@ -47,3 +54,28 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     changes: history.filter((m) => m.who === 'you').map((m) => m.text),
   }
 }
+
+/** Union of the solid rooms (each grown by `grow` ft so wall-thick gaps close) as outlines in frame feet, largest ring first. */
+export function footprintOf(roomList, grow = 0.4) {
+  const rects = roomList
+    .filter((r) => !r.open && r.local)
+    .map((r) => {
+      const [cx, cz] = r.local
+      const w = r.w / 2 + grow
+      const d = r.d / 2 + grow
+      return [[[cx - w, cz - d], [cx + w, cz - d], [cx + w, cz + d], [cx - w, cz + d], [cx - w, cz - d]]]
+    })
+  if (!rects.length) return []
+  try {
+    const u = polygonClipping.union(...rects)
+    const rings = u.map((poly) => poly[0]).map((ring) => ring.map(([x, z]) => [+x.toFixed(3), +z.toFixed(3)]))
+    rings.forEach((ring) => {
+      if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring.pop()
+    })
+    rings.sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)))
+    return rings
+  } catch {
+    return []
+  }
+}
+const area = (ring) => ring.reduce((s, [x, z], i) => s + x * (ring[(i + 1) % ring.length][1]) - ring[(i + 1) % ring.length][0] * z, 0) / 2

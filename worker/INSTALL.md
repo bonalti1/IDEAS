@@ -8,8 +8,12 @@ One Windows machine with Revit. Nobody needs to sit at it.
 4. Copy the `worker` folder to `C:\DraftHouse\worker`.
 5. Put the office template at `C:\DraftHouse\templates\` and the family library at `C:\DraftHouse\families\`.
 6. Copy `config.example.json` to `config.json` and fill in the API address (the Render URL, https), the worker key (`DRAFTHOUSE_WORKER_KEY` from the Render service, Environment tab) and the paths.
-7. Test by hand: `python draft_house_worker.py`. Within a minute the dashboard shows the machine online with its checks.
-8. Make it start at logon: Task Scheduler, new task, trigger "At log on", action `python C:\DraftHouse\worker\draft_house_worker.py`, "Run whether user is logged on or not". Set Windows to log the office account in automatically and never sleep.
+7. Test by hand, in this order (details and what to send back in `docs/OFFICE-CHECKLIST.md`): `python draft_house_worker.py --smoke` (Revit opens the template), `--list-names` (writes `work\template-names.json`), fill `kit.revit.json` from it (copy `kit.revit.example.json`), `python revit\selfcheck.py <design.json> --names work\template-names.json` (dry run, no Revit), `--job <design.json>` (one real build, outputs under `work\local-...`), then `--once` (one heartbeat; the dashboard shows the machine online).
+8. Make it permanent: in an Administrator PowerShell, `Set-ExecutionPolicy -Scope Process Bypass -Force; .\install.ps1`. It registers the `DraftHouseWorker` scheduled task (at logon, restarts itself every minute if it stops) and the `DraftHouseWatchdog` task (every 5 minutes), and turns sleep off. A service in session 0 cannot drive Revit, which needs a desktop, so the worker runs as a task in the logged-on session. Then set automatic logon (`netplwiz`) so a reboot brings it back without a person. `uninstall.ps1` removes both tasks.
+
+## Name mapping
+
+`kit.revit.json` maps the kit's names (wall types, door and window families, fixtures, floor and roof types, title block) to the office template's names. Every name the template does not have falls back to the template default and shows on the job as `name fallback: ...`. The health check "Revit name mapping" says whether the file is present.
 
 ## What the worker reports
 

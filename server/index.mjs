@@ -216,9 +216,10 @@ route('POST', '/api/jobs/:id/complete', 'worker', async (req, res, p) => {
   job.durationS = Math.round((Date.parse(job.finishedAt) - Date.parse(job.startedAt || job.updatedAt)) / 1000)
   job.outputs = body.outputs || job.outputs
   job.warnings = body.warnings || []
+  job.fallbacks = body.fallbacks || []
   job.log = (body.log || '').slice(-20000)
   await store.jobs.put(job)
-  await event('job', `${job.client}: model built in ${job.durationS}s${job.warnings.length ? `, ${job.warnings.length} warnings` : ''}`, { jobId: job.id })
+  await event('job', `${job.client}: model built in ${job.durationS}s${job.warnings.length ? `, ${job.warnings.length} warnings` : ''}${job.fallbacks.length ? `, ${job.fallbacks.length} name fallbacks` : ''}`, { jobId: job.id })
   await projects.built(job.id)
   json(res, 200, { ok: true }, req)
 })

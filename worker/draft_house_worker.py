@@ -7,7 +7,11 @@ the office template, uploads the Revit file, the PDF set and the IFC, and
 reports done or failed. Every 30 s it sends a heartbeat with health checks.
 
 Install: see worker/INSTALL.md. Config: worker/config.json (copy the example).
-Run:     python draft_house_worker.py
+Run:     python draft_house_worker.py                 the loop (what the scheduled task runs)
+         python draft_house_worker.py --smoke         open Revit once with the template and exit
+         python draft_house_worker.py --list-names    write template-names.json for kit.revit.json
+         python draft_house_worker.py --job design.json   build one design locally, no API needed
+         python draft_house_worker.py --once          one heartbeat and at most one job, then exit
 """
 import json, os, sys, time, shutil, socket, subprocess, platform, traceback, urllib.request, urllib.error
 
@@ -27,6 +31,8 @@ WORK = CFG.get('workDir', os.path.join(HERE, 'work'))
 JOB_TIMEOUT_S = int(CFG.get('jobTimeoutS', 900))
 VERSION = '0.1.0'
 BUILD_SCRIPT = os.path.join(HERE, 'revit', 'build_model.py')
+NAMES_SCRIPT = os.path.join(HERE, 'revit', 'list_names.py')
+MAP_FILE = os.path.join(HERE, 'kit.revit.json')
 
 os.makedirs(WORK, exist_ok=True)
 log_file = open(os.path.join(WORK, 'worker.log'), 'a')
@@ -73,6 +79,17 @@ def smoke_test():
     last_smoke.update({'at': time.strftime('%Y-%m-%dT%H:%M:%S'), 'ok': ok, 's': int(time.time() - t0)})
     return ok
 
+def list_names():
+    """Write template-names.json (the names kit.revit.json must use) from the office template."""
+    env = dict(os.environ, DH_OUT=WORK)
+    r = subprocess.run(['pyrevit', 'run', NAMES_SCRIPT, TEMPLATE, '--revit=' + REVIT_YEAR, '--purge'], capture_output=True, text=True, timeout=600, env=env)
+    out = r.stdout + r.stderr
+    ok = 'DRAFT_HOUSE_NAMES_OK' in out
+    log('list-names %s\n%s' % ('ok' if ok else 'FAILED', out[-3000:]))
+    if ok:
+        log('template names written to %s' % os.path.join(WORK, 'template-names.json'))
+    return ok
+
 def checks():
     now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     disk = shutil.disk_usage(WORK)
@@ -86,6 +103,7 @@ def checks():
         {'id': 'families', 'name': 'Family library', 'ok': fam > 0, 'detail': '%d families' % fam, 'at': now},
         {'id': 'disk', 'name': 'Disk space', 'ok': free_gb > 10, 'detail': '%.0f GB free' % free_gb, 'at': now},
         {'id': 'revit-smoke', 'name': 'Revit responds', 'ok': bool(last_smoke['ok']), 'detail': ('launched in %ss at %s' % (last_smoke['s'], last_smoke['at'])) if last_smoke['at'] else 'not run yet', 'at': now},
+        {'id': 'mapping', 'name': 'Revit name mapping', 'ok': os.path.exists(MAP_FILE), 'detail': 'kit.revit.json present' if os.path.exists(MAP_FILE) else 'no kit.revit.json: kit names used as-is, fallbacks logged per job', 'at': now},
     ]
     return c, pv, fam, free_gb
 
@@ -106,20 +124,29 @@ def kill_revit():
     if os.name == 'nt':
         subprocess.run(['taskkill', '/IM', 'Revit.exe', '/F'], capture_output=True)
 
-def run_job(job):
+def run_job(job, local_design=None):
+    """Build one job. With local_design (a path) nothing is fetched or reported to the API."""
     jid = job['id']
     jdir = os.path.join(WORK, jid)
     os.makedirs(jdir, exist_ok=True)
-    progress = lambda step, msg, pct: api('POST', '/api/jobs/%s/progress' % jid, {'step': step, 'message': msg, 'pct': pct})
+    if local_design:
+        progress = lambda step, msg, pct: log('  %3d%% %s: %s' % (pct, step, msg))
+    else:
+        progress = lambda step, msg, pct: api('POST', '/api/jobs/%s/progress' % jid, {'step': step, 'message': msg, 'pct': pct})
     try:
-        progress('download', 'fetching design', 5)
-        status, design = api('GET', job['designUrl'])
-        if status != 200:
-            raise RuntimeError('could not download design (%s)' % status)
+        if local_design:
+            design = json.load(open(local_design))
+        else:
+            progress('download', 'fetching design', 5)
+            status, design = api('GET', job['designUrl'])
+            if status != 200:
+                raise RuntimeError('could not download design (%s)' % status)
+        if design.get('contract') != 1:
+            raise RuntimeError('design contract %s is not 1' % design.get('contract'))
         design_path = os.path.join(jdir, 'design.json')
         json.dump(design, open(design_path, 'w'))
         out_rvt = os.path.join(jdir, 'model.rvt')
-        env = dict(os.environ, DH_DESIGN=design_path, DH_OUT=jdir, DH_TEMPLATE=TEMPLATE, DH_FAMILIES=FAMILIES, DH_JOB=jid)
+        env = dict(os.environ, DH_DESIGN=design_path, DH_OUT=jdir, DH_TEMPLATE=TEMPLATE, DH_FAMILIES=FAMILIES, DH_JOB=jid, DH_MAP=MAP_FILE)
         progress('revit', 'starting Revit %s' % REVIT_YEAR, 10)
         t0 = time.time()
         proc = subprocess.Popen(['pyrevit', 'run', BUILD_SCRIPT, TEMPLATE, '--revit=' + REVIT_YEAR, '--purge'], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -142,25 +169,54 @@ def run_job(job):
         log_txt = '\n'.join(out_lines)
         report_path = os.path.join(jdir, 'report.json')
         report = json.load(open(report_path)) if os.path.exists(report_path) else {}
+        open(os.path.join(jdir, 'revit.log'), 'w').write(log_txt)
         if proc.returncode != 0 or not report.get('ok'):
             raise RuntimeError(report.get('error') or 'Revit script failed (exit %s)' % proc.returncode)
+        warnings = list(report.get('warnings', []))
+        for fb in report.get('fallbacks', []):
+            line = 'name fallback: %s "%s" -> "%s"' % (fb.get('kind'), fb.get('wanted'), fb.get('used'))
+            if line not in warnings:
+                warnings.append(line)
+        if local_design:
+            log('job %s built in %ds: %s; %d warnings, %d name fallbacks' % (jid, time.time() - t0, ', '.join(report.get('outputs', [])), len(report.get('warnings', [])), len(report.get('fallbacks', []))))
+            for w in warnings:
+                log('  ' + w)
+            log('outputs in %s' % jdir)
+            return True
         progress('upload', 'uploading outputs', 85)
         outputs = []
-        for name in ['model.rvt', 'sheets.pdf', 'model.ifc', 'report.json']:
+        for name in ['model.rvt', 'sheets.pdf', 'model.ifc', 'report.json', 'revit.log']:
             p = os.path.join(jdir, name)
             if os.path.exists(p):
                 st, body = api('PUT', '/api/jobs/%s/files/%s' % (jid, name), raw=open(p, 'rb').read())
                 if st == 200:
                     outputs.append({'name': name, 'url': body.get('url')})
-        api('POST', '/api/jobs/%s/complete' % jid, {'outputs': outputs, 'warnings': report.get('warnings', []), 'log': log_txt[-20000:]})
+        api('POST', '/api/jobs/%s/complete' % jid, {'outputs': outputs, 'warnings': warnings, 'fallbacks': report.get('fallbacks', []), 'log': log_txt[-20000:]})
         log('job %s done in %ds' % (jid, time.time() - t0))
+        return True
     except Exception as e:
         log('job %s failed: %s' % (jid, e))
         kill_revit()
+        if local_design:
+            log(traceback.format_exc())
+            return False
         api('POST', '/api/jobs/%s/fail' % jid, {'error': str(e), 'log': traceback.format_exc()[-5000:]})
+        return False
 
 def main():
-    log('worker %s starting, api %s, key %s' % (WORKER_ID, API, ('%d chars' % len(WORKER_KEY)) if WORKER_KEY else 'NONE (only works against an open office API)'))
+    args = sys.argv[1:]
+    log('worker %s v%s starting, api %s, key %s, revit %s, template %s' % (WORKER_ID, VERSION, API, ('%d chars' % len(WORKER_KEY)) if WORKER_KEY else 'NONE (only works against an open office API)', REVIT_YEAR, TEMPLATE))
+    if '--smoke' in args:
+        ok = smoke_test()
+        log('smoke test %s: %s' % ('OK' if ok else 'FAILED', json.dumps(last_smoke)))
+        sys.exit(0 if ok else 1)
+    if '--list-names' in args:
+        sys.exit(0 if list_names() else 1)
+    if '--job' in args:
+        path = args[args.index('--job') + 1]
+        ok = run_job({'id': 'local-' + time.strftime('%Y%m%d-%H%M%S')}, local_design=path)
+        sys.exit(0 if ok else 1)
+    once = '--once' in args
     smoke_test()
     last_hb = 0
     last_smoke_t = time.time()
@@ -180,7 +236,12 @@ def main():
                 run_job(job)
                 heartbeat(current=None)
                 last_hb = time.time()
+                if once:
+                    break
             else:
+                if once:
+                    log('no job waiting')
+                    break
                 time.sleep(10)
         except KeyboardInterrupt:
             break
