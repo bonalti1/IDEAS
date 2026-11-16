@@ -86,7 +86,6 @@ export default function Review({ user }) {
   if (open) {
     const style = STYLES.find((s) => s.id === open.style?.id) || STYLES.find((s) => s.ready)
     const changes = (open.versions || []).filter((v) => v.kind === 'change')
-    const spent = (open.creditsTotal || 0) - (open.credits || 0)
     const s = STATUS[open.status] || { label: open.status, tone: 'wait' }
     return (
       <div className="screen split">
@@ -112,7 +111,7 @@ export default function Review({ user }) {
             <Stat k="Style" v={style.name} />
             <Stat k="Rooms" v={`${open.program?.beds} bed · ${open.program?.baths}${open.program?.halfBath ? '.5' : ''} bath · ${open.program?.garage ? open.program.garage + '-car · ' : ''}${open.program?.stories} story`} />
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
-            <Stat k="Changes used" v={`${spent} of ${open.creditsTotal}`} />
+            <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
           </div>
           {open.lot?.spec?.kind === 'plat' && (
             <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')}>

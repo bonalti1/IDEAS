@@ -47,7 +47,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         if (r.applied) setProject((p) => ({ ...p, credits: r.credits, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, credit: 1, at: new Date().toISOString() }] }))
       } else res = await interpretRequest(q, rooms, program, style, { lot })
     } catch (e) {
-      res = e.status === 402 ? { applied: false, reply: 'No changes left on this design.', source: 'claude', credits: 0 } : e.status === 409 ? { applied: false, reply: 'This design is with the drafters now, so it cannot change.', source: 'claude' } : { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
+      res = e.status === 402 ? { applied: false, reply: 'No changes left on your account. Add more on the billing page and your draft is right here when you come back.', source: 'claude', credits: 0 } : e.status === 409 ? { applied: false, reply: 'This design is with the drafters now, so it cannot change.', source: 'claude' } : { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
     }
     setBusy(false)
     setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied }])
@@ -123,6 +123,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           {!project && <span className="muted small">not saved</span>}
           <span className={'credits' + (credits <= 2 ? ' low' : '')}>
             {credits} change{credits === 1 ? '' : 's'} left
+            {project && credits <= 2 && (
+              <a className="buy" href="#/billing">
+                buy more
+              </a>
+            )}
           </span>
         </div>
         <div className="stats row2">

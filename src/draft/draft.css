@@ -263,3 +263,19 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .tblwrap { overflow-x: auto; }
 .tbl.rules input.cell { width: 64px; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--brand-hair); border-radius: 6px; text-align: right; }
 .tbl.rules td { vertical-align: middle; }
+
+/* billing */
+.dh-credits { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brand-brown); border: 1px solid var(--brand-brown); border-radius: 999px; padding: 3px 9px; text-decoration: none; margin-right: 6px; }
+.dh-credits.on, .dh-credits:hover { background: var(--brand-brown); color: #fff; }
+.credits .buy { margin-left: 8px; color: var(--brand-brown); text-decoration: underline; text-transform: none; letter-spacing: 0; }
+.packs { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 10px 0 12px; }
+.pack { border: 1px solid var(--brand-hair); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+.pack-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pack-head b { font-size: 14px; }
+.pack-price { font-weight: 600; color: var(--brand-brown); }
+.card.note.good { border-color: #2e6b3a; }
+.billing .tbl a { color: var(--brand-brown); }
+.tbl.rules input.cell.wide { width: 150px; text-align: left; }
+.row.grant { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.row.grant select, .row.grant input { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--brand-hair); border-radius: 8px; background: #fff; }
+.card .row { display: flex; gap: 8px; }

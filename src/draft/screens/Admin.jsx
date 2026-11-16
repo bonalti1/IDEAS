@@ -109,6 +109,105 @@ function CityRules() {
   )
 }
 
+const money = (amount, currency = 'usd') => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format((amount || 0) / 100)
+
+/** Packs and prices (admins), and a way to add credits to an account by hand. */
+function Pricing() {
+  const [pricing, setPricing] = useState(null)
+  const [packs, setPacks] = useState(null)
+  const [users, setUsers] = useState([])
+  const [grant, setGrant] = useState({ userId: '', credits: 5, note: '' })
+  const [msg, setMsg] = useState('')
+  const [payments, setPayments] = useState([])
+  useEffect(() => {
+    api.pricing().then((p) => { setPricing(p); setPacks(p.packs.map((x) => ({ ...x, dollars: (x.amount / 100).toFixed(2) }))) }).catch(() => {})
+    api.users().then(setUsers).catch(() => {})
+    api.payments().then(setPayments).catch(() => {})
+  }, [])
+  if (!pricing) return null
+  const setPack = (i, k, v) => setPacks((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)))
+  const save = async () => {
+    try {
+      const p = await api.setPricing({ currency: pricing.currency, packs: packs.map((x) => ({ id: x.id, name: x.name, blurb: x.blurb, credits: +x.credits, amount: Math.round(+x.dollars * 100) })) })
+      setPricing(p)
+      setMsg('Prices saved')
+    } catch (e) {
+      setMsg(e.message)
+    }
+    setTimeout(() => setMsg(''), 2500)
+  }
+  const give = async () => {
+    try {
+      const u = await api.grantCredits(grant.userId, +grant.credits, grant.note)
+      setMsg(`${u.email} now has ${u.credits} credits`)
+      api.payments().then(setPayments).catch(() => {})
+    } catch (e) {
+      setMsg(e.message)
+    }
+    setTimeout(() => setMsg(''), 3000)
+  }
+  return (
+    <div className="card">
+      <h3>Pricing and credits</h3>
+      <p className="muted small">What a client pays through Stripe Checkout, in dollars. Each applied change uses one credit from the account.{pricing.placeholder ? ' These are placeholders until an admin saves real prices.' : ''}</p>
+      <div className="tblwrap">
+        <table className="tbl rules">
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th>Name</th>
+              <th>Blurb</th>
+              <th>Credits</th>
+              <th>Price $</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packs.map((p, i) => (
+              <tr key={i}>
+                <td><input className="cell" value={p.id} onChange={(e) => setPack(i, 'id', e.target.value)} /></td>
+                <td><input className="cell wide" value={p.name} onChange={(e) => setPack(i, 'name', e.target.value)} /></td>
+                <td><input className="cell wide" value={p.blurb || ''} onChange={(e) => setPack(i, 'blurb', e.target.value)} /></td>
+                <td><input className="cell" type="number" value={p.credits} onChange={(e) => setPack(i, 'credits', e.target.value)} /></td>
+                <td><input className="cell" type="number" step="1" value={p.dollars} onChange={(e) => setPack(i, 'dollars', e.target.value)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <Button small ghost onClick={() => setPacks((ps) => [...ps, { id: 'pack' + (ps.length + 1), name: '', blurb: '', credits: 5, dollars: '49.00' }])}>
+          Add a pack
+        </Button>
+        <Button small onClick={save}>
+          Save prices (admin)
+        </Button>
+      </div>
+      <h3 style={{ marginTop: 18 }}>Add credits to an account</h3>
+      <div className="row grant">
+        <select value={grant.userId} onChange={(e) => setGrant({ ...grant, userId: e.target.value })}>
+          <option value="">Pick an account</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.email} ({u.credits ?? 0})
+            </option>
+          ))}
+        </select>
+        <input type="number" value={grant.credits} onChange={(e) => setGrant({ ...grant, credits: e.target.value })} style={{ width: 70 }} />
+        <input placeholder="Note (paid by check, comp…)" value={grant.note} onChange={(e) => setGrant({ ...grant, note: e.target.value })} />
+        <Button small ghost disabled={!grant.userId} onClick={give}>
+          Add
+        </Button>
+      </div>
+      {msg && <p className="fine">{msg}</p>}
+      {payments.length > 0 && (
+        <p className="fine">
+          Last payments: {payments.slice(0, 5).map((p) => `${p.email || p.userId} ${p.credits > 0 ? '+' : ''}${p.credits}${p.amount ? ` ${money(p.amount, p.currency)}` : ''}`).join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const [ov, setOv] = useState(null)
   const [offline, setOffline] = useState(false)
@@ -294,6 +393,7 @@ export default function Admin() {
       </div>
 
       <CityRules />
+      <Pricing />
 
       <div className="card">
         <h3>Client requests</h3>

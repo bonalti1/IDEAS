@@ -8,7 +8,7 @@ export function jsonStore(dataDir) {
   const DB_PATH = path.join(dataDir, 'db.json')
   const LOG_PATH = path.join(dataDir, 'interpret-log.jsonl')
   const db = fs.existsSync(DB_PATH) ? JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) : {}
-  for (const k of ['designs', 'jobs', 'workers', 'events', 'commands', 'users', 'projects', 'versions', 'reviews']) db[k] ||= []
+  for (const k of ['designs', 'jobs', 'workers', 'events', 'commands', 'users', 'projects', 'versions', 'reviews', 'payments']) db[k] ||= []
   db.meta ||= {}
   let timer = null
   const save = () => {
@@ -160,6 +160,40 @@ export function jsonStore(dataDir) {
       async list(limit = 200) {
         return clone(db.users.slice(0, limit))
       },
+      // one credit off the account, or null when none are left
+      async charge(id, now) {
+        const u = db.users.find((x) => x.id === id)
+        if (!u || (u.credits || 0) <= 0) return null
+        u.credits -= 1
+        u.lastSeen = now
+        save()
+        return clone(u)
+      },
+      async addCredits(id, n, now) {
+        const u = db.users.find((x) => x.id === id)
+        if (!u) return null
+        u.credits = (u.credits || 0) + n
+        u.lastSeen = now
+        save()
+        return clone(u)
+      },
+    },
+    payments: {
+      async add(pay) {
+        if (db.payments.some((x) => x.id === pay.id)) return null
+        db.payments.unshift(clone(pay))
+        save()
+        return pay
+      },
+      async get(id) {
+        return clone(db.payments.find((x) => x.id === id) || null)
+      },
+      async listForUser(userId) {
+        return clone(db.payments.filter((x) => x.userId === userId))
+      },
+      async list(limit = 100) {
+        return clone(db.payments.slice(0, limit))
+      },
     },
     projects: {
       async add(p) {
@@ -236,7 +270,7 @@ export function jsonStore(dataDir) {
       },
     },
     async dump() {
-      return { at: new Date().toISOString(), kind: 'json', designs: clone(db.designs), jobs: clone(db.jobs), workers: clone(db.workers), commands: clone(db.commands), events: clone(db.events), users: clone(db.users), projects: clone(db.projects), versions: clone(db.versions), reviews: clone(db.reviews), interpretLog: readLog(), meta: clone(db.meta) }
+      return { at: new Date().toISOString(), kind: 'json', designs: clone(db.designs), jobs: clone(db.jobs), workers: clone(db.workers), commands: clone(db.commands), events: clone(db.events), users: clone(db.users), projects: clone(db.projects), versions: clone(db.versions), reviews: clone(db.reviews), payments: clone(db.payments), interpretLog: readLog(), meta: clone(db.meta) }
     },
     async close() {
       flush()

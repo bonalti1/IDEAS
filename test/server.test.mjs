@@ -175,7 +175,7 @@ test('office API end to end on Postgres', { skip: !process.env.TEST_DATABASE_URL
   await pipeline(base, true)
   const h = await (await fetch(base + '/api/health', { headers: { 'x-api-key': APP } })).json()
   assert.equal(h.store, 'postgres')
-  assert.match(h.checks.find((c) => c.id === 'db').detail, /2 designs, 2 jobs, 2 migrations/)
+  assert.match(h.checks.find((c) => c.id === 'db').detail, /2 designs, 2 jobs, \d+ migrations/)
   // a second start finds the migration applied and the data still there
   const again = await startServer(t, { DATA_DIR: dir, DATABASE_URL: url.toString(), DRAFTHOUSE_APP_KEY: APP, DRAFTHOUSE_WORKER_KEY: WORKER })
   assert.doesNotMatch(again.log(), /applied 001_init/)

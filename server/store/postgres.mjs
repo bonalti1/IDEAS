@@ -196,25 +196,49 @@ export function postgresStore(url) {
       },
       async put(u) {
         await q(
-          'insert into users (id, email, role, name, created_at, last_seen, doc) values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do update set email = excluded.email, role = excluded.role, name = excluded.name, last_seen = excluded.last_seen, doc = excluded.doc',
-          [u.id, u.email, u.role, u.name || null, u.createdAt, u.lastSeen, u]
+          'insert into users (id, email, role, name, credits, created_at, last_seen, doc) values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict (id) do update set email = excluded.email, role = excluded.role, name = excluded.name, credits = excluded.credits, last_seen = excluded.last_seen, doc = excluded.doc',
+          [u.id, u.email, u.role, u.name || null, u.credits || 0, u.createdAt, u.lastSeen, u]
         )
         return u
       },
       async list(limit = 200) {
         return (await q('select doc from users order by created_at desc limit $1', [limit])).rows.map((r) => r.doc)
       },
+      // one atomic decrement; null when none are left
+      async charge(id, now) {
+        const r = await q("update users set credits = credits - 1, last_seen = $2, doc = doc || jsonb_build_object('credits', credits - 1, 'lastSeen', $3::text) where id = $1 and credits > 0 returning doc", [id, now, now])
+        return r.rows[0]?.doc || null
+      },
+      async addCredits(id, n, now) {
+        const r = await q("update users set credits = credits + $2, last_seen = $3, doc = doc || jsonb_build_object('credits', credits + $2, 'lastSeen', $4::text) where id = $1 returning doc", [id, n, now, now])
+        return r.rows[0]?.doc || null
+      },
+    },
+    payments: {
+      async add(pay) {
+        const r = await q('insert into payments (id, user_id, pack, credits, amount, currency, status, receipt_url, at, doc) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) on conflict (id) do nothing returning id', [pay.id, pay.userId, pay.pack || null, pay.credits || 0, pay.amount || 0, pay.currency || 'usd', pay.status, pay.receiptUrl || null, pay.at, pay])
+        return r.rowCount ? pay : null
+      },
+      async get(id) {
+        return (await q('select doc from payments where id = $1', [id])).rows[0]?.doc || null
+      },
+      async listForUser(userId) {
+        return (await q('select doc from payments where user_id = $1 order by at desc', [userId])).rows.map((r) => r.doc)
+      },
+      async list(limit = 100) {
+        return (await q('select doc from payments order by at desc limit $1', [limit])).rows.map((r) => r.doc)
+      },
     },
     projects: {
       async add(p) {
-        await q('insert into projects (id, user_id, status, credits, version, created_at, updated_at, doc) values ($1, $2, $3, $4, $5, $6, $7, $8)', [p.id, p.userId, p.status, p.credits, p.version, p.createdAt, p.updatedAt, p])
+        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8)', [p.id, p.userId, p.status, p.creditsUsed || 0, p.version, p.createdAt, p.updatedAt, p])
         return p
       },
       async get(id) {
         return (await q('select doc from projects where id = $1', [id])).rows[0]?.doc || null
       },
       async put(p) {
-        const r = await q('update projects set status = $2, credits = $3, version = $4, updated_at = $5, doc = $6 where id = $1', [p.id, p.status, p.credits, p.version, p.updatedAt, p])
+        const r = await q('update projects set status = $2, credits_used = $3, version = $4, updated_at = $5, doc = $6 where id = $1', [p.id, p.status, p.creditsUsed || 0, p.version, p.updatedAt, p])
         if (!r.rowCount) throw new Error('project not found: ' + p.id)
         return p
       },
@@ -279,6 +303,7 @@ export function postgresStore(url) {
         projects: (await rows('select doc from projects order by created_at desc')).map((r) => r.doc),
         versions: (await rows('select doc from versions order by project_id, n')).map((r) => r.doc),
         reviews: await this.reviewsAll(),
+        payments: (await rows('select doc from payments order by at desc')).map((r) => r.doc),
         interpretLog: (await rows('select doc from interpret_log order by id')).map((r) => r.doc),
         meta: Object.fromEntries((await rows('select key, value from meta')).map((r) => [r.key, r.value])),
       }
@@ -315,7 +340,7 @@ export function postgresStore(url) {
         n++
       }
       for (const p of dump.projects || []) {
-        await q('insert into projects (id, user_id, status, credits, version, created_at, updated_at, doc) values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict (id) do update set status = excluded.status, credits = excluded.credits, version = excluded.version, updated_at = excluded.updated_at, doc = excluded.doc', [p.id, p.userId, p.status, p.credits, p.version, p.createdAt, p.updatedAt, p])
+        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8) on conflict (id) do update set status = excluded.status, credits_used = excluded.credits_used, version = excluded.version, updated_at = excluded.updated_at, doc = excluded.doc', [p.id, p.userId, p.status, p.creditsUsed || 0, p.version, p.createdAt, p.updatedAt, p])
         n++
       }
       for (const v of dump.versions || []) {
@@ -324,6 +349,10 @@ export function postgresStore(url) {
       }
       for (const r of dump.reviews || []) {
         await q('insert into reviews (id, project_id, drafter_id, decision, note, at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing', [r.id, r.projectId, r.drafterId, r.decision, r.note || null, r.at])
+        n++
+      }
+      for (const pay of dump.payments || []) {
+        await this.payments.add(pay)
         n++
       }
       for (const [k, v] of Object.entries(dump.meta || {})) await this.meta.set(k, v)

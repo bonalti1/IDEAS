@@ -54,6 +54,15 @@ export const api = {
   flood: (address) => call(`/api/lot/flood?address=${encodeURIComponent(address)}`, {}, 30000),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
+  // billing
+  billing: () => call('/api/billing'),
+  checkout: (pack) => call('/api/billing/checkout', { method: 'POST', body: JSON.stringify({ pack }) }, 30000),
+  billingSession: (id) => call(`/api/billing/session/${id}`, {}, 20000),
+  pricing: () => call('/api/admin/pricing'),
+  setPricing: (body) => call('/api/admin/pricing', { method: 'PUT', body: JSON.stringify(body) }),
+  payments: () => call('/api/admin/payments'),
+  users: () => call('/api/admin/users'),
+  grantCredits: (userId, credits, note) => call(`/api/admin/users/${userId}/credits`, { method: 'POST', body: JSON.stringify({ credits, note }) }),
   // drafter review
   inbox: () => call('/api/review'),
   reviewProject: (id) => call(`/api/review/${id}`),

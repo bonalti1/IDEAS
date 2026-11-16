@@ -44,6 +44,18 @@ Without `SUPABASE_URL` the API runs in local sign-in mode: any email signs in at
 - Worker offline for more than 10 minutes: one email, and one more when it is back. Needs a Resend account (resend.com, free tier is enough): verify the sending domain, create an API key, set `RESEND_API_KEY`, `ALERT_EMAIL_FROM` (on the verified domain), `ALERT_EMAIL_TO` (comma separated). Without these the alert still appears in the dashboard activity and the health row says email is not set.
 - Nightly backup at 08:00 UTC (2 am Texas): a gzip JSON dump of every table, stored in the Supabase bucket under `backups/`, last 30 kept. "Back up now" on the dashboard runs one; `node scripts/backup-db.mjs` runs one from a shell. Restore with `node scripts/migrate-json-to-pg.mjs backups/db-....json.gz`. Supabase Pro also keeps its own daily snapshots.
 
+## 6. Stripe (payments)
+
+1. stripe.com, create the account; stay in **Test mode** until the launch check passes.
+2. Developers, API keys: copy the **Secret key** (`sk_test_...`) to Render as `STRIPE_SECRET_KEY`. The publishable key is not needed: the API creates the Checkout Session and sends the browser to Stripe.
+3. Developers, Webhooks, Add endpoint: URL `https://<render service>.onrender.com/api/billing/webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy the **Signing secret** (`whsec_...`) to Render as `STRIPE_WEBHOOK_SECRET`. Without it no payment ever adds credits.
+4. Set `APP_URL` on Render to the Netlify site URL (where Stripe sends the client back). It defaults to the first `DRAFTHOUSE_APP_ORIGIN`.
+5. On the dashboard, Pricing and credits: set the real packs and prices (admin only). Until then the billing page shows placeholders and says so.
+6. Test it: buy a pack with card `4242 4242 4242 4242`, any future date, any CVC. The billing page shows the credits within seconds and the receipt link (Stripe emails receipts if Settings, Emails, "Successful payments" is on).
+7. Going live: switch the keys to `sk_live_...` and a live webhook endpoint with its own `whsec_...`, and activate the account (business details, bank).
+
+Credits live on the account, not the house: every applied change uses one, rollback returns them, a new account starts with `FREE_CREDITS_PER_ACCOUNT` (default 10; set 0 when drafts are paid). The office can add credits by hand on the dashboard (admin), which shows in the client's payment history as "Added by the office".
+
 ## Every setting
 
 | Where | Name | What |
@@ -54,7 +66,9 @@ Without `SUPABASE_URL` the API runs in local sign-in mode: any email signs in at
 | Render | `SUPABASE_BUCKET` | `drafthouse` (default) |
 | Render | `SUPABASE_JWT_SECRET` | optional; verifies sign-in tokens locally instead of with the project's public keys |
 | Render | `DRAFTHOUSE_DRAFTERS`, `DRAFTHOUSE_ADMINS` | comma-separated emails that get the drafter and admin roles |
-| Render | `CREDITS_PER_PROJECT` (10) | changes a client may apply per house |
+| Render | `FREE_CREDITS_PER_ACCOUNT` (10) | credits a new account starts with; 0 once drafts are paid |
+| Render | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe secret key and the webhook signing secret |
+| Render | `APP_URL` | where Stripe sends the client back; defaults to the first `DRAFTHOUSE_APP_ORIGIN` |
 | Render | outbound hosts | the API calls api.anthropic.com, geocoding.geo.census.gov and hazards.fema.gov; Render allows outbound traffic by default |
 | Render | `DRAFTHOUSE_CLAUDE_KEY` | Claude API key for the change interpreter. `ANTHROPIC_API_KEY` is read as a fallback. |
 | Render | `DRAFTHOUSE_APP_KEY` | generated; same value as Netlify `VITE_API_KEY` |

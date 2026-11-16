@@ -13,7 +13,6 @@ const fail = (status, error, extra = {}) => Object.assign(new Error(error), { st
 export const EDITABLE = ['drafting', 'returned']
 
 export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots }) {
-  const CREDITS = +(env.CREDITS_PER_PROJECT || 10)
 
   const styleOf = (p) => STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready)
   const publicProject = (p, extra = {}) => ({ ...p, ...extra })
@@ -24,7 +23,6 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
   }
 
   return {
-    CREDITS,
     async create(user, body) {
       if (!Array.isArray(body.rooms) || !body.rooms.length) throw fail(400, 'rooms required')
       if (!body.style?.id) throw fail(400, 'style required')
@@ -39,8 +37,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         style: { id: body.style.id, name: body.style.name || body.style.id },
         program: body.program || {},
         status: 'drafting',
-        credits: CREDITS,
-        creditsTotal: CREDITS,
+        creditsUsed: 0,
         version: 1,
         createdAt: t,
         updatedAt: t,
@@ -58,9 +55,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       return p
     },
 
+    // credits are the owner's account balance; the project only counts what it used
     async detail(p) {
-      const [full, versions, reviews, job] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null])
-      return publicProject(full, { versions, reviews, job: job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null })
+      const [full, versions, reviews, job, owner] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null, store.users.get(p.userId)])
+      return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, job: job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null })
     },
 
     // lot, style, program, and (when the program changed) regenerated rooms as a free version
@@ -87,7 +85,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
-      if (p.credits <= 0) throw fail(402, 'no changes left on this design', { credits: 0 })
+      const owner = await store.users.get(p.userId)
+      if (!owner || (owner.credits || 0) <= 0) throw fail(402, 'no changes left on your account; add more on the billing page', { credits: 0 })
       const style = styleOf(p)
       const kit = kitFor(style)
       const current = await store.versions.get(p.id, p.version)
@@ -107,15 +106,16 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
       const result = decide(diff, rooms, p.program, style, kit, source, await lots.lotOfProject(p))
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
-      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], credits: p.credits, version: p.version }
-      const charged = await store.projects.charge(p.id, now())
-      if (!charged) throw fail(402, 'no changes left on this design', { credits: 0 })
-      const n = charged.version + 1
+      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], credits: owner.credits, version: p.version }
+      const charged = await store.users.charge(p.userId, now())
+      if (!charged) throw fail(402, 'no changes left on your account; add more on the billing page', { credits: 0 })
+      const n = p.version + 1
       const t = now()
       await store.versions.add({ projectId: p.id, n, at: t, kind: 'change', text: request, credit: 1, rooms: result.rooms, reply: result.reply, source, ops: result.ops, did: result.did })
-      charged.version = n
-      charged.updatedAt = t
-      await store.projects.put(charged)
+      p.version = n
+      p.creditsUsed = (p.creditsUsed || 0) + 1
+      p.updatedAt = t
+      await store.projects.put(p)
       await event('project', `${p.client}: "${request.slice(0, 60)}" applied (${source}), ${charged.credits} credit${charged.credits === 1 ? '' : 's'} left`, { projectId: p.id })
       return { applied: true, reply: result.reply, source, rooms: result.rooms, credits: charged.credits, version: n, did: result.did, ops: result.ops, ...meta }
     },
@@ -137,8 +137,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
       const t = now()
       p.version += 1
-      p.credits = Math.min(p.creditsTotal || CREDITS, p.credits + refund)
+      p.creditsUsed = Math.max(0, (p.creditsUsed || 0) - refund)
       p.updatedAt = t
+      if (refund) await store.users.addCredits(p.userId, refund, t)
       await store.versions.add({ projectId: p.id, n: p.version, at: t, kind: 'rollback', text: `Back to version ${k}`, rollbackOf: k, credit: 0, rooms: want.rooms })
       await store.projects.put(p)
       await event('project', `${p.client}: back to version ${k}${refund ? `, ${refund} credit${refund === 1 ? '' : 's'} returned` : ''}`, { projectId: p.id })

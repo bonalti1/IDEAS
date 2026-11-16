@@ -10,6 +10,7 @@ import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
 import Admin from './screens/Admin.jsx'
 import Review from './screens/Review.jsx'
+import Billing from './screens/Billing.jsx'
 import SignIn from './screens/SignIn.jsx'
 import { DEFAULT_PROGRAM, generateRooms } from './lib/layout.js'
 import { STYLES } from './lib/styles.js'
@@ -46,7 +47,7 @@ function OfficeGate({ user, onUser, children }) {
   return children
 }
 
-export default function DraftApp({ admin = false, review = false }) {
+export default function DraftApp({ admin = false, review = false, billing = false }) {
   const [user, setUser] = useState(undefined) // undefined: still checking
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState(null) // the saved project, when signed in and the office is reachable
@@ -63,8 +64,10 @@ export default function DraftApp({ admin = false, review = false }) {
   const loadUser = async () => {
     const u = await currentUser()
     setUser(u)
-    if (u) api.projects().then(setProjects).catch(() => setProjects([]))
-    else setProjects([])
+    if (u) {
+      setCredits(u.credits ?? CREDITS)
+      api.projects().then(setProjects).catch(() => setProjects([]))
+    } else setProjects([])
   }
   useEffect(() => {
     loadUser()
@@ -80,7 +83,7 @@ export default function DraftApp({ admin = false, review = false }) {
     setStyle(null)
     setProgram(DEFAULT_PROGRAM)
     setRooms([])
-    setCredits(CREDITS)
+    setCredits(user?.credits ?? CREDITS)
     setHistory([])
     setReturnSeen(false)
     if (user) api.projects().then(setProjects).catch(() => {})
@@ -135,7 +138,7 @@ export default function DraftApp({ admin = false, review = false }) {
     }
   }
 
-  const office = admin || review
+  const office = admin || review || billing
   return (
     <div className="dh">
       <header className="dh-head">
@@ -159,6 +162,9 @@ export default function DraftApp({ admin = false, review = false }) {
         <nav className="dh-links">
           {user && (
             <span className="dh-user">
+              <a className={'dh-credits' + (billing ? ' on' : '')} href="#/billing" title="Changes left on your account">
+                {credits} change{credits === 1 ? '' : 's'}
+              </a>
               {user.email}
               <button className="linkish" onClick={logout}>
                 Sign out
@@ -189,6 +195,14 @@ export default function DraftApp({ admin = false, review = false }) {
             <Review user={user} />
           </OfficeGate>
         )}
+        {billing &&
+          (user === undefined ? null : user ? (
+            <Billing user={user} onCredits={(c) => { setCredits(c); setUser((u) => (u ? { ...u, credits: c } : u)) }} />
+          ) : (
+            <div className="screen padded narrow center">
+              <SignIn title="Sign in to see your billing" askName={false} onSignedIn={(u) => { setUser(u); setCredits(u.credits ?? CREDITS) }} />
+            </div>
+          ))}
         {!office && step === 0 && (
           <Start
             user={user}

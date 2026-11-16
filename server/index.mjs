@@ -16,6 +16,7 @@ import { makeInterpreter } from './interpreter.mjs'
 import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
+import { makeBilling } from './billing.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = +(process.env.PORT || 8787)
@@ -39,6 +40,7 @@ const interpreter = makeInterpreter()
 const users = makeUsers({ store, dataDir: DATA })
 const lots = makeLots({ store, files, interpreter, event })
 const projects = makeProjects({ store, interpreter, event, logInterpret, lots })
+const billing = makeBilling({ store, event })
 
 // ── health ─────────────────────────────────────────────────────────────────
 async function health() {
@@ -55,11 +57,12 @@ async function health() {
     { id: 'worker', name: 'Revit worker', ok: workers.some((w) => w.online), detail: workers.length ? workers.map((w) => `${w.name}: ${w.online ? 'online' : 'offline'}`).join(', ') : 'none registered', at: now() },
     { id: 'auth', name: 'API keys', ...auth.describe(), at: now() },
     { id: 'accounts', name: 'Client accounts', ...users.describe(), at: now() },
+    { id: 'billing', name: 'Payments', ...billing.describe(), at: now() },
     { id: 'alerts', name: 'Alert email', ...alerts.describe(), at: now() },
     { id: 'backup', name: 'Nightly backup', ...bk, at: now() },
   ]
   workers.forEach((w) => (w.checks || []).forEach((c) => checks.push({ ...c, id: `${w.id}:${c.id}`, worker: w.name })))
-  const soft = new Set(['interpreter', 'auth', 'accounts', 'alerts', 'backup']) // shown, but they do not take the office down
+  const soft = new Set(['interpreter', 'auth', 'accounts', 'alerts', 'backup', 'billing']) // shown, but they do not take the office down
   return { ok: checks.filter((c) => !soft.has(c.id)).every((c) => c.ok), version: VERSION, uptimeS: Math.round((t - started) / 1000), store: store.kind, files: files.kind, auth: users.devMode ? 'local' : 'supabase', checks, workers, queue: { queued: q.queued, running: q.running, stuck: q.stuck } }
 }
 
@@ -126,7 +129,7 @@ route('POST', '/api/auth/dev-login', 'app', async (req, res) => {
     json(res, 400, { error: e.message }, req)
   }
 })
-route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: ctx.user, credits: projects.CREDITS, auth: users.devMode ? 'local' : 'supabase' }, req))
+route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: ctx.user, credits: ctx.user.credits || 0, freeCredits: users.freeCredits, auth: users.devMode ? 'local' : 'supabase' }, req))
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await store.projects.listForUser(ctx.user.id), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req)), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) })), req))
@@ -154,6 +157,30 @@ route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
 route('GET', '/api/lot/flood', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
   json(res, 200, await lots.flood(url.searchParams.get('address')), req)
+})
+
+// ── billing: pricing, Stripe Checkout, the webhook, receipts ───────────────
+route('GET', '/api/billing', 'user', async (req, res, p, ctx) => json(res, 200, { credits: ctx.user.credits || 0, pricing: await billing.pricing(), mode: billing.mode, history: await billing.history(ctx.user) }, req))
+route('POST', '/api/billing/checkout', 'user', async (req, res, p, ctx) => {
+  const body = await readJson(req)
+  json(res, 200, await billing.checkout(ctx.user, body.pack, req.headers.origin || ''), req)
+})
+route('GET', '/api/billing/session/:id', 'user', async (req, res, p, ctx) => json(res, 200, await billing.session(ctx.user, p.id), req))
+// Stripe posts here; the signature in the header is the authentication
+route('POST', '/api/billing/webhook', 'public', async (req, res) => {
+  const raw = await readBody(req)
+  json(res, 200, await billing.webhook(raw, req.headers['stripe-signature'] || ''), req)
+})
+route('PUT', '/api/admin/pricing', 'drafter', async (req, res, p, ctx) => {
+  if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes prices' }, req)
+  json(res, 200, await billing.setPricing(await readJson(req), ctx.user), req)
+})
+route('GET', '/api/admin/pricing', 'drafter', async (req, res) => json(res, 200, await billing.pricing(), req))
+route('GET', '/api/admin/payments', 'drafter', async (req, res) => json(res, 200, await store.payments.list(100), req))
+route('POST', '/api/admin/users/:id/credits', 'drafter', async (req, res, p, ctx) => {
+  if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin grants credits' }, req)
+  const body = await readJson(req)
+  json(res, 200, await billing.grant(ctx.user, p.id, body.credits, body.note), req)
 })
 
 // ── drafter review ─────────────────────────────────────────────────────────

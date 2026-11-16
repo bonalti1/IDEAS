@@ -28,8 +28,14 @@ services:
         sync: false
       - key: DRAFTHOUSE_ADMINS       # comma-separated admin emails
         sync: false
-      - key: CREDITS_PER_PROJECT
+      - key: FREE_CREDITS_PER_ACCOUNT
         value: "10"
+      - key: STRIPE_SECRET_KEY       # sk_test_... until the launch check, then sk_live_...
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET   # whsec_... from the webhook endpoint /api/billing/webhook
+        sync: false
+      - key: APP_URL                 # the Netlify site, for Stripe's return
+        sync: false
       - key: DRAFTHOUSE_CLAUDE_KEY
         sync: false
       - key: DRAFTHOUSE_APP_KEY   # same value goes to Netlify as VITE_API_KEY
