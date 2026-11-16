@@ -3,8 +3,9 @@
 // farmhouse has a real kit so far (src/kits); the others borrow its room
 // templates until their own sets are extracted.
 import { KIT as FARMHOUSE } from '../../kits/modern-farmhouse.js'
+import { GENERATED } from '../../kits/generated.js'
 
-export const STYLES = [
+const BASE_STYLES = [
   { id: 'modern', name: 'Modern', blurb: 'Flat roofs, clean lines, big glass.', psf: 215, roof: 'flat', stories: 2 },
   { id: 'farmhouse', name: 'Modern Farmhouse', blurb: 'Gables, board and batten, deep porch.', psf: 190, roof: 'gable', stories: 1, kit: FARMHOUSE, ready: true },
   { id: 'spanish', name: 'Spanish', blurb: 'Stucco, clay tile, arches, courtyard.', psf: 205, roof: 'hip', stories: 1 },
@@ -17,4 +18,5 @@ export const STYLES = [
   { id: 'coastal', name: 'Coastal', blurb: 'Raised, airy, metal roof, shutters.', psf: 200, roof: 'hip', stories: 2 },
 ]
 
-
+// a style is ready when it has a kit: the traced farmhouse, or one generated from a drafter's IFC export
+export const STYLES = BASE_STYLES.map((st) => (GENERATED[st.id] ? { ...st, kit: GENERATED[st.id], ready: true } : st))
