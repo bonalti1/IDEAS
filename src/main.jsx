@@ -13,7 +13,7 @@ function Root() {
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
-  return hash === '#/lot514' ? <App /> : <DraftApp admin={hash === '#/admin'} />
+  return hash === '#/lot514' ? <App /> : <DraftApp admin={hash === '#/admin'} review={hash === '#/review'} />
 }
 
 createRoot(document.getElementById('root')).render(

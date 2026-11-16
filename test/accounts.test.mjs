@@ -1,0 +1,238 @@
+// Accounts, saved projects, credits, rollback, review. Runs on the JSON store in local sign-in mode,
+// and on Postgres too when TEST_DATABASE_URL is set.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { generateRooms } from '../src/draft/lib/layout.js'
+import { STYLES } from '../src/draft/lib/styles.js'
+import { KIT } from '../src/kits/modern-farmhouse.js'
+
+const style = STYLES.find((s) => s.id === 'farmhouse')
+const program = { ...KIT.reference.program }
+const WORKER = 'test-worker-key'
+
+async function startServer(t, env) {
+  const port = 8900 + Math.floor(Math.random() * 100)
+  const base = `http://127.0.0.1:${port}`
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: WORKER, DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  let out = ''
+  proc.stdout.on('data', (c) => (out += c))
+  proc.stderr.on('data', (c) => (out += c))
+  t.after(() => proc.kill())
+  for (let i = 0; i < 60; i++) {
+    try {
+      await fetch(base + '/api/health')
+      return { base, log: () => out }
+    } catch {
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
+  throw new Error('server did not start:\n' + out)
+}
+
+// a signed-in caller
+async function who(base, email, name) {
+  const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name }) })
+  const { token, user } = await r.json()
+  const h = { 'content-type': 'application/json', authorization: `Bearer ${token}` }
+  return {
+    user,
+    get: (p) => fetch(base + p, { headers: h }),
+    post: (p, body = {}) => fetch(base + p, { method: 'POST', headers: h, body: JSON.stringify(body) }),
+    put: (p, body = {}) => fetch(base + p, { method: 'PUT', headers: h, body: JSON.stringify(body) }),
+  }
+}
+const j = async (r) => ({ status: r.status, body: await r.json() })
+const nRooms = (rs) => rs.filter((r) => !r.element).length // doors, windows, fixtures ride along as elements
+
+async function suite(base) {
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  const ben = await who(base, 'ben@example.com', 'Ben Lopez')
+  const maria = await who(base, 'maria@drafthouse.test', 'Maria')
+  assert.equal(ana.user.role, 'client')
+  assert.equal(maria.user.role, 'drafter')
+  assert.equal((await j(await ana.get('/api/me'))).body.user.email, 'ana@example.com')
+
+  // a project starts with the first draft as version 1 and the full credit allowance
+  const rooms = generateRooms(program, style)
+  const created = await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse', name: 'Modern Farmhouse' }, program, rooms, client: 'Ana Garza' }))
+  assert.equal(created.status, 201)
+  const prj = created.body
+  assert.equal(prj.status, 'drafting')
+  assert.equal(prj.credits, 10)
+  assert.equal(prj.version, 1)
+  assert.equal(nRooms(prj.rooms), nRooms(rooms))
+
+  // an applied change costs one credit and makes version 2; a rejected one costs nothing
+  const c1 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
+  assert.equal(c1.status, 200)
+  assert.equal(c1.body.applied, true, c1.body.reply)
+  assert.equal(c1.body.source, 'fallback', 'no Claude key in tests: basic rules')
+  assert.equal(c1.body.credits, 9)
+  assert.equal(c1.body.version, 2)
+  const kitchen = (rs) => rs.find((r) => r.id === 'kitchen')
+  assert.ok(kitchen(c1.body.rooms).w > kitchen(rooms).w)
+  const c2 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'remove the kitchen' }))
+  assert.equal(c2.body.applied, false)
+  assert.equal(c2.body.credits, 9, 'a rejected change is free')
+  const c3 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))
+  assert.equal(c3.body.applied, true, c3.body.reply)
+  assert.equal(c3.body.credits, 8)
+
+  // the project reloads with its versions and current rooms; credits survive a reload because they live here
+  const d1 = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.equal(d1.body.credits, 8)
+  assert.equal(d1.body.version, 3)
+  assert.deepEqual(d1.body.versions.map((v) => v.kind), ['initial', 'change', 'change'])
+  assert.equal(d1.body.versions[1].text, 'make the kitchen bigger')
+  assert.equal(d1.body.versions[1].rooms, undefined, 'summaries carry no rooms')
+  assert.equal(nRooms(d1.body.rooms), nRooms(rooms) + 1, 'office added')
+  assert.equal((await j(await ana.get('/api/projects'))).body.length, 1)
+
+  // rollback to version 1 returns both credits and keeps every version
+  const rb = await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 1 }))
+  assert.equal(rb.status, 200)
+  assert.equal(rb.body.credits, 10)
+  assert.equal(rb.body.refunded, 2)
+  assert.equal(rb.body.version, 4)
+  assert.equal(kitchen(rb.body.rooms).w, kitchen(rooms).w)
+  assert.equal(nRooms(rb.body.rooms), nRooms(rooms))
+  const d2 = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.deepEqual(d2.body.versions.map((v) => v.kind), ['initial', 'change', 'change', 'rollback'])
+  assert.equal(d2.body.versions[1].refunded, true)
+  // rolling forward to version 3 is free and does not refund twice
+  const rf = await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 3 }))
+  assert.equal(rf.body.credits, 10)
+  assert.equal(nRooms(rf.body.rooms), nRooms(rooms) + 1)
+  assert.equal((await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 99 }))).status, 404)
+
+  // the program can change: a free version with regenerated rooms (the lot and the packer decide what fits, not this test)
+  const up = await j(await ana.put(`/api/projects/${prj.id}`, { program: { ...program, name: 'same rooms' }, rooms: generateRooms(program, style), client: 'Ana G.', note: 'Rooms changed' }))
+  assert.equal(up.status, 200)
+  assert.equal(up.body.client, 'Ana G.')
+  assert.equal(up.body.version, 6)
+  assert.equal(up.body.credits, 10)
+
+  // permissions: another client cannot see, change or send it; drafters can see it
+  assert.equal((await ben.get(`/api/projects/${prj.id}`)).status, 404)
+  assert.equal((await ben.post(`/api/projects/${prj.id}/change`, { text: 'bigger kitchen' })).status, 404)
+  assert.equal((await ben.post(`/api/projects/${prj.id}/send`, {})).status, 404)
+  assert.equal((await j(await ben.get('/api/projects'))).body.length, 0)
+  assert.equal((await maria.get(`/api/projects/${prj.id}`)).status, 200)
+  assert.equal((await ana.get('/api/review')).status, 403, 'clients cannot see the review inbox')
+  assert.equal((await ana.get('/api/admin/overview')).status, 403)
+  assert.equal((await fetch(base + '/api/projects')).status, 401, 'no token')
+  assert.equal((await fetch(base + '/api/projects', { headers: { authorization: 'Bearer dh1.bogus.sig' } })).status, 401, 'bad token')
+
+  // send: the design goes to the drafters, nothing is built yet, and the plan is locked
+  const sent = await j(await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza', lot: { address: 'Lot 514' }, style: { name: 'Modern Farmhouse' }, livingSf: 2533, changes: ['make the kitchen bigger'] }, ifc: 'ISO-10303-21;' }))
+  assert.equal(sent.status, 200)
+  assert.equal(sent.body.status, 'in_review')
+  assert.ok(sent.body.designId)
+  assert.equal((await ana.post(`/api/projects/${prj.id}/change`, { text: 'bigger kitchen' })).status, 409)
+  assert.equal((await ana.post(`/api/projects/${prj.id}/send`, {})).status, 409)
+  const worker = (p, body) => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': WORKER }, body: JSON.stringify(body) })
+  assert.equal((await worker('/api/jobs/claim', { worker: 'w' })).status, 204, 'no job until a drafter approves')
+
+  // the drafter returns it with a note; the client sees the note and can keep drafting
+  const inbox = await j(await maria.get('/api/review'))
+  assert.equal(inbox.body.waiting.length, 1)
+  assert.equal(inbox.body.waiting[0].id, prj.id)
+  const ret = await j(await maria.post(`/api/review/${prj.id}`, { decision: 'returned', note: 'The office needs a window. Move it to an outside wall.' }))
+  assert.equal(ret.status, 200)
+  assert.equal(ret.body.status, 'returned')
+  const d3 = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.equal(d3.body.status, 'returned')
+  assert.match(d3.body.review.note, /needs a window/)
+  assert.equal(d3.body.reviews.length, 1)
+  const c4 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
+  assert.equal(c4.body.applied, true, c4.body.reply)
+  assert.equal(c4.body.credits, 9)
+
+  // sent again, approved: the Revit job is queued, built when the worker finishes
+  await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' } })
+  assert.equal((await j(await maria.get('/api/review'))).body.waiting.length, 1)
+  assert.equal((await maria.post(`/api/review/${prj.id}`, { decision: 'maybe' })).status, 400)
+  const ok = await j(await maria.post(`/api/review/${prj.id}`, { decision: 'approved', note: 'Looks good.' }))
+  assert.equal(ok.body.status, 'approved')
+  assert.ok(ok.body.jobId)
+  assert.equal((await maria.post(`/api/review/${prj.id}`, { decision: 'approved' })).status, 409, 'cannot review twice')
+  const claim = await j(await worker('/api/jobs/claim', { worker: 'office-1' }))
+  assert.equal(claim.status, 200)
+  assert.equal(claim.body.projectId, prj.id)
+  const d4 = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.equal(d4.body.status, 'approved')
+  assert.equal(d4.body.job.status, 'running')
+  await worker(`/api/jobs/${claim.body.id}/complete`, { outputs: [{ name: 'model.rvt', url: `/files/${claim.body.designId}/model.rvt` }] })
+  const d5 = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.equal(d5.body.status, 'built')
+  assert.equal(d5.body.job.status, 'done')
+  assert.equal((await j(await maria.get('/api/review'))).body.waiting.length, 0)
+  assert.equal((await j(await maria.get('/api/review'))).body.recent[0].status, 'built')
+
+  // roles: only an admin changes them
+  const rolando = await who(base, 'rolando@drafthouse.test', 'Rolando')
+  assert.equal(rolando.user.role, 'admin')
+  assert.equal((await maria.post(`/api/admin/users/${ben.user.id}/role`, { role: 'drafter' })).status, 403)
+  assert.equal((await j(await rolando.post(`/api/admin/users/${ben.user.id}/role`, { role: 'drafter' }))).body.role, 'drafter')
+  const ben2 = await who(base, 'ben@example.com')
+  assert.equal(ben2.user.role, 'drafter')
+  assert.equal((await ben2.get('/api/review')).status, 200)
+
+  // the interpret log kept every verdict with the project id
+  const log = await j(await maria.get('/api/interpret/log'))
+  assert.ok(log.body.recent.some((r) => r.projectId === prj.id && r.verdict === 'rejected'))
+  assert.ok(log.body.recent.some((r) => r.projectId === prj.id && r.verdict === 'applied'))
+}
+
+test('accounts, projects, credits, rollback and review on the JSON store', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
+  await suite(base)
+})
+
+test('credits run out: the change is refused with 402 and nothing is saved', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), CREDITS_PER_PROJECT: '1' })
+  const ana = await who(base, 'ana@example.com')
+  const prj = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style) }))).body
+  assert.equal(prj.credits, 1)
+  const c1 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
+  assert.equal(c1.body.credits, 0)
+  const c2 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))
+  assert.equal(c2.status, 402)
+  assert.equal(c2.body.credits, 0)
+  const d = await j(await ana.get(`/api/projects/${prj.id}`))
+  assert.equal(d.body.version, 2)
+  assert.equal(nRooms(d.body.rooms), nRooms(prj.rooms), 'the office was not added')
+  // undo gives the credit back and the next change works again
+  await ana.post(`/api/projects/${prj.id}/rollback`, { version: 1 })
+  assert.equal((await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))).body.applied, true)
+})
+
+test('local sign-in is off when Supabase is configured', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), SUPABASE_URL: 'https://example.supabase.co', SUPABASE_JWT_SECRET: 'x' })
+  const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'ana@example.com' }) })
+  assert.equal(r.status, 404)
+  assert.equal((await fetch(base + '/api/me', { headers: { authorization: 'Bearer dh1.x.y' } })).status, 401)
+  const h = await (await fetch(base + '/api/health')).json()
+  assert.equal(h.auth, 'supabase')
+})
+
+test('accounts on Postgres', { skip: !process.env.TEST_DATABASE_URL && 'set TEST_DATABASE_URL to run' }, async (t) => {
+  const { default: pg } = await import('pg')
+  const admin = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+  await admin.connect()
+  const name = 'dh_acc_' + Date.now().toString(36)
+  await admin.query(`create database ${name}`)
+  t.after(async () => {
+    await admin.query(`drop database ${name} with (force)`)
+    await admin.end()
+  })
+  const url = new URL(process.env.TEST_DATABASE_URL)
+  url.pathname = '/' + name
+  const { base, log } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), DATABASE_URL: url.toString() })
+  assert.match(log(), /applied 001_init\.sql, 002_accounts\.sql/)
+  await suite(base)
+})

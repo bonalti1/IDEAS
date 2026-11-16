@@ -187,6 +187,76 @@ export function postgresStore(url) {
         return { count: num(s.count), calls, cost: +s.cost, perCall: calls ? +s.cost / calls : 0, avgMs: s.avg_ms == null ? 0 : Math.round(+s.avg_ms) }
       },
     },
+    users: {
+      async get(id) {
+        return (await q('select doc from users where id = $1', [id])).rows[0]?.doc || null
+      },
+      async getByEmail(email) {
+        return (await q('select doc from users where email = $1', [email])).rows[0]?.doc || null
+      },
+      async put(u) {
+        await q(
+          'insert into users (id, email, role, name, created_at, last_seen, doc) values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do update set email = excluded.email, role = excluded.role, name = excluded.name, last_seen = excluded.last_seen, doc = excluded.doc',
+          [u.id, u.email, u.role, u.name || null, u.createdAt, u.lastSeen, u]
+        )
+        return u
+      },
+      async list(limit = 200) {
+        return (await q('select doc from users order by created_at desc limit $1', [limit])).rows.map((r) => r.doc)
+      },
+    },
+    projects: {
+      async add(p) {
+        await q('insert into projects (id, user_id, status, credits, version, created_at, updated_at, doc) values ($1, $2, $3, $4, $5, $6, $7, $8)', [p.id, p.userId, p.status, p.credits, p.version, p.createdAt, p.updatedAt, p])
+        return p
+      },
+      async get(id) {
+        return (await q('select doc from projects where id = $1', [id])).rows[0]?.doc || null
+      },
+      async put(p) {
+        const r = await q('update projects set status = $2, credits = $3, version = $4, updated_at = $5, doc = $6 where id = $1', [p.id, p.status, p.credits, p.version, p.updatedAt, p])
+        if (!r.rowCount) throw new Error('project not found: ' + p.id)
+        return p
+      },
+      async listForUser(userId) {
+        return (await q('select doc from projects where user_id = $1 order by updated_at desc', [userId])).rows.map((r) => r.doc)
+      },
+      async listByStatus(statuses, limit = 100) {
+        return (await q('select doc from projects where status = any($1) order by updated_at desc limit $2', [statuses, limit])).rows.map((r) => r.doc)
+      },
+      async count() {
+        return num((await q('select count(*) as n from projects')).rows[0].n)
+      },
+      // one atomic decrement; null when no credits are left
+      async charge(id, now) {
+        const r = await q("update projects set credits = credits - 1, updated_at = $2, doc = doc || jsonb_build_object('credits', credits - 1, 'updatedAt', $3::text) where id = $1 and credits > 0 returning doc", [id, now, now])
+        return r.rows[0]?.doc || null
+      },
+    },
+    versions: {
+      async add(v) {
+        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7)', [v.projectId, v.n, v.at, v.kind, v.credit || 0, !!v.refunded, v])
+        return v
+      },
+      async get(projectId, n) {
+        return (await q('select doc from versions where project_id = $1 and n = $2', [projectId, n])).rows[0]?.doc || null
+      },
+      async put(v) {
+        await q('update versions set credit = $3, refunded = $4, doc = $5 where project_id = $1 and n = $2', [v.projectId, v.n, v.credit || 0, !!v.refunded, v])
+      },
+      async list(projectId) {
+        return (await q("select doc - 'rooms' as doc from versions where project_id = $1 order by n", [projectId])).rows.map((r) => r.doc)
+      },
+    },
+    reviews: {
+      async add(r) {
+        await q('insert into reviews (id, project_id, drafter_id, decision, note, at) values ($1, $2, $3, $4, $5, $6)', [r.id, r.projectId, r.drafterId, r.decision, r.note || null, r.at])
+        return r
+      },
+      async list(projectId) {
+        return (await q('select id, project_id, drafter_id, decision, note, at from reviews where project_id = $1 order by at desc', [projectId])).rows.map((r) => ({ id: r.id, projectId: r.project_id, drafterId: r.drafter_id, decision: r.decision, note: r.note, at: r.at.toISOString() }))
+      },
+    },
     meta: {
       async get(key) {
         return (await q('select value from meta where key = $1', [key])).rows[0]?.value ?? null
@@ -205,9 +275,16 @@ export function postgresStore(url) {
         workers: (await rows('select doc from workers')).map((r) => r.doc),
         commands: (await rows('select id, worker, command, at, taken from commands where taken is null')),
         events: (await rows('select id, at, kind, message, doc from events order by at desc limit 500')).map((r) => ({ id: r.id, at: r.at, kind: r.kind, message: r.message, ...r.doc })),
+        users: (await rows('select doc from users')).map((r) => r.doc),
+        projects: (await rows('select doc from projects order by created_at desc')).map((r) => r.doc),
+        versions: (await rows('select doc from versions order by project_id, n')).map((r) => r.doc),
+        reviews: await this.reviewsAll(),
         interpretLog: (await rows('select doc from interpret_log order by id')).map((r) => r.doc),
         meta: Object.fromEntries((await rows('select key, value from meta')).map((r) => [r.key, r.value])),
       }
+    },
+    async reviewsAll() {
+      return (await q('select id, project_id, drafter_id, decision, note, at from reviews order by at desc')).rows.map((r) => ({ id: r.id, projectId: r.project_id, drafterId: r.drafter_id, decision: r.decision, note: r.note, at: r.at.toISOString() }))
     },
     // import a dump or an old db.json (used by scripts/migrate-json-to-pg.mjs and restores)
     async load(dump) {
@@ -231,6 +308,22 @@ export function postgresStore(url) {
       }
       for (const rec of dump.interpretLog || []) {
         await this.interpretLog.add(rec)
+        n++
+      }
+      for (const u of dump.users || []) {
+        await this.users.put(u)
+        n++
+      }
+      for (const p of dump.projects || []) {
+        await q('insert into projects (id, user_id, status, credits, version, created_at, updated_at, doc) values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict (id) do update set status = excluded.status, credits = excluded.credits, version = excluded.version, updated_at = excluded.updated_at, doc = excluded.doc', [p.id, p.userId, p.status, p.credits, p.version, p.createdAt, p.updatedAt, p])
+        n++
+      }
+      for (const v of dump.versions || []) {
+        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7) on conflict (project_id, n) do update set credit = excluded.credit, refunded = excluded.refunded, doc = excluded.doc', [v.projectId, v.n, v.at, v.kind, v.credit || 0, !!v.refunded, v])
+        n++
+      }
+      for (const r of dump.reviews || []) {
+        await q('insert into reviews (id, project_id, drafter_id, decision, note, at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing', [r.id, r.projectId, r.drafterId, r.decision, r.note || null, r.at])
         n++
       }
       for (const [k, v] of Object.entries(dump.meta || {})) await this.meta.set(k, v)

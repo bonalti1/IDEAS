@@ -23,20 +23,25 @@ export function makeAuth(env = process.env) {
   const keyOf = (req, url) => {
     const h = req.headers['x-api-key']
     if (h) return String(h).trim()
-    const a = req.headers.authorization || ''
-    if (/^bearer /i.test(a)) return a.slice(7).trim()
-    return url.searchParams.get('key') || ''
+    const q = url.searchParams.get('key')
+    if (q) return q
+    const a = req.headers.authorization || '' // normally the user's sign-in token; a key here still works for scripts
+    return /^bearer /i.test(a) ? a.slice(7).trim() : ''
   }
-  // 'app' | 'worker' | null; 'open' when no keys are configured
+  // 'worker' | 'app' | 'open' (no app key configured, so app routes are open) | null (a key was needed and none or a wrong one came)
   const role = (req, url) => {
-    if (!enforced) return 'open'
     const k = keyOf(req, url)
     if (workerKey && same(k, workerKey)) return 'worker'
     if (appKey && same(k, appKey)) return 'app'
-    return null
+    return appKey ? null : 'open'
   }
-  // need: 'public' | 'any' | 'app' | 'worker'
-  const allows = (need, r) => need === 'public' || r === 'open' || (need === 'any' ? !!r : r === need)
+  // need: 'public' | 'any' | 'app' | 'worker'. Each key gates only its own routes: with no worker key the worker routes are open too.
+  const allows = (need, r) => {
+    if (need === 'public') return true
+    const app = r === 'app' || r === 'open'
+    const worker = r === 'worker' || (!workerKey && app)
+    return need === 'app' ? app : need === 'worker' ? worker : app || worker
+  }
 
   const cors = (req) => {
     const origin = req.headers.origin

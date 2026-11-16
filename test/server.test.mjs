@@ -16,7 +16,7 @@ const ORIGIN = 'https://drafthouse.example'
 async function startServer(t, env) {
   const port = 8790 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_DRAFTERS: 'drafter@test.local', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))
@@ -32,9 +32,12 @@ async function startServer(t, env) {
   throw new Error('server did not start:\n' + out)
 }
 
-// the full pipeline against a running server, as the app (app key) and the worker (worker key)
+// the full pipeline against a running server, as the app (app key), the worker (worker key) and a signed-in drafter (dashboard routes)
 async function pipeline(base, keys) {
-  const h = (role) => (keys ? { 'x-api-key': role === 'worker' ? WORKER : APP } : {})
+  const key = (role) => (keys ? { 'x-api-key': role === 'worker' ? WORKER : APP } : {})
+  const login = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json', ...key('app') }, body: JSON.stringify({ email: 'drafter@test.local' }) })
+  const { token } = await login.json()
+  const h = (role) => ({ ...key(role), ...(role === 'drafter' ? { authorization: `Bearer ${token}` } : {}) })
   const post = (p, body, role = 'app') => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...h(role) }, body: JSON.stringify(body) })
   const get = (p, role = 'app') => fetch(base + p, { headers: h(role) })
 
@@ -68,7 +71,7 @@ async function pipeline(base, keys) {
   assert.equal(await file.text(), 'rvt bytes')
   // a file link opened in a new tab carries the key in the query string
   if (keys) assert.equal((await fetch(base + `/files/${job.designId}/model.rvt?key=${APP}`)).status, 200)
-  const ov = await (await get('/api/admin/overview')).json()
+  const ov = await (await get('/api/admin/overview', 'drafter')).json()
   assert.equal(ov.counts.done, 1)
   assert.equal(ov.counts.designs, 1)
   assert.ok(ov.events.length >= 3)
@@ -85,11 +88,11 @@ async function pipeline(base, keys) {
   await post('/api/jobs/claim', { worker: 'office-1' }, 'worker')
   await post(`/api/jobs/${j2.id}/fail`, { error: 'Revit crashed again' }, 'worker')
   assert.equal((await (await get(`/api/jobs/${j2.id}`)).json()).status, 'failed')
-  await post(`/api/jobs/${j2.id}/retry`, {})
+  await post(`/api/jobs/${j2.id}/retry`, {}, 'drafter')
   assert.equal((await (await get(`/api/jobs/${j2.id}`)).json()).status, 'queued')
 
   // commands reach the worker once
-  await post('/api/workers/office-1/commands', { command: 'smoke' })
+  await post('/api/workers/office-1/commands', { command: 'smoke' }, 'drafter')
   const hb2 = await (await post('/api/workers/heartbeat', { id: 'office-1', name: 'Office Revit' }, 'worker')).json()
   assert.deepEqual(hb2.commands, ['smoke'])
   const hb3 = await (await post('/api/workers/heartbeat', { id: 'office-1', name: 'Office Revit' }, 'worker')).json()
@@ -97,7 +100,7 @@ async function pipeline(base, keys) {
 
   // interpret log lines land in the store and the summary counts them
   await post('/api/interpret/verdict', { text: 'make the kitchen bigger', source: 'fallback', applied: true, reply: 'ok', ops: [] })
-  const ilog = await (await get('/api/interpret/log')).json()
+  const ilog = await (await get('/api/interpret/log', 'drafter')).json()
   assert.equal(ilog.count, 1)
   assert.equal(ilog.recent[0].request, 'make the kitchen bigger')
 
@@ -106,7 +109,7 @@ async function pipeline(base, keys) {
   assert.equal(interp.status, 503)
 
   // backup on demand writes a gzip dump with everything in it
-  const bk = await (await post('/api/admin/backup', {})).json()
+  const bk = await (await post('/api/admin/backup', {}, 'drafter')).json()
   assert.ok(bk.name.startsWith('backups/db-'))
   assert.equal(bk.designs, 2)
   const h2 = await (await get('/api/health')).json()
@@ -131,7 +134,7 @@ test('API keys and CORS', async (t) => {
   const { base } = await startServer(t, { DATA_DIR: dir, DRAFTHOUSE_APP_KEY: APP, DRAFTHOUSE_WORKER_KEY: WORKER, DRAFTHOUSE_APP_ORIGIN: ORIGIN })
   // no key: only the health verdict, nothing else
   const pub = await (await fetch(base + '/api/health')).json()
-  assert.deepEqual(Object.keys(pub).sort(), ['ok', 'uptimeS', 'version'])
+  assert.deepEqual(Object.keys(pub).sort(), ['auth', 'ok', 'uptimeS', 'version'])
   assert.equal((await fetch(base + '/api/admin/overview')).status, 401)
   assert.equal((await fetch(base + '/api/jobs/claim', { method: 'POST' })).status, 401)
   // wrong key
@@ -139,7 +142,7 @@ test('API keys and CORS', async (t) => {
   // app key cannot act as the worker, worker key cannot see the dashboard
   assert.equal((await fetch(base + '/api/jobs/claim', { method: 'POST', headers: { 'x-api-key': APP } })).status, 403)
   assert.equal((await fetch(base + '/api/admin/overview', { headers: { 'x-api-key': WORKER } })).status, 403)
-  assert.equal((await fetch(base + '/api/interpret/log', { headers: { authorization: `Bearer ${APP}` } })).status, 200)
+  assert.equal((await fetch(base + '/api/interpret/log', { headers: { authorization: `Bearer ${APP}` } })).status, 401, 'a key alone is not a signed-in drafter')
   // CORS: the app origin is echoed, another site gets nothing
   const good = await fetch(base + '/api/health', { headers: { origin: ORIGIN, 'x-api-key': APP } })
   assert.equal(good.headers.get('access-control-allow-origin'), ORIGIN)
@@ -172,11 +175,12 @@ test('office API end to end on Postgres', { skip: !process.env.TEST_DATABASE_URL
   await pipeline(base, true)
   const h = await (await fetch(base + '/api/health', { headers: { 'x-api-key': APP } })).json()
   assert.equal(h.store, 'postgres')
-  assert.match(h.checks.find((c) => c.id === 'db').detail, /2 designs, 2 jobs, 1 migrations/)
+  assert.match(h.checks.find((c) => c.id === 'db').detail, /2 designs, 2 jobs, 2 migrations/)
   // a second start finds the migration applied and the data still there
   const again = await startServer(t, { DATA_DIR: dir, DATABASE_URL: url.toString(), DRAFTHOUSE_APP_KEY: APP, DRAFTHOUSE_WORKER_KEY: WORKER })
   assert.doesNotMatch(again.log(), /applied 001_init/)
-  const ov = await (await fetch(again.base + '/api/admin/overview', { headers: { 'x-api-key': APP } })).json()
+  const tok = (await (await fetch(again.base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': APP }, body: JSON.stringify({ email: 'drafter@test.local' }) })).json()).token
+  const ov = await (await fetch(again.base + '/api/admin/overview', { headers: { 'x-api-key': APP, authorization: `Bearer ${tok}` } })).json()
   assert.equal(ov.counts.designs, 2)
   assert.equal(ov.counts.done, 1)
 })

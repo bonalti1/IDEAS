@@ -8,7 +8,7 @@ export function jsonStore(dataDir) {
   const DB_PATH = path.join(dataDir, 'db.json')
   const LOG_PATH = path.join(dataDir, 'interpret-log.jsonl')
   const db = fs.existsSync(DB_PATH) ? JSON.parse(fs.readFileSync(DB_PATH, 'utf8')) : {}
-  for (const k of ['designs', 'jobs', 'workers', 'events', 'commands']) db[k] ||= []
+  for (const k of ['designs', 'jobs', 'workers', 'events', 'commands', 'users', 'projects', 'versions', 'reviews']) db[k] ||= []
   db.meta ||= {}
   let timer = null
   const save = () => {
@@ -143,6 +143,89 @@ export function jsonStore(dataDir) {
         return { count: recs.length, calls: calls.length, cost, perCall: calls.length ? cost / calls.length : 0, avgMs: calls.length ? Math.round(calls.reduce((s, r) => s + (r.ms || 0), 0) / calls.length) : 0 }
       },
     },
+    users: {
+      async get(id) {
+        return clone(db.users.find((u) => u.id === id) || null)
+      },
+      async getByEmail(email) {
+        return clone(db.users.find((u) => u.email === email) || null)
+      },
+      async put(u) {
+        const i = db.users.findIndex((x) => x.id === u.id)
+        if (i < 0) db.users.push(clone(u))
+        else db.users[i] = clone(u)
+        save()
+        return u
+      },
+      async list(limit = 200) {
+        return clone(db.users.slice(0, limit))
+      },
+    },
+    projects: {
+      async add(p) {
+        db.projects.unshift(clone(p))
+        save()
+        return p
+      },
+      async get(id) {
+        return clone(db.projects.find((p) => p.id === id) || null)
+      },
+      async put(p) {
+        const i = db.projects.findIndex((x) => x.id === p.id)
+        if (i < 0) throw new Error('project not found: ' + p.id)
+        db.projects[i] = clone(p)
+        save()
+        return p
+      },
+      async listForUser(userId) {
+        return clone(db.projects.filter((p) => p.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+      },
+      async listByStatus(statuses, limit = 100) {
+        return clone(db.projects.filter((p) => statuses.includes(p.status)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit))
+      },
+      async count() {
+        return db.projects.length
+      },
+      // take one credit if any are left; null when none
+      async charge(id, now) {
+        const p = db.projects.find((x) => x.id === id)
+        if (!p || p.credits <= 0) return null
+        p.credits -= 1
+        p.updatedAt = now
+        save()
+        return clone(p)
+      },
+    },
+    versions: {
+      async add(v) {
+        db.versions.push(clone(v))
+        save()
+        return v
+      },
+      async get(projectId, n) {
+        return clone(db.versions.find((v) => v.projectId === projectId && v.n === n) || null)
+      },
+      async put(v) {
+        const i = db.versions.findIndex((x) => x.projectId === v.projectId && x.n === v.n)
+        if (i < 0) throw new Error('version not found')
+        db.versions[i] = clone(v)
+        save()
+      },
+      // summaries without rooms, oldest first
+      async list(projectId) {
+        return db.versions.filter((v) => v.projectId === projectId).sort((a, b) => a.n - b.n).map(({ rooms, ...rest }) => clone(rest))
+      },
+    },
+    reviews: {
+      async add(r) {
+        db.reviews.unshift(clone(r))
+        save()
+        return r
+      },
+      async list(projectId) {
+        return clone(db.reviews.filter((r) => r.projectId === projectId))
+      },
+    },
     meta: {
       async get(key) {
         return clone(db.meta[key] ?? null)
@@ -153,7 +236,7 @@ export function jsonStore(dataDir) {
       },
     },
     async dump() {
-      return { at: new Date().toISOString(), kind: 'json', designs: clone(db.designs), jobs: clone(db.jobs), workers: clone(db.workers), commands: clone(db.commands), events: clone(db.events), interpretLog: readLog(), meta: clone(db.meta) }
+      return { at: new Date().toISOString(), kind: 'json', designs: clone(db.designs), jobs: clone(db.jobs), workers: clone(db.workers), commands: clone(db.commands), events: clone(db.events), users: clone(db.users), projects: clone(db.projects), versions: clone(db.versions), reviews: clone(db.reviews), interpretLog: readLog(), meta: clone(db.meta) }
     },
     async close() {
       flush()

@@ -57,3 +57,7 @@ Checked on the plan as it would be after the ops (`src/draft/lib/rules.js`). Any
 - `node scripts/try-interpret.mjs [api base]` prints the key's length, checks api.anthropic.com directly (and stops with a clear BLOCKED line if network access does not allow it), then runs the ten named requests against the live endpoint. For each request it prints the diff, the rules verdict (it uses the app's own `decide`), the reply, the time, the tokens and the cost, and grades the outcome as RIGHT or WRONG: requests 1 to 7 must apply and take effect, and requests 8 to 10 must be refused, either by the rules or by Claude asking back. It posts each verdict to the log and exits 0 when at least 9 of the 10 come out right.
 - Last live result, 2026-11-03, `claude-opus-5-5` at low effort: 10 of 10 right in three consecutive runs, about 2.2 s and $0.012 per request ($0.117 to $0.123 for all ten). The system prompt is cached, about 1,200 tokens read from cache per call after the first.
 - Undo in the Draft step restores the plan and the credit of the last applied change. A rejected change never costs a credit.
+
+## With an account
+
+Signed-in clients do not call `/api/interpret` from the browser. The office API runs the whole step for the saved project (`POST /api/projects/:id/change`): Claude or the basic rules, the shape check, the plan rules, and the credit, which is taken only when the change applies. The response carries the new rooms, the reply, the source label, the credits left and the version number. The browser path above remains for the no-account mode.

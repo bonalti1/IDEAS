@@ -22,6 +22,14 @@ services:
         sync: false
       - key: SUPABASE_BUCKET
         value: drafthouse
+      - key: SUPABASE_JWT_SECRET    # optional, Project Settings, API, JWT secret
+        sync: false
+      - key: DRAFTHOUSE_DRAFTERS     # comma-separated drafter emails
+        sync: false
+      - key: DRAFTHOUSE_ADMINS       # comma-separated admin emails
+        sync: false
+      - key: CREDITS_PER_PROJECT
+        value: "10"
       - key: DRAFTHOUSE_CLAUDE_KEY
         sync: false
       - key: DRAFTHOUSE_APP_KEY   # same value goes to Netlify as VITE_API_KEY

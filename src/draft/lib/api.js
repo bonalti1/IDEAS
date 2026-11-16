@@ -7,14 +7,19 @@ export const API = (import.meta.env?.VITE_API_URL ?? 'http://localhost:8787').re
 // Client accounts (phase 2) are the real door. Empty when the office runs open on a laptop.
 export const API_KEY = (import.meta.env?.VITE_API_KEY || '').trim()
 
+// the signed-in user's token, set by auth.js
+let tokenProvider = async () => null
+export const setTokenProvider = (fn) => (tokenProvider = fn)
+
 async function call(path, opts = {}, timeoutMs = 6000) {
   const ctl = new AbortController()
   const t = setTimeout(() => ctl.abort(), timeoutMs)
   try {
-    const res = await fetch(API + path, { ...opts, signal: ctl.signal, headers: { 'content-type': 'application/json', ...(API_KEY ? { 'x-api-key': API_KEY } : {}), ...(opts.headers || {}) } })
+    const token = await tokenProvider()
+    const res = await fetch(API + path, { ...opts, signal: ctl.signal, headers: { 'content-type': 'application/json', ...(API_KEY ? { 'x-api-key': API_KEY } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}), ...(opts.headers || {}) } })
     if (res.status === 204) return null
     const body = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
+    if (!res.ok) throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status, body })
     return body
   } finally {
     clearTimeout(t)
@@ -32,5 +37,19 @@ export const api = {
   retry: (id) => call(`/api/jobs/${id}/retry`, { method: 'POST' }),
   command: (worker, command) => call(`/api/workers/${worker}/commands`, { method: 'POST', body: JSON.stringify({ command }) }),
   fileUrl: (url) => API + url + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
+  // accounts and saved projects
+  devLogin: (body) => call('/api/auth/dev-login', { method: 'POST', body: JSON.stringify(body) }),
+  me: () => call('/api/me'),
+  projects: () => call('/api/projects'),
+  project: (id) => call(`/api/projects/${id}`),
+  createProject: (body) => call('/api/projects', { method: 'POST', body: JSON.stringify(body) }, 20000),
+  updateProject: (id, body) => call(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) }, 20000),
+  change: (id, text) => call(`/api/projects/${id}/change`, { method: 'POST', body: JSON.stringify({ text }) }, 20000),
+  rollback: (id, version) => call(`/api/projects/${id}/rollback`, { method: 'POST', body: JSON.stringify({ version }) }, 20000),
+  sendProject: (id, design, ifc) => call(`/api/projects/${id}/send`, { method: 'POST', body: JSON.stringify({ design, ifc }) }, 30000),
+  // drafter review
+  inbox: () => call('/api/review'),
+  reviewProject: (id) => call(`/api/review/${id}`),
+  review: (id, decision, note) => call(`/api/review/${id}`, { method: 'POST', body: JSON.stringify({ decision, note }) }, 20000),
   backup: () => call('/api/admin/backup', { method: 'POST' }, 60000),
 }

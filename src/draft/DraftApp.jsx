@@ -1,7 +1,6 @@
-// Draft House client flow. Six steps, all state in memory for now.
-// Backend phase replaces: survey parsing, style kits, layout solver,
-// the change interpreter, credits, and the drafter handoff.
-import { useState } from 'react'
+// Draft House client flow. Five steps after the start screen. With an account the project is
+// saved on the office API (every version, credits, status); without one it lives in this tab.
+import { useEffect, useState } from 'react'
 import { Mark } from './ui.jsx'
 import Start from './screens/Start.jsx'
 import Lot from './screens/Lot.jsx'
@@ -10,13 +9,47 @@ import Program from './screens/Program.jsx'
 import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
 import Admin from './screens/Admin.jsx'
+import Review from './screens/Review.jsx'
+import SignIn from './screens/SignIn.jsx'
 import { DEFAULT_PROGRAM, generateRooms } from './lib/layout.js'
+import { STYLES } from './lib/styles.js'
+import { api } from './lib/api.js'
+import { currentUser, onAuthChange, signOut } from './lib/auth.js'
+import { EDITABLE, historyFrom } from './lib/status.js'
 import './draft.css'
 
 const STEPS = ['Lot', 'Style', 'Rooms', 'Draft', 'Send']
 const CREDITS = 10
+const isDrafter = (u) => u && (u.role === 'drafter' || u.role === 'admin')
 
-export default function DraftApp({ admin = false }) {
+/** Office screens need a drafter. */
+function OfficeGate({ user, onUser, children }) {
+  if (user === undefined) return <div className="screen padded narrow center"><p className="muted">Loading…</p></div>
+  if (!user)
+    return (
+      <div className="screen padded narrow center">
+        <SignIn title="Office sign-in" lede="Drafters and admins only." askName={false} onSignedIn={onUser} />
+      </div>
+    )
+  if (!isDrafter(user))
+    return (
+      <div className="screen padded narrow center">
+        <div className="card signin">
+          <h3>Not a drafter account</h3>
+          <p className="muted small">{user.email} is a client account. Ask the office to make it a drafter, or sign in with another email.</p>
+          <button className="linkish" onClick={() => signOut().then(() => onUser(null))}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  return children
+}
+
+export default function DraftApp({ admin = false, review = false }) {
+  const [user, setUser] = useState(undefined) // undefined: still checking
+  const [projects, setProjects] = useState([])
+  const [project, setProject] = useState(null) // the saved project, when signed in and the office is reachable
   const [step, setStep] = useState(0)
   const [lot, setLot] = useState(null)
   const [style, setStyle] = useState(null)
@@ -24,18 +57,82 @@ export default function DraftApp({ admin = false }) {
   const [rooms, setRooms] = useState([])
   const [credits, setCredits] = useState(CREDITS)
   const [history, setHistory] = useState([])
+  const [returnSeen, setReturnSeen] = useState(false) // the client read the drafter's note and went back to the draft
+
+  const loadUser = async () => {
+    const u = await currentUser()
+    setUser(u)
+    if (u) api.projects().then(setProjects).catch(() => setProjects([]))
+    else setProjects([])
+  }
+  useEffect(() => {
+    loadUser()
+    return onAuthChange(loadUser)
+  }, [])
 
   const go = (n) => setStep(n)
   const restart = () => {
     setStep(0)
+    setProject(null)
     setLot(null)
     setStyle(null)
     setProgram(DEFAULT_PROGRAM)
     setRooms([])
     setCredits(CREDITS)
     setHistory([])
+    setReturnSeen(false)
+    if (user) api.projects().then(setProjects).catch(() => {})
+  }
+  const noteMessage = (p) => ({ who: 'house', text: `Note from ${p.review?.drafter || 'your drafter'}: ${p.review?.note}`, applied: true, source: 'undo' })
+  const backToDraft = () => {
+    setReturnSeen(true)
+    if (project?.review?.note) setHistory((h) => [...h, noteMessage(project)])
+    go(4)
+  }
+  const logout = async () => {
+    await signOut()
+    setUser(null)
+    restart()
   }
 
+  // Rooms → Draft: a fresh layout; saved as a project (or a new free version of one) when signed in
+  const enterDraft = async () => {
+    const next = generateRooms(program, style)
+    setRooms(next)
+    setHistory([])
+    if (user) {
+      try {
+        const body = { lot, style: { id: style.id, name: style.name }, program, rooms: next, client: lot?.client }
+        const p = project && EDITABLE.includes(project.status) ? await api.updateProject(project.id, { ...body, note: 'Rooms changed' }) : await api.createProject(body)
+        setProject(p)
+        setCredits(p.credits)
+        setHistory(historyFrom(p.versions))
+      } catch {
+        setProject(null) // office unreachable: keep drafting in this tab
+      }
+    }
+    go(4)
+  }
+
+  // open a saved house where it was left
+  const resume = async (id) => {
+    try {
+      const p = await api.project(id)
+      setProject(p)
+      setLot(p.lot || { address: p.address, client: p.client })
+      setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
+      setProgram(p.program || DEFAULT_PROGRAM)
+      setRooms(p.rooms)
+      setCredits(p.credits)
+      setHistory(p.status === 'returned' && p.review?.note ? [...historyFrom(p.versions), noteMessage(p)] : historyFrom(p.versions))
+      setReturnSeen(p.status === 'returned')
+      go(EDITABLE.includes(p.status) ? 4 : 5)
+    } catch (e) {
+      alert(`Could not open that house: ${e.message}`)
+    }
+  }
+
+  const office = admin || review
   return (
     <div className="dh">
       <header className="dh-head">
@@ -43,7 +140,7 @@ export default function DraftApp({ admin = false }) {
           <Mark size={24} />
           <span>Draft House</span>
         </a>
-        {!admin && step > 0 && (
+        {!office && step > 0 && (
           <ol className="steps">
             {STEPS.map((s, i) => {
               const n = i + 1
@@ -57,7 +154,20 @@ export default function DraftApp({ admin = false }) {
           </ol>
         )}
         <nav className="dh-links">
-          <a className="dh-link" href="#/admin">
+          {user && (
+            <span className="dh-user">
+              {user.email}
+              <button className="linkish" onClick={logout}>
+                Sign out
+              </button>
+            </span>
+          )}
+          {isDrafter(user) && (
+            <a className={'dh-link' + (review ? ' on' : '')} href="#/review">
+              Review
+            </a>
+          )}
+          <a className={'dh-link' + (admin ? ' on' : '')} href="#/admin">
             Office
           </a>
           <a className="dh-link" href="#/lot514">
@@ -66,31 +176,36 @@ export default function DraftApp({ admin = false }) {
         </nav>
       </header>
       <main className="dh-main">
-        {admin && <Admin />}
-        {!admin && step === 0 && (
+        {admin && (
+          <OfficeGate user={user} onUser={setUser}>
+            <Admin />
+          </OfficeGate>
+        )}
+        {review && (
+          <OfficeGate user={user} onUser={setUser}>
+            <Review user={user} />
+          </OfficeGate>
+        )}
+        {!office && step === 0 && (
           <Start
+            user={user}
+            projects={projects}
+            onSignedIn={(u) => {
+              setUser(u)
+              api.projects().then(setProjects).catch(() => {})
+            }}
+            onSkip={() => {}}
+            onResume={resume}
             onNext={(l) => {
               setLot(l)
               go(1)
             }}
           />
         )}
-        {!admin && step === 1 && <Lot lot={lot} onNext={() => go(2)} onBack={() => go(0)} />}
-        {!admin && step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
-        {!admin && step === 3 && (
-          <Program
-            program={program}
-            style={style}
-            onChange={setProgram}
-            onBack={() => go(2)}
-            onNext={() => {
-              setRooms(generateRooms(program, style))
-              setHistory([])
-              go(4)
-            }}
-          />
-        )}
-        {!admin && step === 4 && (
+        {!office && step === 1 && <Lot lot={lot} onNext={() => go(2)} onBack={() => go(0)} />}
+        {!office && step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
+        {!office && step === 3 && <Program program={program} style={style} onChange={setProgram} onBack={() => go(2)} onNext={enterDraft} />}
+        {!office && step === 4 && (
           <Draft
             style={style}
             program={program}
@@ -100,12 +215,14 @@ export default function DraftApp({ admin = false }) {
             setCredits={setCredits}
             history={history}
             setHistory={setHistory}
+            project={project}
+            setProject={setProject}
             onBack={() => go(3)}
             onNext={() => go(5)}
             lot={lot}
           />
         )}
-        {!admin && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} onBack={() => go(4)} onRestart={restart} />}
+        {!office && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} project={project} setProject={setProject} returnSeen={returnSeen} onBackToDraft={backToDraft} onBack={() => go(4)} onRestart={restart} />}
       </main>
     </div>
   )

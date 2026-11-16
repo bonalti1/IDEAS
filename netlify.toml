@@ -1,6 +1,7 @@
 # Netlify build for the Draft House client app (Vite). Set these in Site settings, Environment variables:
 #   VITE_API_URL = https://drafthouse-office.onrender.com   (the Render service URL, no trailing slash)
 #   VITE_API_KEY = the DRAFTHOUSE_APP_KEY value from Render
+#   VITE_SUPABASE_URL = https://<project>.supabase.co, VITE_SUPABASE_ANON_KEY = the anon key (email sign-in link)
 [build]
   command = "npm ci && npm run build"
   publish = "dist"

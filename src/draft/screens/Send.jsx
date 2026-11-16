@@ -5,12 +5,14 @@ import { takeoff } from '../lib/takeoff.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
 import { api } from '../lib/api.js'
+import { STATUS, STEPS, EDITABLE } from '../lib/status.js'
 
 const n = (x) => Math.round(x).toLocaleString()
 const pct = (a, b) => (b ? `${a - b >= 0 ? '+' : ''}${Math.round(((a - b) / b) * 100)}%` : '')
 
-export default function Send({ lot, style, program, rooms, history, onRestart, onBack }) {
+export default function Send({ lot, style, program, rooms, history, project, setProject, returnSeen, onBackToDraft, onRestart, onBack }) {
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
   const [job, setJob] = useState(null) // { id, status, steps, outputs } or { offline: true }
   const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('summary')
@@ -20,6 +22,20 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
   const estimate = t.areas.living * style.psf + program.garage * 28000
+
+  // a saved project: follow its status while the drafters and the office computer work on it
+  const tracked = project && (['in_review', 'approved', 'built'].includes(project.status) || (project.status === 'returned' && !returnSeen))
+  useEffect(() => {
+    if (!project || !['in_review', 'approved'].includes(project.status)) return
+    const tm = setInterval(async () => {
+      try {
+        setProject(await api.project(project.id))
+      } catch {
+        /* keep last state */
+      }
+    }, 5000)
+    return () => clearInterval(tm)
+  }, [project?.id, project?.status])
 
   useEffect(() => {
     if (!job?.id || ['done', 'failed'].includes(job.status)) return
@@ -35,18 +51,84 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
 
   const send = async () => {
     setSending(true)
+    setError('')
     const design = buildDesign({ rooms, program, style, lot, history, client: lot?.client })
+    const ifc = toIFC({ rooms, program, kit, style, lot })
     try {
-      const res = await api.sendDesign(design, toIFC({ rooms, program, kit, style, lot }))
-      setJob(res.job)
+      if (project) setProject(await api.sendProject(project.id, design, ifc))
+      else setJob((await api.sendDesign(design, ifc)).job)
     } catch (e) {
+      if (project) {
+        setError(`Could not send: ${e.message}`)
+        setSending(false)
+        return
+      }
       setJob({ offline: true, error: String(e.message || e) })
     }
     setSending(false)
     setSent(true)
   }
 
-  if (sent)
+  if (tracked) {
+    const st = STATUS[project.status] || STATUS.in_review
+    const pj = project.job
+    return (
+      <div className="screen padded narrow center">
+        <Mark size={56} />
+        <h2>{project.status === 'returned' ? 'Your drafter sent it back' : project.status === 'built' ? 'Your Revit model is ready' : project.status === 'approved' ? 'Approved, building the model' : 'With the drafting team'}</h2>
+        <ol className="timeline">
+          {STEPS.map((label, i) => (
+            <li key={label} className={i < st.step ? 'done' : i === st.step ? 'now' : ''}>
+              <i />
+              <span>{label}</span>
+            </li>
+          ))}
+        </ol>
+        {project.status === 'in_review' && <p className="lede">A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day.</p>}
+        {project.status === 'returned' && (
+          <div className="card note">
+            <h3>Note from {project.review?.drafter || 'your drafter'}</h3>
+            <p>{project.review?.note}</p>
+            <Button primary onClick={onBackToDraft || onBack}>
+              Back to the draft
+            </Button>
+          </div>
+        )}
+        {(project.status === 'approved' || project.status === 'built') && (
+          <div className="card job">
+            <h3>Office</h3>
+            <div className="stat">
+              <span className="stat-k">Revit model</span>
+              <span className={'pill ' + (pj?.status === 'done' ? 'good' : pj?.status === 'failed' ? 'bad' : 'wait')}>{!pj || pj.status === 'queued' ? 'waiting for the office computer' : pj.status === 'running' ? 'building in Revit' : pj.status === 'done' ? 'built' : 'needs a drafter'}</span>
+            </div>
+            {pj?.status === 'running' && pj.steps?.length > 0 && <p className="fine">{pj.steps[pj.steps.length - 1].message}</p>}
+            {pj?.status === 'done' && pj.outputs?.length > 0 && (
+              <ul className="list">
+                {pj.outputs.map((o) => (
+                  <li key={o.url}>
+                    <a href={api.fileUrl(o.url)} target="_blank" rel="noreferrer">
+                      {o.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {project.review?.note && <p className="fine">Drafter: "{project.review.note}"</p>}
+          </div>
+        )}
+        <div className="card stats">
+          <Stat k="What happens next" v={project.status === 'built' ? 'Your drafter finishes the sheets' : 'Structure, roof, details, and code check'} />
+          <Stat k="You will get" v={`${kit.sheets.length} sheets: ${kit.sheets.map((s) => s.title).filter((v, i, a) => a.indexOf(v) === i).join(', ').toLowerCase()}`} />
+          <Stat k="Changes after this" v="Through your drafter, at drafting rates" />
+        </div>
+        <Button ghost onClick={onRestart}>
+          Start another house
+        </Button>
+      </div>
+    )
+  }
+
+  if (sent && !project)
     return (
       <div className="screen padded narrow center">
         <Mark size={56} />
@@ -109,6 +191,12 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
 
       {tab === 'summary' && (
         <>
+          {project?.status === 'returned' && project.review?.note && (
+            <div className="card note">
+              <h3>Your drafter asked for</h3>
+              <p>{project.review.note}</p>
+            </div>
+          )}
           <div className="card stats">
             <Stat k="Lot" v={lot?.address} />
             <Stat k="Style" v={style.name} />
@@ -207,6 +295,7 @@ export default function Send({ lot, style, program, rooms, history, onRestart, o
         </>
       )}
 
+      {error && <p className="fine bad">{error}</p>}
       <div className="actions">
         <Button ghost onClick={onBack}>
           Keep editing

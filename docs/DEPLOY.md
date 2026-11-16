@@ -7,7 +7,9 @@ Three pieces: the office API on Render, the client app on Netlify, the Revit wor
 1. Create a project at supabase.com (region: US East).
 2. Project Settings, Database, Connection string: copy the **Transaction pooler** URI (port 6543). That is `DATABASE_URL`. Put the database password in it.
 3. Project Settings, API: copy the project URL (`SUPABASE_URL`) and the **service_role** key (`SUPABASE_SERVICE_KEY`). The service key is server-side only; it never goes to Netlify or the browser.
-4. Nothing else to create by hand. The API runs its migrations (`server/migrations/*.sql`) at start and creates the private bucket `drafthouse` for files on first start.
+4. Authentication, Providers: keep Email on, turn off "Confirm email" if you want the first link to sign the client straight in, and under URL Configuration add the Netlify site URL to the redirect allow list (the magic link returns there).
+5. Project Settings, API: the **anon** key goes to Netlify as `VITE_SUPABASE_ANON_KEY` with the project URL as `VITE_SUPABASE_URL`. Optional: Project Settings, API, JWT Settings, copy the JWT secret to Render as `SUPABASE_JWT_SECRET` (faster token checks; without it the API uses the project's public keys).
+6. Nothing else to create by hand. The API runs its migrations (`server/migrations/*.sql`) at start and creates the private bucket `drafthouse` for files on first start.
 
 To bring the data from the laptop along: `DATABASE_URL=... node scripts/migrate-json-to-pg.mjs server/data/db.json`, then upload `server/data/files/<design>/` folders into the bucket with the same paths (Supabase Studio, Storage).
 
@@ -25,7 +27,13 @@ Plan note: the **starter** plan keeps the API awake. On the free plan it sleeps 
 2. Site settings, Environment variables: `VITE_API_URL` = the Render URL (no trailing slash), `VITE_API_KEY` = the `DRAFTHOUSE_APP_KEY` value.
 3. Back on Render, set `DRAFTHOUSE_APP_ORIGIN` to the Netlify site URL (`https://<site>.netlify.app`, or the custom domain; comma separated for both) and redeploy. Until then CORS is open to any site.
 
-The app key is visible to anyone who opens the site (it is in the built JavaScript). It keeps bots and strangers off the API, it is not a login. Client accounts come in phase 2.
+The app key is visible to anyone who opens the site (it is in the built JavaScript). It keeps bots and strangers off the API, it is not a login. Clients sign in with an email link (Supabase Auth); their token goes to the API with every call and decides what they can see.
+
+## 3b. Who is a drafter
+
+Everyone who signs in is a client. `DRAFTHOUSE_DRAFTERS` (comma-separated emails) on Render makes those accounts drafters: they get the Review inbox and the Office dashboard. `DRAFTHOUSE_ADMINS` makes admins, who can also change roles from the API (`POST /api/admin/users/:id/role`). Roles stick in the users table, so an email can be removed from the list later without losing the role.
+
+Without `SUPABASE_URL` the API runs in local sign-in mode: any email signs in at once, no link is sent, and `drafter@drafthouse.local` is a drafter. That is for laptops and tests only; the health row "Client accounts" is red until Supabase is set.
 
 ## 4. Office worker
 
@@ -44,6 +52,9 @@ The app key is visible to anyone who opens the site (it is in the built JavaScri
 | Render | `SUPABASE_URL` | `https://<project>.supabase.co` |
 | Render | `SUPABASE_SERVICE_KEY` | service_role key. Never in Netlify. |
 | Render | `SUPABASE_BUCKET` | `drafthouse` (default) |
+| Render | `SUPABASE_JWT_SECRET` | optional; verifies sign-in tokens locally instead of with the project's public keys |
+| Render | `DRAFTHOUSE_DRAFTERS`, `DRAFTHOUSE_ADMINS` | comma-separated emails that get the drafter and admin roles |
+| Render | `CREDITS_PER_PROJECT` (10) | changes a client may apply per house |
 | Render | `DRAFTHOUSE_CLAUDE_KEY` | Claude API key for the change interpreter. `ANTHROPIC_API_KEY` is read as a fallback. |
 | Render | `DRAFTHOUSE_APP_KEY` | generated; same value as Netlify `VITE_API_KEY` |
 | Render | `DRAFTHOUSE_WORKER_KEY` | generated; same value as `workerKey` in the office `config.json` |
@@ -54,6 +65,7 @@ The app key is visible to anyone who opens the site (it is in the built JavaScri
 | Render | `INTERPRET_MODEL`, `INTERPRET_TIMEOUT_MS`, `INTERPRET_PRICES` | interpreter model, time limit, prices per million tokens |
 | Netlify | `VITE_API_URL` | Render service URL |
 | Netlify | `VITE_API_KEY` | = `DRAFTHOUSE_APP_KEY` |
+| Netlify | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Supabase project URL and anon key, for the email sign-in link. Without them the app offers local sign-in. |
 | Office PC | `config.json` `api`, `workerKey` | Render URL, = `DRAFTHOUSE_WORKER_KEY` |
 | Tests | `TEST_DATABASE_URL` | optional; runs the server tests on a real Postgres too (a throwaway database is created and dropped) |
 

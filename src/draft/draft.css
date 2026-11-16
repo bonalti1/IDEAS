@@ -199,3 +199,46 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .jobs td.bad { color: var(--status-bad, #A33A2D); }
 .jobs td.warn { color: var(--status-warning, #9A6B12); }
 .card-head .row { display: flex; gap: 8px; }
+
+/* accounts, saved houses, review */
+.dh-user { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--brand-muted); letter-spacing: 0.04em; }
+.dh-link.on { color: var(--brand-ink); }
+.signin { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+.signin h3, .start-card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.small { font-size: 12px; line-height: 1.5; }
+.fine.bad { color: #a33a2d; }
+.houses-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.house { font: inherit; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 10px 12px; border: 1px solid var(--brand-hair); border-radius: 10px; background: #fff; cursor: pointer; }
+.house:hover { border-color: var(--brand-brown); }
+.house-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.house-main b { font-weight: 600; font-size: 13px; }
+.chat-tools { display: flex; justify-content: space-between; margin-top: 6px; }
+.versions { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; max-height: 160px; overflow-y: auto; border: 1px solid var(--brand-hair); border-radius: 8px; background: #fff; }
+.versions li { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #efedea; }
+.versions li:last-child { border-bottom: 0; }
+.versions li.now { background: #faf9f7; }
+.versions .v-n { color: var(--brand-muted); width: 28px; flex: 0 0 28px; font-variant-numeric: tabular-nums; }
+.versions .v-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline { list-style: none; margin: 8px 0 4px; padding: 0; display: flex; gap: 0; width: 100%; max-width: 560px; }
+.timeline li { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brand-muted); text-align: center; }
+.timeline li i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--brand-hair); background: #fff; z-index: 1; }
+.timeline li::before { content: ''; position: absolute; top: 6px; left: 50%; width: 100%; height: 2px; background: var(--brand-hair); }
+.timeline li:last-child::before { display: none; }
+.timeline li.done i, .timeline li.now i { border-color: var(--brand-brown); }
+.timeline li.done i { background: var(--brand-brown); }
+.timeline li.done::before { background: var(--brand-brown); }
+.timeline li.now { color: var(--brand-ink); font-weight: 600; }
+.card.note { text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.card.note p { margin: 0; font-size: 14px; line-height: 1.55; }
+.card.thin { padding: 14px 16px; margin-bottom: 12px; }
+.card.thin h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand-muted); }
+.inbox-list { display: flex; flex-direction: column; gap: 6px; }
+.inbox-row { font: inherit; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 12px 14px; border: 1px solid var(--brand-hair); border-radius: 10px; background: #fff; cursor: pointer; }
+.inbox-row:hover { border-color: var(--brand-brown); }
+.inbox-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inbox-main b { font-weight: 600; font-size: 14px; }
+.inbox-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
+.side.review .back { align-self: flex-start; padding-left: 0; margin-bottom: 4px; }
+.side.review textarea { font: inherit; font-size: 13px; padding: 10px 12px; border: 1px solid var(--brand-hair); border-radius: 8px; background: #fff; resize: vertical; text-transform: none; letter-spacing: 0; color: var(--brand-ink); }
+.side.review .list li.muted { text-decoration: line-through; }
+.side.review a { color: var(--brand-brown); }
