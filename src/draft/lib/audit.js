@@ -8,6 +8,7 @@
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
 import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
 import { withPlanCoords } from './ops.js'
+import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength } from './site.js'
 
 const BEDROOMS = ['bed', 'master', 'suite2']
 const BATHS = ['bath', 'mbath', 'jackjill', 'halfbath']
@@ -52,6 +53,7 @@ export function auditPlan(rooms, program, kit, lot) {
   const windows = flat.filter((e) => e.kind === 'window' && !e.dormer)
   const fixtures = flat.filter((e) => e.kind === 'fixture')
   const findings = []
+  const measures = {}
   const say = (id, severity, room, message) => findings.push({ id, severity, room: room?.name || room || null, message })
   const roomAt = (pt) => R.find((r) => inside(r, pt))
   const byId = Object.fromEntries(R.map((r) => [r.id, r]))
@@ -237,56 +239,27 @@ export function auditPlan(rooms, program, kit, lot) {
     }
     const overhead = doors.filter((d) => (d.size === 'overhead' || d.size === 'overheadSingle') && d.room === g.id)
     const carsNamed = +(g.name.match(/^(\d+)-Car/) || [])[1] || 0
-    const bays = Math.max(1, Math.round(Math.max(g.w, g.d) / (K.rooms?.garage?.perCar || 11)))
-    if (carsNamed && carsNamed !== bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' wide, ${bays} bay${bays === 1 ? '' : 's'}; the name says ${carsNamed}.`)
+    const perCar = K.rooms?.garage?.perCar || 11
+    const tandem = !!g.tandem || /tandem/i.test(g.name)
+    // bays across the door wall; a tandem garage parks a car behind another (two deep)
+    const across = Math.max(1, Math.round((tandem ? Math.min(g.w, g.d) : Math.max(g.w, g.d)) / perCar))
+    const deep = tandem ? Math.max(1, Math.floor(Math.max(g.w, g.d) / 20)) : 1
+    const bays = across * deep
+    if (carsNamed && carsNamed > bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' by ${g.d}', ${bays} bay${bays === 1 ? '' : 's'}; the name says ${carsNamed}.`)
+    if (carsNamed && !tandem && carsNamed < bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' wide, ${bays} bays; the name says ${carsNamed}.`)
     if (!overhead.length) say('garage-overhead', 'error', g, `${g.name} has no overhead door.`)
     else {
       // the doors cover the bays: at least 8 ft of door per car
       const doorFt = overhead.reduce((a, d) => a + d.span, 0)
-      if (doorFt < bays * 8 - 0.01) say('garage-bays', 'error', g, `${g.name} has ${Math.round(doorFt)}' of overhead door for ${bays} bays; it needs at least 8' per car.`)
-      // the overhead doors' wall must be an outside wall with a driveway on the lot to the street
+      if (doorFt < across * 8 - 0.01) say('garage-bays', 'error', g, `${g.name} has ${Math.round(doorFt)}' of overhead door for ${across} bay${across === 1 ? '' : 's'} across; it needs at least 8' per bay.`)
+      // the driveway is a real path: door → apron → lane → street, inside the lot, through no room, a 20 ft
+      // pocket on the inside of every turn (site.js draws the same path on the site plan, in 3D and in design.json)
       const L = lotOf(lot)
-      const facing = (d) => {
-        const [cx, cy] = centre(d)
-        return d.axis === 'h' ? (Math.abs(cy - (g.y + g.d)) < 0.4 ? 's' : 'n') : Math.abs(cx - (g.x + g.w)) < 0.4 ? 'e' : 'w'
-      }
-      const reasons = overhead.map((d) => {
-        const [cx, cy] = centre(d)
-        const side = facing(d)
-        const outPt = side === 's' ? [cx, cy + 0.7] : side === 'n' ? [cx, cy - 0.7] : side === 'e' ? [cx + 0.7, cy] : [cx - 0.7, cy]
-        if (roomAt(outPt)) return 'opens into a room'
-        if (side === 'n' && !L.alley) return 'faces the rear yard, and this lot has no alley'
-        if (side === 's') {
-          // front-load: the driveway from the door to the street, inside the lot and clear of rooms
-          const strip = { x: cx - 5, y: g.y + g.d, w: 10, d: 24 }
-          if (house.some((r) => intrusion(r, strip) > 0.5)) return 'has a room in front of it'
-          let y = g.y + g.d + 1
-          while (y < g.y + g.d + 200 && insideLot(L, K, cx, y)) y += 1
-          if (!insideLot(L, K, cx - 5, y - 2) || !insideLot(L, K, cx + 5, y - 2)) return 'its driveway leaves the lot before the street'
-          return null
-        }
-        // side-load: 25 ft of apron from the door, inside the lot and clear of rooms, and a driveway to the
-        // street: straight down from the apron, or down the side yard the apron reaches (10 ft wide)
-        const dir = side === 'e' ? 1 : -1
-        const face = side === 'e' ? g.x + g.w : g.x
-        const apron = { x: side === 'e' ? face : face - 25, y: g.y, w: 25, d: g.d }
-        const inApron = house.find((r) => intrusion(r, apron) > 0.5)
-        if (inApron) return `has ${inApron.name} in front of it; a car needs 25' to turn in`
-        for (const t of [8, 16, 25]) if (!insideLot(L, K, face + dir * t, cy)) return `has ${t - 1}' or less to the lot line; a car needs 25' to turn in`
-        const front = Math.max(...house.map((r) => r.y + r.d))
-        const straight = { x: apron.x, y: g.y, w: 25, d: front + 30 - g.y }
-        if (!house.some((r) => intrusion(r, straight) > 0.5)) return null
-        // the driveway down a side yard: 10 ft between the house and the lot line, from the apron's row to the street
-        for (const edge of [Math.max(...house.map((r) => r.x + r.w)), Math.min(...house.map((r) => r.x))]) {
-          const out = edge > g.x ? 1 : -1
-          let ok = true
-          for (let y = g.y; y <= front + 1 && ok; y += 5) ok = insideLot(L, K, edge + out * 10, y) && insideLot(L, K, edge + out * 1, y)
-          if (ok) return null
-        }
-        return 'has no 10 ft driveway to the street'
-      })
-      const bad = reasons.find((r) => r)
-      if (!reasons.some((r) => r === null)) say('garage-street', 'error', g, `${g.name}'s overhead door ${bad}.`)
+      const frame = frameOf(flat, K.plan ? [K.plan.footprint.w / 2, K.plan.footprint.d / 2] : [0, 0])
+      const slabs = drivewaySlabs(frame.rooms, frame.doors, L)
+      const problem = drivewayProblem(slabs, frame.rooms, frame.doors, L)
+      if (problem) say('garage-street', 'error', g, `${g.name} cannot be driven to: ${problem}.`)
+      measures.driveway = { lengthFt: drivewayLength(slabs), pieces: slabs.length, problem }
     }
     // the garage must not cover another room's window or door
     windows.forEach((w) => {
@@ -303,7 +276,6 @@ export function auditPlan(rooms, program, kit, lot) {
   if (master && mwic && !connected(master, mwic) && !(mbath && connected(mbath, mwic))) say('suite-closet', 'error', mwic, `${mwic.name} does not open from the ${master.name.toLowerCase()} or its bath.`)
 
   // the kitchen: work triangle and aisles
-  const measures = {}
   const kitchen = R.find((r) => r.kind === 'kitchen')
   if (kitchen) {
     const pick = (k) => fixtures.find((f) => f.room === kitchen.id && f.fixture === k)

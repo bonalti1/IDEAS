@@ -22,12 +22,19 @@ const programs = {
 }
 
 for (const city of CITY_IDS) {
-  test(`the starter draft passes the rules on the 100 x 150 default lot in ${city}`, () => {
+  test(`the starter draft passes the rules on the 100 x 150 default lot in ${city}, at the size the rooms step offers`, () => {
     const lot = defaultLot(city)
     for (const [name, program] of Object.entries(programs)) {
-      const rooms = generateRooms(program, style, lot)
-      const r = checkRules(rooms, program, style, lot)
+      // a 2-car garage beside a 72 ft house does not fit an 88 ft envelope at 2,800 sf: the rooms step offers the
+      // largest size that does (the house narrows for a front-load garage a car can reach), and that draft passes
+      const f = fitsLot(program, style, lot)
+      // (a 3-car garage beside this plan does not fit a 100 ft lot at any size: the rooms step offers a 2-car)
+      const drafted = f.ok ? program : f.maxSqft ? { ...program, sqft: f.maxSqft } : f.suggestion?.program || null
+      assert.ok(drafted, `${city}, ${name}: ${f.reasons.join(' | ')}`)
+      const rooms = generateRooms(drafted, style, lot)
+      const r = checkRules(rooms, drafted, style, lot)
       assert.deepEqual(r.reasons, [], `${city}, ${name}`)
+      if (drafted.garage) assert.ok(rooms.some((x) => isRoom(x) && x.kind === 'garage'), `${city}, ${name}: the garage is drawn`)
     }
   })
 }
@@ -49,7 +56,10 @@ test('the starter draft passes the rules on the recorded Lot 514 and on a corner
 })
 
 test('extras added for the program are real rooms: the garage keeps its id, a new bedroom gets a door and an egress window', () => {
-  const rooms = generateRooms(DEFAULT_PROGRAM, style, defaultLot('hidalgo'))
+  // at the size the rooms step offers on a 100 ft lot (the house narrows for a front-load garage a car can reach)
+  const lotH = defaultLot('hidalgo')
+  const fH = fitsLot(DEFAULT_PROGRAM, style, lotH)
+  const rooms = generateRooms(fH.ok ? DEFAULT_PROGRAM : { ...DEFAULT_PROGRAM, sqft: fH.maxSqft }, style, lotH)
   const garage = rooms.find((r) => r.id === 'garage')
   assert.ok(garage && garage.kind === 'garage' && garage.w === 22, 'two-car garage')
   const bed3 = rooms.find((r) => r.id === 'bed-3')
@@ -97,11 +107,11 @@ test('a program that does not fit is refused before drafting, with the largest s
   const lot90 = defaultLot('mcallen', { width: 90, depth: 130 })
   const big = { ...DEFAULT_PROGRAM, sqft: 3800 }
   const f = fitsLot(big, style, lot90)
-  // the standard plan is 99 ft wide at 3,800 sf and the starter program (office, half bath) is more than the
-  // narrow plan holds: the step offers the largest size that fits, and that drafts clean
+  // the standard plan is 99 ft wide at 3,800 sf; on a 78 ft envelope no size of it takes a 2-car garage a car can
+  // reach (a rear-court garage is no longer drawn), so the step offers the smallest change that does, and that drafts clean
   assert.equal(f.ok, false)
-  assert.ok(f.maxSqft && f.maxSqft < 3800, `max ${f.maxSqft}`)
-  const smaller = { ...big, sqft: f.maxSqft }
+  assert.ok(f.maxSqft || f.suggestion, `max ${f.maxSqft}, suggestion ${f.suggestion?.label}`)
+  const smaller = f.maxSqft ? { ...big, sqft: f.maxSqft } : f.suggestion.program
   assert.deepEqual(checkRules(generateRooms(smaller, style, lot90), smaller, style, lot90).reasons, [])
   // 70 ft lot: the standard plan is 72 ft wide, so the step offers what the narrow plan holds (4 bed, 2 bath,
   // 2-car, no office), and that drafts clean on the narrow plan

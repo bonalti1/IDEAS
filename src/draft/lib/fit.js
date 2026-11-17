@@ -29,6 +29,11 @@ const TRIM = 0.95
 const passes = (program, style, lot) => {
   const draft = starterDraft(program, style, lot)
   const rules = checkRules(draft.rooms, program, style, lot)
+  // a garage asked for that found no spot a car can reach is a miss, not a quiet 0-car draft
+  if (program.garage > 0 && !draft.rooms.some((r) => isRoom(r) && r.kind === 'garage')) {
+    rules.ok = false
+    rules.reasons = [...(rules.reasons || []), `A ${program.garage}-car garage has no spot on this lot that a car can be driven to (front-load does not fit the setbacks, and a side driveway has no room to turn).`]
+  }
   return { ...rules, ok: rules.ok && draft.fitScale >= TRIM - 1e-9, draft }
 }
 
@@ -60,6 +65,8 @@ export function fitsLot(program, style, lot = DEFAULT_LOT) {
   if (!rules.ok && maxSqft == null) {
     const kit = kitFor(style)
     const tries = [
+      // one bay less first: it keeps every room the client asked for
+      program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },
       // what the kit's other plans (the narrow one) can hold on this lot
       ...Object.values(kit.plans || {}).map((plan) => {
         const within = programWithin(plan, program)
@@ -68,7 +75,6 @@ export function fitsLot(program, style, lot = DEFAULT_LOT) {
       }),
       program.office && { label: 'without the office', program: { ...program, office: false } },
       program.suite2 && { label: 'without the second suite', program: { ...program, suite2: false } },
-      program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },
       program.garage > 0 && { label: 'without the garage', program: { ...program, garage: 0 } },
       program.beds > 3 && { label: `with ${program.beds - 1} bedrooms`, program: { ...program, beds: program.beds - 1, baths: Math.min(program.baths, program.beds - 1) } },
       program.office && program.garage > 0 && { label: 'without the office or the garage', program: { ...program, office: false, garage: 0 } },

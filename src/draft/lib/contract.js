@@ -7,6 +7,7 @@ import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
 import { sheetPlan } from './sheets.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../../kits/modern-farmhouse.js'
+import { drivewaySlabs, walkSlabs, lotCoverage, drivewayLength } from './site.js'
 
 export const CONTRACT_VERSION = 1
 
@@ -21,6 +22,16 @@ export function openingMarks(rooms) {
     if (e.kind === 'window') marks.set(e.id, `W${String(++w).padStart(2, '0')}`)
   })
   return marks
+}
+
+/** The site in the house frame: the driveway pieces, the walk and the coverage, as drawn everywhere. */
+function siteOf(rooms, lot) {
+  const r2 = (v) => Math.round(v * 100) / 100
+  const list = rooms.filter((r) => !r.element && r.local).map((r) => ({ id: r.id, kind: r.kind, name: r.name, open: !!r.open, driveway: r.driveway, x: r.local[0], z: r.local[1], w: r.w, d: r.d }))
+  const doors = rooms.filter((e) => e.kind === 'door' && e.local).map((e) => ({ id: e.id, room: e.room, axis: e.axis, x: e.local[0], z: e.local[1], span: e.span, size: e.size, exterior: !!e.exterior }))
+  const drive = drivewaySlabs(list, doors, lot)
+  const slab = (s) => ({ x: r2(s.x), z: r2(s.z), w: r2(s.w), d: r2(s.d), part: s.part })
+  return { driveway: drive.map(slab), drivewayFt: drivewayLength(drive), walk: walkSlabs(list, doors, lot, drive).map(slab), coverage: lotCoverage(list, lot) }
 }
 
 export function buildDesign({ rooms, program, style, lot, client, history = [] }) {
@@ -40,6 +51,7 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     program,
     // the plan as it is after the client's changes: what the title block, the summary and the schedules say
     asBuilt: programOf(rooms, program),
+    site: siteOf(rooms, lot),
     units: 'feet',
     // local frame: x along the front of the house, z toward the street, y up; origin at the plan centre
     frame: { x: 'along front', z: 'toward street', y: 'up', origin: 'plan centre', lotRotationRad: null },
