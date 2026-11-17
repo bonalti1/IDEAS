@@ -96,3 +96,20 @@ test('the audit catches overlapping doors, too little door for the bays, a wrong
   const rear = flat.map((e) => (e.id === doors[0].id ? { ...e, y: g.y - e.d / 2 } : e))
   assert.ok(ids(rear).includes('garage-street'))
 })
+
+test('a garage never lands on a room: the Garza sample with a grown primary bedroom gets no tandem through the bedroom', async () => {
+  const program = { ...kit.reference.program }
+  let rooms = generateRooms(program, style, DEFAULT_LOT)
+  const grown = await interpretRequest('make the primary bedroom bigger', rooms, program, style, { lot: DEFAULT_LOT, interpreter: offline, report: false })
+  assert.ok(grown.applied, grown.reply)
+  rooms = grown.rooms
+  const r = await interpretRequest('make the garage 3 cars', rooms, program, style, { lot: DEFAULT_LOT, interpreter: offline, report: false })
+  // applied with a garage clear of every room, or refused for want of a spot: never "would run into"
+  assert.ok(!/would run into/i.test(r.reply), r.reply)
+  if (r.applied) {
+    const flat = withPlanCoords(r.rooms, kit).rooms
+    const g = flat.find((x) => isRoom(x) && x.kind === 'garage')
+    const hit = flat.filter((x) => isRoom(x) && !x.open && x.id !== g.id).find((x) => Math.min(Math.min(x.x + x.w, g.x + g.w) - Math.max(x.x, g.x), Math.min(x.y + x.d, g.y + g.d) - Math.max(x.y, g.y)) > 0.6)
+    assert.ok(!hit, `the garage runs into the ${hit?.name}`)
+  }
+})

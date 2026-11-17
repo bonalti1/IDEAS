@@ -3,7 +3,7 @@
 // materials, property sets, quantities and marks a drafter needs in Revit.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateRooms, kitFor } from '../src/draft/lib/layout.js'
+import { generateRooms, kitFor, DEFAULT_PROGRAM } from '../src/draft/lib/layout.js'
 import { fitsLot } from '../src/draft/lib/fit.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { toIFC } from '../src/draft/lib/ifc.js'
@@ -126,4 +126,22 @@ test('the window schedule carries U-factor and SHGC (IECC 2021 zone 2) or a CONF
   })
   const code = kit.energyCode || kit.windows.energyCode
   assert.ok(code?.maxU === 0.4 && code?.maxShgc === 0.25)
+})
+
+test('the IFC property set says the program as drawn: after "add a bedroom" and "make the garage 3 cars" it reads 5 bed, 3-car, not what was first asked', async () => {
+  const { interpretRequest } = await import('../src/draft/lib/interpret.js')
+  const { DEFAULT_LOT } = await import('../src/draft/lib/lot.js')
+  const offline = async () => {
+    throw new Error('no api')
+  }
+  let rooms = generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT)
+  for (const text of ['add a bedroom', 'make the garage 3 cars']) {
+    const r = await interpretRequest(text, rooms, DEFAULT_PROGRAM, style, { lot: DEFAULT_LOT, interpreter: offline, report: false })
+    assert.ok(r.applied, `${text}: ${r.reply}`)
+    rooms = r.rooms
+  }
+  const ifc = toIFC({ rooms, program: DEFAULT_PROGRAM, kit, style, lot: DEFAULT_LOT })
+  const line = ifc.split('\n').find((l) => /IFCPROPERTYSINGLEVALUE\('Program'/.test(l))
+  assert.ok(line, 'the IFC carries a Program property')
+  assert.match(line, /5 bed, 3\.5 bath, 3-car/, line)
 })

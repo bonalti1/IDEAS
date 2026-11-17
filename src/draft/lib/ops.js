@@ -39,6 +39,12 @@ export function normalizeOps(ops, rooms) {
         return { ...o, dx, dy }
       }
       if (o.op === 'add' && !o.kind) return null
+      // a garage op without a bay count keeps the garage's bays ("make the garage side-load")
+      if (o.op === 'garage' && !(o.cars >= 1)) {
+        const g = rooms.find((r) => isRoom(r) && r.kind === 'garage')
+        const cars = g ? (g.tandem || /tandem/i.test(g.name || '') ? 3 : Math.max(1, Math.round(Math.max(g.w, g.d) / 11))) : 2
+        return { ...o, cars }
+      }
       return o
     })
     .filter(Boolean)
@@ -672,9 +678,11 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       if (sqft < lim[0] || sqft > lim[1]) throw new Error(`this plan draws ${lim[0].toLocaleString()} to ${lim[1].toLocaleString()} sf; ${sqft.toLocaleString()} is outside that`)
       const areaOf = (list) => list.filter((r) => isRoom(r) && isConditioned(r)).reduce((a, r) => a + r.w * r.d, 0) * stories
       const base = areaOf(flat)
+      // the search scales the rooms alone (the roof's surfaces are costly to rebuild); the plan scales once at the end
+      const planId = planIdOf(flat)
       const at = (k) => {
-        const copy = flat.map((r) => ({ ...r }))
-        scalePlan(copy, k, centre[0], centre[1], kit)
+        const copy = flat.filter(isRoom).map((r) => ({ ...r }))
+        scalePlan(copy, k, centre[0], centre[1], kit, planId)
         return areaOf(copy)
       }
       let lo = sqft < base ? 0.5 : 1

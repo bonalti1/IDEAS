@@ -859,8 +859,9 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
   let pick = null
   // the way asked for: front-load, or side-load (the courtyard way counts as side-load)
   const wanted = prefer === 'front' ? candidates.filter((c) => c.kind === 'front') : prefer === 'side' ? candidates.filter((c) => c.kind !== 'front') : candidates
+  const runsInto = (room) => solid.some((r) => r.id !== room.id && Math.min(Math.min(r.x + r.w, room.x + room.w) - Math.max(r.x, room.x), Math.min(r.y + r.d, room.y + room.d) - Math.max(r.y, room.y)) > 0.6)
   for (const c of wanted) {
-    if (blockedBy(c.room)) continue
+    if (blockedBy(c.room) || runsInto(c.room)) continue
     // the driveway from this garage, on the house as it will sit: slid toward the street when the garage
     // needs it, and centred in the envelope with the garage on (the fit after this narrows and shifts it)
     const boxX0 = Math.min(Math.min(...xs), c.room.x)

@@ -9,6 +9,8 @@ import { generateRooms, DEFAULT_PROGRAM, kitFor, isRoom, programOf, extendWing }
 import { withPlanCoords } from '../src/draft/lib/ops.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { DEFAULT_LOT } from '../src/draft/lib/lot.js'
+import { fitsLot } from '../src/draft/lib/fit.js'
+import { planIdOf } from '../src/draft/lib/layout.js'
 import { LOTS } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
@@ -122,4 +124,16 @@ test('the compact plan: a 3/2 at 1,300, 1,450 and 1,600 sf, with a 2-car garage 
   }
   // 1,800 sf and up is the standard plan's (or the narrow one's on a 50 ft lot)
   assert.notEqual(draft(three2, LOTS['McAllen 100 x 150']).flat.find((r) => r.kind === 'roof')?.plan, 'compact')
+})
+
+test('a fit offer drafts on the plan it names: 5/4 3-car 3,500 sf on the 50 ft lot is offered as what the compact plan holds, and the compact plan is what comes out', () => {
+  const f = fitsLot({ ...DEFAULT_PROGRAM, beds: 5, baths: 4, halfBath: false, office: true, garage: 3, sqft: 3500 }, style, LOTS['narrow 50 x 120'])
+  assert.ok(!f.ok && f.suggestion, 'the program does not fit and an offer is made')
+  const m = f.suggestion.label.match(/what the (\w+) plan holds/)
+  assert.ok(m, f.suggestion.label)
+  const rooms = generateRooms(f.suggestion.program, style, LOTS['narrow 50 x 120'])
+  assert.equal(planIdOf(rooms), m[1], `${f.suggestion.label} at ${f.suggestion.program.sqft} sf drafted the ${planIdOf(rooms)} plan`)
+  const a = auditPlan(rooms, f.suggestion.program, kit, LOTS['narrow 50 x 120'])
+  assert.equal(a.errors.length, 0, a.errors.map((e) => e.message).join(' / '))
+  assert.ok(!a.warnings.some((w) => w.id === 'area'), 'the offered size is what the draft comes out at')
 })

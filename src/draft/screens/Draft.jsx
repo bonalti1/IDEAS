@@ -280,7 +280,16 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
               {m.picker && (
                 <div className="picker">
                   {m.picker.map((o) => (
-                    <button key={o.id} className="option" onClick={() => send(o.label, { ops: o.ops, label: o.label })} disabled={busy || credits <= 0} title={o.did.join('. ')}>
+                    <button
+                      key={o.id}
+                      className="option"
+                      aria-disabled={busy || credits <= 0}
+                      onClick={() => {
+                        if (busy || credits <= 0) return
+                        send(o.label, { ops: o.ops, label: o.label })
+                      }}
+                      title={o.did.join('. ')}
+                    >
                       <span
                         className="thumb"
                         role="button"

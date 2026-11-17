@@ -128,3 +128,17 @@ test('the audit refuses a driveway through a room, one that leaves the lot, and 
     s2.forEach((s) => assert.ok(intrusion(s, d2.rooms.find((r) => r.kind === 'garage')) <= 0.5, `${lotName}: the driveway does not run through the garage`))
   }
 })
+
+test('tabloid is always 1/8": the 5/4 3-car plan runs past one 11 x 17 sheet and is split in two, a 3/2 goes on one', () => {
+  const big = PROGRAMS['5/4 with office and 3-car at 3,500 sf'] || Object.values(PROGRAMS).find((p) => p.beds === 5)
+  const small = Object.values(PROGRAMS).find((p) => p.beds === 3 && !p.garage)
+  assert.ok(big && small, 'both programs are in the matrix')
+  const lot = LOTS['Lot 514'] || Object.values(LOTS)[0]
+  for (const [program, expectSplit] of [[big, true], [small, false]]) {
+    const drafted = draftable(program, lot)
+    const design = buildDesign({ rooms: generateRooms(drafted, style, lot), program: drafted, kit, style, lot })
+    const S = sheetFor(planSVG(design), 'tabloid')
+    assert.equal(S.plan[0], 0.125, `${program.beds} bed tabloid at 1/8", got ${S.plan[1]}`)
+    assert.equal(!!S.split, expectSplit, `${program.beds} bed: ${expectSplit ? 'two sheets with a match line' : 'one sheet'} (split=${S.split})`)
+  }
+})

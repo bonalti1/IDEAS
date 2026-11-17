@@ -84,3 +84,19 @@ test('typed in chat: "make the house 3,000 sf" scales the plan, "swap the office
   assert.equal(optionTopic('show me options for the garage'), 'garage')
   assert.equal(optionTopic('what are my choices for the porch'), 'porch')
 })
+
+test('"swap the office and the dining room" on the default draft applies: the dining room grows to its 9 by 9 minimum in the office\'s spot', async () => {
+  const rooms = generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT)
+  const offline = async () => {
+    throw new Error('no api')
+  }
+  const r = await interpretRequest('swap the office and the dining room', rooms, DEFAULT_PROGRAM, style, { lot: DEFAULT_LOT, interpreter: offline, report: false })
+  assert.ok(r.applied, r.reply)
+  const dining = r.rooms.find((x) => isRoom(x) && x.kind === 'dining')
+  const office = r.rooms.find((x) => isRoom(x) && x.kind === 'office')
+  assert.ok(dining && office, 'both rooms are still there')
+  assert.ok(Math.min(dining.w, dining.d) >= 9 - 0.01, `the dining room is ${dining.w} by ${dining.d}`)
+  assert.ok(r.ops.some((o) => o.op === 'resize' && o.room === dining.id), 'the swap carried a resize to the minimum')
+  const a = auditPlan(r.rooms, DEFAULT_PROGRAM, kit, DEFAULT_LOT)
+  assert.equal(a.errors.length, 0, a.errors.map((e) => e.message).join(' / '))
+})
