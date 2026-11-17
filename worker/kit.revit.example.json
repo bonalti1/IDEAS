@@ -1,0 +1,56 @@
+{
+  "_about": "Copy to kit.revit.json. Left side: the kit's name as it appears in the design (from src/kits/modern-farmhouse.js). Right side: the exact name in the office template, as listed in template-names.json by list_names.py. A name with no entry is used as-is; a name the template does not have falls back to the template default and is logged on the job.",
+  "roofSlopeUnits": "ratio",
+  "wallTypes": {
+    "Exterior - 2x4 Board and Batten": "Exterior - 2x4 Board and Batten",
+    "Interior - 2x4": "Interior - 2x4",
+    "Interior - 2x6 Plumbing": "Interior - 2x6 Plumbing"
+  },
+  "floorType": {
+    "Slab on Grade - 4in": "Slab on Grade - 4in"
+  },
+  "roofTypes": {
+    "Architectural Shingles on 2x6": "Architectural Shingles on 2x6",
+    "Standing Seam Metal": "Standing Seam Metal"
+  },
+  "doors": {
+    "Single-Flush : 30\" x 80\"": "Single-Flush : 30\" x 80\"",
+    "Single-Flush : 32\" x 80\"": "Single-Flush : 32\" x 80\"",
+    "Single-Flush : 24\" x 80\"": "Single-Flush : 24\" x 80\"",
+    "Single-Flush : 36\" x 80\"": "Single-Flush : 36\" x 80\"",
+    "Sliding-Barn : 30\" x 96\"": "Sliding-Barn : 30\" x 96\"",
+    "Exterior - Single : 36\" x 80\"": "Exterior - Single : 36\" x 80\"",
+    "Exterior - French Pair : 72\" x 96\"": "Exterior - French Pair : 72\" x 96\""
+  },
+  "windows": {
+    "Single Hung : 36\" x 60\"": "Single Hung : 36\" x 60\"",
+    "Fixed : 42\" x 36\"": "Fixed : 42\" x 36\"",
+    "Fixed : 24\" x 36\"": "Fixed : 24\" x 36\"",
+    "Single Hung : 36\" x 42\"": "Single Hung : 36\" x 42\""
+  },
+  "fixtures": {
+    "Toilet - Standard": "Toilet - Standard",
+    "Shower Pan": "Shower Pan",
+    "Vanity - Single": "Vanity - Single",
+    "Sink - Kitchen": "Sink - Kitchen",
+    "Refrigerator": "Refrigerator",
+    "Range": "Range",
+    "Washer": "Washer",
+    "Dryer": "Dryer",
+    "Water Heater": "Water Heater",
+    "Bed - Queen": "Bed - Queen",
+    "Sofa": "Sofa",
+    "Table - Dining": "Table - Dining",
+    "Desk": "Desk",
+    "Base Cabinet - Run": "Base Cabinet - Run",
+    "Island": "Island",
+    "Shelving": "Shelving",
+    "Linen Cabinet": "Linen Cabinet",
+    "Bench": "Bench",
+    "Media Wall": "Media Wall",
+    "Coffee Table": "Coffee Table"
+  },
+  "titleBlock": {
+    "STB Title Block : 24x36": "STB Title Block : 24x36"
+  }
+}

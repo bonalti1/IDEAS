@@ -1,16 +1,8 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { Line, Grid } from '@react-three/drei'
-import {
-  BOUNDARY,
-  LOT_CORNERS,
-  SETBACK_CORNERS,
-  SETBACK_EDGE_LABELS,
-  STREETS,
-  STREET_WIDTH_ILLUSTRATIVE,
-  LOT_AREA_SF,
-  LOT_CENTROID,
-} from '../data/survey.js'
+import { STREET_WIDTH_ILLUSTRATIVE } from '../data/survey.js'
+import { DEFAULT_LOT } from '../draft/lib/lot.js'
 import { offsetPolyline, stripPositions, polylinePoint } from '../lib/geometry.js'
 import { FlatLabel } from './labels.jsx'
 
@@ -27,16 +19,17 @@ export const COLORS = {
 // draw-order elevations (ft) to avoid z-fighting
 const Y = { street: 0.02, lot: 0.06, setback: 0.24, property: 0.3, marker: 0.32 }
 
-function LotFill() {
+function LotFill({ lot }) {
   const geom = useMemo(() => {
+    const B = lot.boundary
     const shape = new THREE.Shape()
-    shape.moveTo(BOUNDARY[0][0], BOUNDARY[0][1])
-    for (let i = 1; i < BOUNDARY.length; i++) shape.lineTo(BOUNDARY[i][0], BOUNDARY[i][1])
+    shape.moveTo(B[0][0], B[0][1])
+    for (let i = 1; i < B.length; i++) shape.lineTo(B[i][0], B[i][1])
     shape.closePath()
     const g = new THREE.ShapeGeometry(shape)
     g.rotateX(Math.PI / 2) // shape (x, y) -> world (x, 0, y=z-south)
     return g
-  }, [])
+  }, [lot])
   return (
     <mesh geometry={geom} position={[0, Y.lot, 0]}>
       <meshBasicMaterial color={COLORS.lotFill} side={THREE.DoubleSide} />
@@ -44,15 +37,12 @@ function LotFill() {
   )
 }
 
-function PropertyLine() {
-  const pts = useMemo(
-    () => [...BOUNDARY, BOUNDARY[0]].map(([x, z]) => [x, Y.property, z]),
-    []
-  )
+function PropertyLine({ lot }) {
+  const pts = useMemo(() => [...lot.boundary, lot.boundary[0]].map(([x, z]) => [x, Y.property, z]), [lot])
   return (
     <>
       <Line points={pts} color={COLORS.property} lineWidth={2.5} />
-      {LOT_CORNERS.map(([x, z], i) => (
+      {lot.corners.map(([x, z], i) => (
         <mesh key={i} position={[x, Y.marker, z]} rotation-x={-Math.PI / 2}>
           <circleGeometry args={[1.3, 20]} />
           <meshBasicMaterial color={COLORS.property} />
@@ -62,23 +52,41 @@ function PropertyLine() {
   )
 }
 
-function SetbackEnvelope() {
-  const pts = useMemo(
-    () => [...SETBACK_CORNERS, SETBACK_CORNERS[0]].map(([x, z]) => [x, Y.setback, z]),
-    []
-  )
+// the label of the lot edge nearest a point (arcs make more envelope edges than lot edges)
+function nearestLabel(lot, p) {
+  let best = ''
+  let bd = Infinity
+  lot.corners.forEach((a, i) => {
+    const b = lot.corners[(i + 1) % lot.corners.length]
+    const len2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2 || 1
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / len2))
+    const d = Math.hypot(p[0] - (a[0] + (b[0] - a[0]) * t), p[1] - (a[1] + (b[1] - a[1]) * t))
+    if (d < bd) {
+      bd = d
+      best = lot.edges?.[i]?.label || lot.envelopeLabels?.[i] || ''
+    }
+  })
+  return best
+}
+
+function SetbackEnvelope({ lot }) {
+  const E = lot.envelope
+  const pts = useMemo(() => [...E, E[0]].map(([x, z]) => [x, Y.setback, z]), [lot])
+  if (E.length < 3) return null
+  const C = lot.centroid
   return (
     <>
       <Line points={pts} color={COLORS.setback} lineWidth={1.5} dashed dashSize={4} gapSize={3} />
-      {SETBACK_CORNERS.map(([ax, az], i) => {
-        const [bx, bz] = SETBACK_CORNERS[(i + 1) % 4]
+      {E.map(([ax, az], i) => {
+        const [bx, bz] = E[(i + 1) % E.length]
+        if (Math.hypot(bx - ax, bz - az) < 18) return null
         const angle = Math.atan2(bz - az, bx - ax)
         // nudge the label outward so it sits between the dashed line and the
         // property line, clear of the buildable area
         const nx = -(bz - az)
         const nz = bx - ax
         const l = Math.hypot(nx, nz)
-        const toC = (LOT_CENTROID[0] - (ax + bx) / 2) * nx + (LOT_CENTROID[1] - (az + bz) / 2) * nz
+        const toC = (C[0] - (ax + bx) / 2) * nx + (C[1] - (az + bz) / 2) * nz
         const s = (toC > 0 ? -1 : 1) * 4
         return (
           <FlatLabel
@@ -89,7 +97,7 @@ function SetbackEnvelope() {
             size={4}
             color={COLORS.setback}
           >
-            {SETBACK_EDGE_LABELS[i]}
+            {nearestLabel(lot, [(ax + bx) / 2, (az + bz) / 2])}
           </FlatLabel>
         )
       })}
@@ -97,22 +105,22 @@ function SetbackEnvelope() {
   )
 }
 
-function Street({ street }) {
+function Street({ street, lot }) {
   const { geom, edgeInner, edgeOuter, label } = useMemo(() => {
     const inner = street.pts
-    const outer = offsetPolyline(inner, STREET_WIDTH_ILLUSTRATIVE, LOT_CENTROID)
+    const outer = offsetPolyline(inner, STREET_WIDTH_ILLUSTRATIVE, lot.centroid)
     const { positions, indices } = stripPositions(inner, outer, 0)
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     g.setIndex(new THREE.BufferAttribute(indices, 1))
-    const mid = offsetPolyline(inner, STREET_WIDTH_ILLUSTRATIVE / 2, LOT_CENTROID)
+    const mid = offsetPolyline(inner, STREET_WIDTH_ILLUSTRATIVE / 2, lot.centroid)
     return {
       geom: g,
       edgeInner: inner.map(([x, z]) => [x, Y.street + 0.02, z]),
       edgeOuter: outer.map(([x, z]) => [x, Y.street + 0.02, z]),
       label: polylinePoint(mid, 0.5),
     }
-  }, [street])
+  }, [street, lot])
   return (
     <group position={[0, Y.street, 0]}>
       <mesh geometry={geom}>
@@ -192,11 +200,18 @@ function ScaleBar({ x0 = 20, z0 = 175 }) {
   )
 }
 
-export default function SitePlan() {
+export default function SitePlan({ lot = DEFAULT_LOT }) {
+  const [cx, cz] = lot.centroid
+  const xs = lot.boundary.map((p) => p[0])
+  const zs = lot.boundary.map((p) => p[1])
+  const minX = Math.min(...xs)
+  const maxZ = Math.max(...zs)
+  const minZ = Math.min(...zs)
+  const isRef = lot.kind === 'reference'
   return (
     <group>
       <Grid
-        position={[100, -0.05, 60]}
+        position={[cx, -0.05, cz]}
         args={[2000, 2000]}
         cellSize={10}
         cellColor="#ccd0d5"
@@ -208,28 +223,33 @@ export default function SitePlan() {
         fadeStrength={1}
         followCamera={false}
       />
-      {STREETS.map((s) => (
-        <Street key={s.name} street={s} />
+      {(lot.streets || []).map((s) => (
+        <Street key={s.name + (s.edge ?? '')} street={s} lot={lot} />
       ))}
-      <LotFill />
-      <PropertyLine />
-      <SetbackEnvelope />
+      <LotFill lot={lot} />
+      <PropertyLine lot={lot} />
+      <SetbackEnvelope lot={lot} />
 
-      {/* Lot identity — kept clear of the program layout */}
-      <FlatLabel x={150} z={27} angle={Math.atan2(19.22, 220.76)} size={7} bold>
-        LOT 514
-      </FlatLabel>
-      <FlatLabel x={151} z={33} angle={Math.atan2(19.22, 220.76)} size={3.2} color="#5a6069">
-        ±{Math.round(LOT_AREA_SF).toLocaleString()} SF · {(LOT_AREA_SF / 43560).toFixed(2)} AC
-      </FlatLabel>
+      {isRef ? (
+        <>
+          <FlatLabel x={150} z={27} angle={lot.angle} size={7} bold>
+            LOT 514
+          </FlatLabel>
+          <FlatLabel x={151} z={33} angle={lot.angle} size={3.2} color="#5a6069">
+            ±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC
+          </FlatLabel>
+          <FlatLabel x={110} z={-14} angle={lot.angle} size={5} color="#7a808a">
+            LOT 513 — NEIGHBOR (6' SIDE SETBACK)
+          </FlatLabel>
+        </>
+      ) : (
+        <FlatLabel x={cx} z={minZ - 8} angle={0} size={3.6} color="#5a6069">
+          {lot.address ? lot.address.toUpperCase().slice(0, 40) + ' · ' : ''}±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC{lot.confirmed === false ? ' · LOT PENDING DRAFTER CONFIRMATION' : ''}
+        </FlatLabel>
+      )}
 
-      {/* Neighbor */}
-      <FlatLabel x={110} z={-14} angle={Math.atan2(19.22, 220.76)} size={5} color="#7a808a">
-        LOT 513 — NEIGHBOR (6' SIDE SETBACK)
-      </FlatLabel>
-
-      <NorthArrow />
-      <ScaleBar />
+      <NorthArrow x={minX - 40} z={minZ - 10} />
+      <ScaleBar x0={minX + 20} z0={maxZ + 58} />
     </group>
   )
 }

@@ -1,0 +1,446 @@
+// Office dashboard: every connected piece, its health, the queue, and the jobs.
+import { useEffect, useState } from 'react'
+import { api, API } from '../lib/api.js'
+import { Button } from '../ui.jsx'
+import { RULE_FIELDS } from '../lib/cities.js'
+
+const fmtAgo = (iso) => {
+  if (!iso) return 'never'
+  const s = Math.round((Date.now() - Date.parse(iso)) / 1000)
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`
+}
+const STATUS = { queued: ['wait', 'Queued'], running: ['wait', 'Building'], done: ['good', 'Built'], failed: ['bad', 'Failed'] }
+
+function Pill({ ok, children }) {
+  return <span className={'pill ' + (ok === true ? 'good' : ok === false ? 'bad' : 'wait')}>{children}</span>
+}
+
+/** The manifold: every piece between the client and the drafter, in the order data flows. */
+function Manifold({ h, offline }) {
+  const worker = h?.workers?.[0]
+  const find = (id) => h?.checks?.find((c) => c.id === id || c.id.endsWith(':' + id))
+  const nodes = [
+    { name: 'Client app', ok: true, detail: 'this build', sub: window.location.host },
+    { name: 'Office API', ok: offline ? false : true, detail: offline ? 'unreachable' : find('api')?.detail, sub: API },
+    { name: 'File store', ok: offline ? null : find('store')?.ok, detail: find('store')?.detail, sub: 'designs, IFC, Revit files, PDFs' },
+    { name: 'Job queue', ok: offline ? null : find('queue')?.ok, detail: find('queue')?.detail, sub: 'one job per approved design' },
+    { name: 'Office computer', ok: offline ? null : worker ? worker.online : false, detail: worker ? (worker.online ? `online, seen ${fmtAgo(worker.lastSeen)}` : `offline, last seen ${fmtAgo(worker.lastSeen)}`) : 'not connected yet', sub: worker ? `${worker.name} · ${worker.host || ''}` : 'install the worker' },
+    { name: 'Revit', ok: offline ? null : find('revit-smoke')?.ok ?? (worker ? false : null), detail: find('revit-smoke')?.detail || (worker ? `Revit ${worker.revit}` : ''), sub: worker ? `pyRevit ${worker.pyrevit || '?'}` : '' },
+    { name: 'Office template', ok: offline ? null : find('template')?.ok ?? null, detail: find('template')?.detail || '', sub: find('families')?.detail || '' },
+    { name: 'Drafters', ok: true, detail: 'open the model from the shared folder', sub: 'finish, review, issue' },
+  ]
+  return (
+    <div className="manifold">
+      {nodes.map((n, i) => (
+        <div key={n.name} className={'node' + (n.ok === false ? ' down' : '')}>
+          <div className="node-head">
+            <span className="node-name">{n.name}</span>
+            <Pill ok={n.ok}>{n.ok === true ? 'ok' : n.ok === false ? 'down' : 'unknown'}</Pill>
+          </div>
+          <div className="node-detail">{n.detail || '—'}</div>
+          <div className="node-sub">{n.sub}</div>
+          {i < nodes.length - 1 && <i className="node-link" />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const RULE_LABELS = { front: 'Front', side: 'Side', rear: 'Rear', streetSide: 'Street side', maxCoverage: 'Max coverage', maxHeightFt: 'Max height ft', minLotSf: 'Min lot sf' }
+
+/** City setbacks and limits, editable row by row. */
+function CityRules() {
+  const [table, setTable] = useState(null)
+  const [edit, setEdit] = useState({}) // id → patch
+  const [saved, setSaved] = useState('')
+  useEffect(() => {
+    api.cities().then(setTable).catch(() => setTable({}))
+  }, [])
+  const save = async (id) => {
+    const t = await api.setCity(id, edit[id] || {})
+    setTable((x) => ({ ...x, [id]: t }))
+    setEdit((e) => ({ ...e, [id]: undefined }))
+    setSaved(id)
+    setTimeout(() => setSaved(''), 1500)
+  }
+  if (!table) return null
+  return (
+    <div className="card">
+      <h3>City rules</h3>
+      <p className="muted small">Setbacks in feet, coverage as a fraction. The Lot step reads this table. Rows start as office defaults; tick Verified once checked against the ordinance.</p>
+      <div className="tblwrap">
+        <table className="tbl rules">
+          <thead>
+            <tr>
+              <th>City</th>
+              {RULE_FIELDS.map((f) => (
+                <th key={f}>{RULE_LABELS[f]}</th>
+              ))}
+              <th>Verified</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.values(table).map((c) => (
+              <tr key={c.id}>
+                <td>
+                  <b>{c.name}</b>
+                  <div className="muted small">{c.zoning}</div>
+                </td>
+                {RULE_FIELDS.map((f) => (
+                  <td key={f}>
+                    <input className="cell" type="number" step={f === 'maxCoverage' ? 0.05 : 1} value={edit[c.id]?.[f] ?? c[f]} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), [f]: e.target.value } }))} />
+                  </td>
+                ))}
+                <td>
+                  <input type="checkbox" checked={edit[c.id]?.verified ?? !!c.verified} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), verified: e.target.checked } }))} />
+                </td>
+                <td>
+                  <Button small ghost disabled={!edit[c.id]} onClick={() => save(c.id)}>
+                    {saved === c.id ? 'Saved' : 'Save'}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+const money = (amount, currency = 'usd') => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format((amount || 0) / 100)
+
+/** Packs and prices (admins), and a way to add credits to an account by hand. */
+function Pricing() {
+  const [pricing, setPricing] = useState(null)
+  const [packs, setPacks] = useState(null)
+  const [users, setUsers] = useState([])
+  const [grant, setGrant] = useState({ userId: '', credits: 5, note: '' })
+  const [msg, setMsg] = useState('')
+  const [payments, setPayments] = useState([])
+  useEffect(() => {
+    api.pricing().then((p) => { setPricing(p); setPacks(p.packs.map((x) => ({ ...x, dollars: (x.amount / 100).toFixed(2) }))) }).catch(() => {})
+    api.users().then(setUsers).catch(() => {})
+    api.payments().then(setPayments).catch(() => {})
+  }, [])
+  if (!pricing) return null
+  const setPack = (i, k, v) => setPacks((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)))
+  const save = async () => {
+    try {
+      const p = await api.setPricing({ currency: pricing.currency, packs: packs.map((x) => ({ id: x.id, name: x.name, blurb: x.blurb, credits: +x.credits, amount: Math.round(+x.dollars * 100) })) })
+      setPricing(p)
+      setMsg('Prices saved')
+    } catch (e) {
+      setMsg(e.message)
+    }
+    setTimeout(() => setMsg(''), 2500)
+  }
+  const give = async () => {
+    try {
+      const u = await api.grantCredits(grant.userId, +grant.credits, grant.note)
+      setMsg(`${u.email} now has ${u.credits} credits`)
+      api.payments().then(setPayments).catch(() => {})
+    } catch (e) {
+      setMsg(e.message)
+    }
+    setTimeout(() => setMsg(''), 3000)
+  }
+  return (
+    <div className="card">
+      <h3>Pricing and credits</h3>
+      <p className="muted small">What a client pays through Stripe Checkout, in dollars. Each applied change uses one credit from the account.{pricing.placeholder ? ' These are placeholders until an admin saves real prices.' : ''}</p>
+      <div className="tblwrap">
+        <table className="tbl rules">
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th>Name</th>
+              <th>Blurb</th>
+              <th>Credits</th>
+              <th>Price $</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packs.map((p, i) => (
+              <tr key={i}>
+                <td><input className="cell" value={p.id} onChange={(e) => setPack(i, 'id', e.target.value)} /></td>
+                <td><input className="cell wide" value={p.name} onChange={(e) => setPack(i, 'name', e.target.value)} /></td>
+                <td><input className="cell wide" value={p.blurb || ''} onChange={(e) => setPack(i, 'blurb', e.target.value)} /></td>
+                <td><input className="cell" type="number" value={p.credits} onChange={(e) => setPack(i, 'credits', e.target.value)} /></td>
+                <td><input className="cell" type="number" step="1" value={p.dollars} onChange={(e) => setPack(i, 'dollars', e.target.value)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <Button small ghost onClick={() => setPacks((ps) => [...ps, { id: 'pack' + (ps.length + 1), name: '', blurb: '', credits: 5, dollars: '49.00' }])}>
+          Add a pack
+        </Button>
+        <Button small onClick={save}>
+          Save prices (admin)
+        </Button>
+      </div>
+      <h3 style={{ marginTop: 18 }}>Add credits to an account</h3>
+      <div className="row grant">
+        <select value={grant.userId} onChange={(e) => setGrant({ ...grant, userId: e.target.value })}>
+          <option value="">Pick an account</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.email} ({u.credits ?? 0})
+            </option>
+          ))}
+        </select>
+        <input type="number" value={grant.credits} onChange={(e) => setGrant({ ...grant, credits: e.target.value })} style={{ width: 70 }} />
+        <input placeholder="Note (paid by check, comp…)" value={grant.note} onChange={(e) => setGrant({ ...grant, note: e.target.value })} />
+        <Button small ghost disabled={!grant.userId} onClick={give}>
+          Add
+        </Button>
+      </div>
+      {msg && <p className="fine">{msg}</p>}
+      {payments.length > 0 && (
+        <p className="fine">
+          Last payments: {payments.slice(0, 5).map((p) => `${p.email || p.userId} ${p.credits > 0 ? '+' : ''}${p.credits}${p.amount ? ` ${money(p.amount, p.currency)}` : ''}`).join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export default function Admin() {
+  const [ov, setOv] = useState(null)
+  const [offline, setOffline] = useState(false)
+  const [at, setAt] = useState(null)
+  const [open, setOpen] = useState(null)
+  const [ilog, setIlog] = useState(null)
+  const refresh = async () => {
+    try {
+      setOv(await api.overview())
+      setIlog(await api.interpretLog().catch(() => null))
+      setOffline(false)
+    } catch {
+      setOffline(true)
+    }
+    setAt(new Date())
+  }
+  useEffect(() => {
+    refresh()
+    const t = setInterval(refresh, 5000)
+    return () => clearInterval(t)
+  }, [])
+  const h = ov?.health
+  const c = ov?.counts
+  const worker = h?.workers?.[0]
+  const maxDur = Math.max(60, ...(ov?.recentDurations?.map((d) => d.s) || [0]))
+
+  return (
+    <div className="screen padded admin">
+      <div className="admin-head">
+        <div>
+          <h2>Office dashboard</h2>
+          <p className="muted">
+            {offline ? 'Office API unreachable.' : h?.ok ? 'Everything connected and healthy.' : 'Something needs attention.'} Updated {at ? at.toLocaleTimeString() : '…'}, refreshes every 5 s.
+          </p>
+        </div>
+        <Pill ok={offline ? false : h?.ok}>{offline ? 'offline' : h?.ok ? 'all systems go' : 'attention'}</Pill>
+      </div>
+
+      <h3>Manifold</h3>
+      <Manifold h={h} offline={offline} />
+
+      <div className="admin-grid">
+        <div className="card">
+          <h3>Queue</h3>
+          <div className="tiles">
+            {[
+              ['Queued', c?.queued ?? '–'],
+              ['Building', c?.running ?? '–'],
+              ['Built', c?.done ?? '–'],
+              ['Failed', c?.failed ?? '–'],
+              ['Avg build', c?.avgDurationS != null ? `${Math.round(c.avgDurationS / 60)} min` : '–'],
+              ['Designs', c?.designs ?? '–'],
+            ].map(([k, v]) => (
+              <div key={k} className="tile">
+                <span className="tile-v">{v}</span>
+                <span className="tile-k">{k}</span>
+              </div>
+            ))}
+          </div>
+          {ov?.recentDurations?.length > 0 && (
+            <div className="bars" aria-label="Build time of recent jobs">
+              <h3>Build time, last {ov.recentDurations.length} jobs</h3>
+              {ov.recentDurations.map((d) => (
+                <div key={d.id} className="bar-row" title={`${d.client}: ${d.s}s`}>
+                  <span className="bar-k">{d.client}</span>
+                  <span className="bar-track">
+                    <span className="bar-fill" style={{ width: `${(d.s / maxDur) * 100}%` }} />
+                  </span>
+                  <span className="bar-v">{d.s < 90 ? `${d.s}s` : `${Math.round(d.s / 60)} min`}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <h3>Health checks</h3>
+            <span className="row">
+              <Button small ghost onClick={() => api.backup().then(refresh)}>
+                Back up now
+              </Button>
+              {worker && (
+                <Button small ghost onClick={() => api.command(worker.id, 'smoke').then(refresh)}>
+                  Run Revit check
+                </Button>
+              )}
+            </span>
+          </div>
+          <table className="tbl">
+            <tbody>
+              {(h?.checks || []).map((ck) => (
+                <tr key={ck.id}>
+                  <td>
+                    <Pill ok={ck.ok}>{ck.ok ? 'ok' : 'fail'}</Pill>
+                  </td>
+                  <td>
+                    {ck.name}
+                    {ck.worker ? <span className="cmp"> · {ck.worker}</span> : null}
+                  </td>
+                  <td className="cmp">{ck.detail}</td>
+                  <td className="cmp">{fmtAgo(ck.at)}</td>
+                </tr>
+              ))}
+              {offline && (
+                <tr>
+                  <td>
+                    <Pill ok={false}>fail</Pill>
+                  </td>
+                  <td>Office API</td>
+                  <td className="cmp">
+                    No answer from {API}. Start it with <code>node server/index.mjs</code> or fix the address.
+                  </td>
+                  <td />
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Jobs</h3>
+        {!ov?.jobs?.length ? (
+          <p className="muted">No jobs yet. Approve a design in the client flow and it shows up here.</p>
+        ) : (
+          <table className="tbl jobs">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Client</th>
+                <th>Lot</th>
+                <th>Worker</th>
+                <th>When</th>
+                <th>Time</th>
+                <th>Outputs</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {ov.jobs.map((j) => (
+                <tr key={j.id} className={open === j.id ? 'open' : ''}>
+                  <td>
+                    <span className={'pill ' + STATUS[j.status]?.[0]}>{STATUS[j.status]?.[1] || j.status}</span>
+                  </td>
+                  <td>{j.client}</td>
+                  <td className="cmp">{j.address}</td>
+                  <td className="cmp">{j.worker || '—'}</td>
+                  <td className="cmp">{fmtAgo(j.createdAt)}</td>
+                  <td className="cmp">{j.durationS != null ? `${j.durationS}s` : j.status === 'running' ? j.steps?.[j.steps.length - 1]?.message || 'starting' : '—'}</td>
+                  <td>
+                    {(j.outputs || []).map((o) => (
+                      <a key={o.url} className="out" href={api.fileUrl(o.url)} target="_blank" rel="noreferrer">
+                        {o.name}
+                      </a>
+                    ))}
+                    {j.warnings?.length ? <span className="pill warn">{j.warnings.length} warnings</span> : null}
+                  </td>
+                  <td>
+                    {j.status === 'failed' && (
+                      <Button small ghost onClick={() => api.retry(j.id).then(refresh)}>
+                        Retry
+                      </Button>
+                    )}
+                    {(j.log || j.error || j.warnings?.length) && (
+                      <button className="linkish" onClick={() => setOpen(open === j.id ? null : j.id)}>
+                        {open === j.id ? 'hide' : 'details'}
+                      </button>
+                    )}
+                    {open === j.id && (
+                      <pre className="joblog">
+                        {j.error ? `error: ${j.error}\n` : ''}
+                        {(j.warnings || []).map((w) => `warning: ${w}`).join('\n')}
+                        {j.log ? `\n${j.log}` : ''}
+                      </pre>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <CityRules />
+      <Pricing />
+
+      <div className="card">
+        <h3>Client requests</h3>
+        <p className="muted small">
+          Every change request the assistant was asked for, with what it cost.{' '}
+          {ilog?.calls ? `${ilog.calls} assistant call${ilog.calls === 1 ? '' : 's'} · $${ilog.cost.toFixed(4)} total · $${ilog.perCall.toFixed(4)} per request · ${ilog.avgMs} ms avg` : 'No assistant calls yet (fallback rules only).'}
+        </p>
+        {ilog?.recent?.length ? (
+          <table className="jobs">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Request</th>
+                <th>Path</th>
+                <th>Verdict</th>
+                <th>Time</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ilog.recent.slice(0, 20).map((r, i) => (
+                <tr key={i}>
+                  <td className="cmp">{fmtAgo(r.at)}</td>
+                  <td>“{r.request}”{r.reasons?.[0] ? <div className="muted small">{r.reasons[0]}</div> : null}</td>
+                  <td>{r.source || (r.cost !== undefined ? 'assistant' : '')}</td>
+                  <td className={r.verdict === 'rejected' || r.verdict === 'error' || r.verdict === 'timeout' ? 'bad' : r.verdict === 'unsure' ? 'warn' : ''}>{r.verdict}</td>
+                  <td>{r.ms ? `${r.ms} ms` : ''}</td>
+                  <td>{r.cost !== undefined ? `$${r.cost.toFixed(4)}` : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </div>
+
+      <div className="card">
+        <h3>Activity</h3>
+        <ul className="events">
+          {(ov?.events || []).map((e) => (
+            <li key={e.id} className={e.kind}>
+              <span className="cmp">{fmtAgo(e.at)}</span>
+              <span>{e.message}</span>
+            </li>
+          ))}
+          {!ov?.events?.length && <li className="muted">Nothing yet.</li>}
+        </ul>
+      </div>
+    </div>
+  )
+}

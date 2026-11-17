@@ -2,3 +2,13 @@ node_modules
 dist
 shots
 *.local
+
+# IFC preview artifacts
+public/ifc-preview.obj
+*.ifc
+server/data/
+worker/work/
+worker/config.json
+
+# drafter IFC exports stay out of git; the kits made from them are committed
+kits-ifc/*.ifc
