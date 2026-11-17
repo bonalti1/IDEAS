@@ -4,6 +4,8 @@
 // nine sheets. Items marked CONFIRM need a drafter's sign-off before this kit
 // is used on a client project. Feet and inches unless noted.
 
+import { NARROW_PLAN } from './farmhouse-narrow.js'
+
 export const KIT = {
   id: 'farmhouse',
   name: 'Modern Farmhouse',
@@ -149,6 +151,8 @@ export const KIT = {
   // ── Reference plan, traced from sheet 200 (feet, x from the left, y from the
   //    rear wall toward the street). This is what the layout engine starts from.
   //    Hallways are real rooms here so the walls come out where the set has them.
+  // the narrow plan for 50 ft lots (src/kits/farmhouse-narrow.js); the drafter picks the one that fits the lot
+  plans: { narrow: NARROW_PLAN },
   plan: {
     footprint: { w: 72, d: 53 },
     facing: 'street', // front porch faces the lot's front street

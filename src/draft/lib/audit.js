@@ -6,7 +6,7 @@
 // (IRC R307); the garage attached, with a rated door into the mud room, laundry or hall and an
 // overhead door toward the street; the kitchen work triangle; the primary suite; the living area.
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
-import { isRoom, kitFor } from './layout.js'
+import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
 import { withPlanCoords } from './ops.js'
 
 const BEDROOMS = ['bed', 'master', 'suite2']
@@ -206,6 +206,20 @@ export function auditPlan(rooms, program, kit, lot) {
     })
   })
 
+  // g2) no two doors on a wall overlap
+  doors.forEach((a, i) => {
+    doors.slice(i + 1).forEach((b) => {
+      if (a.axis !== b.axis) return
+      const along = a.axis === 'h' ? 'x' : 'y'
+      const size = a.axis === 'h' ? 'w' : 'd'
+      const across = a.axis === 'h' ? 'y' : 'x'
+      const sameWall = Math.abs(a[across] + a[a.axis === 'h' ? 'd' : 'w'] / 2 - (b[across] + b[b.axis === 'h' ? 'd' : 'w'] / 2)) < 0.6
+      if (!sameWall) return
+      const overlap = Math.min(a[along] + a[size], b[along] + b[size]) - Math.max(a[along], b[along])
+      if (overlap > 0.05) say('doors-overlap', 'error', byId[a.room], `${byId[a.room]?.name || 'A'} doors ${a.id} and ${b.id} overlap by ${overlap.toFixed(1)} ft on the same wall.`)
+    })
+  })
+
   // h) the garage
   const garages = R.filter((r) => r.kind === 'garage')
   garages.forEach((g) => {
@@ -219,19 +233,58 @@ export function auditPlan(rooms, program, kit, lot) {
       if (!GARAGE_DOOR_ROOMS.includes(other.kind)) say('garage-door-room', 'error', g, `${g.name}'s house door opens into ${other.name}; it must open into a mud room, laundry or hall.`)
       if (!houseDoor.d.fireRated) say('garage-door-rating', 'error', g, `${g.name}'s house door must be solid or 20-minute rated and self-closing (R302.5.1).`)
     }
-    const overhead = doors.filter((d) => d.size === 'overhead' && d.room === g.id)
+    const overhead = doors.filter((d) => (d.size === 'overhead' || d.size === 'overheadSingle') && d.room === g.id)
+    const carsNamed = +(g.name.match(/^(\d+)-Car/) || [])[1] || 0
+    const bays = Math.max(1, Math.round(Math.max(g.w, g.d) / (K.rooms?.garage?.perCar || 11)))
+    if (carsNamed && carsNamed !== bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' wide, ${bays} bay${bays === 1 ? '' : 's'}; the name says ${carsNamed}.`)
     if (!overhead.length) say('garage-overhead', 'error', g, `${g.name} has no overhead door.`)
     else {
-      // the overhead door's wall must be an outside wall with a clear run to the street (toward +y)
-      const ok = overhead.some((d) => {
+      // the doors cover the bays: at least 8 ft of door per car
+      const doorFt = overhead.reduce((a, d) => a + d.span, 0)
+      if (doorFt < bays * 8 - 0.01) say('garage-bays', 'error', g, `${g.name} has ${Math.round(doorFt)}' of overhead door for ${bays} bays; it needs at least 8' per car.`)
+      // the overhead doors' wall must be an outside wall with a driveway on the lot to the street
+      const L = lotOf(lot)
+      const facing = (d) => {
         const [cx, cy] = centre(d)
-        const outPt = d.axis === 'h' ? [cx, cy + (Math.abs(cy - (g.y + g.d)) < 0.4 ? 0.7 : -0.7)] : [cx + (Math.abs(cx - (g.x + g.w)) < 0.4 ? 0.7 : -0.7), cy]
-        if (roomAt(outPt)) return false
-        // a strip from the door toward the street is clear of enclosed rooms
-        const strip = d.axis === 'h' ? { x: cx - 5, y: outPt[1] < cy ? g.y - 24 : g.y + g.d, w: 10, d: 24 } : { x: outPt[0] < cx ? g.x - 12 : g.x + g.w, y: Math.min(cy - 5, g.y), w: 12, d: 120 }
-        return !house.some((r) => intrusion(r, strip) > 0.5)
+        return d.axis === 'h' ? (Math.abs(cy - (g.y + g.d)) < 0.4 ? 's' : 'n') : Math.abs(cx - (g.x + g.w)) < 0.4 ? 'e' : 'w'
+      }
+      const reasons = overhead.map((d) => {
+        const [cx, cy] = centre(d)
+        const side = facing(d)
+        const outPt = side === 's' ? [cx, cy + 0.7] : side === 'n' ? [cx, cy - 0.7] : side === 'e' ? [cx + 0.7, cy] : [cx - 0.7, cy]
+        if (roomAt(outPt)) return 'opens into a room'
+        if (side === 'n' && !L.alley) return 'faces the rear yard, and this lot has no alley'
+        if (side === 's') {
+          // front-load: the driveway from the door to the street, inside the lot and clear of rooms
+          const strip = { x: cx - 5, y: g.y + g.d, w: 10, d: 24 }
+          if (house.some((r) => intrusion(r, strip) > 0.5)) return 'has a room in front of it'
+          let y = g.y + g.d + 1
+          while (y < g.y + g.d + 200 && insideLot(L, K, cx, y)) y += 1
+          if (!insideLot(L, K, cx - 5, y - 2) || !insideLot(L, K, cx + 5, y - 2)) return 'its driveway leaves the lot before the street'
+          return null
+        }
+        // side-load: 25 ft of apron from the door, inside the lot and clear of rooms, and a driveway to the
+        // street: straight down from the apron, or down the side yard the apron reaches (10 ft wide)
+        const dir = side === 'e' ? 1 : -1
+        const face = side === 'e' ? g.x + g.w : g.x
+        const apron = { x: side === 'e' ? face : face - 25, y: g.y, w: 25, d: g.d }
+        const inApron = house.find((r) => intrusion(r, apron) > 0.5)
+        if (inApron) return `has ${inApron.name} in front of it; a car needs 25' to turn in`
+        for (const t of [8, 16, 25]) if (!insideLot(L, K, face + dir * t, cy)) return `has ${t - 1}' or less to the lot line; a car needs 25' to turn in`
+        const front = Math.max(...house.map((r) => r.y + r.d))
+        const straight = { x: apron.x, y: g.y, w: 25, d: front + 30 - g.y }
+        if (!house.some((r) => intrusion(r, straight) > 0.5)) return null
+        // the driveway down a side yard: 10 ft between the house and the lot line, from the apron's row to the street
+        for (const edge of [Math.max(...house.map((r) => r.x + r.w)), Math.min(...house.map((r) => r.x))]) {
+          const out = edge > g.x ? 1 : -1
+          let ok = true
+          for (let y = g.y; y <= front + 1 && ok; y += 5) ok = insideLot(L, K, edge + out * 10, y) && insideLot(L, K, edge + out * 1, y)
+          if (ok) return null
+        }
+        return 'has no 10 ft driveway to the street'
       })
-      if (!ok) say('garage-street', 'error', g, `${g.name}'s overhead door does not face a clear run to the street.`)
+      const bad = reasons.find((r) => r)
+      if (!reasons.some((r) => r === null)) say('garage-street', 'error', g, `${g.name}'s overhead door ${bad}.`)
     }
     // the garage must not cover another room's window or door
     windows.forEach((w) => {
@@ -318,13 +371,13 @@ export function auditDesign(design, kit) {
 
 /** The checks a drafter reads, grouped: [{ id, name, ok, findings: [message] }], plus the measures. */
 export const CHECK_GROUPS = [
-  { id: 'doors', name: 'Every door on a wall its room shares', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial'] },
+  { id: 'doors', name: 'Every door on a wall its room shares, no two overlapping', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial', 'doors-overlap'] },
   { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath', ids: ['reach'] },
   { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
   { id: 'halls', name: 'Halls 36" clear', ids: ['hall'] },
   { id: 'overlap', name: 'No room over another or on a porch', ids: ['overlap', 'porch'] },
   { id: 'fixtures', name: 'Toilet and shower clearances', ids: ['toilet-front', 'toilet-side', 'shower-front'] },
-  { id: 'garage', name: 'Garage attached, fire-rated house door, overhead door to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers'] },
+  { id: 'garage', name: 'Garage attached, fire-rated house door, overhead doors for every bay, a driveway on the lot to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers', 'garage-bays', 'garage-name'] },
   { id: 'suite', name: 'Primary bath and closet from the bedroom', ids: ['suite-bath', 'suite-closet'] },
   { id: 'kitchen', name: 'Kitchen work triangle 26 ft or less, aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },

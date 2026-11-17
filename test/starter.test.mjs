@@ -97,22 +97,27 @@ test('a program that does not fit is refused before drafting, with the largest s
   const lot90 = defaultLot('mcallen', { width: 90, depth: 130 })
   const big = { ...DEFAULT_PROGRAM, sqft: 3800 }
   const f = fitsLot(big, style, lot90)
+  // the standard plan is 99 ft wide at 3,800 sf and the starter program (office, half bath) is more than the
+  // narrow plan holds: the step offers the largest size that fits, and that drafts clean
   assert.equal(f.ok, false)
-  assert.ok(f.reasons.length > 0)
   assert.ok(f.maxSqft && f.maxSqft < 3800, `max ${f.maxSqft}`)
   const smaller = { ...big, sqft: f.maxSqft }
   assert.deepEqual(checkRules(generateRooms(smaller, style, lot90), smaller, style, lot90).reasons, [])
-  // 70 ft lot: this plan is 72 ft wide, so either a smaller size or a smaller program is offered, and it passes
+  // 70 ft lot: the standard plan is 72 ft wide, so the step offers what the narrow plan holds (4 bed, 2 bath,
+  // 2-car, no office), and that drafts clean on the narrow plan
   const lot = defaultLot('mcallen', { width: 70, depth: 120 })
-  const g = fitsLot({ ...DEFAULT_PROGRAM, beds: 4, baths: 3, garage: 2, sqft: 2800 }, style, lot)
+  const p70 = { ...DEFAULT_PROGRAM, beds: 4, baths: 3, garage: 2, sqft: 2800 }
+  const g = fitsLot(p70, style, lot)
   assert.equal(g.ok, false)
-  if (g.maxSqft || g.suggestion) {
-    const fitted = g.maxSqft ? { ...DEFAULT_PROGRAM, beds: 4, baths: 3, garage: 2, sqft: g.maxSqft } : g.suggestion.program
-    assert.deepEqual(checkRules(generateRooms(fitted, style, lot), fitted, style, lot).reasons, [], g.suggestion?.label || `at ${g.maxSqft} sf`)
-  } else {
-    // nothing fits: the step can say how wide the smallest plan is against the lot
-    assert.ok(g.need && g.need.houseWidth > g.need.lotWidth, JSON.stringify(g.need))
-  }
+  assert.ok(g.suggestion && /narrow plan/.test(g.suggestion.label), g.suggestion?.label)
+  const offered = g.suggestion.program
+  const rooms70 = generateRooms(offered, style, lot)
+  assert.equal(rooms70.find((r) => r.kind === 'roof')?.plan, 'narrow')
+  assert.deepEqual(checkRules(rooms70, offered, style, lot).reasons, [])
+  // a 30 ft lot takes no plan at all: the step says how wide the smallest plan is against the lot
+  const tiny = fitsLot({ ...DEFAULT_PROGRAM, beds: 3, baths: 2, garage: 0, sqft: 1800 }, style, defaultLot('mcallen', { width: 30, depth: 120 }))
+  assert.equal(tiny.ok, false)
+  assert.ok(tiny.need && tiny.need.houseWidth > tiny.need.lotWidth, JSON.stringify(tiny.need))
   // 80 ft lot: three beds and no garage fit at a smaller size, so the step lets the client through at that size
   const h = fitsLot({ ...DEFAULT_PROGRAM, beds: 3, baths: 2, garage: 0, sqft: 2800 }, style, defaultLot('mcallen', { width: 80, depth: 120 }))
   assert.ok(h.ok || (h.maxSqft >= 1800 && h.maxSqft < 2800), `${h.ok} ${h.maxSqft} ${h.reasons.join(' | ')}`)

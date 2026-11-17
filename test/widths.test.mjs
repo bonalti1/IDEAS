@@ -9,7 +9,7 @@ import { buildDesign } from '../src/draft/lib/contract.js'
 import { toIFC } from '../src/draft/lib/ifc.js'
 import { doorSchedule, windowSchedule } from '../src/draft/lib/takeoff.js'
 import { STYLES } from '../src/draft/lib/styles.js'
-import { LOTS, PROGRAMS } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './audit.test.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
@@ -27,14 +27,12 @@ function ifcOpenings(ifc) {
   return out
 }
 
-const cases = Object.entries(LOTS)
-  .filter(([n]) => !n.startsWith('narrow'))
-  .flatMap(([lotName, lot]) => Object.entries(PROGRAMS).map(([progName, program]) => [lotName, lot, progName, program]))
+const cases = Object.entries(LOTS).flatMap(([lotName, lot]) => Object.entries(PROGRAMS).map(([progName, program]) => [lotName, lot, progName, program]))
 
 for (const [lotName, lot, progName, program] of cases) {
   test(`opening widths agree: ${progName} on ${lotName}`, () => {
-    const f = fitsLot(program, style, lot)
-    const drafted = f.ok ? program : { ...program, sqft: f.maxSqft }
+    const drafted = draftable(program, lot)
+    assert.ok(drafted)
     const rooms = generateRooms(drafted, style, lot)
     const design = buildDesign({ rooms, program: drafted, style, lot, client: 'Test' })
     const ifc = ifcOpenings(toIFC({ rooms, program: drafted, kit, style, lot }))

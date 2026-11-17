@@ -128,8 +128,17 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         <Button ghost onClick={onBack}>
           Back
         </Button>
-        <Button primary disabled={!check.ok} onClick={onNext} title={check.ok ? '' : 'Make it fit the lot first'}>
-          Draft my house
+        <Button
+          primary
+          disabled={!check.ok}
+          onClick={() => {
+            // the plan does not go under its smallest size: that is what gets drafted, and the ask says so
+            if (check.draft.clamped && program.sqft < minSqft) onChange({ ...program, sqft: minSqft })
+            onNext()
+          }}
+          title={check.ok ? '' : 'Make it fit the lot first'}
+        >
+          Draft my house{check.draft.clamped && program.sqft < minSqft ? ` at ${sf(minSqft)}` : ''}
         </Button>
       </div>
     </div>

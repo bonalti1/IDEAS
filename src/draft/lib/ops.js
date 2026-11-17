@@ -1,13 +1,13 @@
 // Change ops: validate, apply, and the regex fallback that produces them.
 // Schema in docs/change-diff.md. Plan feet throughout.
-import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot } from './layout.js'
+import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing } from './layout.js'
 import { attachBeside, addPorch, addInWing, moveBeside, removeRoom } from './add.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
 import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -27,6 +27,8 @@ export function normalizeOps(ops, rooms) {
         const w = o.w > 0 ? o.w : r.w
         const d = o.d > 0 ? o.d : r.d
         if (!(o.w > 0) && !(o.d > 0)) return null
+        // a garage is placed by its cars, not stretched: a resize of one becomes "N cars"
+        if (r.kind === 'garage') return { op: 'garage', cars: Math.max(1, Math.min(4, Math.round(Math.max(w, d) / 11))) }
         return { ...o, w, d }
       }
       if (o.op === 'move') {
@@ -50,8 +52,9 @@ export function validateOps(ops, rooms, kit) {
   ops.forEach((o, i) => {
     const at = `op ${i + 1}`
     if (!o || !OPS.includes(o.op)) return errors.push(`${at}: unknown op "${o?.op}"`)
-    if (o.op !== 'add' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
+    if (o.op !== 'add' && o.op !== 'garage' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push(`${at}: resize needs w and d`)
+    if (o.op === 'garage' && !(o.cars >= 1 && o.cars <= 4)) errors.push(`${at}: garage needs cars (1 to 4)`)
     if (o.op === 'add' && !kit.rooms[o.kind]) errors.push(`${at}: kind "${o.kind}" is not in the ${kit.name} kit`)
     if (o.op === 'move' && !(Number.isFinite(o.dx) && Number.isFinite(o.dy))) errors.push(`${at}: move needs dx and dy`)
     if (o.op === 'moveBeside' && !ids.has(o.target)) errors.push(`${at}: no room "${o.target}" to move next to`)
@@ -598,8 +601,14 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       settleIslands(flat)
       settleKitchen(flat)
       did.push(`${r.name} is now ${q(r.w)}' by ${q(r.d)}' (was ${was.w}' by ${was.d}')`)
-      // a garage is named by its cars
-      if (r.kind === 'garage' && kit.rooms.garage?.perCar && /-Car Garage$/.test(r.name)) r.name = `${Math.max(1, Math.round(w / kit.rooms.garage.perCar))}-Car Garage`
+      // a garage is named by its cars, and its overhead doors are laid out again for the bays
+      if (r.kind === 'garage' && kit.rooms.garage?.perCar) {
+        const cars = Math.max(1, Math.round(Math.max(r.w, r.d) / kit.rooms.garage.perCar))
+        if (/-Car Garage$/.test(r.name)) r.name = `${cars}-Car Garage`
+        const side = garageFacing(r, flat) || 's'
+        for (let i = flat.length - 1; i >= 0; i--) if (flat[i].kind === 'door' && flat[i].room === r.id && (flat[i].size === 'overhead' || flat[i].size === 'overheadSingle')) flat.splice(i, 1)
+        flat.push(...overheadDoors(kit, r, cars, side))
+      }
     } else if (o.op === 'move') {
       const r = rs[o.room]
       r.x += o.dx
@@ -615,6 +624,29 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       const r = rs[o.room]
       removeRoom(flat, r.id)
       did.push(`Removed ${r.name.toLowerCase()}`)
+    } else if (o.op === 'garage') {
+      // the garage comes off and goes back on for the cars asked, with its doors laid out by bay; a plan
+      // that draws its own garage (the narrow one) resizes it in place instead
+      const g = flat.find((r) => isRoom(r) && r.kind === 'garage')
+      if (!g) throw new Error('there is no garage in this plan; say "add a garage"')
+      const cars = Math.max(1, Math.round(o.cars || 2))
+      const drawn = flat.find((r) => r.kind === 'roof')?.plan === 'narrow'
+      if (drawn) {
+        const w = Math.max(kit.rooms.garage.perCar * cars, cars >= 3 ? 32 : 0)
+        const res = pushWall(flat, g.id, 'e', w - g.w, kit)
+        if (typeof res === 'string') throw new Error(`${g.name} cannot grow that way: ${res}`)
+        const after = flat.find((r) => r.id === g.id)
+        after.name = `${cars}-Car Garage`
+        for (let i = flat.length - 1; i >= 0; i--) if (flat[i].kind === 'door' && flat[i].room === g.id && /overhead/.test(flat[i].size || '')) flat.splice(i, 1)
+        flat.push(...overheadDoors(kit, after, cars, garageFacing(after, flat) || 's'))
+      } else {
+        removeRoom(flat, g.id)
+        const placed = attachGarage(placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L).concat(flat.filter((r) => r.kind === 'roof')), kit, cars, L, stories)
+        if (!placed.some((r) => isRoom(r) && r.kind === 'garage')) throw new Error(`there is no sound spot for a ${cars}-car garage on this lot`)
+        flat.length = 0
+        placed.forEach((r) => flat.push(r))
+      }
+      did.push(`${cars}-car garage, ${q(flat.find((r) => isRoom(r) && r.kind === 'garage').w)}' wide`)
     } else if (o.op === 'moveBeside') {
       const r = rs[o.room]
       const t = rs[o.target]
@@ -672,7 +704,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
   let placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
   // a change that pushed the house past a setback: the house slides on the lot when a shift alone fits it
-  if (ops.some((o) => o.op === 'add') && flat.some((x) => isRoom(x) && !x.open && !insideSetbacks(x, centre, lot))) {
+  if (ops.some((o) => o.op === 'add' || o.op === 'garage') && flat.some((x) => isRoom(x) && !x.open && !insideSetbacks(x, centre, lot))) {
     const refit = fitToLot(placed, kit, stories, lot, { minScale: 1 })
     if (refit.scale === 1 && (refit.shift[0] || refit.shift[1])) {
       placed = refit.rooms
@@ -773,7 +805,7 @@ export function regexOps(text, rooms, kit, lot = DEFAULT_LOT) {
     const n = WORDS[cars[1]] || +cars[1]
     if (!targets.length) return { ops: [{ op: 'add', kind: 'garage', name: `${n}-Car Garage`, w: kit.rooms.garage.perCar * n, d: kit.rooms.garage.d, near: roomsOnly.find((r) => r.kind === 'laundry' || r.kind === 'mud')?.id }], reply: `Adding a ${n}-car garage.`, confidence: 0.7 }
     const g = targets[targets.length - 1]
-    return { ops: [{ op: 'resize', room: g.id, w: kit.rooms.garage.perCar * n, d: g.d }], reply: `Making the garage ${n} cars wide, ${kit.rooms.garage.perCar * n} feet.`, confidence: 0.75 }
+    return { ops: [{ op: 'garage', cars: n }], reply: `Making the garage ${n} cars, ${Math.max(kit.rooms.garage.perCar * n, n >= 3 ? 32 : 0)} feet wide.`, confidence: 0.75 }
   }
   // "move the office 10 feet toward the street", "shift the garage 5 ft east"
   const byDist = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')\s*(?:toward|towards|to|closer to)?\s*(?:the\s+)?(street|front|back|rear|east|west|left|right|north|south)\b/)

@@ -73,24 +73,46 @@ test('bedroom egress: a fixed window is not an exit, a 36 x 60 single hung is', 
   assert.ok(!ids(auditPlan(rooms, DEFAULT_PROGRAM, kit, DEFAULT_LOT)).includes('egress'))
 })
 
+/** What the rooms step drafts for a program on a lot: the program, it at the largest size that fits,
+ * or the smallest change that fits (the offer); null when nothing does. */
+export function draftable(program, lot) {
+  const f = fitsLot(program, style, lot)
+  if (f.ok) return program
+  if (f.maxSqft) return { ...program, sqft: f.maxSqft }
+  if (f.suggestion?.program) return f.suggestion.program
+  return null
+}
+
 for (const [lotName, lot] of Object.entries(LOTS)) {
   for (const [progName, program] of Object.entries(PROGRAMS)) {
     test(`first draft audit: ${progName} on ${lotName}`, () => {
-      const f = fitsLot(program, style, lot)
-      if (!f.ok && lotName.startsWith('narrow')) {
-        // this kit's plan is 72 ft wide: a 50 ft lot cannot take it at any size; the rooms step says so before drafting
-        assert.ok(f.maxSqft == null && !f.suggestion ? f.need : true)
-        return
-      }
-      // a program too big for the lot is drafted at the largest size that fits (the rooms step says so first)
-      const drafted = f.ok ? program : { ...program, sqft: f.maxSqft }
-      assert.ok(f.ok || f.maxSqft, `fits: ${f.reasons.join(' | ')}`)
+      // every cell drafts: the program, a size that fits, or an offer (the 5/4 3-car on the 50 ft lot drafts with a 2-car)
+      const drafted = draftable(program, lot)
+      assert.ok(drafted, `nothing fits: ${fitsLot(program, style, lot).reasons.join(' | ')}`)
       const rooms = generateRooms(drafted, style, lot)
       const a = auditPlan(rooms, drafted, kit, lot)
       assert.deepEqual(a.errors.map((e) => e.message), [])
+      if (lotName.startsWith('narrow')) assert.equal(rooms.find((r) => r.kind === 'roof')?.plan, 'narrow', 'the 50 ft lot takes the narrow plan')
     })
   }
 }
+
+test('the narrow plan: 3/2 at 1,800 sf and 4/2 at 2,200 sf pass the audit on a 50 ft lot, within 3% of the size asked', () => {
+  const lot = LOTS['narrow 50 x 120']
+  for (const program of [{ ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 2, sqft: 1800 }, { ...DEFAULT_PROGRAM, beds: 4, baths: 2, halfBath: false, office: false, garage: 2, sqft: 2200 }]) {
+    const f = fitsLot(program, style, lot)
+    assert.equal(f.ok, true)
+    // the rooms step drafts at the plan's smallest size when the ask is under it, and says so
+    const asked = Math.max(program.sqft, f.draft.clamped ? f.draft.minSqft : 0)
+    const drafted = { ...program, sqft: asked }
+    const rooms = generateRooms(drafted, style, lot)
+    const a = auditPlan(rooms, drafted, kit, lot)
+    assert.deepEqual(a.errors.map((e) => e.message), [])
+    assert.ok(Math.abs(a.measures.livingSf - asked) / asked <= 0.03, `${a.measures.livingSf} sf for ${asked} (asked ${program.sqft})`)
+    assert.ok(asked <= program.sqft * 1.03, `the plan's smallest size ${asked} is within 3% of ${program.sqft}`)
+    assert.equal(rooms.find((r) => r.kind === 'roof')?.plan, 'narrow')
+  }
+})
 
 test('the audit reads a design.json the same way', () => {
   const rooms = generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT)
@@ -101,8 +123,9 @@ test('the audit reads a design.json the same way', () => {
 })
 
 test('every door and window is a catalog size, and the rooms are still rooms', () => {
-  for (const [, lot] of Object.entries(LOTS).filter(([n]) => !n.startsWith('narrow'))) {
-    for (const [, program] of Object.entries(PROGRAMS)) {
+  for (const [, lot] of Object.entries(LOTS)) {
+    for (const [, p] of Object.entries(PROGRAMS)) {
+      const program = draftable(p, lot)
       const rooms = generateRooms(program, style, lot)
       const doorWidths = new Set(Object.values(kit.doors).filter((d) => d.w).flatMap((d) => [d.w, d.w * 2]))
       rooms.filter((e) => e.kind === 'door' && !e.cased).forEach((d) => assert.ok(doorWidths.has(Math.round(d.span * 12)), `${d.id} ${Math.round(d.span * 12)}"`))

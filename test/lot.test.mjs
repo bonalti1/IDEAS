@@ -139,7 +139,8 @@ test('the Garza plan drafts and changes on a 100 by 150 McAllen lot, and refuses
   })
   const res = await interpretRequest('make the kitchen bigger', rooms, program, style, { lot, interpreter: async () => { throw new Error('offline') } })
   assert.equal(res.applied, true, res.reply)
-  const narrow = buildLot({ kind: 'manual', width: 60, depth: 150, city: 'mcallen', frontStreet: 'Elm St' })
+  // a 60 ft lot takes the kit's narrow plan now; 30 ft takes nothing
+  const narrow = buildLot({ kind: 'manual', width: 30, depth: 150, city: 'mcallen', frontStreet: 'Elm St' })
   const r2 = checkRules(generateRooms(program, style, narrow), program, style, narrow)
   assert.ok(r2.reasons.some((x) => /setback/.test(x)), r2.reasons.join(' | '))
   // and the move rule names the right street on the new lot

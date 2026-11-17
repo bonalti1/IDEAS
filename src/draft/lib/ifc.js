@@ -241,7 +241,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       if (!host) return
       const w = walls[host.i]
       const sill = e.kind === 'window' ? e.sill ?? WINDOW_SILL[e.mark] ?? 2 : 0
-      const head = e.kind === 'window' ? e.head ?? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
+      const head = e.kind === 'window' ? e.head ?? WINDOW_HEAD[e.mark] ?? 7 : e.h || DOOR_HEAD
       // the opening keeps its catalog width: one past the end of the wall slides onto it
       const t0 = Math.max(0, Math.min(host.t - e.span / 2, host.len - e.span))
       const t1 = Math.min(host.len, t0 + e.span)

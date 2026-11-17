@@ -7,17 +7,17 @@ import { fitsLot } from '../src/draft/lib/fit.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { planSVG, planSheetHTML } from '../src/draft/lib/plan-svg.js'
 import { STYLES } from '../src/draft/lib/styles.js'
-import { LOTS, PROGRAMS } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './audit.test.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
 const intersects = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
-for (const [lotName, lot] of Object.entries(LOTS).filter(([n]) => !n.startsWith('narrow'))) {
+for (const [lotName, lot] of Object.entries(LOTS)) {
   for (const [progName, program] of Object.entries(PROGRAMS)) {
     test(`floor plan drawing: ${progName} on ${lotName}`, () => {
-      const f = fitsLot(program, style, lot)
-      const drafted = f.ok ? program : { ...program, sqft: f.maxSqft }
+      const drafted = draftable(program, lot)
+      assert.ok(drafted)
       const rooms = generateRooms(drafted, style, lot)
       const design = buildDesign({ rooms, program: drafted, style, lot, client: 'Test Client' })
       const plan = planSVG(design)

@@ -279,14 +279,24 @@ function Driveway({ rooms, centre, lot }) {
       // front-load: straight out to the street
       const z0 = door.local[1]
       out.push({ x: door.local[0], z: (z0 + street) / 2, w: door.span + 2, d: street - z0 })
+    } else if (garage.driveway === 'courtyard' || door.local[0] < garage.local[0]) {
+      // the courtyard way: a 25 ft apron off the west-facing doors, across the rear to the east side yard, then down to the street
+      const x0 = door.local[0]
+      const solid = rooms.filter((r) => isRoom(r) && !r.open && r.local)
+      const east = Math.max(...solid.map((r) => r.local[0] + r.w / 2))
+      const apron = { x: x0 - 12.5, z: garage.local[1], w: 25, d: garage.d }
+      out.push(apron)
+      const legZ = garage.local[1] - garage.d / 2 + 6
+      out.push({ x: (x0 - 25 + east + 10) / 2, z: legZ, w: east + 10 - (x0 - 25), d: 12 })
+      out.push({ x: east + 5, z: (legZ + street) / 2, w: 10, d: street - legZ })
     } else {
-      // side-load: 12 ft out from the door face, then down to the street
+      // side-load: 25 ft of apron off the door face, then down to the street
       const dir = door.local[0] > garage.local[0] ? 1 : -1
       const x0 = door.local[0]
-      const apron = { x: x0 + dir * 7, z: door.local[1], w: 14, d: door.span + 4 }
+      const apron = { x: x0 + dir * 12.5, z: garage.local[1], w: 25, d: garage.d }
       out.push(apron)
-      const z1 = door.local[1] - door.span / 2 - 2
-      out.push({ x: x0 + dir * 8, z: (z1 + street) / 2, w: 12, d: street - z1 })
+      const z1 = garage.local[1] + garage.d / 2
+      out.push({ x: x0 + dir * 12, z: (z1 + street) / 2, w: 12, d: street - z1 })
     }
     return out
   }, [rooms, centre, lot])

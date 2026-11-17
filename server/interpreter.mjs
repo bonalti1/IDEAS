@@ -12,7 +12,8 @@ export const DIFF_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          op: { type: 'string', enum: ['resize', 'add', 'remove', 'move', 'moveBeside'] },
+          op: { type: 'string', enum: ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage'] },
+          cars: { type: 'number', description: 'bays for the garage op (1 to 4): "make the garage 3 cars"' },
           room: { type: 'string', description: 'room id for resize, remove, move, moveBeside' },
           target: { type: 'string', description: 'room id to move the room next to (moveBeside)' },
           kind: { type: 'string', description: 'room kind for add, one of the kit kinds' },
