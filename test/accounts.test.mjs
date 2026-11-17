@@ -274,3 +274,20 @@ test('a fix the client clicked applies its ops without the interpreter and costs
   assert.equal(yes.body.source, 'fix')
   assert.equal(yes.body.credits, 9)
 })
+
+test('/api/interpret answers 200 with the basic rules when the office has no Claude key', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
+  const { summarizeRooms } = await import('../src/draft/lib/ops.js')
+  const rooms = summarizeRooms(generateRooms(program, style))
+  const r = await fetch(base + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make the kitchen bigger', rooms, program, kit: { id: 'farmhouse' } }) })
+  assert.equal(r.status, 200)
+  const body = await r.json()
+  assert.equal(body.source, 'fallback')
+  assert.equal(body.reason, 'not configured')
+  assert.equal(body.ops[0].op, 'resize')
+  assert.equal(body.ops[0].room, 'kitchen')
+  // a request the rules cannot read is still 200, with a question back and no ops
+  const r2 = await fetch(base + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make it nicer', rooms, program, kit: { id: 'farmhouse' } }) })
+  assert.equal(r2.status, 200)
+  assert.deepEqual((await r2.json()).ops, [])
+})

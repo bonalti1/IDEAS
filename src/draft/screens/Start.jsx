@@ -13,7 +13,11 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
   const [name, setName] = useState(user?.name || '')
   const [file, setFile] = useState(null)
   const [guest, setGuest] = useState(false)
-  const ready = address.trim().length > 4 || file
+  // a street address (number, street, city) or a lot and subdivision; anything shorter gets a hint
+  const a = address.trim()
+  const looksLikeAddress = (/\d/.test(a) && /\s/.test(a) && a.length >= 8) || /\blot\b/i.test(a)
+  const ready = looksLikeAddress || !!file
+  const hint = a && !looksLikeAddress && !file ? (a.length < 8 ? 'Type the full street address with the city, like 1300 W Nolana Ave, McAllen, TX.' : 'Add the street number and the city, like 1300 W Nolana Ave, McAllen, TX. Or upload the plat.') : ''
   const canStart = !!user || guest
 
   return (
@@ -87,8 +91,13 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           )}
           <label className="field">
             <span>Address</span>
-            <input id="start-address" placeholder="Street address, or lot and subdivision" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input id="start-address" placeholder="Street address, or lot and subdivision" value={address} onChange={(e) => setAddress(e.target.value)} aria-describedby="start-address-hint" />
           </label>
+          {hint && (
+            <p id="start-address-hint" className="fine warn" style={{ marginTop: -6 }}>
+              {hint}
+            </p>
+          )}
           <div className="or">or</div>
           <label className={'drop' + (file ? ' has-file' : '')}>
             <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} hidden />

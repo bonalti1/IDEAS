@@ -29,6 +29,12 @@ async function flow(viewport, tag) {
   await page.locator('#signin-email').fill(`fix-${RUN}-${tag}@example.com`)
   await page.getByRole('button', { name: /Continue|Email me/ }).click()
   await page.locator('#start-address').waitFor({ timeout: 20000 })
+  // a bad address must say what to type instead of greying the button out silently
+  await page.locator('#start-address').fill('asdf')
+  await page.waitForTimeout(300)
+  const hint = await page.locator('#start-address-hint').textContent().catch(() => '')
+  console.log(`  ${tag} "asdf" → ${hint ? 'hint: ' + hint : 'NO HINT'}`)
+  await shot('01b-address-hint')
   await page.locator('#start-address').fill('1300 W Nolana Ave, McAllen, TX 78504')
   await page.getByRole('button', { name: 'Find my lot' }).click()
   await page.locator('#lot-city').waitFor({ timeout: 20000 })

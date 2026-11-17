@@ -366,3 +366,8 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 }
 .viewport-hint { position: absolute; left: 16px; bottom: 14px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brand-muted); background: rgba(247,247,247,0.85); padding: 5px 9px; border-radius: 6px; }
 .msg.you.undone { opacity: 0.55; text-decoration: line-through; }
+.room-tag { display: inline-block; white-space: nowrap; font-family: var(--brand-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand-ink); background: rgba(247,247,247,0.88); border: 1px solid var(--brand-hair); border-radius: 999px; padding: 2px 7px; transform: translateY(-50%); }
+.room-tag.on { background: var(--brand-brown); color: #fff; border-color: var(--brand-brown); }
+.room-tag.open { color: var(--brand-muted); background: rgba(247,247,247,0.7); }
+.preset.on { border-style: solid; background: #fff; }
+.preset.on span::before { content: '✓ '; }

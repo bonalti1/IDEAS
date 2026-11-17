@@ -169,7 +169,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             Roof
           </label>
         </div>
-        {view === 'top' && <div className="viewport-hint">Scroll to zoom · drag to pan</div>}
+        <div className="viewport-hint">{view === 'top' ? 'Scroll to zoom · drag to pan' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
       </div>
       <aside className="side chat">
         <div className="side-head">

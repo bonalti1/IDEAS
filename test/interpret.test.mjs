@@ -212,3 +212,16 @@ test('the fallback asks when a porch has no side, and when there is nothing to m
   const r2 = await ask('move the laundry next to the pool', fresh(), offline)
   assert.equal(r2.applied, false)
 })
+
+test('a stub op beside the real one (a resize with no size, a move with no distance) does not sink the change', async () => {
+  const stubs = async () => ({ ops: [{ op: 'resize', room: 'garage', w: 33, d: 22 }, { op: 'resize', room: 'laundry' }, { op: 'move', room: 'mud' }], reply: 'Three cars.', confidence: 0.9 })
+  const res = await ask('make the garage 3 cars', withGarage(), stubs)
+  assert.equal(res.applied, true, res.reply)
+  assert.equal(byId(res.rooms, 'garage').w, 33)
+  assert.equal(res.ops.length, 1)
+  // a resize with one side keeps the other
+  const oneSide = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 12 }], reply: 'Narrower.', confidence: 0.9 })
+  const r2 = await ask('kitchen 12 wide', fresh(), oneSide)
+  assert.equal(r2.applied, true, r2.reply)
+  assert.equal(byId(r2.rooms, 'kitchen').w, 12)
+})

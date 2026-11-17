@@ -1,6 +1,6 @@
 # Fix round 1 (from the live test of drafthouse.netlify.app)
 
-Every item from the round, what was done, and where. Verified on 2026-11-17 with `npm test` (81 tests, 79 pass, 2 skipped live tests, 0 fail, with Postgres), `vite build` (clean), the IfcOpenShell check on a fresh Garza export (IFC4, 322 products, geometry for all 318 that carry any, 0 failures), `scripts/shot-flow.mjs` (the full client, drafter and office walk, 18 screenshots) and `scripts/shot-fix-round.mjs` (this round's screens at 1440 and 390 px, before and after).
+Every item from the round, what was done, and where. Verified on 2026-11-17 with `npm test` (83 tests, 81 pass, 2 skipped live tests, 0 fail, with Postgres), `vite build` (clean), the IfcOpenShell check on a fresh Garza export (IFC4, 322 products, geometry for all 318 that carry any, 0 failures), `scripts/shot-flow.mjs` (the full client, drafter and office walk, 18 screenshots) and `scripts/shot-fix-round.mjs` (this round's screens at 1440 and 390 px, before and after).
 
 Before screenshots come from a build of `main` as it was; after screenshots from this branch. Both in `docs/fix-round-1/`.
 
@@ -37,6 +37,15 @@ Before screenshots come from a build of `main` as it was; after screenshots from
 | 12 | Style step | yes | 81d9df5 | Styles without a kit are marked coming soon and cannot be picked; the step says which style is ready and the Next button says "Pick a style to continue". |
 | 13 | First screen | yes | 81d9df5 | 3D and plan previews, one line on what is free and what costs, a real "Try it without an account" button, email field styled like the name field, sign-in button always live with a plain message for a bad email, the repeated line removed (also from the office sign-in). |
 | 14 | 390 px | yes | 81d9df5 | Every step checked at 390 px (`docs/fix-round-1/after/phone-*.png`): header wraps, panels stack, inputs and buttons fit, tables shrink. |
+
+## Added after the strict retest (Nov 17)
+
+| # | Item | Done | Notes |
+|---|---|---|---|
+| 15 | `/api/interpret` answered 503 on every chat message in production | yes | When the Claude key is missing, or Claude times out, refuses or fails, the route answers 200 with the basic rules' diff (`source: "fallback"`, `reason` says why). The project route already did this; now the guest path does too. Tests in `test/accounts.test.mjs` and `test/server.test.mjs`. Also: a stub op the interpreter sometimes adds beside the real one (a resize with no size, a move with no distance) no longer sinks the change; it is dropped or completed from the room's current size (`normalizeOps`, tested). |
+| 16 | "asdf" greyed Find my lot out silently | yes | A short or number-less address shows "Type the full street address with the city, like 1300 W Nolana Ave, McAllen, TX" under the field; a lot and subdivision, or an uploaded plat, also count. `docs/fix-round-1/after/address-hint.png`. |
+| 17 | Rooms sample said 3 bed / 2,533 sf, the house was 4 bed / 2,800 sf | yes | The sample is a button that sets the rooms below to that build; it now says so ("tap to set the rooms below to this; the rooms below are what you will get"), shows a check and "this is what you will get" once they match, and lists the garage. The stories row reads "1 · this style's kit is a one-story plan; two-story styles come with their kits" instead of a greyed stepper. |
+| 18 | 3D room labels and a hint | yes | Every room over 5 ft wears a small tag above it that faces the viewer (lifted above the roof when the roof is on); the hint reads "Drag to turn · scroll to zoom · right-drag to pan" (the plan view keeps "Scroll to zoom · drag to pan"). `docs/fix-round-1/after/draft-first.png`. |
 
 ## Rules that changed, on purpose
 

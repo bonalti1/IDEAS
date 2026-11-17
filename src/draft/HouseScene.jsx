@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Edges, Line } from '@react-three/drei'
+import { OrbitControls, Edges, Line, Html } from '@react-three/drei'
 import SitePlan from '../components/SitePlan.jsx'
 import { FlatLabel } from '../components/labels.jsx'
 import { DEFAULT_LOT } from './lib/lot.js'
@@ -228,7 +228,18 @@ function Room({ r, highlight, labels, lot }) {
   )
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT }) {
+/** A room's name in the 3D view: a small tag above the room that always faces the viewer. */
+function RoomTag({ r, highlight, showRoof }) {
+  const [x, z] = r.center
+  const y = r.open ? 2 : showRoof ? (r.plate || 9) + 7 : (r.plate || 9) + 1.5
+  return (
+    <Html position={[x, y, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+      <span className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '')}>{r.name}</span>
+    </Html>
+  )
+}
+
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true }) {
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
   const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
   const cam = cams[view] || cams['3d']
@@ -250,6 +261,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       <directionalLight position={[-150, 300, -200]} intensity={1.4} />
       <SitePlan lot={L} />
       {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels={view === 'top'} lot={L} />)}
+      {showHouse && tags && view !== 'top' && roomList.filter((r) => Math.min(r.w, r.d) >= 5).map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} />)}
       {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} lot={L} />)}

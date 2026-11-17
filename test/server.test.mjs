@@ -104,9 +104,10 @@ async function pipeline(base, keys) {
   assert.equal(ilog.count, 1)
   assert.equal(ilog.recent[0].request, 'make the kitchen bigger')
 
-  // no Claude key in the test environment → 503 so the app falls back
+  // no Claude key in the test environment → the basic rules answer, with 200, never an error
   const interp = await post('/api/interpret', { text: 'bigger kitchen', rooms: [], program: {}, kit: {} })
-  assert.equal(interp.status, 503)
+  assert.equal(interp.status, 200)
+  assert.equal((await interp.json()).source, 'fallback')
 
   // backup on demand writes a gzip dump with everything in it
   const bk = await (await post('/api/admin/backup', {}, 'drafter')).json()

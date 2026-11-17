@@ -3,7 +3,7 @@
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
 import { kitFor, lotOf } from './layout.js'
-import { validateOps, applyOps, regexOps, summarizeRooms } from './ops.js'
+import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps } from './ops.js'
 import { checkRules } from './rules.js'
 
 const MIN_CONFIDENCE = 0.5
@@ -11,7 +11,7 @@ const MIN_CONFIDENCE = 0.5
 let offlineUntil = 0
 
 /** Calls the office interpreter. Throws when it cannot. */
-export async function claudeInterpreter({ text, rooms, program, kit }) {
+export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
   if (Date.now() < offlineUntil) throw Object.assign(new Error('interpreter not configured'), { unconfigured: true })
   let res
   try {
@@ -19,6 +19,7 @@ export async function claudeInterpreter({ text, rooms, program, kit }) {
     text,
     rooms: summarizeRooms(rooms),
     program,
+    lot,
     kit: { id: kit.id, name: kit.name, kinds: Object.fromEntries(Object.entries(kit.rooms).map(([k, t]) => [k, { name: t.name, w: t.w, d: t.d, zone: t.zone }])), minSize: kit.rules?.minSize || {} },
     })
   } catch (e) {
@@ -39,7 +40,8 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   let diff
   let source = 'claude'
   try {
-    diff = await interpreter({ text, rooms, program, kit })
+    diff = await interpreter({ text, rooms, program, kit, lot: opts.lot ? { spec: opts.lot.spec } : undefined })
+    if (diff.source === 'fallback' || diff.source === 'timeout') source = diff.source // the office answered with the basic rules
   } catch (e) {
     diff = regexOps(text, rooms, kit, lotOf(opts.lot))
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
@@ -52,6 +54,7 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
 /** The deterministic part: confidence gate, shape check, apply, rules. */
 export function decide(diff, rooms, program, style, kit, source, lot) {
   const L = lotOf(lot)
+  diff = { ...diff, ops: normalizeOps(diff.ops, rooms) }
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }

@@ -22,6 +22,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const set = (k) => (v) => onChange({ ...program, [k]: v })
   const toggle = (k) => () => onChange({ ...program, [k]: !program[k] })
   const ref = kit.reference
+  const matchesRef = !!ref && ['beds', 'baths', 'halfBath', 'suite2', 'office', 'garage', 'stories', 'sqft', 'frontPorch', 'rearPorch'].every((k) => (program[k] ?? false) === (ref.program[k] ?? false))
   // the real check: the first draft is drafted and run through the rules on this lot
   const check = useMemo(() => fitsLot(program, style, L), [program, style, L])
   const minSqft = check.draft.minSqft || limits.sqft[0]
@@ -35,11 +36,14 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         <p className="muted">{style.name}. Change anything later in plain language.</p>
       </div>
       {ref && (
-        <button className="preset" onClick={() => onChange({ ...ref.program })}>
-          <span>Start from a recent build</span>
+        <button className={'preset' + (matchesRef ? ' on' : '')} onClick={() => onChange({ ...ref.program })} aria-pressed={matchesRef}>
+          <span>{matchesRef ? 'Rooms set to a recent build' : 'Use the rooms of a recent build'}</span>
           <b>{ref.name}</b>
           <small>
-            {ref.program.beds} bed · {ref.program.baths}.5 bath · {sf(ref.livingSf)}
+            {ref.program.beds} bed · {ref.program.baths}
+            {ref.program.halfBath ? '.5' : ''} bath · {ref.program.garage ? `${ref.program.garage}-car · ` : 'no garage · '}
+            {sf(ref.livingSf)}
+            {matchesRef ? ' · this is what you will get' : ' · tap to set the rooms below to this; the rooms below are what you will get'}
           </small>
         </button>
       )}
@@ -50,7 +54,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         {oneStory ? (
           <div className="stepper">
             <span className="stepper-label">Stories</span>
-            <span className="muted small">One story in this style</span>
+            <span className="muted small">1 · this style's kit is a one-story plan; two-story styles come with their kits</span>
           </div>
         ) : (
           <Stepper label="Stories" value={program.stories} min={limits.stories[0]} max={limits.stories[1]} onChange={set('stories')} />

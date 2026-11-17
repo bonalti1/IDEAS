@@ -8,6 +8,37 @@ import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/mo
 export const OPS = ['resize', 'add', 'remove', 'move']
 const q = (v) => Math.round(v * 4) / 4
 
+/**
+ * Tidy a diff before it is checked: a resize missing one side keeps the room's current side, a move
+ * missing an axis moves 0 on it, and ops with nothing in them are dropped. The interpreter sometimes
+ * adds such a stub beside the real op; the client should not lose the change over it.
+ */
+export function normalizeOps(ops, rooms) {
+  if (!Array.isArray(ops)) return ops
+  const byId = Object.fromEntries(rooms.filter(isRoom).map((r) => [r.id, r]))
+  return ops
+    .map((o) => {
+      if (!o || typeof o !== 'object') return o
+      if (o.op === 'resize') {
+        const r = byId[o.room]
+        if (!r) return o
+        const w = o.w > 0 ? o.w : r.w
+        const d = o.d > 0 ? o.d : r.d
+        if (!(o.w > 0) && !(o.d > 0)) return null
+        return { ...o, w, d }
+      }
+      if (o.op === 'move') {
+        const dx = Number.isFinite(o.dx) ? o.dx : 0
+        const dy = Number.isFinite(o.dy) ? o.dy : 0
+        if (!dx && !dy) return null
+        return { ...o, dx, dy }
+      }
+      if (o.op === 'add' && !o.kind) return null
+      return o
+    })
+    .filter(Boolean)
+}
+
 /** Shape check only. Rules come later. */
 export function validateOps(ops, rooms, kit) {
   const errors = []

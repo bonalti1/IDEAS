@@ -17,6 +17,10 @@ import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
 import { makeBilling } from './billing.mjs'
+import { regexOps } from '../src/draft/lib/ops.js'
+import { kitFor } from '../src/draft/lib/layout.js'
+import { STYLES } from '../src/draft/lib/styles.js'
+import { buildLot } from '../src/draft/lib/lot.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = +(process.env.PORT || 8787)
@@ -329,7 +333,16 @@ route('POST', '/api/interpret', 'app', async (req, res) => {
       logInterpret({ request: input.request, client: body.client || null, verdict: e.timeout ? 'timeout' : e.refusal ? 'refusal' : e.noDiff ? 'no-diff' : 'error', error: String(e.message).slice(0, 200), ms: e.ms, usage: e.usage, cost: e.cost, model: interpreter.model })
       await event('error', `interpreter: ${e.timeout ? `no answer in ${interpreter.timeoutMs} ms` : e.message}`)
     }
-    json(res, e.status || 500, { error: e.message, timeout: !!e.timeout, blocked: !!e.blocked, category: e.category }, req)
+    // no key, a timeout, a refusal: the basic rules answer, with 200, so a chat message is never an error
+    const kit = kitFor(STYLES.find((st) => st.id === body.kit?.id) || STYLES.find((st) => st.ready))
+    let lot
+    try {
+      lot = body.lot?.spec ? buildLot(body.lot.spec, await lots.table()) : undefined
+    } catch {
+      lot = undefined
+    }
+    const out = regexOps(input.request, body.rooms, kit, lot)
+    json(res, 200, { ...out, source: e.timeout ? 'timeout' : 'fallback', reason: e.unconfigured ? 'not configured' : e.timeout ? 'timeout' : String(e.message || e).slice(0, 120), ms: e.ms }, req)
   }
 })
 route('POST', '/api/interpret/verdict', 'app', async (req, res) => {
