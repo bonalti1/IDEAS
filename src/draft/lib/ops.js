@@ -678,6 +678,8 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       if (sqft < lim[0] || sqft > lim[1]) throw new Error(`this plan draws ${lim[0].toLocaleString()} to ${lim[1].toLocaleString()} sf; ${sqft.toLocaleString()} is outside that`)
       const areaOf = (list) => list.filter((r) => isRoom(r) && isConditioned(r)).reduce((a, r) => a + r.w * r.d, 0) * stories
       const base = areaOf(flat)
+      // within 1% of where it is: nothing to scale (a re-scale of a plan the fit already trimmed only snaps walls)
+      if (Math.abs(sqft - base) / base < 0.01) throw new Error(`the house is already about ${Math.round(base).toLocaleString()} sf`)
       // the search scales the rooms alone (the roof's surfaces are costly to rebuild); the plan scales once at the end
       const planId = planIdOf(flat)
       const at = (k) => {

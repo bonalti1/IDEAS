@@ -100,3 +100,22 @@ test('"swap the office and the dining room" on the default draft applies: the di
   const a = auditPlan(r.rooms, DEFAULT_PROGRAM, kit, DEFAULT_LOT)
   assert.equal(a.errors.length, 0, a.errors.map((e) => e.message).join(' / '))
 })
+
+test('on a lot the plan already fills, "make the house 3,000 sf" names the largest size and offers no fix that would fail; the same size is "already there", not a refusal over a snapped wall', async () => {
+  const { buildLot } = await import('../src/draft/lib/lot.js')
+  const { decide } = await import('../src/draft/lib/interpret.js')
+  const offline = async () => {
+    throw new Error('no api')
+  }
+  const mcallen = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'E Nolana Ave', setbacks: {} })
+  const program = { ...DEFAULT_PROGRAM, sqft: 2350 }
+  const rooms = generateRooms(program, style, mcallen)
+  const r = await interpretRequest('make the house 3,000 sf', rooms, program, style, { lot: mcallen, interpreter: offline, report: false })
+  assert.ok(!r.applied && /largest it fits here/.test(r.reply), r.reply)
+  for (const f of r.fixes || []) {
+    const d = decide({ ops: f.ops, reply: f.label, confidence: 1 }, rooms, program, style, kit, 'fix', mcallen)
+    assert.ok(d.applied, `the offered fix "${f.label}" must apply: ${d.reply}`)
+  }
+  const same = await interpretRequest('make the house 2,350 sf', rooms, program, style, { lot: mcallen, interpreter: offline, report: false })
+  assert.ok(!same.applied && /already about/.test(same.reply), same.reply)
+})

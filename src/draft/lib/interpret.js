@@ -140,8 +140,11 @@ export function decide(diff, rooms, program, style, kit, source, lot) {
     if (scaleOp && caused.some((r) => /setback|cover|lot/i.test(r))) {
       const f = fitsLot({ ...program, sqft: Math.round(scaleOp.sqft) }, style, L)
       const max = f.maxSqft || (f.draft?.clamped ? f.draft.minSqft : null)
-      const reply2 = `At ${Math.round(scaleOp.sqft).toLocaleString()} sf this plan runs past the setbacks on this lot${max ? `; the largest it fits here with these rooms is about ${max.toLocaleString()} sf` : ''}.`
-      return { applied: false, rooms, reply: reply2, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes: max ? [{ label: `Make it ${max.toLocaleString()} sf`, ops: [{ op: 'scale', sqft: max }] }] : fixes }
+      // the largest size is offered as the fix, unless the house is already there (within 1%)
+      const now = rooms.filter((r) => isRoom(r) && !r.open && r.kind !== 'garage').reduce((a, r) => a + r.w * r.d, 0) * (program.stories || 1)
+      const there = max && Math.abs(max - now) / now < 0.01
+      const reply2 = `At ${Math.round(scaleOp.sqft).toLocaleString()} sf this plan runs past the setbacks on this lot${max ? `; the largest it fits here with these rooms is about ${max.toLocaleString()} sf${there ? ', which is about where it is now' : ''}` : ''}.`
+      return { applied: false, rooms, reply: reply2, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes: max && !there ? [{ label: `Make it ${max.toLocaleString()} sf`, ops: [{ op: 'scale', sqft: max }] }] : there ? [] : fixes }
     }
     const reply = caused.length
       ? `I can't do that one. ${caused.join(' ')}${preexisting.length ? ` The plan also has a problem from before: ${preexisting.join(' ')}` : ''}`
