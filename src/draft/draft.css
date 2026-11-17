@@ -371,3 +371,14 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 .room-tag.open { color: var(--brand-muted); background: rgba(247,247,247,0.7); }
 .preset.on { border-style: solid; background: #fff; }
 .preset.on span::before { content: '✓ '; }
+
+/* the plan audit on the review screen */
+.card.audit.pass h3 { color: var(--ok, #2a7a3b); }
+.card.audit.fail h3 { color: var(--bad, #b3261e); }
+.checks li { list-style: none; padding-left: 0; }
+.checks li .mark { display: inline-block; width: 1.2em; font-weight: 700; }
+.checks li.ok .mark { color: var(--ok, #2a7a3b); }
+.checks li.bad .mark { color: var(--bad, #b3261e); }
+.fine.block { display: block; margin: 2px 0 2px 1.2em; }
+.card.audit h4 { margin: 10px 0 4px; font-size: 13px; }
+.price-line { margin-top: 4px; }

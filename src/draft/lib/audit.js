@@ -315,3 +315,27 @@ export function auditDesign(design, kit) {
   const fixtures = design.fixtures.map((f) => ({ ...f, kind: 'fixture', element: true, fixture: f.kind, x: f.x - f.w / 2 - ox, y: f.z - f.d / 2 - oz }))
   return auditPlan([...rooms, ...doors, ...windows, ...fixtures], design.program, K, null)
 }
+
+/** The checks a drafter reads, grouped: [{ id, name, ok, findings: [message] }], plus the measures. */
+export const CHECK_GROUPS = [
+  { id: 'doors', name: 'Every door on a wall its room shares', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial'] },
+  { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath', ids: ['reach'] },
+  { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
+  { id: 'halls', name: 'Halls 36" clear', ids: ['hall'] },
+  { id: 'overlap', name: 'No room over another or on a porch', ids: ['overlap', 'porch'] },
+  { id: 'fixtures', name: 'Toilet and shower clearances', ids: ['toilet-front', 'toilet-side', 'shower-front'] },
+  { id: 'garage', name: 'Garage attached, fire-rated house door, overhead door to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers'] },
+  { id: 'suite', name: 'Primary bath and closet from the bedroom', ids: ['suite-bath', 'suite-closet'] },
+  { id: 'kitchen', name: 'Kitchen work triangle 26 ft or less, aisles 42"', ids: ['triangle', 'aisle'] },
+  { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },
+  { id: 'west', name: 'West glass over 40 sf shaded', ids: ['west-glass'] },
+]
+export function auditSummary(rooms, program, kit, lot) {
+  const a = auditPlan(rooms, program, kit, lot)
+  const groups = CHECK_GROUPS.map((g) => {
+    const errors = a.errors.filter((f) => g.ids.includes(f.id)).map((f) => f.message)
+    const warnings = a.warnings.filter((f) => g.ids.includes(f.id)).map((f) => f.message)
+    return { id: g.id, name: g.name, ok: errors.length === 0, errors, warnings }
+  })
+  return { ok: a.ok, errors: a.errors.length, warnings: a.warnings.length, groups, measures: a.measures }
+}

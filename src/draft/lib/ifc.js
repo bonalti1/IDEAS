@@ -3,6 +3,7 @@
 // Opens in Revit (Insert > Link IFC or Open IFC), BIMcollab Zoom, or any IFC viewer.
 import { isConditioned, lotOf } from './layout.js'
 import { hostWall } from './openings.js'
+import { openingMarks } from './contract.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 
 const FT = 0.3048
@@ -172,8 +173,20 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
   const X = (lx) => lx * FT
   const Y = (lz) => -lz * FT
 
+  // property helpers
+  const pBool = (k, v) => add(`IFCPROPERTYSINGLEVALUE('${k}',$,IFCBOOLEAN(${v ? '.T.' : '.F.'}),$)`)
+  const pText = (k, v) => add(`IFCPROPERTYSINGLEVALUE('${k}',$,IFCLABEL('${esc(v)}'),$)`)
+  const pReal = (k, v, type = 'IFCREAL') => add(`IFCPROPERTYSINGLEVALUE('${k}',$,${type}(${Number(v).toFixed(4)}),$)`)
+  const pset = (name, props, objects) => {
+    const ps = add(`IFCPROPERTYSET(${g()},#${oh},'${name}',$,(${props.map((i) => '#' + i).join(',')}))`)
+    add(`IFCRELDEFINESBYPROPERTIES(${g()},#${oh},$,$,(${objects.map((i) => '#' + i).join(',')}),#${ps})`)
+    return ps
+  }
+  const typed = (typeId, objects) => objects.length && add(`IFCRELDEFINESBYTYPE(${g()},#${oh},$,$,(${objects.map((i) => '#' + i).join(',')}),#${typeId})`)
+
   // ── walls ─────────────────────────────────────────────────────────────
   const walls = wallsFrom(rooms, kit)
+  const wallClass = (w) => (w.dormer || w.exterior ? 'exterior' : w.plumbing ? 'plumbing' : 'interior')
   const wallIds = walls.map((w, i) => {
     const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) * FT
     const t = (w.thicknessIn / 12) * FT
@@ -183,12 +196,36 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     const sy = Y(w.a[1]) + dir[0] * (t / 2)
     const base = w.base || 0
     const { pl, shape } = box(sx.toFixed(4), sy.toFixed(4), (base * FT).toFixed(4), len, t, (w.plate - base) * FT, dir)
-    return add(`IFCWALL(${g()},#${oh},'${w.dormer ? 'Dormer face' : w.exterior ? 'Exterior' : w.plumbing ? 'Plumbing' : 'Interior'} wall ${i + 1}','${w.thicknessIn}" ${w.exterior ? kit.walls.exterior.studs : w.plumbing ? kit.walls.plumbing.studs : kit.walls.interior.studs}',$,#${pl},#${shape},$,.STANDARD.)`)
+    return add(`IFCWALL(${g()},#${oh},'${w.dormer ? 'Dormer face' : w.exterior ? 'Exterior' : w.plumbing ? 'Plumbing' : 'Interior'} wall ${i + 1}','${w.thicknessIn}" ${w.exterior ? kit.walls.exterior.studs : w.plumbing ? kit.walls.plumbing.studs : kit.walls.interior.studs}',$,#${pl},#${shape},'W${String(i + 1).padStart(3, '0')}',.STANDARD.)`)
   })
+  // wall types named as the office's Revit template names them, each with its material layers
+  const wallTypeIds = {}
+  for (const cls of ['exterior', 'interior', 'plumbing']) {
+    const members = wallIds.filter((_, i) => wallClass(walls[i]) === cls)
+    if (!members.length) continue
+    const spec = kit.walls[cls]
+    const name = kit.revit?.wallTypes?.[cls] || `${cls} wall`
+    const gyp = add(`IFCMATERIAL('Gypsum board 1/2"',$,'finish')`)
+    const studs = add(`IFCMATERIAL('${esc(spec.studs)} framing',$,'framing')`)
+    const layers = [add(`IFCMATERIALLAYER(#${gyp},${((0.5 / 12) * FT).toFixed(4)},$,'Gypsum board',$,$,$)`), add(`IFCMATERIALLAYER(#${studs},${((Math.max(spec.thicknessIn - 1, 3.5) / 12) * FT).toFixed(4)},$,'${esc(spec.studs)} studs',$,$,$)`)]
+    if (cls === 'exterior') {
+      const skin = add(`IFCMATERIAL('${esc(kit.exterior.siding)}',$,'cladding')`)
+      layers.push(add(`IFCMATERIALLAYER(#${skin},${((0.5 / 12) * FT).toFixed(4)},$,'Sheathing and siding',$,$,$)`))
+    } else layers.push(add(`IFCMATERIALLAYER(#${gyp},${((0.5 / 12) * FT).toFixed(4)},$,'Gypsum board',$,$,$)`))
+    const set = add(`IFCMATERIALLAYERSET((${layers.map((i) => '#' + i).join(',')}),'${esc(name)}',$)`)
+    const type = add(`IFCWALLTYPE(${g()},#${oh},'${esc(name)}','${spec.thicknessIn}" ${esc(spec.studs)}',$,$,$,$,$,.STANDARD.)`)
+    add(`IFCRELASSOCIATESMATERIAL(${g()},#${oh},$,$,(#${type}),#${set})`)
+    typed(type, members)
+    pset('Pset_WallCommon', [pBool('IsExternal', cls === 'exterior'), pBool('LoadBearing', cls === 'exterior')], members)
+    wallTypeIds[cls] = type
+  }
 
   // ── doors and windows: opening voids the host wall, door or window fills it
   const elements = rooms.filter((r) => r.element)
+  const marks = openingMarks(rooms)
   const fillIds = []
+  const doorsBySize = {}
+  const windowsByMark = {}
   const wallBox = (w, t0, t1, z0, h, extra = 0.1) => {
     const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])
     const dir = [(X(w.b[0]) - X(w.a[0])) / (len * FT), (Y(w.b[1]) - Y(w.a[1])) / (len * FT)]
@@ -205,8 +242,9 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const w = walls[host.i]
       const sill = e.kind === 'window' ? e.sill ?? WINDOW_SILL[e.mark] ?? 2 : 0
       const head = e.kind === 'window' ? e.head ?? WINDOW_HEAD[e.mark] ?? 7 : DOOR_HEAD
-      const t0 = Math.max(0, host.t - e.span / 2)
-      const t1 = Math.min(host.len, host.t + e.span / 2)
+      // the opening keeps its catalog width: one past the end of the wall slides onto it
+      const t0 = Math.max(0, Math.min(host.t - e.span / 2, host.len - e.span))
+      const t1 = Math.min(host.len, t0 + e.span)
       const op = wallBox(w, t0, t1, sill, head - sill)
       const opening = add(`IFCOPENINGELEMENT(${g()},#${oh},'Opening for ${e.name}',$,$,#${op.pl},#${op.shape},$,.OPENING.)`)
       add(`IFCRELVOIDSELEMENT(${g()},#${oh},$,$,#${wallIds[host.i]},#${opening})`)
@@ -215,16 +253,43 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const H = ((head - sill) * FT).toFixed(3)
       const W = ((t1 - t0) * FT).toFixed(3)
       let fill
+      const tag = marks.get(e.id) || ''
       if (e.kind === 'door') {
+        const spec = kit.doors[e.size] || {}
         const op = e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
-        fill = add(`IFCDOOR(${g()},#${oh},'${e.size || 'door'} ${e.pair ? 'pair' : ''}'.trim(),'${kit.doors[e.size]?.material || ''}',$,#${fb.pl},#${fb.shape},$,${H},${W},.DOOR.,${op},$)`)
+        const name = [tag, e.size || 'door', e.pair && !spec.pair ? 'pair' : ''].filter(Boolean).join(' ')
+        fill = add(`IFCDOOR(${g()},#${oh},'${esc(name)}','${esc(spec.material || '')}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.DOOR.,${op},$)`)
+        pset('Pset_DoorCommon', [pBool('IsExternal', !!e.exterior), pText('FireRating', e.fireRated ? '20 min' : ''), pBool('SelfClosingDevice', !!e.selfClosing), pText('Reference', e.size || '')], [fill])
+        ;(doorsBySize[`${e.size}${e.pair && !spec.pair ? ':pair' : ''}`] ||= []).push(fill)
       } else {
         const win = kit.windows[e.mark] || {}
-        fill = add(`IFCWINDOW(${g()},#${oh},'Window ${e.mark}','${win.type || ''} ${win.material || ''}'.trim(),$,#${fb.pl},#${fb.shape},$,${H},${W},.WINDOW.,.${e.span >= 5 ? 'DOUBLE_PANEL_VERTICAL' : 'SINGLE_PANEL'}.,$)`)
+        const name = [tag, `Window ${e.mark}`].filter(Boolean).join(' ')
+        fill = add(`IFCWINDOW(${g()},#${oh},'${esc(name)}','${esc([win.type, win.material].filter(Boolean).join(' '))}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.WINDOW.,.${e.span >= 5 ? 'DOUBLE_PANEL_VERTICAL' : 'SINGLE_PANEL'}.,$)`)
+        const props = [pBool('IsExternal', true), pText('Reference', e.mark)]
+        if (win.uFactor) props.push(pReal('ThermalTransmittance', win.uFactor * 5.678, 'IFCTHERMALTRANSMITTANCEMEASURE')) // Btu/h·ft²·°F → W/m²·K
+        pset('Pset_WindowCommon', props, [fill])
+        if (win.uFactor || win.shgc) pset('DraftHouse_Window', [pReal('UFactor', win.uFactor || 0), pReal('SHGC', win.shgc || 0), pText('Energy', win.energy || '')], [fill])
+        ;(windowsByMark[e.mark] ||= []).push(fill)
       }
       add(`IFCRELFILLSELEMENT(${g()},#${oh},$,$,#${opening},#${fill})`)
       fillIds.push(fill)
     })
+
+  // door and window types, named as the office's Revit families
+  Object.entries(doorsBySize).forEach(([k, ids]) => {
+    const [size, pairFlag] = k.split(':')
+    const spec = kit.doors[size] || {}
+    const name = kit.revit?.doors?.[size] || size
+    const op = pairFlag || spec.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : '.SINGLE_SWING_LEFT.'
+    const type = add(`IFCDOORTYPE(${g()},#${oh},'${esc(name)}${pairFlag ? ' (pair)' : ''}','${esc(spec.material || '')}',$,$,$,$,$,.DOOR.,${op},.F.,$)`)
+    typed(type, ids)
+  })
+  Object.entries(windowsByMark).forEach(([mark, ids]) => {
+    const win = kit.windows[mark] || {}
+    const name = kit.revit?.windows?.[mark] || `Window ${mark}`
+    const type = add(`IFCWINDOWTYPE(${g()},#${oh},'${esc(name)}','${esc([win.type, win.material].filter(Boolean).join(' '))}',$,$,$,$,$,.WINDOW.,.SINGLE_PANEL.,.F.,$)`)
+    typed(type, ids)
+  })
 
   // ── fixtures and furniture ────────────────────────────────────────────
   const FIX_IFC = {
@@ -313,10 +378,16 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     })
 
   // ── spaces (rooms) ────────────────────────────────────────────────────
-  const spaceIds = rooms.filter((r) => !r.element).map((r) => {
+  const spaceIds = rooms.filter((r) => !r.element).map((r, i) => {
     const h = r.open ? 0.3 : r.plate * FT
     const { pl, shape } = box(X(r.local[0] - r.w / 2).toFixed(4), Y(r.local[1] + r.d / 2).toFixed(4), '0.', r.w * FT, r.d * FT, h)
-    return add(`IFCSPACE(${g()},#${oh},'${r.name}','${r.w} ft x ${r.d} ft',$,#${pl},#${shape},$,.ELEMENT.,.${r.open ? 'EXTERNAL' : 'INTERNAL'}.,$)`)
+    // Name is the room number, LongName the room name (Revit reads them that way)
+    const space = add(`IFCSPACE(${g()},#${oh},'${101 + i}','${r.w} ft x ${r.d} ft',$,#${pl},#${shape},'${esc(r.name)}',.ELEMENT.,.${r.open ? 'EXTERNAL' : 'INTERNAL'}.,$)`)
+    pset('Pset_SpaceCommon', [pBool('IsExternal', !!r.open), pText('Reference', r.kind), pText('Category', r.open ? 'porch' : r.kind === 'garage' ? 'garage' : 'conditioned')], [space])
+    const area = add(`IFCQUANTITYAREA('NetFloorArea',$,$,${(r.w * r.d * FT * FT).toFixed(4)},$)`)
+    const qty = add(`IFCELEMENTQUANTITY(${g()},#${oh},'Qto_SpaceBaseQuantities',$,$,(#${area}))`)
+    add(`IFCRELDEFINESBYPROPERTIES(${g()},#${oh},$,$,(#${space}),#${qty})`)
+    return space
   })
   add(`IFCRELAGGREGATES(${g()},#${oh},$,$,#${storey},(${spaceIds.map((i) => '#' + i).join(',')}))`)
   add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${g()},#${oh},$,$,(${[...wallIds, ...slabIds, ...fillIds, ...fixtureIds, ...roofIds].map((i) => '#' + i).join(',')}),#${storey})`)
@@ -331,8 +402,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     ['Exterior', `${kit.exterior.siding}; ${kit.exterior.accent}`],
     ['Foundation', kit.foundation.slab],
   ].map(([k, v]) => add(`IFCPROPERTYSINGLEVALUE('${k}',$,IFCTEXT('${String(v).replace(/'/g, '')}'),$)`))
-  const pset = add(`IFCPROPERTYSET(${g()},#${oh},'DraftHouse',$,(${props.map((i) => '#' + i).join(',')}))`)
-  add(`IFCRELDEFINESBYPROPERTIES(${g()},#${oh},$,$,(#${building}),#${pset})`)
+  pset('DraftHouse', props, [building])
 
   const date = new Date().toISOString().slice(0, 19)
   return [

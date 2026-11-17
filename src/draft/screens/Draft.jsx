@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
 import { floorArea, isRoom, kitFor } from '../lib/layout.js'
+import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 
@@ -55,7 +56,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   }
 
   const area = floorArea(rooms, program.stories)
-  const estimate = area * style.psf + program.garage * 28000
+  const price = priceOf({ rooms, program, style, lot })
+  const estimate = price.mid
   const suggestions = useMemo(() => suggestionsFor(rooms, kit), [rooms, kit])
 
   /**
@@ -91,7 +93,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     let meta = null
     if (res.applied) {
       const a2 = floorArea(res.rooms, program.stories)
-      meta = { sf: a2 - before.area, cost: a2 * style.psf + program.garage * 28000 - before.estimate, credit: 1 }
+      meta = { sf: a2 - before.area, cost: priceOf({ rooms: res.rooms, program, style, lot }).mid - before.estimate, credit: 1 }
     }
     setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta }])
     if (res.credits !== undefined) setCredits(res.credits)
@@ -186,8 +188,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         </div>
         <div className="stats row2">
           <Stat k="Living area" v={sf(area)} />
-          <Stat k="Estimate" v={money(estimate)} />
+          <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
         </div>
+        <p className="fine price-line" title={price.note}>
+          {rateLine(price)} · {price.county}. {price.note}
+        </p>
         <div className="log" ref={logRef}>
           {history.length === 0 && (
             <div className="msg house">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
 import { kitFor } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
+import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
 import { checkRules } from '../lib/rules.js'
@@ -26,7 +27,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const rules = checkRules(rooms, program, style, lot)
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
-  const estimate = t.areas.living * style.psf + program.garage * 28000
+  const price = priceOf({ rooms, program, style, lot })
 
   // a saved project: follow its status while the drafters and the office computer work on it
   const tracked = project && (['in_review', 'approved', 'built'].includes(project.status) || (project.status === 'returned' && !returnSeen))
@@ -208,7 +209,12 @@ export default function Send({ lot, style, program, rooms, history, project, set
             <Stat k="Program" v={`${program.beds} bed · ${program.baths}${program.halfBath ? '.5' : ''} bath · ${program.garage ? program.garage + '-car · ' : ''}${program.stories} story`} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
-            <Stat k="Rough estimate" v={money(estimate)} />
+            <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
+            <p className="fine">
+              {rateLine(price)} · {price.county}. Living {money(price.parts.living[0])}–{money(price.parts.living[1])}
+              {price.areas.garage ? `, garage ${money(price.parts.garage[0])}–${money(price.parts.garage[1])}` : ''}
+              {price.areas.porches ? `, porches ${money(price.parts.porches[0])}–${money(price.parts.porches[1])}` : ''}. {price.note}
+            </p>
           </div>
           <div className="card">
             <h3>Your changes</h3>

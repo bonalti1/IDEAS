@@ -191,8 +191,8 @@ export default function DraftApp({ admin = false, review = false, billing = fals
             </a>
           )}
           {isDrafter(user) && (
-            <a className={'dh-link' + (lot514 ? ' on' : '')} href="#/lot514">
-              Drafter view
+            <a className={'dh-link' + (lot514 ? ' on' : '')} href="#/lot514" title="The original Lot 514 event-venue site plan (pool, dance floor). A legacy demo, not a client project.">
+              Legacy demo
             </a>
           )}
         </nav>

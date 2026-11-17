@@ -320,10 +320,12 @@ export function scalePlan(rooms, k, cx, cy, kit) {
       r.y = ey - r.d / 2
       return
     }
-    const x1 = fx(r.x + r.w)
-    const y1 = fy(r.y + r.d)
-    r.x = fx(r.x)
-    r.y = fy(r.y)
+    // room edges snap to 2" so dimensions read clean and shared walls stay shared
+    const snap = (v) => Math.round(v * 6) / 6
+    const x1 = snap(fx(r.x + r.w))
+    const y1 = snap(fy(r.y + r.d))
+    r.x = snap(fx(r.x))
+    r.y = snap(fy(r.y))
     r.w = x1 - r.x
     r.d = y1 - r.y
   })

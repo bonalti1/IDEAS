@@ -29,9 +29,15 @@ export function doorSchedule(rooms, kit) {
   const bump = (key, n = 1) => (counts[key] = (counts[key] || 0) + n)
   const traced = rooms.filter((r) => r.kind === 'door' && !r.cased)
   if (traced.length) {
-    traced.forEach((d) => bump(d.size, d.pair && d.size !== 'exteriorPair' ? 2 : 1))
+    // one row per catalog door, pairs apart; count is openings, widthIn the opening (a pair is two leaves)
+    traced.forEach((d) => bump(d.pair && !kit.doors[d.size]?.pair ? `${d.size}:pair` : d.size))
     rooms.filter((r) => r.kind === 'fixture' && r.fixture === 'shower').forEach(() => bump('showerGlass'))
-    return Object.entries(counts).map(([key, count]) => ({ key, ...kit.doors[key], count }))
+    return Object.entries(counts).map(([k, count]) => {
+      const [key, pairFlag] = k.split(':')
+      const spec = kit.doors[key] || {}
+      const pair = !!pairFlag || !!spec.pair
+      return { key, ...spec, pair, widthIn: (spec.w || 0) * (pair ? 2 : 1), count }
+    })
   }
   rooms.forEach((r) => {
     const k = DOOR_FOR[r.kind]
@@ -84,7 +90,7 @@ export function takeoff(rooms, program, kit) {
     windows,
     doors,
     counts: {
-      interiorDoors: doors.filter((d) => !d.key.startsWith('exterior') && d.key !== 'showerGlass').reduce((s, d) => s + d.count, 0),
+      interiorDoors: doors.filter((d) => !d.key.startsWith('exterior') && d.key !== 'showerGlass').reduce((s, d) => s + d.count * (d.pair ? 2 : 1), 0), // leaves, as the set counts them
       exteriorDoors: doors.filter((d) => d.key.startsWith('exterior')).reduce((s, d) => s + d.count, 0),
       singleHung: windows.filter((w) => w.type.startsWith('single')).reduce((s, w) => s + w.count, 0),
       fixed: windows.filter((w) => w.type.startsWith('fixed')).reduce((s, w) => s + w.count, 0),

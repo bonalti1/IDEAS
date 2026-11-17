@@ -154,6 +154,48 @@ export default function Review({ user }) {
               )}
             </div>
           )}
+          {open.audit && (
+            <div className={'card thin audit' + (open.audit.ok ? ' pass' : ' fail')}>
+              <h3>
+                Plan audit · {open.audit.ok ? 'passed' : `${open.audit.errors} error${open.audit.errors === 1 ? '' : 's'}`}
+                {open.audit.warnings ? ` · ${open.audit.warnings} warning${open.audit.warnings === 1 ? '' : 's'}` : ''}
+              </h3>
+              {open.audit.measures?.requestedSf && (
+                <p className="small">
+                  {Math.round(open.audit.measures.livingSf).toLocaleString()} sf delivered for {open.audit.measures.requestedSf.toLocaleString()} sf asked (
+                  {((open.audit.measures.livingSf / open.audit.measures.requestedSf - 1) * 100).toFixed(1)}%)
+                  {open.audit.measures.triangle ? ` · work triangle ${open.audit.measures.triangle.total} ft` : ''}
+                </p>
+              )}
+              <ul className="list small checks">
+                {open.audit.groups.map((g) => (
+                  <li key={g.id} className={g.ok ? 'ok' : 'bad'}>
+                    <span className="mark">{g.ok ? '✓' : '✗'}</span> {g.name}
+                    {g.errors.map((m, i) => (
+                      <span key={i} className="fine bad block">
+                        {m}
+                      </span>
+                    ))}
+                    {g.warnings.map((m, i) => (
+                      <span key={'w' + i} className="fine block">
+                        {m}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+              {open.audit.questions?.length > 0 && (
+                <>
+                  <h4>Open questions</h4>
+                  <ul className="list small">
+                    {open.audit.questions.map((q, i) => (
+                      <li key={i}>{q}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
           <div className="card thin">
             <h3>What the client asked for</h3>
             {changes.length === 0 ? (
@@ -184,6 +226,7 @@ export default function Review({ user }) {
                 {open.reviews.map((r) => (
                   <li key={r.id}>
                     <b>{r.decision}</b> {ago(r.at)}
+                    {r.override ? ' (override)' : ''}
                     {r.note ? `: ${r.note}` : ''}
                   </li>
                 ))}
@@ -193,16 +236,17 @@ export default function Review({ user }) {
           {open.status === 'in_review' ? (
             <>
               <label className="field">
-                <span>Note to the client</span>
-                <textarea id="review-note" rows={3} placeholder="What to fix, or a word of welcome. The client sees this." value={note} onChange={(e) => setNote(e.target.value)} />
+                <span>{open.audit && !open.audit.ok ? 'Note to the client, or your override note' : 'Note to the client'}</span>
+                <textarea id="review-note" rows={3} placeholder={open.audit && !open.audit.ok ? 'The plan has audit errors. Say why it can go to Revit anyway; the override is logged with your name.' : 'What to fix, or a word of welcome. The client sees this.'} value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
               {error && <p className="fine bad">{error}</p>}
+              {open.audit && !open.audit.ok && <p className="fine bad">Approve is off while the audit has errors. Fix the plan, or type an override note to approve anyway.</p>}
               <div className="actions">
                 <Button ghost disabled={busy || !note.trim()} onClick={() => decide('returned')} title={note.trim() ? '' : 'A returned design needs a note'}>
                   Return with note
                 </Button>
-                <Button primary disabled={busy} onClick={() => decide('approved')}>
-                  Approve, build in Revit
+                <Button primary disabled={busy || (open.audit && !open.audit.ok && !note.trim())} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'Type an override note to approve a plan with audit errors' : ''}>
+                  {open.audit && !open.audit.ok && note.trim() ? 'Approve with override, build in Revit' : 'Approve, build in Revit'}
                 </Button>
               </div>
             </>

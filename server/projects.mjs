@@ -6,6 +6,8 @@ import { decide } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
+import { auditSummary } from '../src/draft/lib/audit.js'
+import { RATES } from '../src/draft/lib/pricing.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 
 const id = (p) => p + '_' + crypto.randomBytes(5).toString('hex')
@@ -21,6 +23,23 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
   async function withRooms(p) {
     const v = await store.versions.get(p.id, p.version)
     return { ...p, rooms: v?.rooms || [] }
+  }
+  // the architect audit of the current version, with the open questions a drafter settles by hand
+  function auditOf(full) {
+    if (!full.rooms?.length || !full.program) return null
+    try {
+      const style = styleOf(full)
+      const a = auditSummary(full.rooms, full.program, kitFor(style), full.lot)
+      const questions = []
+      if (!RATES.confirmed) questions.push('Price rates are not confirmed yet (src/draft/lib/pricing.js): the client saw an estimate, not a quote.')
+      if (full.lot?.spec?.kind === 'plat' && !full.lot.spec.confirmed) questions.push('The lot was read from a plat and is not confirmed.')
+      if (full.lot?.assumed) questions.push('The lot size was assumed, not measured.')
+      const kit = kitFor(style)
+      if (Object.values(kit.windows || {}).some((w) => w?.energy === 'CONFIRM')) questions.push('Window U-factor and SHGC in the kit are marked CONFIRM against the supplier.')
+      return { ...a, questions }
+    } catch (e) {
+      return { ok: false, errors: 1, warnings: 0, groups: [], questions: [`The audit could not run: ${e.message}`] }
+    }
   }
 
   return {
@@ -59,7 +78,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // credits are the owner's account balance; the project only counts what it used
     async detail(p) {
       const [full, versions, reviews, job, owner] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null, store.users.get(p.userId)])
-      return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, job: job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null })
+      return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, audit: auditOf(full), job: job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null })
     },
 
     // lot, style, program, and (when the program changed) regenerated rooms as a free version
@@ -209,6 +228,16 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (!['approved', 'returned'].includes(decision)) throw fail(400, 'decision must be approved or returned')
       const t = now()
       const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision, note: String(note || '').trim().slice(0, 2000), at: t }
+      // a plan with audit errors is approved only over an override note, and the override is logged
+      if (decision === 'approved') {
+        const audit = auditOf(await withRooms(p))
+        if (audit && !audit.ok) {
+          if (!r.note) throw fail(409, `the plan has ${audit.errors} audit error${audit.errors === 1 ? '' : 's'}; fix them or approve with an override note`)
+          r.override = true
+          r.auditErrors = audit.groups.flatMap((g) => g.errors)
+          await event('project', `${p.client}: approved over ${audit.errors} audit error${audit.errors === 1 ? '' : 's'} by ${r.drafter}: "${r.note.slice(0, 80)}"`, { projectId: p.id, override: true })
+        }
+      }
       await store.reviews.add(r)
       p.review = r
       p.updatedAt = t
