@@ -19,6 +19,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
   const styleOf = (p) => STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready)
   const publicProject = (p, extra = {}) => ({ ...p, ...extra })
+  // what a homeowner sees of a review: the decision and the note written to them; the override and the
+  // audit it covered stay in the office
+  const clientReview = (r) => (r ? { id: r.id, projectId: r.projectId, drafter: r.drafter, decision: r.decision, note: r.note, at: r.at, overridden: !!r.override } : r)
+  const auditCache = new Map() // project id + version → the audit of that version (the rooms do not change under a version)
 
   async function withRooms(p) {
     const v = await store.versions.get(p.id, p.version)
@@ -76,9 +80,20 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     },
 
     // credits are the owner's account balance; the project only counts what it used
-    async detail(p) {
+    // the owner's view carries no audit, office questions or override notes; the drafter's carries them all
+    async detail(p, { drafter = false } = {}) {
       const [full, versions, reviews, job, owner] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null, store.users.get(p.userId)])
-      return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, audit: auditOf(full), job: job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null })
+      const jobView = job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null
+      if (!drafter) return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews: reviews.map(clientReview), review: clientReview(full.review), job: jobView })
+      return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, audit: this.auditCached(full), job: jobView })
+    },
+    auditCached(full) {
+      const key = `${full.id}:${full.version}:${full.lot?.updatedAt || ''}:${JSON.stringify(full.program || {})}`
+      if (!auditCache.has(key)) {
+        if (auditCache.size > 500) auditCache.clear()
+        auditCache.set(key, auditOf(full))
+      }
+      return auditCache.get(key)
     },
 
     // lot, style, program, and (when the program changed) regenerated rooms as a free version
@@ -221,23 +236,26 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
       await store.projects.put(p)
       await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
-      return this.detail(p)
+      return this.detail(p, { drafter: true })
     },
 
     // approve → queue the Revit build; return → back to the client with a note
-    async review(p, drafter, { decision, note }, queueJob) {
+    async review(p, drafter, { decision, note, override }, queueJob) {
       if (p.status !== 'in_review') throw fail(409, `this design is ${p.status.replace('_', ' ')}, not waiting for review`)
       if (!['approved', 'returned'].includes(decision)) throw fail(400, 'decision must be approved or returned')
       const t = now()
+      // the note is written to the client; the override note (below) stays in the office
       const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision, note: String(note || '').trim().slice(0, 2000), at: t }
-      // a plan with audit errors is approved only over an override note, and the override is logged
+      // a plan with audit errors is approved only over an override note of its own, 20 characters at least,
+      // stored with who wrote it, when, and which errors it covered
       if (decision === 'approved') {
-        const audit = auditOf(await withRooms(p))
+        const audit = this.auditCached(await withRooms(p))
         if (audit && !audit.ok) {
-          if (!r.note) throw fail(409, `the plan has ${audit.errors} audit error${audit.errors === 1 ? '' : 's'}; fix them or approve with an override note`)
-          r.override = true
-          r.auditErrors = audit.groups.flatMap((g) => g.errors)
-          await event('project', `${p.client}: approved over ${audit.errors} audit error${audit.errors === 1 ? '' : 's'} by ${r.drafter}: "${r.note.slice(0, 80)}"`, { projectId: p.id, override: true })
+          const why = String(override || '').trim().slice(0, 2000)
+          if (why.length < 20) throw fail(409, `the plan has ${audit.errors} audit error${audit.errors === 1 ? '' : 's'}; fix them, or approve with an override note of at least 20 characters`)
+          const errors = audit.groups.flatMap((g) => g.errors)
+          r.override = { note: why, by: r.drafter, byId: drafter.id, at: t, errors }
+          await event('project', `${p.client}: approved over ${audit.errors} audit error${audit.errors === 1 ? '' : 's'} by ${r.drafter}: "${why.slice(0, 80)}"`, { projectId: p.id, override: true })
         }
       }
       await store.reviews.add(r)
@@ -253,7 +271,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         await event('project', `${p.client}: returned by ${r.drafter}${r.note ? ` ("${r.note.slice(0, 60)}")` : ''}`, { projectId: p.id })
       }
       await store.projects.put(p)
-      return this.detail(p)
+      return this.detail(p, { drafter: true })
     },
 
     // the worker finished the model

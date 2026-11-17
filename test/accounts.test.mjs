@@ -311,14 +311,42 @@ test('a plan with audit errors is approved only over an override note, and the o
   const p = await projects.create(user, { style: { id: 'farmhouse' }, program, rooms, client: 'Ana Garza' })
   p.status = 'in_review'
   await store.projects.put(p)
-  const det = await projects.detail(p)
+  const det = await projects.detail(p, { drafter: true })
   assert.equal(det.audit.ok, false)
   assert.ok(det.audit.groups.find((g) => g.id === 'reach' && !g.ok), 'the reach check fails')
+  assert.equal((await projects.detail(p)).audit, undefined, 'the owner view has no audit')
   const maria = { id: 'd1', email: 'maria@drafthouse.test', name: 'Maria', role: 'drafter' }
-  await assert.rejects(projects.review(p, maria, { decision: 'approved' }, async () => ({ id: 'job1' })), /override note/)
-  const yes = await projects.review(p, maria, { decision: 'approved', note: 'Door drawn by hand in Revit; client confirmed.' }, async () => ({ id: 'job1' }))
+  await assert.rejects(projects.review(p, maria, { decision: 'approved', note: 'Door drawn by hand in Revit; client confirmed.' }, async () => ({ id: 'job1' })), /override note/)
+  await assert.rejects(projects.review(p, maria, { decision: 'approved', override: 'ok by me' }, async () => ({ id: 'job1' })), /20 characters/)
+  const yes = await projects.review(p, maria, { decision: 'approved', note: 'Approved.', override: 'Door drawn by hand in Revit; client confirmed.' }, async () => ({ id: 'job1' }))
   assert.equal(yes.status, 'approved')
-  assert.equal(yes.reviews[0].override, true)
-  assert.ok(yes.reviews[0].auditErrors.length >= 1)
+  assert.equal(yes.reviews[0].override.by, 'Maria')
+  assert.ok(yes.reviews[0].override.errors.length >= 1 && yes.reviews[0].override.at)
   assert.ok(events.some((e) => /approved over \d+ audit error/.test(e.message) && e.override), 'the override is in the log')
+})
+
+test('the homeowner never receives the audit, the office questions or an override note; the drafter does, cached per version', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-priv-')) })
+  const ana = await who(base, 'ana2@example.com', 'Ana Garza')
+  const maria = await who(base, 'maria@drafthouse.test', 'Maria')
+  const prj = (await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse', name: 'Modern Farmhouse' }, program, rooms: generateRooms(program, style), client: 'Ana Garza' }))).body
+  const own = (await j(await ana.get(`/api/projects/${prj.id}`))).body
+  assert.equal(own.audit, undefined, 'no audit for the owner')
+  assert.equal(own.questions, undefined, 'no office questions for the owner')
+  assert.ok(!JSON.stringify(own).includes('server/projects.mjs'), 'no source paths for the owner')
+  const office = (await j(await maria.get(`/api/review/${prj.id}`))).body
+  assert.ok(office.audit && typeof office.audit.ok === 'boolean' && office.audit.questions.length >= 1, 'the drafter sees the audit and the questions')
+  assert.deepEqual((await j(await maria.get(`/api/review/${prj.id}`))).body.audit, office.audit, 'the same audit for the same version')
+  // sent and approved with a note to the client: the owner sees the decision and the note, never override fields
+  await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' } })
+  const ok = await j(await maria.post(`/api/review/${prj.id}`, { decision: 'approved', note: 'Approved, building it.' }))
+  assert.equal(ok.status, 200, JSON.stringify(ok.body))
+  const seen = (await j(await ana.get(`/api/projects/${prj.id}`))).body
+  assert.equal(seen.reviews.length, 1)
+  assert.equal(seen.reviews[0].override, undefined)
+  assert.equal(seen.reviews[0].overridden, false)
+  assert.equal(seen.reviews[0].auditErrors, undefined)
+  assert.match(seen.review.note, /Approved, building it/)
+  assert.equal(seen.audit, undefined)
+  // the override itself (20 characters, who, when, which errors) is covered on the module above
 })
