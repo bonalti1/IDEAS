@@ -13,7 +13,7 @@ Commits, in order:
 | bd28663 | A fit offer names the plan nearest the ask (the 5/4 on the 50 ft lot gets the narrow plan, not the compact); the screenshot script shows the whole chat bubble and trims its crops |
 | f5e8688 | A whole-house size the plan is already at is said so ("already about 2,356 sf"), not offered as a fix that would fail |
 
-Tests: `npm test` → **229 tests, 227 pass, 0 fail, 2 skipped** (the last full run before the final test was added: 228, 226 pass, 0 fail, 2 skipped; the one added since, on the size refusal, passes on its own; a full rerun is in flight and its numbers go in the next commit)**** (the two skipped are the `LIVE=1` tests: a Stripe Checkout session in test mode, which needs `STRIPE_SECRET_KEY`, and Claude reading the Garza site plan with the FEMA lookup, which needs the key and the internet). `npm run build` clean. Every item below has a test that failed before its fix and passes after it, except the three that are only visible in a browser (12, 13, 18), which the screenshot script checks and the notes record, and 17, which cannot be measured from here.
+Tests: `npm test` → **229 tests, 227 pass, 0 fail, 2 skipped** (the two skipped are the `LIVE=1` tests: a Stripe Checkout session in test mode, which needs `STRIPE_SECRET_KEY`, and Claude reading the Garza site plan with the FEMA lookup, which needs the key and the internet). `npm run build` clean. Every item below has a test that failed before its fix and passes after it, except the three that are only visible in a browser (12, 13, 18), which the screenshot script checks and the notes record, and 17, which cannot be measured from here.
 
 `npm audit --omit=dev`:
 
