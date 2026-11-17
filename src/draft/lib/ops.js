@@ -696,7 +696,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
   const roof = flat.find((r) => r.kind === 'roof')
   if (roof && kit.plan?.roof) {
     const ids = new Set(flat.filter(isRoom).map((r) => r.id))
-    const masses = (roof.masses || kit.plan.roof).filter((m) => !m.id || ids.has(m.id) || !kit.plan.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
+    const masses = (roof.masses || kit.plan.roof).filter((m) => !m.id || ids.has(m.id) || !kit.plan.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2'))).filter((m) => !(m.id && m.id.startsWith('awning-') && kit.plan.rooms.some((r) => r.id === m.id.slice(7)) && !ids.has(m.id.slice(7))))
     roof.masses = masses
     roof.faces = roofSurfaces(masses, roof.scale || 1, roof.centre || centre, roof.offset || [0, 0])
     roof.dormers = dormerWalls(masses, roof.scale || 1, roof.centre || centre, roof.offset || [0, 0])

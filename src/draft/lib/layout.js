@@ -289,7 +289,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the bed wing's roof grows with the wing; the roof then scales with the rooms
     const ids2 = new Set(rooms.filter(isRoom).map((r) => r.id))
-    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).map((m) => {
+    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).filter((m) => !(m.id && m.id.startsWith('awning-') && T.rooms.some((r) => r.id === m.id.slice(7)) && !ids2.has(m.id.slice(7)))).map((m) => {
       // a mass drawn for a room that is not there takes its 'absent' shape (the bed wing runs on over Bath 1 without the mini primary)
       const { absent, ...mass } = m
       Object.entries(absent || {}).forEach(([id, over]) => { if (!ids2.has(id)) Object.assign(mass, over) })
