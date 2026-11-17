@@ -5,6 +5,7 @@
 // is used on a client project. Feet and inches unless noted.
 
 import { NARROW_PLAN } from './farmhouse-narrow.js'
+import { COMPACT_PLAN } from './farmhouse-compact.js'
 
 export const KIT = {
   id: 'farmhouse',
@@ -154,14 +155,19 @@ export const KIT = {
   //    rear wall toward the street). This is what the layout engine starts from.
   //    Hallways are real rooms here so the walls come out where the set has them.
   // the narrow plan for 50 ft lots (src/kits/farmhouse-narrow.js); the drafter picks the one that fits the lot
-  plans: { narrow: NARROW_PLAN },
+  plans: { compact: COMPACT_PLAN, narrow: NARROW_PLAN },
+  // the standard plan is drawn for 1,850 sf and up; the compact one (src/kits/farmhouse-compact.js) for 1,300 to 1,750
+  planSqft: [1750, Infinity],
   plan: {
     footprint: { w: 72, d: 53 },
     facing: 'street', // front porch faces the lot's front street
-    // Round 4 re-plan of the traced set (CONFIRM with the drafter): the pantry is inside, off the kitchen,
-    // the dining room takes the front gable the pantry had; the half bath opens off the mud room; the
-    // primary suite is entered through its own vestibule off the kitchen, not the mud hall; Bath 1 sits
-    // in the wing line with its window on the side; halls are 4 ft (42" clear); closets 2'-6".
+    // Round 4 re-plan of the traced set (CONFIRM with the drafter): the pantry is inside, the dining room
+    // takes the front gable the pantry had; Bath 1 sits in the wing line with its window on the side;
+    // halls are 4 ft (42" clear); closets 2'-6".
+    // Round 5: the primary suite is entered through a gallery off the dining room, away from the kitchen;
+    // the half bath (the guests' bath) opens off that gallery, not the mud room; the pantry opens off the
+    // gallery's end; the mud room has a pocket door to the kitchen so no two swings meet and the bench
+    // sits on a wall with no door; the fridge moved to the kitchen's east wall (work triangle 18 ft).
     rooms: [
       { id: 'bed2', kind: 'bed', name: 'Bedroom 2', x: 3.75, y: 2.75, w: 12.25, d: 12.75 },
       { id: 'closet2', kind: 'wic', name: 'Closet', x: 15.75, y: 2.75, w: 4.0, d: 4.5 },
@@ -183,10 +189,10 @@ export const KIT = {
       { id: 'frontPorch', kind: 'frontPorch', name: 'Front Porch', x: 29.0, y: 38.0, w: 28.0, d: 10 },
       { id: 'laundry', kind: 'laundry', name: 'Laundry', x: 64.25, y: 0.5, w: 7.75, d: 14.75 },
       { id: 'mud', kind: 'mud', name: 'Mud Room', x: 57.0, y: 9.75, w: 7.25, d: 5.5 },
-      { id: 'pantry', kind: 'pantry', name: 'Pantry', x: 57.0, y: 15.25, w: 4.0, d: 8.5 },
-      { id: 'halfbath', kind: 'halfbath', name: 'Half Bath', x: 61.0, y: 15.25, w: 3.75, d: 8.5 },
-      { id: 'mwic', kind: 'mwic', name: 'Primary Closet', x: 64.75, y: 15.25, w: 7.25, d: 8.5 },
-      { id: 'mhall', kind: 'hall', name: 'Suite Hall', x: 57.0, y: 23.75, w: 4.0, d: 7.75 },
+      { id: 'pantry', kind: 'pantry', name: 'Pantry', x: 57.0, y: 15.25, w: 4.0, d: 4.5 },
+      { id: 'halfbath', kind: 'halfbath', name: 'Half Bath', x: 61.0, y: 15.25, w: 4.25, d: 8.5 },
+      { id: 'mwic', kind: 'mwic', name: 'Primary Closet', x: 65.25, y: 15.25, w: 6.75, d: 8.5 },
+      { id: 'mhall', kind: 'hall', name: 'Gallery', x: 57.0, y: 19.75, w: 4.0, d: 11.75 },
       { id: 'mbath', kind: 'mbath', name: 'Primary Bath', x: 61.0, y: 23.75, w: 11.0, d: 7.75 },
       { id: 'master', kind: 'master', name: 'Primary Bedroom', x: 57.0, y: 31.5, w: 15.0, d: 16.25 },
     ],
@@ -237,10 +243,10 @@ export const KIT = {
     // Doors: centre on the wall line. axis 'h' = wall runs along x, 'v' = along y.
     // swing +1 opens toward +y (h) or +x (v); hinge 'start' = lower x or y end.
     doors: [
-      { id: 'd-bed2', room: 'bed2', axis: 'v', x: 15.75, y: 14.1, w: 2.67, swing: -1, hinge: 'end', size: 'interiorWide' },
+      { id: 'd-bed2', room: 'bed2', axis: 'v', x: 15.75, y: 12, w: 2.67, swing: -1, hinge: 'start', size: 'interiorWide' },
       { id: 'd-closet2', room: 'closet2', axis: 'v', x: 15.75, y: 5, w: 4, swing: -1, pair: true, size: 'closet' },
       { id: 'd-linen', room: 'linen', axis: 'h', x: 17.75, y: 10.25, w: 2, swing: 1, hinge: 'start', size: 'closet' },
-      { id: 'd-jj-n', room: 'jackjill', axis: 'h', x: 12.25, y: 15.5, w: 2.5, swing: -1, hinge: 'end', size: 'interior' },
+      { id: 'd-jj-n', room: 'jackjill', axis: 'h', x: 13, y: 15.5, w: 2.5, swing: -1, hinge: 'end', size: 'interior' },
       { id: 'd-jj-s', room: 'jackjill', axis: 'h', x: 12.25, y: 23.75, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
       { id: 'd-closet1', room: 'closet1', axis: 'h', x: 7, y: 28, w: 4, swing: 1, pair: true, size: 'closet' },
       { id: 'd-bed1', room: 'bed1', axis: 'v', x: 16, y: 36.5, w: 2.67, swing: -1, hinge: 'start', size: 'interiorWide' },
@@ -251,17 +257,18 @@ export const KIT = {
       { id: 'd-office', room: 'office', axis: 'h', x: 28.75, y: 30.75, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
       { id: 'd-front', room: 'foyer', axis: 'h', x: 40, y: 38, w: 6, swing: -1, pair: true, size: 'exteriorPair', exterior: true },
       { id: 'd-rear', room: 'living', axis: 'h', x: 38, y: 12.25, w: 6, swing: 1, pair: true, size: 'exteriorPair', exterior: true },
-      // the pantry and the mud room open off the kitchen's east wall; the suite hall is a cased opening from it
-      { id: 'd-pantry', room: 'pantry', axis: 'v', x: 57, y: 19.5, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
-      { id: 'd-kit-mud', room: 'mud', axis: 'v', x: 57, y: 13.75, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
-      { id: 'd-kit-hall', room: 'mhall', axis: 'v', x: 57, y: 25.4, w: 3, cased: true },
+      // the mud room opens off the kitchen through a pocket door (no leaf to meet the back door's);
+      // the gallery is a cased opening off the dining room; the pantry opens off the gallery's end
+      { id: 'd-pantry', room: 'pantry', axis: 'h', x: 59, y: 19.75, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
+      { id: 'd-kit-mud', room: 'mud', axis: 'v', x: 57, y: 13.75, w: 2.5, pocket: true, size: 'interior' },
+      { id: 'd-gallery', room: 'mhall', axis: 'v', x: 57, y: 29.25, w: 3, cased: true },
       { id: 'd-hall-liv-n', room: 'living', axis: 'v', x: 19.75, y: 14.75, w: 2.5, cased: true },
       { id: 'd-hall-liv-s', room: 'living', axis: 'v', x: 19.75, y: 28.75, w: 3.5, cased: true },
       { id: 'd-mud-ext', room: 'mud', axis: 'h', x: 59.5, y: 9.75, w: 3, swing: 1, hinge: 'start', size: 'exteriorSingle', exterior: true },
       { id: 'd-laundry', room: 'laundry', axis: 'v', x: 64.25, y: 11.5, w: 3, swing: 1, hinge: 'start', size: 'pantry' },
-      { id: 'd-halfbath', room: 'halfbath', axis: 'h', x: 62.6, y: 15.25, w: 2.33, swing: 1, hinge: 'start', size: 'bath' },
+      { id: 'd-halfbath', room: 'halfbath', axis: 'v', x: 61, y: 21.5, w: 2.33, swing: 1, hinge: 'start', size: 'bath' },
       // CONFIRM against the Garza set: the closet opens from the primary bath, the bath from the primary bedroom
-      { id: 'd-mwic', room: 'mwic', axis: 'h', x: 68, y: 23.75, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
+      { id: 'd-mwic', room: 'mwic', axis: 'h', x: 66.75, y: 23.75, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
       { id: 'd-mbath', room: 'mbath', axis: 'h', x: 64.5, y: 31.5, w: 2.5, swing: -1, hinge: 'end', size: 'interior' },
       { id: 'd-master', room: 'master', axis: 'h', x: 58.7, y: 31.5, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
     ],
@@ -277,7 +284,7 @@ export const KIT = {
       { mark: 'A', room: 'laundry', axis: 'h', x: 67.5, y: 0.5, w: 3 },
       { mark: 'A', room: 'master', axis: 'h', x: 62, y: 47.75, w: 6 },
       { mark: 'A', room: 'master', axis: 'h', x: 68.5, y: 47.75, w: 3 },
-      { mark: 'D', room: 'kitchen', axis: 'h', x: 49, y: 12.25, w: 6 },
+      { mark: 'D', room: 'kitchen', axis: 'h', x: 47.5, y: 12.25, w: 6 },
       { mark: 'C', room: 'mbath', axis: 'v', x: 72, y: 30, w: 2 },
       { mark: 'B', room: 'dormer', axis: 'h', x: 38.25, y: 38, w: 3.5, sill: 14.5, head: 17.5 },
       { mark: 'B', room: 'dormer', axis: 'h', x: 41.75, y: 38, w: 3.5, sill: 14.5, head: 17.5 },
@@ -290,34 +297,36 @@ export const KIT = {
       { k: 'bed', room: 'master', x: 64.5, y: 34, w: 7, d: 6.5, head: 'e' },
       { k: 'shower', room: 'jackjill', x: 4, y: 16.25, w: 6.5, d: 3 },
       { k: 'toilet', room: 'jackjill', x: 4.5, y: 21, w: 1.5, d: 2.3, face: 'e' },
-      { k: 'vanity', room: 'jackjill', x: 13.5, y: 17, w: 2, d: 4, face: 'w' },
-      // bath 1: vanity under the side window, the shower clear of the door
+      { k: 'vanity', room: 'jackjill', x: 13.5, y: 18.5, w: 2, d: 4, face: 'w' },
+      // bath 1: vanity by the side window, the toilet across from it, the shower mid-room so both doors clear it
       { k: 'vanity', room: 'bath1', x: 4.05, y: 40.55, w: 3, d: 2, face: 's' },
-      { k: 'toilet', room: 'bath1', x: 7.75, y: 40.55, w: 2.3, d: 1.5, face: 's' },
-      { k: 'shower', room: 'bath1', x: 10.5, y: 40.55, w: 3, d: 5.4 },
-      { k: 'vanity', room: 'halfbath', x: 61.25, y: 17.75, w: 2, d: 2, face: 'e' },
-      { k: 'toilet', room: 'halfbath', x: 61.7, y: 21.9, w: 2.3, d: 1.5, face: 'n' },
+      { k: 'toilet', room: 'bath1', x: 4.5, y: 44.7, w: 2.3, d: 1.5, face: 'n' },
+      { k: 'shower', room: 'bath1', x: 8, y: 40.55, w: 3, d: 5.4 },
+      // half bath: toilet at the far end, vanity by the door, both clear of its swing
+      { k: 'toilet', room: 'halfbath', x: 62.35, y: 15.5, w: 1.5, d: 2.3, face: 's' },
+      { k: 'vanity', room: 'halfbath', x: 63.6, y: 21, w: 1.6, d: 2.5, face: 'w' },
       { k: 'vanity', room: 'mbath', x: 61, y: 24, w: 2, d: 6, face: 'e' },
-      { k: 'shower', room: 'mbath', x: 66.75, y: 24, w: 5.25, d: 4.5 },
+      { k: 'shower', room: 'mbath', x: 68, y: 24, w: 4, d: 4.5 },
       { k: 'toilet', room: 'mbath', x: 69.75, y: 28.9, w: 1.5, d: 2.3, face: 'w' },
       { k: 'linen', room: 'mbath', x: 61, y: 30.25, w: 2, d: 1.25 },
-      // work triangle: fridge and range on the rear run either side of the window, the sink in the island
-      { k: 'fridge', room: 'kitchen', x: 45, y: 12.25, w: 3, d: 2.5 },
-      { k: 'counter', room: 'kitchen', x: 48, y: 12.25, w: 9, d: 2.1 },
-      { k: 'range', room: 'kitchen', x: 53, y: 12.25, w: 2.5, d: 2.1 },
-      { k: 'island', room: 'kitchen', x: 48, y: 18.5, w: 5.5, d: 3.5 },
-      { k: 'sink', room: 'kitchen', x: 49.5, y: 19.25, w: 2.5, d: 1.6 },
+      // work triangle (18 ft): the range on the rear run beside the window, the fridge on the east wall
+      // past the mud room's door, the sink in the island
+      { k: 'counter', room: 'kitchen', x: 45.5, y: 12.25, w: 7.5, d: 2.1 },
+      { k: 'range', room: 'kitchen', x: 50.5, y: 12.25, w: 2.5, d: 2.1 },
+      { k: 'fridge', room: 'kitchen', x: 54.5, y: 15.5, w: 2.5, d: 3 },
+      { k: 'island', room: 'kitchen', x: 48, y: 19, w: 5.5, d: 3.5 },
+      { k: 'sink', room: 'kitchen', x: 49.5, y: 19.75, w: 2.5, d: 1.6 },
       { k: 'table', room: 'dining', x: 48.5, y: 29.5, w: 4.5, d: 6 },
-      { k: 'tv', room: 'living', x: 20, y: 16, w: 1.5, d: 8 },
+      { k: 'tv', room: 'living', x: 20, y: 17, w: 1.5, d: 8 },
       { k: 'sofa', room: 'living', x: 28.5, y: 15, w: 3, d: 7 },
       { k: 'sofa', room: 'living', x: 22, y: 23, w: 7, d: 3 },
       { k: 'coffee', room: 'living', x: 24, y: 18, w: 3.5, d: 2 },
       { k: 'desk', room: 'office', x: 33.5, y: 32, w: 2, d: 5 },
-      { k: 'shelves', room: 'pantry', x: 59.5, y: 15.5, w: 1.25, d: 8 },
+      { k: 'shelves', room: 'pantry', x: 57.25, y: 15.5, w: 3.5, d: 1.25 },
       { k: 'washer', room: 'laundry', x: 69.75, y: 7.5, w: 2.25, d: 2.5 },
       { k: 'dryer', room: 'laundry', x: 69.75, y: 10.25, w: 2.25, d: 2.5 },
       { k: 'wh', room: 'laundry', x: 64.5, y: 1, w: 2, d: 2 },
-      { k: 'bench', room: 'mud', x: 60, y: 13.5, w: 4, d: 1.5 },
+      { k: 'bench', room: 'mud', x: 60.5, y: 13.75, w: 3.5, d: 1.5 },
     ],
   },
 

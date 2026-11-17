@@ -12,8 +12,43 @@ const PRIVATE = ['bed', 'master', 'suite2', 'bath', 'mbath', 'jackjill', 'halfba
 const overlap1 = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0)
 const intrudes = (a, b, tol = 0.5) => overlap1(a.x, a.x + a.w, b.x, b.x + b.w) > tol && overlap1(a.y, a.y + a.d, b.y, b.y + b.d) > tol
 
-/** Fixtures a new room of this kind gets, laid out inside it. */
-export function fixturesFor(kind, room) {
+/**
+ * Fixtures a new room of this kind gets, laid out inside it and clear of its doors: the layout is drawn
+ * with the door in mind, then mirrored across the room (left-right, front-back, both) until no piece
+ * sits under a door's swing or in the 30" in front of it.
+ */
+export function fixturesFor(kind, room, doors = []) {
+  const base = fixturesLayout(kind, room)
+  if (!doors.length || !base.length) return base
+  const flipFace = { e: 'w', w: 'e', n: 's', s: 'n' }
+  const mirror = (list, fx, fy) => list.map((f) => ({
+    ...f,
+    x: fx ? room.x + room.w - (f.x - room.x) - f.w : f.x,
+    y: fy ? room.y + room.d - (f.y - room.y) - f.d : f.y,
+    ...(f.face && ((fx && (f.face === 'e' || f.face === 'w')) || (fy && (f.face === 'n' || f.face === 's'))) ? { face: flipFace[f.face] } : {}),
+    ...(f.head && ((fx && (f.head === 'e' || f.head === 'w')) || (fy && (f.head === 'n' || f.head === 's'))) ? { head: flipFace[f.head] } : {}),
+  }))
+  // the no-go zones: a square the leaf sweeps and the 30" strip, on this room's side of each door
+  const zones = doors.flatMap((d) => {
+    const span = d.span || Math.max(d.w, d.d)
+    const reach = Math.max(span, 2.5)
+    if (d.axis === 'h') {
+      const wall = d.y + d.d / 2
+      const inRoomBelow = wall < room.y + room.d / 2 // the door is on the room's rear (low y) wall
+      return [{ x: d.x - 0.2, y: inRoomBelow ? wall : wall - reach, w: span + 0.4, d: reach }]
+    }
+    const wall = d.x + d.w / 2
+    const onWest = wall < room.x + room.w / 2
+    return [{ x: onWest ? wall : wall - reach, y: d.y - 0.2, w: reach, d: span + 0.4 }]
+  })
+  const clear = (list) => list.every((f) => !zones.some((z) => overlap1(f.x, f.x + f.w, z.x, z.x + z.w) > 0.05 && overlap1(f.y, f.y + f.d, z.y, z.y + z.d) > 0.05))
+  for (const [fx, fy] of [[false, false], [true, false], [false, true], [true, true]]) {
+    const list = mirror(base, fx, fy)
+    if (clear(list)) return list
+  }
+  return base
+}
+function fixturesLayout(kind, room) {
   const fx = (k, x, y, w, d, extra = {}) => ({ id: `fx-${room.id}-${k}`, kind: 'fixture', fixture: k, element: true, open: true, name: FIXTURE_NAME[k] || k, room: room.id, x, y, w, d, h: FIXTURE_H[k] || 2, ...extra })
   const { x, y, w, d } = room
   if (kind === 'bath' || kind === 'jackjill') {
@@ -162,7 +197,7 @@ export function attachBeside(flat, kit, { kind, name, id, w, d, target, door = '
       const mid = ws === 'e' || ws === 'w' ? [ws === 'e' ? rect.x + rect.w : rect.x, rect.y + rect.d / 2] : [rect.x + rect.w / 2, ws === 'n' ? rect.y : rect.y + rect.d]
       flat.push(windowEl(kit, `win-${id}`, id, ws === 'e' || ws === 'w' ? 'v' : 'h', mid[0], mid[1], mark, twin))
     }
-    fixturesFor(kind, room).forEach((f) => flat.push(f))
+    fixturesFor(kind, room, flat.filter((e) => e.kind === 'door' && e.room === id)).forEach((f) => flat.push(f))
   } else if (exteriorDoorFrom) {
     // a porch: French doors from the room it serves, when that wall has none
     const axis = side === 'e' || side === 'w' ? 'v' : 'h'
@@ -247,7 +282,7 @@ function extendWingOffice(flat, kit) {
   flat.push(room)
   flat.push(doorEl(kit, `d-${id}`, id, 'v', hall.x, room.y + room.d / 2, 'interiorWide', { swing: -1, hinge: 'start' }))
   flat.push(windowEl(kit, `win-${id}`, id, 'v', bed2.x, room.y + room.d / 2, 'A', true))
-  fixturesFor('office', room).forEach((f) => flat.push(f))
+  fixturesFor('office', room, flat.filter((e) => e.kind === 'door' && e.room === id)).forEach((f) => flat.push(f))
   return D
 }
 

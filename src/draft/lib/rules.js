@@ -1,6 +1,6 @@
 // Rules engine. Checks a plan (rooms + elements) and returns reasons a client
 // can read. Run on the plan as it would be after a change, before applying it.
-import { isRoom, isConditioned, kitFor, lotOf } from './layout.js'
+import { isRoom, isConditioned, kitFor, lotOf, minSizeOf, planIdOf } from './layout.js'
 import { DEFAULT_LOT } from './lot.js'
 import { auditPlan } from './audit.js'
 
@@ -83,8 +83,9 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: wi
     }
 
   // 3. minimum sizes
+  const planId = planIdOf(rooms)
   solid.forEach((r) => {
-    const min = R.minSize?.[r.kind]
+    const min = minSizeOf(kit, r.kind, planId)
     const [mw, md] = min || (R.habitable?.includes(r.kind) ? [7, 7] : [3, 3])
     const fits = (Math.min(r.w, r.d) >= Math.min(mw, md) - 0.01 && Math.max(r.w, r.d) >= Math.max(mw, md) - 0.01)
     if (!fits) reasons.push(`${label(r)} would be ${r.w}' by ${r.d}', under the ${mw}' by ${md}' minimum.`)

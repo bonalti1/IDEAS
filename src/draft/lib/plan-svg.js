@@ -161,6 +161,12 @@ export function planSVG(design, opts = {}) {
     const gx = d.axis === 'h' ? cx - wIn / 2 : host ? X(host.at) - t / 2 : cx - t / 2
     const gy = d.axis === 'h' ? (host ? Y(host.at) - t / 2 : cy - t / 2) : cy - wIn / 2
     out.push(`<rect class="opening door" data-id="${esc(d.id)}" x="${r1(gx)}" y="${r1(gy)}" width="${r1(d.axis === 'h' ? wIn : t)}" height="${r1(d.axis === 'h' ? t : wIn)}" fill="#fbfaf7" stroke="none"/>`)
+    if (d.pocket || d.barn) {
+      // a pocket door: the leaf drawn half into its pocket in the wall; a barn door: the leaf on the wall face
+      if (d.axis === 'h') out.push(`<line class="leaf" x1="${r1(gx + wIn / 2)}" y1="${r1(gy + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" x2="${r1(gx + wIn + (d.barn ? 0 : wIn / 2))}" y2="${r1(gy + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" stroke="#333" stroke-width="1"${d.pocket ? ' stroke-dasharray="3 2"' : ''}/>`)
+      else out.push(`<line class="leaf" x1="${r1(gx + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" y1="${r1(gy + wIn / 2)}" x2="${r1(gx + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" y2="${r1(gy + wIn + (d.barn ? 0 : wIn / 2))}" stroke="#333" stroke-width="1"${d.pocket ? ' stroke-dasharray="3 2"' : ''}/>`)
+      return
+    }
     if (d.cased || d.overhead) {
       // a cased opening or an overhead door: dashed head line
       out.push(`<line x1="${r1(gx)}" y1="${r1(d.axis === 'h' ? gy + t / 2 : gy)}" x2="${r1(d.axis === 'h' ? gx + wIn : gx + t / 2)}" y2="${r1(d.axis === 'h' ? gy + t / 2 : gy + wIn)}" stroke="#555" stroke-width="0.8" stroke-dasharray="4 3"/>`)

@@ -259,7 +259,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const tag = marks.get(e.id) || ''
       if (e.kind === 'door') {
         const spec = kit.doors[e.size] || {}
-        const op = e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
+        const op = e.pocket || e.barn ? (e.hinge === 'end' ? '.SLIDING_TO_RIGHT.' : '.SLIDING_TO_LEFT.') : e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
         const name = [tag, e.size || 'door', e.pair && !spec.pair ? 'pair' : ''].filter(Boolean).join(' ')
         fill = add(`IFCDOOR(${g()},#${oh},'${esc(name)}','${esc(spec.material || '')}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.DOOR.,${op},$)`)
         pset('Pset_DoorCommon', [pBool('IsExternal', !!e.exterior), pText('FireRating', e.fireRated ? '20 min' : ''), pBool('SelfClosingDevice', !!e.selfClosing), pText('Reference', e.size || '')], [fill])

@@ -1,6 +1,6 @@
 // Change ops: validate, apply, and the regex fallback that produces them.
 // Schema in docs/change-diff.md. Plan feet throughout.
-import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing } from './layout.js'
+import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing, minSizeOf, planIdOf } from './layout.js'
 import { attachBeside, addPorch, addInWing, moveBeside, removeRoom } from './add.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
 import { auditPlan } from './audit.js'
@@ -260,7 +260,7 @@ export function pushWall(flat, roomId, side, delta, kit, { roof: roofOverride } 
   const staying = [...lane].filter((r) => !moved.has(r) && !shrinkers.has(r) && !against(r))
   const givers = [...lane].filter((r) => !moved.has(r) && !shrinkers.has(r) && against(r) && (delta > 0 || !r.open))
   const minOf = (r) => {
-    const m = kit.rules?.minSize?.[r.kind]
+    const m = minSizeOf(kit, r.kind, planIdOf(flat))
     return m ? (axis === 'x' ? m[0] : m[1]) : 3
   }
   if (delta > 0) {
@@ -486,8 +486,23 @@ export function settleKitchen(flat, { maxLeg = 9, minLeg = 4, maxTotal = 26 } = 
     const dist = (a, b) => Math.hypot(c(a)[0] - c(b)[0], c(a)[1] - c(b)[1])
     const legs = () => [dist(sink, range), dist(range, fridge), dist(fridge, sink)]
     const bad = (L) => Math.max(0, Math.max(...L) - maxLeg) + Math.max(0, minLeg - Math.min(...L)) + Math.max(0, L.reduce((a, b) => a + b, 0) - maxTotal)
-    // a fixture slides along the wall it sits on
+    // a fixture slides along the wall it sits on, never into the 30" in front of a door on that wall
     const runAxis = (f) => (Math.abs(f.x - k.x) < 0.6 || Math.abs(f.x + f.w - (k.x + k.w)) < 0.6 ? 'y' : 'x')
+    const approach = 2.5
+    const fronts = flat.filter((e) => e.kind === 'door' && e.size !== 'overhead' && e.size !== 'overheadSingle').map((d) => {
+      const span = d.span || Math.max(d.w, d.d)
+      if (d.axis === 'h') {
+        const wall = d.y + d.d / 2
+        if (Math.abs(wall - k.y) < 0.6) return { x: d.x, y: k.y, w: span, d: approach }
+        if (Math.abs(wall - (k.y + k.d)) < 0.6) return { x: d.x, y: k.y + k.d - approach, w: span, d: approach }
+      } else {
+        const wall = d.x + d.w / 2
+        if (Math.abs(wall - k.x) < 0.6) return { x: k.x, y: d.y, w: approach, d: span }
+        if (Math.abs(wall - (k.x + k.w)) < 0.6) return { x: k.x + k.w - approach, y: d.y, w: approach, d: span }
+      }
+      return null
+    }).filter(Boolean)
+    const inFront = (f) => fronts.some((a) => Math.min(a.x + a.w, f.x + f.w) - Math.max(a.x, f.x) > 0.1 && Math.min(a.y + a.d, f.y + f.d) - Math.max(a.y, f.y) > 0.1)
     for (let i = 0; i < 80 && bad(legs()) > 0.001; i++) {
       let best = null
       for (const f of [range, fridge]) {
@@ -496,7 +511,7 @@ export function settleKitchen(flat, { maxLeg = 9, minLeg = 4, maxTotal = 26 } = 
           f[axis] += dir
           f.x = Math.min(Math.max(f.x, k.x), k.x + k.w - f.w)
           f.y = Math.min(Math.max(f.y, k.y), k.y + k.d - f.d)
-          const clash = fx.some((o) => o !== f && o.fixture !== 'counter' && Math.min(o.x + o.w, f.x + f.w) - Math.max(o.x, f.x) > 0.3 && Math.min(o.y + o.d, f.y + f.d) - Math.max(o.y, f.y) > 0.3)
+          const clash = inFront(f) || fx.some((o) => o !== f && o.fixture !== 'counter' && Math.min(o.x + o.w, f.x + f.w) - Math.max(o.x, f.x) > 0.3 && Math.min(o.y + o.d, f.y + f.d) - Math.max(o.y, f.y) > 0.3)
           const score = clash ? Infinity : bad(legs())
           if (!best || score < best.score) best = { f, pos: { x: f.x, y: f.y }, score }
           Object.assign(f, before)

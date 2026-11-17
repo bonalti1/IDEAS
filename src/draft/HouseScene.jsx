@@ -166,6 +166,23 @@ function Door({ e, centre, lot }) {
   const leafW = e.span / leaves
   const dir = e.swing || 1
   const parts = []
+  if (e.pocket || e.barn) {
+    // a pocket door slides into the wall (drawn half in, faint); a barn door hangs on the wall face
+    const off = e.barn ? dir * 0.25 : 0
+    return (
+      <group position={[x, 0, z]} rotation-y={-rot}>
+        <mesh position={[0, DOOR_HEAD + 1.2, 0]}>
+          <boxGeometry args={[e.span, 2.4, 0.4]} />
+          <meshLambertMaterial color="#f4f1ec" />
+        </mesh>
+        <mesh position={[e.hinge === 'end' ? e.span / 2 : -e.span / 2, DOOR_HEAD / 2, off]}>
+          <boxGeometry args={[e.span, DOOR_HEAD, 0.12]} />
+          <meshLambertMaterial color="#a8927c" transparent opacity={e.pocket ? 0.35 : 1} />
+          <Edges color={INK} threshold={15} />
+        </mesh>
+      </group>
+    )
+  }
   for (let i = 0; i < leaves; i++) {
     const hingeAtStart = e.pair ? i === 0 : e.hinge !== 'end'
     const h0 = hingeAtStart ? -e.span / 2 + i * leafW : e.span / 2
