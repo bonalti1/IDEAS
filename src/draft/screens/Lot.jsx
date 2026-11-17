@@ -121,6 +121,9 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const [flood, setFlood] = useState(saved?.flood || null)
   const [floodErr, setFloodErr] = useState('')
   const [showPlat, setShowPlat] = useState(true)
+  const [geo, setGeo] = useState(saved?.geo || null) // where the address really is
+  const [geoErr, setGeoErr] = useState('')
+  const [confirmed, setConfirmed] = useState(!!saved?.spec && saved.spec.kind !== 'reference') // the typed lot is an assumption until the client says it is right
 
   useEffect(() => {
     api.cities().then((t) => setTable(t)).catch(() => {})
@@ -131,6 +134,18 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       .flood(address)
       .then(setFlood)
       .catch((e) => setFloodErr(e.message))
+  }, [address])
+  // geocode the address for real: the city it is in, the street, and whether we build there
+  useEffect(() => {
+    if (!address || geo || saved?.spec) return
+    api
+      .geocode(address)
+      .then((g) => {
+        setGeo(g)
+        if (!g.found) return
+        setSpec((sp) => ({ ...sp, city: g.cityId || sp.city, frontStreet: sp.frontStreet || (g.street ? g.street.replace(/\b\w+/g, (w) => (/^(FM|US|TX|N|S|E|W|NE|NW|SE|SW)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase())) : '') }))
+      })
+      .catch((e) => setGeoErr(e.message))
   }, [address])
 
   const readFile = async (f) => {
@@ -155,11 +170,11 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const lot = useMemo(() => {
     try {
       const L = buildLot({ ...spec, address, flood }, table)
-      return { ...L, plat: read || null }
+      return { ...L, plat: read || null, geo: geo || null }
     } catch (e) {
       return null
     }
-  }, [spec, table, address, flood, read])
+  }, [spec, table, address, flood, read, geo])
   const city = table[spec.city] || table.hidalgo
   const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))
@@ -184,6 +199,15 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       <aside className="side lot-side">
         <h2>Your lot</h2>
         <p className="muted small">{address || 'No address yet.'}</p>
+        {geo?.found && (
+          <p className={'fine ' + (geo.cityId ? 'good' : 'warn')}>
+            Found: {geo.matched}
+            {geo.place ? ` · ${geo.place}, ${geo.county || ''}` : geo.county ? ` · ${geo.county}` : ''}.{geo.note ? ` ${geo.note}` : ` We have the ${table[geo.cityId]?.name} rules.`}
+          </p>
+        )}
+        {geo && !geo.found && <p className="fine warn">{geo.note}</p>}
+        {!geo && address && !geoErr && !saved?.spec && <p className="fine">Looking the address up…</p>}
+        {geoErr && <p className="fine warn">Could not look the address up ({geoErr}). Pick the city yourself.</p>}
         <div className="tabs small">
           <button className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual') || (spec.kind !== 'manual' && setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))}>
             Type it in
@@ -206,6 +230,9 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
         {mode === 'manual' && (
           <>
+            <p className="fine assume">
+              We do not have your plat, so the {spec.width} by {spec.depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.
+            </p>
             <div className="row2">
               <label className="field">
                 <span>Width (ft)</span>
@@ -294,11 +321,19 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         )}
         {tooSmall && <p className="fine bad">The buildable area is very small. Check the dimensions and the setbacks.</p>}
         <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
+        {mode === 'manual' && (
+          <label className="confirm">
+            <input id="lot-confirm" type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+            <span>
+              The lot is about {spec.width} by {spec.depth} ft and faces {spec.frontStreet || 'the street'}. I know this is my assumption until a drafter checks it.
+            </span>
+          </label>
+        )}
         <div className="actions">
           <Button ghost onClick={onBack}>
             Back
           </Button>
-          <Button primary disabled={!lot || tooSmall || reading} onClick={() => onNext(lot)}>
+          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? 'Confirm the lot size first' : ''}>
             Looks right, pick a style
           </Button>
         </div>
