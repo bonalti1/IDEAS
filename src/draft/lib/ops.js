@@ -3,6 +3,7 @@
 import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot } from './layout.js'
 import { attachBeside, addPorch, addInWing, moveBeside, removeRoom } from './add.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
+import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
@@ -514,10 +515,13 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
   ops.forEach((o) => {
     const rs = byId()
     if (o.op === 'resize') {
-      const r = rs[o.room]
+      let r = rs[o.room]
       const w = q(o.w)
       const d = q(o.d)
       const was = { w: r.w, d: r.d }
+      // what the audit already flags: a push may not add to it
+      const auditKeys = (list) => new Set(auditPlan(list, { stories, sqft: 0 }, kit, lot).errors.filter((f) => f.id !== 'area').map((f) => `${f.id}:${f.room || ''}`))
+      const flagged = auditKeys(flat)
       // the wall that moves: when growing, the side with the least house beyond it (an outside wall
       // if there is one); when shrinking, the side with the most, so the house closes up
       const solid = flat.filter((x) => isRoom(x) && !x.open && x !== r)
@@ -548,6 +552,11 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
             if (a === b || (a.open && b.open) || intrusion(a, b) <= 0.6) continue
             return undo(`${a.name} would run into the ${b.name.toLowerCase()}`)
           }
+          // and the architect's checks must still pass: a push that breaks one is undone, the other side tried
+          settleIslands(flat)
+          settleKitchen(flat)
+          const broke = auditPlan(flat, { stories, sqft: 0 }, kit, lot).errors.find((f) => f.id !== 'area' && !flagged.has(`${f.id}:${f.room || ''}`))
+          if (broke) return undo(broke.message.replace(/\.$/, ''))
           return true
         }
         let res = attempt(first)
@@ -560,6 +569,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
           throw new Error(`${r.name} cannot grow that way: ${failed[0] || res}`)
         }
       }
+      r = flat.find((x) => x.id === o.room) // the room object may have been replaced by an undo
       // fixtures inside the room stay inside it
       flat.forEach((e) => {
         if (e.kind !== 'fixture' || e.room !== r.id) return

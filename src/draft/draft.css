@@ -382,3 +382,22 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 .fine.block { display: block; margin: 2px 0 2px 1.2em; }
 .card.audit h4 { margin: 10px 0 4px; font-size: 13px; }
 .price-line { margin-top: 4px; }
+
+/* the floor plan drawing */
+.plan-drawing { position: absolute; inset: 0; overflow: hidden; background: #ecebe6; cursor: grab; touch-action: none; }
+.plan-drawing:active { cursor: grabbing; }
+.plan-drawing-inner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transform-origin: center; }
+.plan-drawing-inner svg { max-width: 96%; max-height: 96%; width: auto; height: auto; box-shadow: 0 2px 14px rgba(0,0,0,0.12); background: #fff; }
+.plan-drawing.hl-bed .room.bed, .plan-drawing.hl-bath .room.bath, .plan-drawing.hl-kitchen .room.kitchen, .plan-drawing.hl-garage .room.garage, .plan-drawing.hl-living .room.living, .plan-drawing.hl-office .room.office, .plan-drawing.hl-master .room.master { fill: #ffe9b8; }
+
+/* who stands behind the plans */
+.trust { width: 100%; max-width: 560px; margin: 10px auto 0; padding: 14px 16px; border: 1px solid var(--brand-hair); border-radius: 10px; background: #fff; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.trust.compact { max-width: 460px; }
+.trust-head { display: flex; align-items: center; gap: 12px; }
+.trust-head b { display: block; font-size: 14px; }
+.trust-photo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; }
+.trust-photo.mono { display: inline-flex; align-items: center; justify-content: center; background: #e8e1d6; color: #4e3c30; font-weight: 700; font-size: 15px; letter-spacing: 0.04em; }
+.trust p { margin: 0; }
+.trust-next { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.trust-next b { display: inline-block; min-width: 160px; font-weight: 600; }
+.trust a { color: var(--brand-ink, #2a2520); }

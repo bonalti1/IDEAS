@@ -1,6 +1,7 @@
 // Drafter review inbox: designs clients sent, the plan, their requests, approve or return with a note.
 import { useEffect, useState } from 'react'
 import HouseScene from '../HouseScene.jsx'
+import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, sf } from '../ui.jsx'
 import { api } from '../lib/api.js'
 import { STYLES } from '../lib/styles.js'
@@ -58,6 +59,7 @@ export default function Review({ user }) {
     setNote('')
   }
   const [lotNote, setLotNote] = useState('')
+  const [planView, setPlanView] = useState(true)
   const confirmLot = async (confirmed) => {
     if (!open || busy) return
     setBusy(true)
@@ -90,7 +92,15 @@ export default function Review({ user }) {
     return (
       <div className="screen split">
         <div className="viewport">
-          <HouseScene rooms={open.rooms || []} style={style} view="top" lot={open.lot} />
+          {planView ? <PlanDrawing rooms={open.rooms || []} program={open.program || {}} style={style} lot={open.lot} client={open.client} /> : <HouseScene rooms={open.rooms || []} style={style} view="3d" lot={open.lot} />}
+          <div className="viewport-views">
+            <button className={planView ? 'on' : ''} onClick={() => setPlanView(true)}>
+              Plan
+            </button>
+            <button className={!planView ? 'on' : ''} onClick={() => setPlanView(false)}>
+              3D
+            </button>
+          </div>
           <div className="viewport-tag">
             {open.client} · {style.name} · {open.address}
           </div>

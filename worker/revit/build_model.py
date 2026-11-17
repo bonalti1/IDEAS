@@ -315,25 +315,229 @@ def main():
             except Exception:
                 pass
 
-    # ── sheets ───────────────────────────────────────────────────────────────
-    with revit.Transaction('Draft House: sheets'):
-        progress(80, 'sheets', 'sheet set')
-        tb = family_symbol('titleBlock', (DESIGN.get('revit') or {}).get('titleBlockFamily'), DB.BuiltInCategory.OST_TitleBlocks)
+    # ── views: the floor plan with tags and dimensions, four elevations, the roof plan, the site
+    #    plan, the door and window schedules, the sheet index. Each is placed on the sheet that
+    #    design.sheetPlan names (src/draft/lib/sheets.js; scripts/sheets-dry-run.mjs lists it). ──
+    views = {}          # view name → Revit view
+    schedules = {}      # schedule name → ViewSchedule
+    placed = []         # 'sheet: view' strings, for the report
+    unplaced = []       # 'sheet: view: why'
+    with revit.Transaction('Draft House: views'):
+        progress(76, 'views', 'floor plan, elevations, roof and site plans, schedules')
         plan_view = None
         for v in DB.FilteredElementCollector(doc).OfClass(DB.ViewPlan):
             if not v.IsTemplate and v.ViewType == DB.ViewType.FloorPlan and v.GenLevel is not None and v.GenLevel.Id == lvl.Id:
                 plan_view = v
                 break
+        plan_type = None
+        for vft in DB.FilteredElementCollector(doc).OfClass(DB.ViewFamilyType):
+            if vft.ViewFamily == DB.ViewFamily.FloorPlan:
+                plan_type = vft
+                break
+        if plan_view is None and plan_type is not None:
+            try:
+                plan_view = DB.ViewPlan.Create(doc, plan_type.Id, lvl.Id)
+            except Exception as e:
+                warn('floor plan view: %s' % e)
+        if plan_view is not None:
+            try:
+                plan_view.Name = 'Floor Plan'
+            except Exception:
+                pass
+            views['Floor Plan'] = plan_view
+            # door and window tags, by category, at each opening
+            try:
+                plan_view.Scale = 48
+            except Exception:
+                pass
+            tagged = 0
+            for cat in (DB.BuiltInCategory.OST_Doors, DB.BuiltInCategory.OST_Windows):
+                for el in DB.FilteredElementCollector(doc).OfCategory(cat).WhereElementIsNotElementType():
+                    try:
+                        ref = DB.Reference(el)
+                        pt = el.Location.Point if hasattr(el.Location, 'Point') else None
+                        if pt is None:
+                            continue
+                        DB.IndependentTag.Create(doc, plan_view.Id, ref, False, DB.TagMode.TM_ADDBY_CATEGORY, DB.TagOrientation.Horizontal, DB.XYZ(pt.X, pt.Y + 2.0, pt.Z))
+                        tagged += 1
+                    except Exception as e:
+                        warn('tag %s: %s' % (ename(el), e))
+            report['tags'] = tagged
+            # exterior dimension strings along the house's outside walls: one string per side, wall faces as references
+            try:
+                dims = 0
+                for w in DB.FilteredElementCollector(doc).OfClass(DB.Wall):
+                    pass
+                # overall strings from the design's exterior walls, grouped by side
+                ext = [w for w in DESIGN['walls'] if w.get('exterior') and not w.get('dormer')]
+                for side, key, pick in (('front', 1, max), ('back', 1, min), ('left', 0, min), ('right', 0, max)):
+                    runs = [w for w in ext if abs(w['a'][1 - key] - w['b'][1 - key]) < 0.01] if key == 1 else [w for w in ext if abs(w['a'][0] - w['b'][0]) < 0.01]
+                    if not runs:
+                        continue
+                    coord = pick([w['a'][1 - key] if key == 1 else w['a'][0] for w in runs])
+                    face = [w for w in runs if abs((w['a'][1 - key] if key == 1 else w['a'][0]) - coord) < 0.6]
+                    ends = sorted(set([round(w['a'][key], 2) for w in face] + [round(w['b'][key], 2) for w in face]))
+                    if len(ends) < 2:
+                        continue
+                    offset = 6.0 if pick is max else -6.0
+                    refs = DB.ReferenceArray()
+                    for e_ in ends:
+                        # a detail line per break gives the dimension its references (walls' faces need geometry options)
+                        if key == 1:
+                            a = DB.XYZ(e_, -coord - offset, 0.0); b = DB.XYZ(e_, -coord - offset + 1.0, 0.0)
+                        else:
+                            a = DB.XYZ(coord + offset, -e_, 0.0); b = DB.XYZ(coord + offset + 1.0, -e_, 0.0)
+                        line = doc.Create.NewDetailCurve(plan_view, DB.Line.CreateBound(a, b))
+                        refs.Append(line.GeometryCurve.Reference)
+                    if key == 1:
+                        dl = DB.Line.CreateBound(DB.XYZ(ends[0], -coord - offset, 0.0), DB.XYZ(ends[-1], -coord - offset, 0.0))
+                    else:
+                        dl = DB.Line.CreateBound(DB.XYZ(coord + offset, -ends[0], 0.0), DB.XYZ(coord + offset, -ends[-1], 0.0))
+                    doc.Create.NewDimension(plan_view, dl, refs)
+                    dims += 1
+                report['dimensionStrings'] = dims
+            except Exception as e:
+                warn('dimension strings: %s (the drafter dimensions sheet 200 by hand)' % e)
+        else:
+            unplaced.append('200: Floor Plan: no floor plan view type in the template')
+        # four exterior elevations from a marker at the house centre
+        try:
+            vft_el = None
+            for vft in DB.FilteredElementCollector(doc).OfClass(DB.ViewFamilyType):
+                if vft.ViewFamily == DB.ViewFamily.Elevation:
+                    vft_el = vft
+                    break
+            if vft_el is None:
+                raise Exception('no elevation view type in the template')
+            marker = DB.ElevationMarker.CreateElevationMarker(doc, vft_el.Id, DB.XYZ(0, 0, 0), 48)
+            # index 0 faces -X? Revit: 0 = west-facing (looks east)… name them by where the camera stands
+            names = {0: 'Left Elevation', 1: 'Front Elevation', 2: 'Right Elevation', 3: 'Rear Elevation'}
+            for i in range(4):
+                try:
+                    ev = marker.CreateElevation(doc, plan_view.Id if plan_view is not None else lvl.Id, i)
+                    ev.Name = names[i]
+                    views[names[i]] = ev
+                except Exception as e:
+                    unplaced.append('300/301: %s: %s' % (names[i], e))
+        except Exception as e:
+            unplaced.append('300/301: elevations: %s' % e)
+        # roof plan and site plan: floor plans of their own, named so the drafter sets their view range and template
+        for nm in ('Roof Plan', 'Site Plan', 'Foundation Plan', 'Electrical Plan', 'Code Review Plan'):
+            try:
+                if plan_type is None:
+                    raise Exception('no floor plan view type')
+                vp = DB.ViewPlan.Create(doc, plan_type.Id, lvl.Id)
+                vp.Name = nm
+                if nm == 'Roof Plan':
+                    try:
+                        vr = vp.GetViewRange()
+                        vr.SetOffset(DB.PlanViewPlane.CutPlane, 30.0)
+                        vr.SetOffset(DB.PlanViewPlane.TopClipPlane, 40.0)
+                        vp.SetViewRange(vr)
+                    except Exception as e:
+                        warn('roof plan view range: %s' % e)
+                if nm == 'Site Plan':
+                    try:
+                        vp.Scale = 240
+                    except Exception:
+                        pass
+                views[nm] = vp
+            except Exception as e:
+                unplaced.append('%s: %s' % (nm, e))
+        # schedules: doors, windows, the sheet index
+        try:
+            sd = DB.ViewSchedule.CreateSchedule(doc, DB.ElementId(DB.BuiltInCategory.OST_Doors))
+            sd.Name = 'Door Schedule'
+            for bip in (DB.BuiltInParameter.ALL_MODEL_MARK, DB.BuiltInParameter.DOOR_WIDTH, DB.BuiltInParameter.DOOR_HEIGHT, DB.BuiltInParameter.ALL_MODEL_TYPE_NAME):
+                try:
+                    f = DB.ScheduleField if False else None
+                    for sf in sd.Definition.GetSchedulableFields():
+                        if sf.ParameterId.IntegerValue == int(bip):
+                            sd.Definition.AddField(sf)
+                            break
+                except Exception:
+                    pass
+            schedules['Door Schedule'] = sd
+            sw = DB.ViewSchedule.CreateSchedule(doc, DB.ElementId(DB.BuiltInCategory.OST_Windows))
+            sw.Name = 'Window Schedule'
+            for bip in (DB.BuiltInParameter.ALL_MODEL_MARK, DB.BuiltInParameter.WINDOW_WIDTH, DB.BuiltInParameter.WINDOW_HEIGHT, DB.BuiltInParameter.ALL_MODEL_TYPE_NAME):
+                try:
+                    for sf in sw.Definition.GetSchedulableFields():
+                        if sf.ParameterId.IntegerValue == int(bip):
+                            sw.Definition.AddField(sf)
+                            break
+                except Exception:
+                    pass
+            schedules['Window Schedule'] = sw
+        except Exception as e:
+            unplaced.append('200: schedules: %s' % e)
+        try:
+            idx = DB.ViewSchedule.CreateSheetList(doc)
+            idx.Name = 'Sheet index'
+            schedules['Sheet index'] = idx
+        except Exception as e:
+            unplaced.append('CVR: Sheet index: %s' % e)
+        # a 3D view for the cover
+        try:
+            vft_3d = None
+            for vft in DB.FilteredElementCollector(doc).OfClass(DB.ViewFamilyType):
+                if vft.ViewFamily == DB.ViewFamily.ThreeDimensional:
+                    vft_3d = vft
+                    break
+            if vft_3d is not None:
+                v3 = DB.View3D.CreateIsometric(doc, vft_3d.Id)
+                v3.Name = '3D view, front'
+                views['3D view, front'] = v3
+        except Exception as e:
+            unplaced.append('CVR: 3D view: %s' % e)
+
+    # ── sheets: one per kit sheet, the views and schedules the plan names placed on it ──────────
+    with revit.Transaction('Draft House: sheets'):
+        progress(80, 'sheets', 'sheet set')
+        tb = family_symbol('titleBlock', (DESIGN.get('revit') or {}).get('titleBlockFamily'), DB.BuiltInCategory.OST_TitleBlocks)
+        plan_by_no = dict((str(x['no']), x) for x in (DESIGN.get('sheetPlan') or []))
         for s in DESIGN.get('sheets', []):
             try:
                 sheet = DB.ViewSheet.Create(doc, tb.Id if tb else DB.ElementId.InvalidElementId)
                 sheet.SheetNumber = str(s['no'])
                 sheet.Name = s['title']
-                if str(s['no']) == '200' and plan_view and DB.Viewport.CanAddViewToSheet(doc, sheet.Id, plan_view.Id):
-                    DB.Viewport.Create(doc, sheet.Id, plan_view.Id, DB.XYZ(1.3, 1.0, 0))
                 created['sheets'] += 1
+                sp = plan_by_no.get(str(s['no'])) or {'views': [], 'schedules': []}
+                # views side by side across the sheet (feet on paper), schedules down the right
+                x = 0.6
+                for v in sp.get('views', []):
+                    view = views.get(v.get('name'))
+                    if view is None:
+                        unplaced.append('%s: %s: no such view' % (s['no'], v.get('name')))
+                        continue
+                    try:
+                        if DB.Viewport.CanAddViewToSheet(doc, sheet.Id, view.Id):
+                            DB.Viewport.Create(doc, sheet.Id, view.Id, DB.XYZ(x, 0.95, 0))
+                            placed.append('%s: %s' % (s['no'], v.get('name')))
+                            x += 1.2
+                        else:
+                            unplaced.append('%s: %s: already on a sheet or not placeable' % (s['no'], v.get('name')))
+                    except Exception as e:
+                        unplaced.append('%s: %s: %s' % (s['no'], v.get('name'), e))
+                y = 1.6
+                for nm in sp.get('schedules', []):
+                    sch = schedules.get(nm)
+                    if sch is None:
+                        if nm != 'Building area':
+                            unplaced.append('%s: %s: no such schedule' % (s['no'], nm))
+                        continue
+                    try:
+                        DB.ScheduleSheetInstance.Create(doc, sheet.Id, sch.Id, DB.XYZ(2.3, y, 0))
+                        placed.append('%s: %s' % (s['no'], nm))
+                        y -= 0.5
+                    except Exception as e:
+                        unplaced.append('%s: %s: %s' % (s['no'], nm, e))
             except Exception as e:
                 warn('sheet %s: %s' % (s.get('no'), e))
+        report['sheetsPlaced'] = placed
+        report['sheetsNotPlaced'] = unplaced
+        for u in unplaced:
+            warn('could not place %s' % u)
         tbt = DESIGN.get('titleBlock') or {}
         try:
             pi = doc.ProjectInformation

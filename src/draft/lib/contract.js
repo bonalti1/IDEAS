@@ -5,6 +5,7 @@ import polygonClipping from 'polygon-clipping'
 import { kitFor, isRoom, floorArea } from './layout.js'
 import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
+import { sheetPlan } from './sheets.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../../kits/modern-farmhouse.js'
 
 export const CONTRACT_VERSION = 1
@@ -30,7 +31,7 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
   const roof = rooms.find((r) => r.kind === 'roof')
   const walls = wallsFrom(rooms, kit)
   const r2 = (v) => +(+v).toFixed(3)
-  return {
+  const design = {
     contract: CONTRACT_VERSION,
     createdAt: new Date().toISOString(),
     client: client || null,
@@ -67,6 +68,8 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     livingSf: Math.round(floorArea(rooms, program.stories)),
     changes: history.filter((m) => m.who === 'you').map((m) => m.text),
   }
+  design.sheetPlan = sheetPlan(design)
+  return design
 }
 
 /** Union of the solid rooms (each grown by `grow` ft so wall-thick gaps close) as outlines in frame feet, largest ring first. */
