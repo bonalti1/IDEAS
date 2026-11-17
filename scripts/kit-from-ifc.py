@@ -26,13 +26,12 @@ OVERHANG = 1.33   # the kit's roof overhang: masses are wall lines, the roof eng
 # ── room, fixture and door naming ─────────────────────────────────────────
 ROOM_KINDS = [
     (r'half ?bath|powder', 'halfbath'), (r'primary bath|master bath|m\. ?bath|owner.*bath', 'mbath'),
-    (r'jack|j ?& ?j', 'jackjill'), (r'bath', 'bath'),
+    (r'jack|j ?& ?j', 'jackjill'), (r'bath', 'bath'), (r'hall|corridor|gallery', 'hall'),
     (r'primary closet|master closet|owner.*closet|w\.?i\.?c', 'mwic'), (r'closet|linen|wic|wardrobe', 'wic'),
     (r'mini primary|second suite|guest suite|suite', 'suite2'), (r'primary|master|owner', 'master'), (r'bed', 'bed'),
     (r'kitchen', 'kitchen'), (r'dining|breakfast|nook', 'dining'), (r'living|family|great|den', 'living'),
     (r'foyer|entry|vestibule', 'foyer'), (r'pantry', 'pantry'), (r'office|study|library', 'office'),
     (r'laundry|utility', 'laundry'), (r'mud', 'mud'), (r'garage', 'garage'), (r'porch|patio|lanai|veranda', 'porch'),
-    (r'hall|corridor|gallery', 'hall'),
 ]
 FIXTURE_KINDS = [
     (r'toilet|water closet|w\.?c\.?', 'toilet'), (r'shower|tub', 'shower'), (r'vanity|lavatory|lav\b', 'vanity'),
@@ -41,6 +40,7 @@ FIXTURE_KINDS = [
     (r'coffee', 'coffee'), (r'dining table|table', 'table'), (r'desk', 'desk'), (r'island', 'island'), (r'linen', 'linen'),
     (r'base cabinet|counter|cabinet', 'counter'), (r'shelv', 'shelves'), (r'bench', 'bench'), (r'media|tv|television', 'tv'),
 ]
+KNOWN_KINDS = set(k for _, k in ROOM_KINDS) | {'frontPorch', 'rearPorch', 'master', 'mwic', 'mbath', 'suite2'}
 def kind_of(table, text, default=None):
     t = (text or '').lower()
     for pat, k in table:
@@ -138,6 +138,29 @@ class Reader:
         self.origin = np.array([allp[:, 0].min(), -allp[:, 1].max()])
         self.log('straightened: rotated %.1f°, origin at world (%.1f, %.1f) ft' % (math.degrees(self.angle), self.origin[0], -self.origin[1]))
 
+    def pset_text(self, el, key):
+        try:
+            for ps in E.get_psets(el).values():
+                if key in ps and ps[key] not in (None, ''):
+                    return str(ps[key])
+        except Exception:
+            pass
+        return None
+
+    def snap_to_edges(self, rooms, axis, cx, cy, tol=1.0):
+        """an opening read off a wall box sits on the nearest room edge across the wall (the kit draws rooms to wall centrelines)"""
+        edges = [e for r in rooms if r['kind'] not in ('frontPorch', 'rearPorch') for e in ((r['y'], r['y'] + r['d']) if axis == 'h' else (r['x'], r['x'] + r['w']))]
+        v = cy if axis == 'h' else cx
+        near = min(edges, key=lambda e: abs(e - v)) if edges else v
+        if abs(near - v) <= tol:
+            v = near
+        return (cx, v) if axis == 'h' else (v, cy)
+
+    def named_room(self, rooms, el, fallback):
+        """the room an opening belongs to, when the export says so"""
+        rid = self.pset_text(el, 'Room')
+        return next((r for r in rooms if r['id'] == rid), fallback) if rid else fallback
+
     def is_external(self, w):
         for ps in E.get_psets(w).values():
             if 'IsExternal' in ps:
@@ -152,11 +175,13 @@ class Reader:
             if not b:
                 continue
             name = sp.LongName if (sp.LongName and (not sp.Name or re.fullmatch(r'[\d.]+', sp.Name or ''))) else (sp.Name or sp.LongName or 'Room')
-            kind = kind_of(ROOM_KINDS, name, 'hall')
+            kind = self.pset_text(sp, 'Reference')
+            if kind not in KNOWN_KINDS:
+                kind = kind_of(ROOM_KINDS, name, 'hall')
             w, d = b['x1'] - b['x0'], b['y1'] - b['y0']
             if w < 1.5 or d < 1.5:
                 continue
-            out.append({'ifc': sp.GlobalId, 'id': slug(name), 'kind': kind, 'name': name.strip(), 'x': b['x0'], 'y': b['y0'], 'w': w, 'd': d, 'plate': b['z1'] - b['z0'], 'cz': (b['z0'] + b['z1']) / 2})
+            out.append({'ifc': sp.GlobalId, 'id': self.pset_text(sp, 'Id') or slug(name), 'kind': kind, 'name': name.strip(), 'x': b['x0'], 'y': b['y0'], 'w': w, 'd': d, 'plate': b['z1'] - b['z0'], 'cz': (b['z0'] + b['z1']) / 2})
         # porches: front (max y) or rear (min y) by position
         if out:
             ys = [r['y'] + r['d'] / 2 for r in out]
@@ -227,8 +252,10 @@ class Reader:
             size = 'exteriorPair' if exterior and pair else 'exteriorSingle' if exterior else 'closet' if width <= 2.1 and not pair else 'interior' if width <= 2.6 else 'interiorWide' if width <= 2.8 else 'pantry'
             if pair and not exterior:
                 size = 'closet'
+            cx, cy = self.snap_to_edges(rooms, axis, cx, cy)
             room = self.room_at(rooms, cx, cy)
-            doors.append({'id': 'd-' + slug(d.Name or (room['id'] if room else 'door')), 'room': room['id'] if room else None, 'axis': axis, 'x': cx, 'y': cy, 'w': width, 'swing': -1, 'hinge': 'end' if 'LEFT' in op else None, 'pair': pair, 'exterior': exterior, 'size': size, 'ifcType': (E.get_type(d).Name if E.get_type(d) else d.Name)})
+            room = self.named_room(rooms, d, room)
+            doors.append({'id': self.pset_text(d, 'Id') or 'd-' + slug(d.Name or (room['id'] if room else 'door')), 'room': room['id'] if room else None, 'axis': axis, 'x': cx, 'y': cy, 'w': width, 'swing': -1, 'hinge': 'end' if 'LEFT' in op else None, 'pair': pair, 'exterior': exterior, 'size': size, 'ifcType': (E.get_type(d).Name if E.get_type(d) else d.Name)})
         # cased openings: voids in walls with nothing in them, wider than a window
         filled = set(r.RelatingOpeningElement.GlobalId for r in self.f.by_type('IfcRelFillsElement'))
         for op in self.f.by_type('IfcOpeningElement'):
@@ -247,8 +274,10 @@ class Reader:
             if width < 2.5 or b['z0'] > 1.0:
                 continue
             cx, cy = (b['x0'] + b['x1']) / 2, (b['y0'] + b['y1']) / 2
+            cx, cy = self.snap_to_edges(rooms, hw['axis'], cx, cy)
             room = self.room_at(rooms, cx, cy)
-            doors.append({'id': 'o-' + slug(op.Name or (room['id'] if room else 'opening')), 'room': room['id'] if room else None, 'axis': hw['axis'], 'x': cx, 'y': cy, 'w': width, 'cased': True})
+            room = self.named_room(rooms, op, room)
+            doors.append({'id': self.pset_text(op, 'Id') or 'o-' + slug(op.Name or (room['id'] if room else 'opening')), 'room': room['id'] if room else None, 'axis': hw['axis'], 'x': cx, 'y': cy, 'w': width, 'cased': True})
         marks = {}
         for w in self.f.by_type('IfcWindow'):
             b = self.bbox(w)
@@ -267,6 +296,7 @@ class Reader:
                 if key not in marks:
                     marks[key] = chr(ord('A') + len(marks))
                 mark = marks[key]
+            cx, cy = self.snap_to_edges(rooms, axis, cx, cy)
             room = self.room_at(rooms, cx, cy, pad=1.5)
             windows.append({'mark': mark, 'room': room['id'] if room else None, 'axis': axis, 'x': cx, 'y': cy, 'w': width, 'h': height, 'sill': b['z0'] - (self.level_z or 0), 'head': b['z1'] - (self.level_z or 0), 'ifcType': (E.get_type(w).Name if E.get_type(w) else w.Name)})
         return doors, windows
@@ -284,12 +314,19 @@ class Reader:
                 if not b:
                     continue
                 text = ' '.join(filter(None, [p.Name, getattr(p, 'ObjectType', None), str(getattr(p, 'PredefinedType', '') or ''), (E.get_type(p).Name if E.get_type(p) else '')]))
-                k = kind_of(FIXTURE_KINDS, text)
+                k = self.pset_text(p, 'Kind') or kind_of(FIXTURE_KINDS, text)
                 if not k:
                     continue
                 cx, cy = (b['x0'] + b['x1']) / 2, (b['y0'] + b['y1']) / 2
                 room = self.room_at(rooms, cx, cy, pad=0.5)
-                out.append({'k': k, 'room': room['id'] if room else None, 'x': b['x0'], 'y': b['y0'], 'w': b['x1'] - b['x0'], 'd': b['y1'] - b['y0'], 'h': b['z1'] - b['z0'], 'ifcType': (E.get_type(p).Name if E.get_type(p) else p.Name)})
+                fx = {'k': k, 'room': room['id'] if room else None, 'x': b['x0'], 'y': b['y0'], 'w': b['x1'] - b['x0'], 'd': b['y1'] - b['y0'], 'h': b['z1'] - b['z0'], 'ifcType': (E.get_type(p).Name if E.get_type(p) else p.Name)}
+                face = self.pset_text(p, 'Face')
+                head = self.pset_text(p, 'Head')
+                if face in ('n', 's', 'e', 'w'):
+                    fx['face'] = face
+                if head in ('n', 's', 'e', 'w'):
+                    fx['head'] = head
+                out.append(fx)
         return out
 
     # ── roof ──
@@ -459,7 +496,7 @@ def build_kit(raw, kit_id, name, source):
                 e['exterior'] = True
         doors.append(e)
     windows = [{'mark': w['mark'], 'room': w['room'], 'axis': w['axis'], 'x': r2(w['x'] - x0), 'y': r2(w['y'] - y0), 'w': r2(w['w']), 'sill': r2(w['sill']), 'head': r2(w['head'])} for w in raw['windows'] if w.get('room')]
-    fixtures = [{'k': f['k'], 'room': f['room'], 'x': r2(f['x'] - x0), 'y': r2(f['y'] - y0), 'w': r2(f['w']), 'd': r2(f['d'])} for f in raw['fixtures'] if f.get('room')]
+    fixtures = [dict({'k': f['k'], 'room': f['room'], 'x': r2(f['x'] - x0), 'y': r2(f['y'] - y0), 'w': r2(f['w']), 'd': r2(f['d'])}, **{k: f[k] for k in ('face', 'head') if f.get(k)}) for f in raw['fixtures'] if f.get('room')]
     roof = [{'id': m['id'], 'kind': 'gable', 'x0': r2(m['x0'] - x0), 'x1': r2(m['x1'] - x0), 'y0': r2(m['y0'] - y0), 'y1': r2(m['y1'] - y0), 'ridge': m['ridge'], 'plate': m['plate'], 'pitch': m['pitch'], 'ends': m['ends']} for m in raw['roof']]
     wall_types = sorted(set(w['type'] for w in raw['walls'] if w.get('type')))
     thick = collections.Counter((round(w['thicknessIn']), w['exterior']) for w in raw['walls'])

@@ -5,26 +5,15 @@ import assert from 'node:assert/strict'
 import { auditPlan, auditDesign } from '../src/draft/lib/audit.js'
 import { generateRooms, DEFAULT_PROGRAM, kitFor, isRoom } from '../src/draft/lib/layout.js'
 import { fitsLot } from '../src/draft/lib/fit.js'
+export { LOTS, PROGRAMS, draftable }
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { DEFAULT_LOT, buildLot } from '../src/draft/lib/lot.js'
+import { LOTS, PROGRAMS, draftable, convertedKit, styleFor } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
 const ids = (a) => a.errors.map((e) => e.id)
-
-export const LOTS = {
-  'reference (Lot 514)': DEFAULT_LOT,
-  'McAllen 100 x 150': buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'E Nolana Ave', setbacks: {} }),
-  'narrow 50 x 120': buildLot({ kind: 'manual', width: 50, depth: 120, city: 'pharr', setbacks: {} }),
-  'corner 110 x 140': buildLot({ kind: 'manual', width: 110, depth: 140, city: 'palmview', corner: 'left', sideStreet: 'Elm St', setbacks: {} }),
-}
-export const PROGRAMS = {
-  '3/2 at 1,800 sf': { ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 0, sqft: 1800 },
-  '4/3.5 office 2-car 2,800 sf': { ...DEFAULT_PROGRAM, beds: 4, baths: 3, halfBath: true, office: true, garage: 2, sqft: 2800 },
-  '5/4 3-car 3,500 sf': { ...DEFAULT_PROGRAM, beds: 5, baths: 4, halfBath: false, office: true, garage: 3, sqft: 3500 },
-  'Garza sample': { ...kit.reference.program },
-}
 
 test('the default first draft passes the audit with 0 errors', () => {
   const a = auditPlan(generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT), DEFAULT_PROGRAM, kit, DEFAULT_LOT)
@@ -36,7 +25,7 @@ test('the Garza sample passes the audit, and its work triangle and halls measure
   const a = auditPlan(generateRooms(p, style, DEFAULT_LOT), p, kit, DEFAULT_LOT)
   assert.deepEqual(a.errors, [])
   assert.ok(a.measures.triangle.total <= 26, `triangle ${a.measures.triangle.total}`)
-  a.measures.halls.forEach((h) => assert.ok(h.clearIn >= 35, `${h.name} ${h.clearIn}"`))
+  a.measures.halls.forEach((h) => assert.ok(h.clearIn >= 42, `${h.name} ${h.clearIn}"`))
 })
 
 test('the audit catches a bedroom reached through another, a door to the outside, a blocked window and a garage with no door', () => {
@@ -73,16 +62,6 @@ test('bedroom egress: a fixed window is not an exit, a 36 x 60 single hung is', 
   assert.ok(!ids(auditPlan(rooms, DEFAULT_PROGRAM, kit, DEFAULT_LOT)).includes('egress'))
 })
 
-/** What the rooms step drafts for a program on a lot: the program, it at the largest size that fits,
- * or the smallest change that fits (the offer); null when nothing does. */
-export function draftable(program, lot) {
-  const f = fitsLot(program, style, lot)
-  if (f.ok) return program
-  if (f.maxSqft) return { ...program, sqft: f.maxSqft }
-  if (f.suggestion?.program) return f.suggestion.program
-  return null
-}
-
 for (const [lotName, lot] of Object.entries(LOTS)) {
   for (const [progName, program] of Object.entries(PROGRAMS)) {
     test(`first draft audit: ${progName} on ${lotName}`, () => {
@@ -113,6 +92,25 @@ test('the narrow plan: 3/2 at 1,800 sf and 4/2 at 2,200 sf pass the audit on a 5
     assert.equal(rooms.find((r) => r.kind === 'roof')?.plan, 'narrow')
   }
 })
+
+// a kit converted from an IFC (our own Garza export read back by scripts/kit-from-ifc.py) drafts the same matrix
+{
+  const conv = convertedKit()
+  for (const [lotName, lot] of Object.entries(LOTS)) {
+    for (const [progName, program] of Object.entries(PROGRAMS)) {
+      test(`first draft audit on the IFC-converted kit: ${progName} on ${lotName}`, { skip: !conv && 'no python with ifcopenshell' }, () => {
+        const cStyle = styleFor(conv)
+        const drafted = draftable(program, lot, cStyle)
+        assert.ok(drafted, `nothing fits: ${fitsLot(program, cStyle, lot).reasons.join(' | ')}`)
+        const rooms = generateRooms(drafted, cStyle, lot)
+        const a = auditPlan(rooms, drafted, conv, lot)
+        assert.deepEqual(a.errors.map((e) => e.message), [])
+        // the bedrooms asked for (the Garza set counts its mini primary apart from its 3 bedrooms)
+        assert.equal(rooms.filter((r) => isRoom(r) && ['bed', 'master'].includes(r.kind)).length, drafted.beds, 'the bedrooms asked for')
+      })
+    }
+  }
+}
 
 test('the audit reads a design.json the same way', () => {
   const rooms = generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT)

@@ -248,7 +248,10 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const op = wallBox(w, t0, t1, sill, head - sill)
       const opening = add(`IFCOPENINGELEMENT(${g()},#${oh},'Opening for ${e.name}',$,$,#${op.pl},#${op.shape},$,.OPENING.)`)
       add(`IFCRELVOIDSELEMENT(${g()},#${oh},$,$,#${wallIds[host.i]},#${opening})`)
-      if (e.cased) return
+      if (e.cased) {
+        pset('DraftHouse_Opening', [pText('Id', e.id), pText('Room', e.room || '')], [opening])
+        return
+      }
       const fb = wallBox(w, t0, t1, sill, head - sill, -0.02)
       const H = ((head - sill) * FT).toFixed(3)
       const W = ((t1 - t0) * FT).toFixed(3)
@@ -260,6 +263,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
         const name = [tag, e.size || 'door', e.pair && !spec.pair ? 'pair' : ''].filter(Boolean).join(' ')
         fill = add(`IFCDOOR(${g()},#${oh},'${esc(name)}','${esc(spec.material || '')}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.DOOR.,${op},$)`)
         pset('Pset_DoorCommon', [pBool('IsExternal', !!e.exterior), pText('FireRating', e.fireRated ? '20 min' : ''), pBool('SelfClosingDevice', !!e.selfClosing), pText('Reference', e.size || '')], [fill])
+        pset('DraftHouse_Opening', [pText('Id', e.id), pText('Room', e.room || '')], [fill])
         ;(doorsBySize[`${e.size}${e.pair && !spec.pair ? ':pair' : ''}`] ||= []).push(fill)
       } else {
         const win = kit.windows[e.mark] || {}
@@ -303,7 +307,9 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const [cls, type] = FIX_IFC[e.fixture] || ['IFCFURNITURE', '.USERDEFINED.']
       const { pl, shape } = box(X(e.local[0] - e.w / 2).toFixed(4), Y(e.local[1] + e.d / 2).toFixed(4), '0.', e.w * FT, e.d * FT, e.h * FT)
       const name = FIXTURE_NAME[e.fixture] || e.fixture
-      return add(`${cls}(${g()},#${oh},'${name}',$,'${name}',#${pl},#${shape},$,${type})`)
+      const id = add(`${cls}(${g()},#${oh},'${name}',$,'${name}',#${pl},#${shape},$,${type})`)
+      pset('DraftHouse_Fixture', [pText('Kind', e.fixture), pText('Face', e.face || ''), pText('Head', e.head || '')], [id])
+      return id
     })
 
   // ── roof: one IfcRoof, made of IfcSlab roof panels, one per visible plane ─
@@ -384,6 +390,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     // Name is the room number, LongName the room name (Revit reads them that way)
     const space = add(`IFCSPACE(${g()},#${oh},'${101 + i}','${r.w} ft x ${r.d} ft',$,#${pl},#${shape},'${esc(r.name)}',.ELEMENT.,.${r.open ? 'EXTERNAL' : 'INTERNAL'}.,$)`)
     pset('Pset_SpaceCommon', [pBool('IsExternal', !!r.open), pText('Reference', r.kind), pText('Category', r.open ? 'porch' : r.kind === 'garage' ? 'garage' : 'conditioned')], [space])
+    pset('DraftHouse_Room', [pText('Id', r.id), pText('Kind', r.kind)], [space])
     const area = add(`IFCQUANTITYAREA('NetFloorArea',$,$,${(r.w * r.d * FT * FT).toFixed(4)},$)`)
     const qty = add(`IFCELEMENTQUANTITY(${g()},#${oh},'Qto_SpaceBaseQuantities',$,$,(#${area}))`)
     add(`IFCRELDEFINESBYPROPERTIES(${g()},#${oh},$,$,(#${space}),#${qty})`)

@@ -7,7 +7,7 @@ import { interpretRequest } from '../src/draft/lib/interpret.js'
 import { withPlanCoords } from '../src/draft/lib/ops.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { DEFAULT_LOT, buildLot } from '../src/draft/lib/lot.js'
-import { LOTS, PROGRAMS, draftable } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)

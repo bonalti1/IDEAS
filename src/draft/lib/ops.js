@@ -622,7 +622,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       did.push(`Moved ${r.name.toLowerCase()} ${Math.abs(o.dx) >= Math.abs(o.dy) ? `${Math.abs(o.dx)}' ${o.dx > 0 ? 'east' : 'west'}` : `${Math.abs(o.dy)}' ${o.dy > 0 ? 'toward the street' : 'toward the back'}`}`)
     } else if (o.op === 'remove') {
       const r = rs[o.room]
-      removeRoom(flat, r.id)
+      removeRoom(flat, r.id, kit)
       did.push(`Removed ${r.name.toLowerCase()}`)
     } else if (o.op === 'garage') {
       // the garage comes off and goes back on for the cars asked, with its doors laid out by bay; a plan

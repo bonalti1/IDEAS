@@ -3,7 +3,7 @@
 // plan reviewer look for first: every room reachable from the front door without crossing a
 // bedroom, bath or closet; doors on walls the two spaces share; windows on outside walls; bedroom
 // egress (IRC R310); hallways 36" clear; no overlaps beyond the wall; bath fixture clearances
-// (IRC R307); the garage attached, with a rated door into the mud room, laundry or hall and an
+// (IRC R307); closets 24" clear and walk-ins 5' x 5'; halls under 12% of the area and none dead-ending; no enclosed voids or jogs under 2 ft; service rooms off the front; the suite entered away from the service hall; the garage attached, with a rated door into the mud room, laundry or hall and an
 // overhead door toward the street; the kitchen work triangle; the primary suite; the living area.
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
 import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
@@ -14,8 +14,10 @@ const BATHS = ['bath', 'mbath', 'jackjill', 'halfbath']
 const CLOSETS = ['wic', 'mwic']
 const PRIVATE = [...BEDROOMS, ...BATHS, ...CLOSETS, 'garage'] // a garage is entered, never passed through
 const GARAGE_DOOR_ROOMS = ['mud', 'laundry', 'hall', 'foyer']
+const SERVICE = ['pantry', 'laundry', 'mud', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
+const SERVICE_HALL = ['mud', 'laundry', 'halfbath']
 export const EGRESS = { sf: 5.7, heightIn: 24, widthIn: 20, sillIn: 44 }
-export const CLEAR = { hallFt: 3, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, legMinFt: 4, legMaxFt: 9 }
+export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, legMinFt: 4, legMaxFt: 9 }
 
 const centre = (e) => [e.x + e.w / 2, e.y + e.d / 2]
 const inside = (r, [x, y], tol = 0.05) => x > r.x + tol && x < r.x + r.w - tol && y > r.y + tol && y < r.y + r.d - tol
@@ -161,7 +163,7 @@ export function auditPlan(rooms, program, kit, lot) {
     if (ext.length && !ext.some(egressOk)) say('egress', 'error', r, `${r.name}'s window is too small for emergency exit (needs 5.7 sf clear, 24" high, 20" wide, sill under 44").`)
   })
 
-  // e) hallways 36" clear
+  // e) hallways 42" clear
   R.filter((r) => r.kind === 'hall').forEach((r) => {
     const clear = Math.min(r.w, r.d) - wallFt
     if (clear < CLEAR.hallFt - 0.1) say('hall', 'error', r, `${r.name} is ${Math.round(clear * 12)}" clear; hallways need ${CLEAR.hallFt * 12}".`)
@@ -342,14 +344,204 @@ export function auditPlan(rooms, program, kit, lot) {
   }
 
   // west-facing glass over 40 sf with nothing to shade it (RGV sun)
+  // an awning (a shed roof mass against the wall) or a porch over the window shades it
+  const roofEl = flat.find((r) => r.kind === 'roof')
+  const massRect = (m) => {
+    const k = roofEl.scale || 1
+    const off = roofEl.offset || [0, 0]
+    const c = roofEl.centre || [0, 0]
+    const px = (v) => c[0] + (v - c[0]) * k + off[0]
+    const py = (v) => c[1] + (v - c[1]) * k + off[1]
+    return { x0: px(m.x0), x1: px(m.x1), y0: py(m.y0), y1: py(m.y1) }
+  }
+  const awnings = (roofEl?.masses || []).filter((m) => m.kind === 'shed' && m.x0 !== undefined).map(massRect)
+  const shaded = (w, home) => {
+    const [cx, cy] = centre(w)
+    const half = (w.span || 3) / 2
+    return awnings.some((a) => a.x0 <= home.x + 0.5 && a.x1 >= home.x - 0.5 && a.y0 <= cy - half + 0.5 && a.y1 >= cy + half - 0.5) || porches.some((p) => p.x + p.w >= home.x - 0.5 && p.x <= home.x && p.y <= cy - half && p.y + p.d >= cy + half)
+  }
   const westGlass = windows.filter((w) => {
     const home = byId[w.room]
-    return home && w.axis === 'v' && Math.abs(centre(w)[0] - home.x) < 0.4
+    return home && w.axis === 'v' && Math.abs(centre(w)[0] - home.x) < 0.4 && !shaded(w, home)
   })
   const westSf = westGlass.reduce((s, w) => s + ((K.windows?.[w.mark]?.w || 36) * (K.windows?.[w.mark]?.h || 60) * (w.span >= 5 ? 2 : 1)) / 144, 0)
-  if (westSf > 40 && !porches.some((p) => p.x + p.w <= Math.min(...R.map((r) => r.x)) + 1)) say('west-glass', 'warn', null, `${Math.round(westSf)} sf of west-facing glass with no porch or awning over it.`)
+  if (westSf > 40) say('west-glass', 'warn', null, `${Math.round(westSf)} sf of west-facing glass with no porch or awning over it.`)
 
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12) }))
+  // j) circulation: the halls as a share of the living area, and no hall that runs on past its last door
+  const halls = R.filter((r) => r.kind === 'hall')
+  const hallSf = halls.reduce((s, r) => s + r.w * r.d, 0)
+  const livingAll = R.filter((r) => r.kind !== 'garage').reduce((s, r) => s + r.w * r.d, 0)
+  measures.circulation = { sf: Math.round(hallSf), pct: livingAll ? Math.round((hallSf / livingAll) * 1000) / 10 : 0 }
+  if (livingAll && hallSf / livingAll > CLEAR.circulationFail) say('circulation', 'error', null, `Halls take ${measures.circulation.pct}% of the living area (${Math.round(hallSf)} sf); over ${CLEAR.circulationFail * 100}% is a corridor plan.`)
+  else if (livingAll && hallSf / livingAll > CLEAR.circulationWarn) say('circulation', 'warn', null, `Halls take ${measures.circulation.pct}% of the living area (${Math.round(hallSf)} sf); under ${CLEAR.circulationWarn * 100}% is the mark.`)
+  const deadEnds = {}
+  halls.forEach((h) => {
+    const along = h.d >= h.w ? 'y' : 'x'
+    const size = along === 'y' ? 'd' : 'w'
+    const h0 = h[along]
+    const h1 = h[along] + h[size]
+    // what opens onto this hall: its doors (on a side wall, their span along the hall; on an end wall, that end) and the rooms it is open to
+    const spans = []
+    links.forEach(({ d, a, b }) => {
+      if (a !== h && b !== h) return
+      const endWall = (along === 'y') === (d.axis === 'h')
+      if (endWall) spans.push(Math.abs(centre(d)[along === 'y' ? 1 : 0] - h0) < Math.abs(centre(d)[along === 'y' ? 1 : 0] - h1) ? [h0, h0] : [h1, h1])
+      else spans.push([d[along], d[along] + d[size]])
+    })
+    R.forEach((o) => {
+      if (o !== h && (openPairs.has(h.id + '|' + o.id) || openPairs.has(h.kind + '|' + o.kind)) && sharedEdge(h, o) > 0) {
+        const lo = Math.max(h[along], o[along])
+        const hi = Math.min(h[along] + h[size], o[along] + o[size])
+        if (hi - lo > 0.5) spans.push([lo, hi])
+        else spans.push(Math.abs(o[along] + o[size] - h0) < 0.6 || Math.abs(o[along] - h0) < 0.6 ? [h0, h0] : [h1, h1])
+      }
+    })
+    if (!spans.length) return
+    const dead = Math.max(Math.min(...spans.map((s) => s[0])) - h0, h1 - Math.max(...spans.map((s) => s[1])))
+    deadEnds[h.id] = Math.round(dead * 10) / 10
+    if (dead > CLEAR.deadEndFt + 0.05) say('dead-end', 'error', h, `${h.name} runs ${dead.toFixed(1)} ft past its last door; a hall should end within ${CLEAR.deadEndFt} ft of one.`)
+  })
+
+  // k) the primary suite is entered from a private hall or the living side, never from the service hall
+  if (master) {
+    links.forEach(({ d, a, b }) => {
+      if (a !== master && b !== master) return
+      const hall = a === master ? b : a
+      if (!hall || hall.kind !== 'hall') return
+      const service = R.filter((o) => o !== hall && SERVICE_HALL.includes(o.kind) && (links.some(({ a: p, b: q }) => (p === hall && q === o) || (p === o && q === hall)) || ((openPairs.has(hall.id + '|' + o.id) || openPairs.has(hall.kind + '|' + o.kind)) && sharedEdge(hall, o) > 0)))
+      if (service.length) say('suite-entry', 'warn', master, `${master.name}'s door shares ${hall.name.toLowerCase()} with the ${service.map((o) => o.name.toLowerCase()).join(' and ')}; enter the suite from a private vestibule or the living side.`)
+    })
+  }
+
+  // l) the street front is for living rooms: no pantry, laundry, mud room, bath or closet with a window toward the street
+  windows.forEach((w) => {
+    const home = byId[w.room]
+    if (!home || !SERVICE.includes(home.kind)) return
+    const [cx, cy] = centre(w)
+    if (w.axis !== 'h' || Math.abs(cy - (home.y + home.d)) > 0.4) return
+    const f = farSide(w)
+    if (f.blocked) return
+    const ahead = R.some((r) => r !== home && r.y + r.d > home.y + home.d + 0.5 && r.x < cx + 0.5 && r.x + r.w > cx - 0.5)
+    if (!ahead) say('service-front', 'warn', home, `${home.name} has a window on the street front; keep the service rooms off the front wall.`)
+  })
+
+  // m) closets you can use: a reach-in 24" clear, a walk-in 5' x 5'
+  R.filter((r) => CLOSETS.includes(r.kind)).forEach((r) => {
+    const walkIn = r.kind === 'mwic' || /walk|primary/i.test(r.name)
+    if (walkIn) {
+      if (Math.min(r.w, r.d) < CLEAR.walkInFt - 0.01) say('walk-in', 'error', r, `${r.name} is ${r.w.toFixed(1)}' x ${r.d.toFixed(1)}'; a walk-in closet needs ${CLEAR.walkInFt}' x ${CLEAR.walkInFt}'.`)
+    } else {
+      const clear = Math.min(r.w, r.d) - wallFt
+      if (clear < CLEAR.closetIn / 12 - 0.01) say('closet', 'error', r, `${r.name} is ${Math.round(clear * 12)}" deep clear; a reach-in closet needs ${CLEAR.closetIn}" (draw it 2'-4" to 2'-6").`)
+    }
+  })
+
+  // n) no voids, no jogs: every enclosed space is a room, and the outside wall does not step less than 2 ft
+  {
+    const pad = 0.3 // half a wall: rooms drawn edge to edge, or a hair apart, close up
+    const r2 = (v) => Math.round(v * 100) / 100
+    // wall lines within 0.4 ft of each other (a tracing offset, a rounding) read as one line
+    const cluster = (vals) => {
+      const sorted = [...new Set(vals.map(r2))].sort((a, b) => a - b)
+      const map = new Map()
+      let start = null
+      let group = []
+      const flush = () => {
+        if (!group.length) return
+        const v = r2(group.reduce((s2, g) => s2 + g, 0) / group.length)
+        group.forEach((g) => map.set(g, v))
+      }
+      sorted.forEach((v) => {
+        if (start === null || v - start > 0.4) {
+          flush()
+          start = v
+          group = [v]
+        } else group.push(v)
+      })
+      flush()
+      return (v) => map.get(r2(v)) ?? r2(v)
+    }
+    const cx2 = cluster(R.flatMap((r) => [r.x, r.x + r.w]))
+    const cy2 = cluster(R.flatMap((r) => [r.y, r.y + r.d]))
+    const boxes = R.map((r) => ({ r, x0: r2(cx2(r.x) - pad), x1: r2(cx2(r.x + r.w) + pad), y0: r2(cy2(r.y) - pad), y1: r2(cy2(r.y + r.d) + pad) }))
+    if (boxes.length) {
+      const xs = [...new Set(boxes.flatMap((b) => [b.x0, b.x1]))].sort((a, b) => a - b)
+      const ys = [...new Set(boxes.flatMap((b) => [b.y0, b.y1]))].sort((a, b) => a - b)
+      const nx = xs.length - 1
+      const ny = ys.length - 1
+      const cell = (i, j) => boxes.find((b) => b.x0 <= xs[i] + 1e-6 && b.x1 >= xs[i + 1] - 1e-6 && b.y0 <= ys[j] + 1e-6 && b.y1 >= ys[j + 1] - 1e-6)
+      const covered = []
+      for (let i = 0; i < nx; i++) {
+        covered.push([])
+        for (let j = 0; j < ny; j++) covered[i].push(!!cell(i, j))
+      }
+      // flood the outside in from the edges; what is left uncovered is enclosed
+      const outside = covered.map((col) => col.map(() => false))
+      const stack = []
+      for (let i = 0; i < nx; i++) for (const j of [0, ny - 1]) if (!covered[i][j]) stack.push([i, j])
+      for (let j = 0; j < ny; j++) for (const i of [0, nx - 1]) if (!covered[i][j]) stack.push([i, j])
+      while (stack.length) {
+        const [i, j] = stack.pop()
+        if (i < 0 || j < 0 || i >= nx || j >= ny || covered[i][j] || outside[i][j]) continue
+        outside[i][j] = true
+        stack.push([i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1])
+      }
+      const seen = covered.map((col) => col.map(() => false))
+      for (let i = 0; i < nx; i++)
+        for (let j = 0; j < ny; j++) {
+          if (covered[i][j] || outside[i][j] || seen[i][j]) continue
+          // one enclosed pocket
+          const cells = []
+          const q = [[i, j]]
+          while (q.length) {
+            const [a, b] = q.pop()
+            if (a < 0 || b < 0 || a >= nx || b >= ny || covered[a][b] || outside[a][b] || seen[a][b]) continue
+            seen[a][b] = true
+            cells.push([a, b])
+            q.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1])
+          }
+          const bx0 = Math.min(...cells.map(([a]) => xs[a])) - pad
+          const bx1 = Math.max(...cells.map(([a]) => xs[a + 1])) + pad
+          const by0 = Math.min(...cells.map(([, b]) => ys[b])) - pad
+          const by1 = Math.max(...cells.map(([, b]) => ys[b + 1])) + pad
+          const sf = cells.reduce((s2, [a, b]) => s2 + (xs[a + 1] - xs[a]) * (ys[b + 1] - ys[b]), 0) + pad * 2 * (bx1 - bx0 + by1 - by0) / 2
+          if (sf <= CLEAR.voidSf) continue
+          const around = R.filter((r) => r.x < bx1 + 0.1 && r.x + r.w > bx0 - 0.1 && r.y < by1 + 0.1 && r.y + r.d > by0 - 0.1).map((r) => r.name)
+          say('void', 'error', null, `An enclosed ${Math.round(sf)} sf space between ${around.slice(0, 3).join(', ') || 'the rooms'} is no room; give it to a room or a closet.`)
+        }
+      // the outside wall: runs of cell edges between covered and uncovered; a run under 2 ft is a jog
+      const runs = []
+      const at = (i, j) => i >= 0 && j >= 0 && i < nx && j < ny && covered[i][j]
+      for (let i = 0; i < nx; i++)
+        for (let j = 0; j < ny; j++) {
+          if (!covered[i][j]) continue
+          if (!at(i, j - 1)) runs.push({ axis: 'h', c: ys[j], a: xs[i], b: xs[i + 1], i, j })
+          if (!at(i, j + 1)) runs.push({ axis: 'h', c: ys[j + 1], a: xs[i], b: xs[i + 1], i, j })
+          if (!at(i - 1, j)) runs.push({ axis: 'v', c: xs[i], a: ys[j], b: ys[j + 1], i, j })
+          if (!at(i + 1, j)) runs.push({ axis: 'v', c: xs[i + 1], a: ys[j], b: ys[j + 1], i, j })
+        }
+      const merged = []
+      runs.sort((p, q2) => (p.axis < q2.axis ? -1 : p.axis > q2.axis ? 1 : p.c - q2.c || p.a - q2.a))
+      runs.forEach((r) => {
+        const last = merged[merged.length - 1]
+        if (last && last.axis === r.axis && Math.abs(last.c - r.c) < 1e-6 && Math.abs(last.b - r.a) < 1e-6 && last.side === (r.axis === 'h' ? (at(r.i, r.j - 1) ? 's' : 'n') : at(r.i - 1, r.j) ? 'e' : 'w')) last.b = r.b
+        else merged.push({ ...r, side: r.axis === 'h' ? (at(r.i, r.j - 1) ? 's' : 'n') : at(r.i - 1, r.j) ? 'e' : 'w' })
+      })
+      const jogged = new Set()
+      merged.forEach((m) => {
+        const len = m.b - m.a
+        if (len < 0.4 || len >= CLEAR.jogFt - 0.01) return
+        const mid = m.axis === 'h' ? [(m.a + m.b) / 2, m.c] : [m.c, (m.a + m.b) / 2]
+        const room = R.find((r) => mid[0] > r.x - pad - 0.05 && mid[0] < r.x + r.w + pad + 0.05 && mid[1] > r.y - pad - 0.05 && mid[1] < r.y + r.d + pad + 0.05)
+        const key = room?.id || 'x'
+        if (jogged.has(key)) return
+        jogged.add(key)
+        say('jog', 'warn', room, `The outside wall steps ${len.toFixed(1)} ft at ${room?.name || 'the house'}; a jog under ${CLEAR.jogFt} ft costs a corner for nothing.`)
+      })
+    }
+  }
+
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')
@@ -375,11 +567,13 @@ export const CHECK_GROUPS = [
   { id: 'doors', name: 'Every door on a wall its room shares, no two overlapping', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial', 'doors-overlap'] },
   { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath', ids: ['reach'] },
   { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
-  { id: 'halls', name: 'Halls 36" clear', ids: ['hall'] },
-  { id: 'overlap', name: 'No room over another or on a porch', ids: ['overlap', 'porch'] },
+  { id: 'halls', name: 'Halls 42" clear, none running past its last door, under 12% of the living area', ids: ['hall', 'dead-end', 'circulation'] },
+  { id: 'overlap', name: 'No room over another or on a porch; no enclosed void, no jog under 2 ft', ids: ['overlap', 'porch', 'void', 'jog'] },
   { id: 'fixtures', name: 'Toilet and shower clearances', ids: ['toilet-front', 'toilet-side', 'shower-front'] },
   { id: 'garage', name: 'Garage attached, fire-rated house door, overhead doors for every bay, a driveway on the lot to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers', 'garage-bays', 'garage-name'] },
-  { id: 'suite', name: 'Primary bath and closet from the bedroom', ids: ['suite-bath', 'suite-closet'] },
+  { id: 'suite', name: 'Primary bath and closet from the bedroom; the suite entered away from the service hall', ids: ['suite-bath', 'suite-closet', 'suite-entry'] },
+  { id: 'closets', name: 'Reach-in closets 24" clear, walk-ins 5\' x 5\'', ids: ['closet', 'walk-in'] },
+  { id: 'front', name: 'Service rooms off the street front', ids: ['service-front'] },
   { id: 'kitchen', name: 'Kitchen work triangle 26 ft or less, aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },
   { id: 'west', name: 'West glass over 40 sf shaded', ids: ['west-glass'] },

@@ -6,6 +6,7 @@ import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-far
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
 import { applyOps, envelopeSize, pushWall, settleIslands, settleKitchen } from './ops.js'
+import { fillVoid } from './add.js'
 import { auditPlan } from './audit.js'
 
 // the reference lot's envelope centre, kept for older call sites
@@ -161,15 +162,16 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   const T = planId && planId !== 'standard' && kit.plans?.[planId] ? kit.plans[planId] : kit.plan
   let rooms = T.rooms.map((r) => ({ ...r, zone: kit.rooms[r.kind]?.zone || 'private', open: !!kit.rooms[r.kind]?.open, plumbing: !!kit.rooms[r.kind]?.plumbing, fill: kit.rooms[r.kind]?.open ? '#e6e1d8' : r.kind === 'garage' ? '#dcd7cf' : undefined, h: kit.rooms[r.kind]?.open ? 0.6 : undefined }))
 
+  const dropped = []
   const drop = (kind, n = 1) => {
     for (let i = 0; i < n; i++) {
       const idx = rooms.map((r) => r.kind).lastIndexOf(kind)
-      if (idx >= 0) rooms.splice(idx, 1)
+      if (idx >= 0) dropped.push(...rooms.splice(idx, 1))
     }
   }
   if (!program.office) drop('office')
   if (!program.garage) drop('garage')
-  if (!program.suite2) { drop('suite2'); rooms = rooms.filter((r) => r.id !== 'wic2') }
+  if (!program.suite2) { drop('suite2'); dropped.push(...rooms.filter((r) => r.id === 'wic2')); rooms = rooms.filter((r) => r.id !== 'wic2') }
   if (!program.halfBath) drop('halfbath')
   if (!program.frontPorch) drop('frontPorch')
   if (!program.rearPorch) drop('rearPorch')
@@ -195,7 +197,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     }
     const candidates = [...rooms.filter((r) => r.kind === 'bath').reverse(), ...rooms.filter((r) => r.kind === 'jackjill')]
     const pick = candidates.find((c) => !far(rooms.filter((r) => r !== c))) || candidates[0]
-    if (pick) rooms.splice(rooms.indexOf(pick), 1)
+    if (pick) dropped.push(...rooms.splice(rooms.indexOf(pick), 1))
   }
 
 
@@ -205,6 +207,11 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     Object.entries(T.companions || {}).forEach(([owner, list]) => {
       if (!present.has(owner)) rooms = rooms.filter((r) => !list.includes(r.id))
     })
+    // a neighbour grows into an enclosed space a dropped room leaves (the primary closet takes the half bath's)
+    Object.entries(T.companions || {}).forEach(([owner, list]) => {
+      if (!present.has(owner)) dropped.push(...T.rooms.filter((r) => list.includes(r.id)))
+    })
+    dropped.forEach((gone) => fillVoid(rooms, gone, T.fills?.[gone.id]))
     ;(T.trims || []).forEach((t) => {
       if (present.has(t.when)) return
       const r = rooms.find((x) => x.id === t.room)
@@ -212,6 +219,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
         r.d -= t.y - r.y
         r.y = t.y
       }
+      if (r && t.y1 !== undefined) r.d = t.y1 - r.y
     })
   }
 
@@ -260,7 +268,14 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     if (bath1 && bed1 && door) {
       const x0 = Math.max(bath1.x, bed1.x) + 0.5
       const x1 = Math.min(bath1.x + bath1.w, bed1.x + bed1.w) - 0.5
-      Object.assign(door, doorEl(kit, 'd-bath1', 'bath1', 'h', (x0 + x1) / 2, bath1.y, 'bath', { swing: 1, hinge: 'start' }))
+      // where no fixture stands against that wall
+      const span = (kit.doors.bath?.w || 28) / 12
+      const against = rooms.filter((f) => f.kind === 'fixture' && f.room === 'bath1' && f.y < bath1.y + 0.6)
+      let at = (x0 + x1) / 2
+      for (let c = x1 - span / 2; c >= x0 + span / 2; c -= 0.25) {
+        if (!against.some((f) => f.x < c + span / 2 + 0.2 && f.x + f.w > c - span / 2 - 0.2)) { at = c; break }
+      }
+      Object.assign(door, doorEl(kit, 'd-bath1', 'bath1', 'h', at, bath1.y, 'bath', { swing: 1, hinge: 'start' }))
     }
   }
 
@@ -274,7 +289,21 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the bed wing's roof grows with the wing; the roof then scales with the rooms
     const ids2 = new Set(rooms.filter(isRoom).map((r) => r.id))
-    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).map((m) => (m.id === 'bedwing' && wingShift ? { ...m, y0: m.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...m, x1: drawnGarage.x + drawnGarage.w } : { ...m }))
+    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).map((m) => {
+      // a mass drawn for a room that is not there takes its 'absent' shape (the bed wing runs on over Bath 1 without the mini primary)
+      const { absent, ...mass } = m
+      Object.entries(absent || {}).forEach(([id, over]) => { if (!ids2.has(id)) Object.assign(mass, over) })
+      return m.id === 'bedwing' && wingShift ? { ...mass, y0: mass.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...mass, x1: drawnGarage.x + drawnGarage.w } : mass
+    })
+    // an awning over the west window of a room the wing grew by (the drawn rooms carry their own)
+    const drawnIds = new Set(T.rooms.map((r) => r.id))
+    const west = Math.min(...rooms.filter((r) => isRoom(r) && !r.open).map((r) => r.x))
+    rooms.filter((r) => isRoom(r) && !r.open && !drawnIds.has(r.id) && Math.abs(r.x - west) < 0.5).forEach((r) => {
+      rooms.filter((e) => e.kind === 'window' && e.room === r.id && e.axis === 'v' && Math.abs(e.x + e.w / 2 - r.x) < 0.4).forEach((win) => {
+        const cy = win.y + win.d / 2
+        masses.push({ id: `awning-${r.id}`, kind: 'shed', x0: r.x - 2.5, x1: r.x, y0: cy - win.span / 2 - 0.5, y1: cy + win.span / 2 + 0.5, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 })
+      })
+    })
     rooms.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: 1, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, 1, [cx, cy]), dormers: dormerWalls(masses, 1, [cx, cy]), plan: T.id || 'standard' })
   }
   const areaAt = (k) => {
@@ -535,7 +564,7 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
     if (kind === 'bed') {
       bedNo += 1
       const id = `bed-${bedNo}`
-      const closetD = 2.25
+      const closetD = 2.5 // 26" clear: a reach-in you can hang a coat in
       const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: bedX, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
       const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: bedX, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
       rooms.push(room, closet)

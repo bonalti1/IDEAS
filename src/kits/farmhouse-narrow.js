@@ -17,6 +17,7 @@ export const NARROW_PLAN = {
   capacity: { beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false },
   // rooms that go when their bedroom goes, and what shortens with it
   companions: { bed4: ['closet4'] },
+  fills: { closet4: 'closet3' },
   trims: [{ when: 'bed4', room: 'hall', y: 0 }],
   rooms: [
     // west column (15 ft), rear to front
@@ -26,8 +27,8 @@ export const NARROW_PLAN = {
     { id: 'closet2', kind: 'wic', name: 'Closet', x: 9, y: 23, w: 6, d: 2.5 },
     { id: 'bed2', kind: 'bed', name: 'Bedroom 2', x: 0, y: 25.5, w: 15, d: 12.5 },
     { id: 'bath1', kind: 'bath', name: 'Bath 1', x: 0, y: 38, w: 8, d: 9.5 },
-    { id: 'hall2', kind: 'hall', name: 'Hall', x: 8, y: 38, w: 7, d: 3.5 },
-    { id: 'laundry', kind: 'laundry', name: 'Laundry', x: 8, y: 41.5, w: 7, d: 6 },
+    { id: 'hall2', kind: 'hall', name: 'Hall', x: 8, y: 38, w: 7, d: 4 },
+    { id: 'laundry', kind: 'laundry', name: 'Laundry', x: 8, y: 42, w: 7, d: 5.5 },
     { id: 'living', kind: 'living', name: 'Living', x: 0, y: 47.5, w: 19, d: 16 },
     // the hall, rear to the living room
     { id: 'hall', kind: 'hall', name: 'Hallway', x: 15, y: -12, w: 4, d: 59.5 },
@@ -58,6 +59,10 @@ export const NARROW_PLAN = {
     { id: 'bed4', kind: 'gable', x0: 15, x1: 39.5, y0: -12, y1: 0, ridge: 'ns', plate: 9, pitch: 10, ends: ['n'] },
     { id: 'frontPorch', kind: 'shed', x0: 0, x1: 19, y0: 63.5, y1: 71.5, high: 'n', plate: 8, pitch: 3, material: 'metal roof' },
     { id: 'rearPorch', kind: 'shed', x0: 0, x1: 15, y0: -10, y1: 0, high: 's', plate: 8, pitch: 3, material: 'metal roof' },
+    // metal awnings over the west windows (the Valley sun)
+    { id: 'awning-master', kind: 'shed', x0: -2.5, x1: 0, y0: 4.5, y1: 11.5, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
+    { id: 'awning-bed2', kind: 'shed', x0: -2.5, x1: 0, y0: 28.5, y1: 35.5, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
+    { id: 'awning-living', kind: 'shed', x0: -2.5, x1: 0, y0: 52, y1: 59, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 },
   ],
   doors: [
     // suite
@@ -73,9 +78,9 @@ export const NARROW_PLAN = {
     { id: 'd-bed3', room: 'bed3', axis: 'v', x: 19, y: 8.75, w: 2.5, swing: 1, size: 'interior' },
     { id: 'd-linen', room: 'linen', axis: 'v', x: 19, y: 18.25, w: 2, swing: -1, size: 'closet' },
     // bath, laundry, pantry
-    { id: 'd-hall2', room: 'hall2', axis: 'v', x: 15, y: 39.75, w: 3.5, cased: true },
-    { id: 'd-bath1', room: 'bath1', axis: 'v', x: 8, y: 39.75, w: 2.33, swing: -1, size: 'bath' },
-    { id: 'd-laundry', room: 'laundry', axis: 'v', x: 15, y: 44.5, w: 2.5, swing: -1, size: 'interior' },
+    { id: 'd-hall2', room: 'hall2', axis: 'v', x: 15, y: 40, w: 3.5, cased: true },
+    { id: 'd-bath1', room: 'bath1', axis: 'v', x: 8, y: 40, w: 2.33, swing: -1, size: 'bath' },
+    { id: 'd-laundry', room: 'laundry', axis: 'h', x: 11.5, y: 42, w: 2.5, swing: 1, size: 'interior' },
     { id: 'd-pantry', room: 'pantry', axis: 'h', x: 21.5, y: 27.5, w: 2.5, swing: -1, size: 'interior' },
     // public openings
     { id: 'd-kitchen', room: 'kitchen', axis: 'v', x: 19, y: 34, w: 5, cased: true },
@@ -110,9 +115,9 @@ export const NARROW_PLAN = {
     { k: 'shower', room: 'bath1', x: 0.3, y: 44.3, w: 5, d: 3 },
     { k: 'toilet', room: 'bath1', x: 0.5, y: 38.5, w: 1.5, d: 2.3, face: 'e' },
     { k: 'vanity', room: 'bath1', x: 5.8, y: 38.8, w: 2, d: 4, face: 'w' },
-    { k: 'washer', room: 'laundry', x: 8.3, y: 44.8, w: 2.25, d: 2.5 },
-    { k: 'dryer', room: 'laundry', x: 10.8, y: 44.8, w: 2.25, d: 2.5 },
-    { k: 'wh', room: 'laundry', x: 12.8, y: 41.8, w: 2, d: 2 },
+    { k: 'washer', room: 'laundry', x: 8.3, y: 44.9, w: 2.25, d: 2.5 },
+    { k: 'dryer', room: 'laundry', x: 10.8, y: 44.9, w: 2.25, d: 2.5 },
+    { k: 'wh', room: 'laundry', x: 12.8, y: 44.9, w: 2, d: 2 },
     // kitchen: a run on the rear wall with the fridge and the range, a short run on the east wall, the sink in the island
     { k: 'fridge', room: 'kitchen', x: 25.5, y: 27.8, w: 3, d: 2.5 },
     { k: 'counter', room: 'kitchen', x: 28.5, y: 27.8, w: 8.9, d: 2.1 },

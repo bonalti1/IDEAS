@@ -7,7 +7,7 @@ import { fitsLot } from '../src/draft/lib/fit.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { planSVG, planSheetHTML } from '../src/draft/lib/plan-svg.js'
 import { STYLES } from '../src/draft/lib/styles.js'
-import { LOTS, PROGRAMS, draftable } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)

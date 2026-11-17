@@ -25,7 +25,9 @@ test('areas match the cover sheet', () => {
   assert.ok(t.areas.total >= ref.totalSf, `total: app ${Math.round(t.areas.total)} vs set ${ref.totalSf} (porches are drawn deeper than the set)`)
 })
 test('material takeoff matches the cover sheet', () => {
-  within(t.sidingSf, ref.takeoff.boardBattenSf, 0.06, 'board and batten')
+  // the round 4 re-plan aligned the wing (Bath 1 no longer bumps out) and moved the pantry inside, so there is
+  // about 7% less wall to side than the set drew; the stone (front width) and tile are unchanged
+  within(t.sidingSf, ref.takeoff.boardBattenSf, 0.08, 'board and batten')
   within(t.stoneSf, ref.takeoff.stoneSf, 0.06, 'stone')
   within(t.showerTileSf, ref.takeoff.showerTileSf, 0.02, 'shower tile')
 })
@@ -46,7 +48,7 @@ test('roof follows sheet 100', () => {
   const top = (id) => Math.max(...roof.faces.filter((f) => f.mass === id && f.kind === 'slope').flatMap((f) => f.rings[0].map((p) => p[1])))
   assert.ok(top('main') > 21 && top('main') < 24, `main ridge ${top('main').toFixed(1)} ft`)
   assert.ok(top('leftwing') > 19, 'left wing gable peaks near 20 ft like the front elevation')
-  for (const id of ['leftwing', 'office', 'pantry', 'master', 'frontPorch', 'rearPorch', 'dormer']) assert.ok(roof.faces.some((f) => f.mass === id), `roof mass ${id} is visible`)
+  for (const id of ['leftwing', 'office', 'dining', 'master', 'frontPorch', 'rearPorch', 'dormer']) assert.ok(roof.faces.some((f) => f.mass === id), `roof mass ${id} is visible`)
   // valleys: no visible slope of one mass sits under another mass's plane
   const slopes = roof.faces.filter((f) => f.kind === 'slope')
   const hAt = (p, x, z) => p.a * x + p.b * z + p.c
