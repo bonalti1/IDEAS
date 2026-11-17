@@ -50,6 +50,8 @@ if (PLAT) {
   await page.locator('#lot-street').fill('N FM 2360')
   await page.waitForTimeout(2500)
   await shot(page, '2-lot')
+  // the typed lot is an assumption the client confirms
+  if (await page.locator('#lot-confirm').count()) await page.locator('#lot-confirm').check()
 }
 await page.getByRole('button', { name: /pick a style/ }).click()
 await shot(page, '3-style')
@@ -61,7 +63,7 @@ await page.getByRole('button', { name: /Draft my house/ }).click()
 await page.waitForTimeout(2500)
 await shot(page, '5-draft')
 const ask = async (text) => {
-  await page.getByPlaceholder(/Move the laundry/).fill(text)
+  await page.getByPlaceholder(/change|Move the laundry/).fill(text)
   await page.getByRole('button', { name: 'Change', exact: true }).click()
   await page.locator('.msg.thinking').waitFor({ state: 'hidden', timeout: 30000 })
 }
