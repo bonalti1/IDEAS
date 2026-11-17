@@ -1,7 +1,7 @@
 // IFC4 export of the draft: walls, floor slabs, and rooms as IfcSpace, placed
 // on the lot. Written as STEP text with no library so it runs in the browser.
 // Opens in Revit (Insert > Link IFC or Open IFC), BIMcollab Zoom, or any IFC viewer.
-import { isConditioned, lotOf } from './layout.js'
+import { isConditioned, lotOf, programOf } from './layout.js'
 import { hostWall } from './openings.js'
 import { openingMarks } from './contract.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
@@ -403,7 +403,8 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
   const props = [
     ['Style', style.name],
     ['Kit', `${kit.name} (${kit.source.plan} rev ${kit.source.rev})`],
-    ['Program', `${program.beds} bed, ${program.baths}${program.halfBath ? '.5' : ''} bath, ${program.garage}-car, ${program.stories} story`],
+    // the program as drawn (the client's asks changed it): beds, baths, garage from the rooms
+    ['Program', (({ beds, baths, halfBath, garage, stories }) => `${beds} bed, ${baths}${halfBath ? '.5' : ''} bath, ${garage}-car, ${stories || 1} story`)(programOf(rooms, program))],
     ['Roof', `${kit.roof.pitch}, ${kit.roof.rafters}, ${kit.roof.overhang} overhang`],
     ['Plates', `${kit.plates.default}' typ, ${kit.plates.public}' public, ${kit.plates.vaulted}' vault`],
     ['Exterior', `${kit.exterior.siding}; ${kit.exterior.accent}`],

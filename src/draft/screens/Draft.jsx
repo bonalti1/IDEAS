@@ -45,6 +45,7 @@ const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(M
 export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack, lot, project, setProject }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
+  const [big, setBig] = useState(null) // an option drawing opened full size
   const [sun, setSun] = useState(false)
   const [highlight, setHighlight] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -183,14 +184,30 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
 
   return (
     <div className="screen split">
+      {big && (
+        <div className="lightbox" role="dialog" aria-label={big.label} onClick={() => setBig(null)}>
+          <div className="lightbox-card" onClick={(e) => e.stopPropagation()}>
+            <div className="lightbox-head">
+              <b>{big.label}</b>
+              <button className="linkish" onClick={() => setBig(null)}>
+                Close
+              </button>
+            </div>
+            <div className="lightbox-svg" dangerouslySetInnerHTML={{ __html: big.svg }} />
+          </div>
+        </div>
+      )}
       <div className="viewport">
-        {view === 'top' || view === 'site' ? (
-          <PlanDrawing mode={view === 'site' ? 'site' : 'plan'} rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
-        ) : (
-          <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} tags={!narrow} />
-        )}
-        <div className="viewport-tag">
-          {style.name} · {programLine(programOf(rooms, program))}
+        <div className="viewport-stage">
+          {view === 'top' || view === 'site' ? (
+            <PlanDrawing mode={view === 'site' ? 'site' : 'plan'} rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
+          ) : (
+            <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} tags={!narrow} />
+          )}
+          <div className="viewport-tag">
+            {style.name} · {programLine(programOf(rooms, program))}
+          </div>
+          <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, setbacks, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
         </div>
         <div className="viewport-views">
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
@@ -218,7 +235,6 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             </>
           )}
         </div>
-        <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, setbacks, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
       </div>
       <aside className="side chat">
         <div className="side-head">
@@ -265,7 +281,16 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
                 <div className="picker">
                   {m.picker.map((o) => (
                     <button key={o.id} className="option" onClick={() => send(o.label, { ops: o.ops, label: o.label })} disabled={busy || credits <= 0} title={o.did.join('. ')}>
-                      <span className="thumb" dangerouslySetInnerHTML={{ __html: o.svg }} />
+                      <span
+                        className="thumb"
+                        role="button"
+                        aria-label={`See ${o.label} full size`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setBig({ label: o.label, svg: o.svg })
+                        }}
+                        dangerouslySetInnerHTML={{ __html: o.svg }}
+                      />
                       <b>{o.label}</b>
                       <span className="delta">
                         {signed(o.sf, ' sf')} · {signed(o.cost).replace(/^([+−]?)/, '$1$')}

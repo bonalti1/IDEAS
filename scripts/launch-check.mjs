@@ -173,6 +173,20 @@ for (const [i, text] of ['make the kitchen bigger', 'add an office', 'remove the
     return r.text.slice(0, 90)
   })
 }
+// ── 4b. the fallback is fast: /api/interpret and one chat change answer in under a second when the office has no Claude key ──
+await step('fallback timing: /api/interpret and a chat change under 1 s (no Claude key)', async () => {
+  const key = await fetch(API + '/api/health').then((r) => r.json()).catch(() => ({}))
+  if (key.interpreter && key.interpreter !== 'fallback' && key.interpreter !== 'none') return `skipped: the office has an interpreter (${key.interpreter}); the fallback is not what answers`
+  const t0 = Date.now()
+  const res = await fetch(API + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make the kitchen bigger', rooms: [], program: {}, kit: { id: 'farmhouse', name: 'Modern Farmhouse', kinds: {}, minSize: {} } }) })
+  const ms = Date.now() - t0
+  await res.text()
+  const t1 = Date.now()
+  const r = await ask('make the office bigger')
+  const chatMs = Date.now() - t1
+  if (ms > 1000 || chatMs > 1000) throw new Error(`/api/interpret ${ms} ms, chat change ${chatMs} ms (target under 1,000 ms each)`)
+  return `/api/interpret ${ms} ms (${res.status}), chat change ${chatMs} ms${r.held ? ' (held: ' + r.text.slice(0, 60) + ')' : ''}`
+})
 await step('undo one edit', async () => {
   const before = (await page.locator('.credits').textContent()).trim()
   await page.getByRole('button', { name: 'Undo last change' }).click()

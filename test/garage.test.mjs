@@ -49,10 +49,13 @@ for (const [lotName, lot] of Object.entries(LOTS)) {
       const rooms = generateRooms(drafted, style, lot)
       const { g, doors } = garageOf(rooms)
       assert.ok(g, 'a garage')
-      const bays = Math.round(Math.max(g.w, g.d) / kit.rooms.garage.perCar)
-      assert.equal(bays, drafted.garage, `${g.name} ${g.w} x ${g.d}`)
+      // a tandem garage parks the third car behind one of two bays: two wide, two deep
+      const bays = g.tandem ? Math.round(Math.min(g.w, g.d) / kit.rooms.garage.perCar) * Math.floor(Math.max(g.w, g.d) / 20) : Math.round(Math.max(g.w, g.d) / kit.rooms.garage.perCar)
+      if (g.tandem) assert.ok(bays >= drafted.garage, `${g.name} ${g.w} x ${g.d}`)
+      else assert.equal(bays, drafted.garage, `${g.name} ${g.w} x ${g.d}`)
       assert.match(g.name, new RegExp(`^${drafted.garage}-Car`))
-      assert.ok(doors.reduce((a, d) => a + d.span, 0) >= drafted.garage * 8, 'doors cover the bays')
+      const across = g.tandem ? Math.round(Math.min(g.w, g.d) / kit.rooms.garage.perCar) : drafted.garage
+      assert.ok(doors.reduce((a, d) => a + d.span, 0) >= across * 8, 'doors cover the bays')
       assert.deepEqual(garageErrors(rooms, drafted, lot), [])
       // the driveway: a front-load door faces the street; a side door has 25 ft of apron inside the lot
       const facing = garageFacing(g, doors)

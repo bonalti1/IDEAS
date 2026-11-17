@@ -1,13 +1,13 @@
 // Change ops: validate, apply, and the regex fallback that produces them.
 // Schema in docs/change-diff.md. Plan feet throughout.
-import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing, minSizeOf, planIdOf } from './layout.js'
-import { attachBeside, addPorch, addInWing, moveBeside, removeRoom } from './add.js'
+import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing, minSizeOf, planIdOf, scalePlan, isConditioned } from './layout.js'
+import { attachBeside, addPorch, addInWing, moveBeside, removeRoom, fixturesFor, doorsOf } from './add.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
 import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -52,7 +52,9 @@ export function validateOps(ops, rooms, kit) {
   ops.forEach((o, i) => {
     const at = `op ${i + 1}`
     if (!o || !OPS.includes(o.op)) return errors.push(`${at}: unknown op "${o?.op}"`)
-    if (o.op !== 'add' && o.op !== 'garage' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
+    if (o.op === 'scale' && !(o.sqft >= 600 && o.sqft <= 10000)) errors.push(`${at}: scale needs sqft`)
+    if (o.op === 'swap' && !ids.has(o.target)) errors.push(`${at}: no room "${o.target}" to swap with`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push(`${at}: resize needs w and d`)
     if (o.op === 'garage' && !(o.cars >= 1 && o.cars <= 4)) errors.push(`${at}: garage needs cars (1 to 4)`)
     if (o.op === 'add' && !kit.rooms[o.kind]) errors.push(`${at}: kind "${o.kind}" is not in the ${kit.name} kit`)
@@ -656,12 +658,59 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
         flat.push(...overheadDoors(kit, after, cars, garageFacing(after, flat) || 's'))
       } else {
         removeRoom(flat, g.id)
-        const placed = attachGarage(placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L).concat(flat.filter((r) => r.kind === 'roof')), kit, cars, L, stories)
-        if (!placed.some((r) => isRoom(r) && r.kind === 'garage')) throw new Error(`there is no sound spot for a ${cars}-car garage on this lot`)
+        const placed = attachGarage(placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L).concat(flat.filter((r) => r.kind === 'roof')), kit, cars, L, stories, { prefer: o.load || null, tandem: !!o.tandem })
+        if (!placed.some((r) => isRoom(r) && r.kind === 'garage')) throw new Error(`there is no sound spot for a ${cars}-car${o.tandem ? ' tandem' : ''}${o.load ? ` ${o.load}-load` : ''} garage on this lot`)
         flat.length = 0
         placed.forEach((r) => flat.push(r))
       }
-      did.push(`${cars}-car garage, ${q(flat.find((r) => isRoom(r) && r.kind === 'garage').w)}' wide`)
+      const made = flat.find((r) => isRoom(r) && r.kind === 'garage')
+      did.push(`${cars}-car garage${made.tandem ? ' (tandem)' : ''}${o.load ? `, ${o.load}-load` : ''}, ${q(made.w)}' wide`)
+    } else if (o.op === 'scale') {
+      // the whole house to a living area, within this plan's range; the service rooms keep their size on the way down
+      const lim = kit.limits?.sqft || [1400, 6000]
+      const sqft = Math.round(o.sqft)
+      if (sqft < lim[0] || sqft > lim[1]) throw new Error(`this plan draws ${lim[0].toLocaleString()} to ${lim[1].toLocaleString()} sf; ${sqft.toLocaleString()} is outside that`)
+      const areaOf = (list) => list.filter((r) => isRoom(r) && isConditioned(r)).reduce((a, r) => a + r.w * r.d, 0) * stories
+      const base = areaOf(flat)
+      const at = (k) => {
+        const copy = flat.map((r) => ({ ...r }))
+        scalePlan(copy, k, centre[0], centre[1], kit)
+        return areaOf(copy)
+      }
+      let lo = sqft < base ? 0.5 : 1
+      let hi = sqft < base ? 1 : 1.8
+      for (let i = 0; i < 24; i++) {
+        const mid = (lo + hi) / 2
+        if (at(mid) >= sqft) hi = mid
+        else lo = mid
+      }
+      const k = Math.round(hi * 1000) / 1000
+      scalePlan(flat, k, centre[0], centre[1], kit)
+      settleIslands(flat)
+      settleKitchen(flat)
+      const got = Math.round(areaOf(flat))
+      if (Math.abs(got - sqft) / sqft > 0.05) throw new Error(`the smallest this plan goes with these rooms is about ${Math.round(got / 50) * 50} sf`)
+      did.push(`${got.toLocaleString()} sf of living area (was ${Math.round(base).toLocaleString()})`)
+    } else if (o.op === 'swap') {
+      // two rooms trade places: each takes the other's rectangle, doors and windows (its walls stay), and gets
+      // fixtures laid for its kind; the rules and the audit then judge the result (a dining room needs a window)
+      const a = rs[o.room]
+      const b = rs[o.target]
+      if (a === b) throw new Error('that is the same room twice')
+      if (a.open !== b.open) throw new Error(`a porch and a room cannot trade places`)
+      const keep = ['kind', 'name', 'zone', 'plumbing', 'fill', 'h', 'vaulted']
+      const ta = Object.fromEntries(keep.map((k) => [k, a[k]]))
+      const tb = Object.fromEntries(keep.map((k) => [k, b[k]]))
+      keep.forEach((k) => {
+        if (k in tb) a[k] = tb[k]
+        else delete a[k]
+        if (k in ta) b[k] = ta[k]
+        else delete b[k]
+      })
+      // each rectangle keeps its id, its doors, windows and openings; the furniture is laid for what it now is
+      for (let i = flat.length - 1; i >= 0; i--) if (flat[i].kind === 'fixture' && (flat[i].room === a.id || flat[i].room === b.id)) flat.splice(i, 1)
+      for (const r of [a, b]) fixturesFor(r.kind, r, doorsOf(flat, r)).forEach((f) => flat.push(f))
+      did.push(`Swapped the ${ta.name.toLowerCase()} and the ${tb.name.toLowerCase()}`)
     } else if (o.op === 'moveBeside') {
       const r = rs[o.room]
       const t = rs[o.target]
@@ -692,7 +741,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
         room = attachBeside(flat, kit, { kind: o.kind, name, id, w, d, target: near.id, door: ['bath', 'halfbath', 'jackjill'].includes(o.kind) ? 'bath' : 'interior' })
         if (!room && ['bath', 'office'].includes(o.kind)) room = addInWing(flat, kit, o.kind)
       } else if (['bed', 'bath', 'office'].includes(o.kind)) {
-        room = addInWing(flat, kit, o.kind)
+        room = addInWing(flat, kit, o.kind, { side: o.side || null })
         if (!room && near) room = attachBeside(flat, kit, { kind: o.kind, name, id, w, d, target: near.id })
       } else {
         // anything else attaches to the room it belongs with: a hall, the kitchen, the laundry
@@ -719,7 +768,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
   let placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
   // a change that pushed the house past a setback: the house slides on the lot when a shift alone fits it
-  if (ops.some((o) => o.op === 'add' || o.op === 'garage') && flat.some((x) => isRoom(x) && !x.open && !insideSetbacks(x, centre, lot))) {
+  if (ops.some((o) => o.op === 'add' || o.op === 'garage' || o.op === 'scale') && flat.some((x) => isRoom(x) && !x.open && !insideSetbacks(x, centre, lot))) {
     const refit = fitToLot(placed, kit, stories, lot, { minScale: 1 })
     if (refit.scale === 1 && (refit.shift[0] || refit.shift[1])) {
       placed = refit.rooms
@@ -812,10 +861,35 @@ export function regexOps(text, rooms, kit, lot = DEFAULT_LOT) {
   const feet = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')/)
   const by = feet ? +feet[1] : null
 
-  if (!kind) return { ops: [], reply: 'I did not catch which room you mean. Try "make the kitchen bigger", "add an office", or "remove the half bath".', confidence: 0.2 }
+  // "make the house 3,000 sf", "I want about 2,400 square feet": the whole plan scales
+  const sqftSaid = t.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/)
+  if (sqftSaid && (!kind || /\b(house|home|plan|whole|total|overall|living area)\b/.test(t))) {
+    let n = +sqftSaid[1].replace(/,/g, '')
+    if (/\d\s*k\b/.test(sqftSaid[0])) n *= 1000
+    return { ops: [{ op: 'scale', sqft: n }], reply: `Sizing the house to about ${Math.round(n).toLocaleString()} square feet.`, confidence: 0.7 }
+  }
+  // "swap the office and the dining room", "switch the laundry with the pantry"
+  if (/\b(swap|switch|exchange|trade places?)\b/.test(t)) {
+    // rooms called by name first ("bedroom 1 and bedroom 2"), else the two kinds named
+    const byName = roomsOnly.filter((r) => r.name && t.includes(r.name.toLowerCase())).map((r) => ({ r, at: t.indexOf(r.name.toLowerCase()) })).sort((p, q) => p.at - q.at || q.r.name.length - p.r.name.length).filter((n, i, all) => !all.slice(0, i).some((o) => o.at === n.at)).map((n) => n.r)
+    const pair = byName.length >= 2 ? byName.slice(0, 2) : hits.length >= 2 ? [roomsOnly.find((r) => r.kind === hits[0].k), roomsOnly.find((r) => r.kind === hits[1].k)] : null
+    if (pair) {
+      const [a, b] = pair
+      if (!a || !b) return { ops: [], reply: `There is no ${kit.rooms[!a ? hits[0].k : hits[1].k]?.name.toLowerCase() || 'such room'} in this plan to swap.`, confidence: 0.5 }
+      return { ops: [{ op: 'swap', room: a.id, target: b.id }], reply: `Swapping the ${a.name.toLowerCase()} and the ${b.name.toLowerCase()}.`, confidence: 0.7 }
+    }
+    return { ops: [], reply: 'Which two rooms should trade places? Say it like "swap the office and the dining room".', confidence: 0.4 }
+  }
+  if (!kind) return { ops: [], reply: 'I did not catch which room you mean. Try "make the kitchen bigger", "add an office", "make the house 2,400 sf", or "swap the office and the dining room".', confidence: 0.2 }
   if (kind === 'porch') return { ops: [], reply: 'Front porch or back porch?', confidence: 0.3 }
   // "make the garage 3 cars", "three-car garage"
   const cars = t.match(/(\d+|one|two|three|four)[- ]?cars?\b/)
+  const load = /\bside[- ]?(load|entry|loading)\b|\bfrom the side\b/.test(t) ? 'side' : /\bfront[- ]?(load|entry|loading)\b|\bfrom the (street|front)\b/.test(t) ? 'front' : null
+  const tandem = /\btandem\b/.test(t)
+  if (kind === 'garage' && (load || tandem) && targets.length && !add && !remove) {
+    const n = cars ? WORDS[cars[1]] || +cars[1] : tandem ? 3 : Math.max(1, Math.round(Math.max(targets[0].w, targets[0].d) / kit.rooms.garage.perCar))
+    return { ops: [{ op: 'garage', cars: n, ...(load ? { load } : {}), ...(tandem ? { tandem: true } : {}) }], reply: `Making the garage ${n} cars${tandem ? ' with a tandem bay' : ''}${load ? `, ${load}-load` : ''}.`, confidence: 0.7 }
+  }
   if (kind === 'garage' && cars && !add && !remove) {
     const n = WORDS[cars[1]] || +cars[1]
     if (!targets.length) return { ops: [{ op: 'add', kind: 'garage', name: `${n}-Car Garage`, w: kit.rooms.garage.perCar * n, d: kit.rooms.garage.d, near: roomsOnly.find((r) => r.kind === 'laundry' || r.kind === 'mud')?.id }], reply: `Adding a ${n}-car garage.`, confidence: 0.7 }

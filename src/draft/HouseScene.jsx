@@ -410,8 +410,8 @@ function useCameraDistance(controlsRef) {
 function RoomTags({ rooms, highlightKind, showRoof, controlsRef }) {
   const dist = useCameraDistance(controlsRef)
   // far away the tags would pile up: they go; close in they are small labels on the rooms
-  if (dist > 520) return null
-  const size = dist > 340 ? ' tiny' : dist > 200 ? ' small' : ''
+  if (dist > 400) return null
+  const size = dist > 260 ? ' tiny' : dist > 160 ? ' small' : ''
   return rooms.map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} size={size} />)
 }
 

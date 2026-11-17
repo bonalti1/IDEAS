@@ -71,6 +71,19 @@ function fixturesLayout(kind, room) {
   return []
 }
 
+/** The doors on a room's walls: its own and the ones other rooms (a closet, a bath) open through them. */
+export function doorsOf(flat, room) {
+  return flat.filter((e) => {
+    if (e.kind !== 'door') return false
+    if (e.room === room.id) return true
+    const cx = e.x + e.w / 2
+    const cy = e.y + e.d / 2
+    const onX = cx > room.x - 0.4 && cx < room.x + room.w + 0.4
+    const onY = cy > room.y - 0.4 && cy < room.y + room.d + 0.4
+    return (onX && (Math.abs(cy - room.y) < 0.4 || Math.abs(cy - (room.y + room.d)) < 0.4)) || (onY && (Math.abs(cx - room.x) < 0.4 || Math.abs(cx - (room.x + room.w)) < 0.4))
+  })
+}
+
 /** A roof mass over a new room: a gable with its ridge along the long side, open toward the house. */
 export function roofFor(flat, room, kit, exteriorSides) {
   const roof = flat.find((r) => r.kind === 'roof')
@@ -246,11 +259,23 @@ export function addPorch(flat, kit, where = 'rear') {
 }
 
 /** A bedroom, bath or office in the bedroom wing, off the hallway (the way the first draft grows). */
-export function addInWing(flat, kit, kind) {
+export function addInWing(flat, kit, kind, { side = null } = {}) {
   const before = new Set(flat.filter(isRoom).map((r) => r.id))
-  const shift = kind === 'office' ? extendWingOffice(flat, kit) : extendWing(flat, kit, kind === 'bed' ? { beds: 1 } : { baths: 1 })
-  if (!shift) return null
+  const grown = kind === 'office' ? { shift: extendWingOffice(flat, kit), east: null } : extendWing(flat, kit, kind === 'bed' ? { beds: 1, prefer: side } : { baths: 1, prefer: side })
+  const shift = grown.shift
   const made = flat.filter((r) => isRoom(r) && !before.has(r.id) && r.kind === kind)[0] || null
+  if (!made) return null
+  // a room across the hall carries its own gable
+  const roofEl = flat.find((r) => r.kind === 'roof')
+  if (grown.east && roofEl?.masses) {
+    const k = roofEl.scale || 1
+    const c = roofEl.centre || [0, 0]
+    const off = roofEl.offset || [0, 0]
+    const back = (v, i) => c[i] + (v - off[i] - c[i]) / k
+    const e = grown.east
+    roofEl.masses = [...roofEl.masses.filter((m) => m.id !== 'eastwing'), { id: 'eastwing', kind: 'gable', x0: back(e.x0, 0), x1: back(e.x1, 0), y0: back(e.y0, 1), y1: back(e.y1, 1), ridge: 'ew', plate: 9, pitch: 10, ends: ['e'] }]
+  }
+  if (!shift && !grown.east) return made
   // the bed wing's roof grows with the wing
   const roof = flat.find((r) => r.kind === 'roof')
   if (roof && roof.masses) {

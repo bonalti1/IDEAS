@@ -12,10 +12,14 @@ export const DIFF_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          op: { type: 'string', enum: ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage'] },
+          op: { type: 'string', enum: ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap'] },
           cars: { type: 'number', description: 'bays for the garage op (1 to 4): "make the garage 3 cars"' },
+          load: { type: 'string', enum: ['front', 'side'], description: 'garage op: front-load (doors to the street) or side-load (doors to the side yard)' },
+          tandem: { type: 'boolean', description: 'garage op: the third car parks behind one of two bays' },
+          sqft: { type: 'number', description: 'scale op: the living area the whole house should come to' },
+          side: { type: 'string', enum: ['west', 'east'], description: 'add op for a bedroom or bath: in line with the wing (west) or across the hall (east)' },
           room: { type: 'string', description: 'room id for resize, remove, move, moveBeside' },
-          target: { type: 'string', description: 'room id to move the room next to (moveBeside)' },
+          target: { type: 'string', description: 'room id to move the room next to (moveBeside), or the room to trade places with (swap)' },
           kind: { type: 'string', description: 'room kind for add, one of the kit kinds' },
           name: { type: 'string' },
           w: { type: 'number', description: 'feet, along the front' },
@@ -44,6 +48,10 @@ Rules:
 - Keep dimensions in quarter-foot steps. When you choose a size yourself, keep it within reason: bedrooms 10 to 20 feet, kitchens 9 to 22, no room over 40.
 - "Move the X next to the Y" is a moveBeside op: room = X's id, target = Y's id. X is the room that moves (the subject of the sentence); Y stays. A move by a distance ("10 feet toward the street") is a move op with dx, dy.
 - "Add" always means one more room of that kind, even when the plan already has one (a second office, a third bedroom). Do not ask whether they meant to resize the existing one.
+- "Make the house 3,000 square feet", "the whole plan smaller": one scale op with sqft (the living area asked for); no room resizes.
+- "Swap the office and the dining room", "switch X with Y": one swap op, room = X's id, target = Y's id; the two trade places.
+- "Side-load garage", "garage doors to the side": a garage op with load "side" (front-load: "front"); "tandem" is a garage op with cars 3 and tandem true.
+- A bedroom or bath "across the hall" is an add op with side "east"; "in line" is side "west".
 - A new room gets the kit's template size unless the client gives one. Put it near the room they mention with "near".
 - Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
 - If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.

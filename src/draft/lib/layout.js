@@ -568,7 +568,7 @@ const shiftEl = (e, dx, dy) => {
  * hall only grows as far as that room's rear wall. Bedrooms first, then baths (a bath pairs across
  * from a bedroom). Plan feet, before scaling. Returns how far the wing grew and the east rooms' box.
  */
-export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
+export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
   if (!beds && !baths) return { shift: 0, east: null }
   const hall = rooms.find((r) => r.id === 'hall')
   const bed2 = rooms.find((r) => r.id === 'bed2')
@@ -594,7 +594,8 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
     const closetD = 2.5 // 26" clear: a reach-in you can hang a coat in
     // east: the band from eastTop - D to eastTop, when the hall needs to grow by less than half a slot for it
     const growEast = Math.max(0, hall.y - (eastTop - D))
-    if (growEast < D / 2 && eastTop - D >= hall.y - D / 2) {
+    // across the hall when that costs less than half a slot, or when asked for (then a whole slot is fine)
+    if (prefer !== 'west' && (growEast < D / 2 || (prefer === 'east' && growEast <= D + 0.01))) {
       const bandY = eastTop - D
       if (growEast > 0) {
         hall.y -= growEast
@@ -788,7 +789,7 @@ export function insideLot(lot, kit, x, y) {
  * is, the house comes back without a garage and the rooms step says so.
  * Placed rooms in; placed rooms out.
  */
-export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0.85 } = {}) {
+export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0.85, prefer = null, tandem = false } = {}) {
   const L = lotOf(lot)
   const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
   const flat = placed.map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
@@ -819,7 +820,8 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
   const hostsFor = (room) => solid.filter((r) => ['laundry', 'mud', 'hall', 'foyer'].includes(r.kind) && Math.abs(r.y - (room.y + room.d)) < 0.75 && Math.min(r.x + r.w, room.x + room.w) - Math.max(r.x, room.x) >= 3.5)
   // the candidates, in the order an STB designer would take them
   const candidates = []
-  const widths = cars >= 3 ? [[Math.max(g.perCar * cars, 32), cars, false], [g.perCar * 2, 2, true]] : [[Math.max(g.perCar * cars, cars >= 3 ? 32 : 0), cars, false]]
+  // a tandem garage parks the third car behind one of two bays: two bays wide, two cars deep
+  const widths = tandem && cars >= 3 ? [[g.perCar * 2, 2, true]] : cars >= 3 ? [[Math.max(g.perCar * cars, 32), cars, false], [g.perCar * 2, 2, true]] : [[Math.max(g.perCar * cars, cars >= 3 ? 32 : 0), cars, false]]
   for (const [w, bays, tandem] of widths) {
     const d = tandem ? g.d * 2 : g.d
     const name = `${cars}-Car Garage${tandem ? ' (tandem)' : ''}`
@@ -833,7 +835,7 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
     // side-load behind the laundry, doors on the outer face, 25 ft of apron to the lot line
     const sw = d
     const sd = w
-    for (let shift = 0; shift <= 30; shift += 1) {
+    for (let shift = -10; shift <= 30; shift += 1) {
       const room = house(laundry.x + laundry.w - sw - shift, laundry.y - sd, name, sw, sd)
       const slide = Math.max(0, Math.min(slackFront, envRear - room.y))
       if (room.y + slide < envRear - 0.01) continue
@@ -850,9 +852,14 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
       if (room.y + slide >= envRear - 0.01 && hosts.length) candidates.push({ room, host: hosts.find((r) => r.id === laundry.id) || hosts[0], side: 'h', doors: overheadDoors(kit, room, bays, 'w'), kind: 'courtyard', slide })
     }
   }
-  const blockedBy = (room) => flat.some((e) => e.element && (e.kind === 'window' || e.kind === 'door') && e.room !== laundry.id && e.x + e.w / 2 > room.x - 0.3 && e.x + e.w / 2 < room.x + room.w + 0.3 && e.y + e.d / 2 > room.y - 0.3 && e.y + e.d / 2 < room.y + room.d + 0.3)
+  const habitable = kit.rules?.habitable || ['bed', 'master', 'suite2', 'kitchen', 'living', 'dining', 'office']
+  const covered = (room) => flat.filter((e) => e.element && (e.kind === 'window' || e.kind === 'door') && e.room !== laundry.id && e.x + e.w / 2 > room.x - 0.3 && e.x + e.w / 2 < room.x + room.w + 0.3 && e.y + e.d / 2 > room.y - 0.3 && e.y + e.d / 2 < room.y + room.d + 0.3)
+  // a door, or a window of a room that needs its daylight, blocks the spot; a bath's or closet's window goes with the pick
+  const blockedBy = (room) => covered(room).some((e) => e.kind === 'door' || habitable.includes(solid.find((r) => r.id === e.room)?.kind))
   let pick = null
-  for (const c of candidates) {
+  // the way asked for: front-load, or side-load (the courtyard way counts as side-load)
+  const wanted = prefer === 'front' ? candidates.filter((c) => c.kind === 'front') : prefer === 'side' ? candidates.filter((c) => c.kind !== 'front') : candidates
+  for (const c of wanted) {
     if (blockedBy(c.room)) continue
     // the driveway from this garage, on the house as it will sit: slid toward the street when the garage
     // needs it, and centred in the envelope with the garage on (the fit after this narrows and shifts it)
@@ -871,6 +878,10 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
   }
   if (!pick) return placed
   const room = pick.room
+  covered(room).filter((e) => e.kind === 'window').forEach((e) => {
+    const i = flat.indexOf(e)
+    if (i >= 0) flat.splice(i, 1)
+  })
   const elements = [garageDoor(room, pick.host, pick.side), ...pick.doors]
   if (pick.kind !== 'front') {
     // a rear window of a room the garage covers moves to that room's outside side wall when it has one
@@ -880,8 +891,10 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
       const c = [win.x + win.w / 2, win.y + win.d / 2]
       const covered = c[0] > room.x - 0.3 && c[0] < room.x + room.w + 0.3 && c[1] > room.y - 0.3 && c[1] < room.y + room.d + 0.3
       if (!covered) return
-      const eastFree = !solid.some((r) => r !== home && Math.abs(r.x - (home.x + home.w)) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && home.x + home.w >= room.x + room.w - 0.3
-      const westFree = !solid.some((r) => r !== home && Math.abs(r.x + r.w - home.x) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && home.x <= room.x + 0.3
+      // a side wall is free when no room stands against it and the garage does not run along it
+      const alongWall = (x) => room.x - 0.3 <= x && x <= room.x + room.w + 0.3 && Math.min(room.y + room.d, home.y + home.d) - Math.max(room.y, home.y) > 1
+      const eastFree = !solid.some((r) => r !== home && Math.abs(r.x - (home.x + home.w)) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && !alongWall(home.x + home.w)
+      const westFree = !solid.some((r) => r !== home && Math.abs(r.x + r.w - home.x) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && !alongWall(home.x)
       if (eastFree) Object.assign(win, windowEl(kit, win.id, home.id, 'v', home.x + home.w, home.y + home.d - 3, win.mark || 'A'))
       else if (westFree) Object.assign(win, windowEl(kit, win.id, home.id, 'v', home.x, home.y + home.d - 3, win.mark || 'A'))
     })

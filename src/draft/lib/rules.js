@@ -90,7 +90,7 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: wi
     const fits = (Math.min(r.w, r.d) >= Math.min(mw, md) - 0.01 && Math.max(r.w, r.d) >= Math.max(mw, md) - 0.01)
     if (!fits) reasons.push(`${label(r)} would be ${r.w}' by ${r.d}', under the ${mw}' by ${md}' minimum.`)
     if (R.habitable?.includes(r.kind) && r.w * r.d < 70) reasons.push(`${label(r)} would be under 70 square feet, the code minimum for a living space.`)
-    if (R.maxRoomFt && r.kind !== 'hall' && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
+    if (R.maxRoomFt && r.kind !== 'hall' && r.kind !== 'garage' && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
   })
 
   // 4. the plan audit: reachable rooms, doors on shared walls, windows and egress, halls, fixture

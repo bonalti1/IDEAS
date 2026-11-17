@@ -36,6 +36,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
   }
   const auditCache = new Map() // project id + version → the audit of that version (the rooms do not change under a version)
 
+  const asBuiltCache = new Map()
   async function withRooms(p) {
     const v = await store.versions.get(p.id, p.version)
     return { ...p, rooms: v?.rooms || [] }
@@ -226,8 +227,21 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
     // drafter inbox: waiting first, then recent decisions, plus plat lots nobody has confirmed
     async inbox() {
-      // the counts a drafter reads come from the plan as it is, not the program the client started with
-      const asBuilt = async (list) => Promise.all(list.map(async (p) => ({ ...p, asBuilt: programOf((await withRooms(p)).rooms, p.program || {}) })))
+      // the counts a drafter reads come from the plan as it is, not the program the client started with;
+      // a version never changes once saved, so its counts are read once (asBuiltCache, keyed by project and version)
+      const asBuilt = async (list) =>
+        Promise.all(
+          list.map(async (p) => {
+            const key = `${p.id}:${p.version}`
+            let got = asBuiltCache.get(key)
+            if (!got) {
+              got = programOf((await withRooms(p)).rooms, p.program || {})
+              asBuiltCache.set(key, got)
+              if (asBuiltCache.size > 2000) asBuiltCache.delete(asBuiltCache.keys().next().value)
+            }
+            return { ...p, asBuilt: got }
+          }),
+        )
       const waiting = await asBuilt(await store.projects.listByStatus(['in_review']))
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
