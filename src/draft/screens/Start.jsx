@@ -28,6 +28,20 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
         <p className="lede">Your lot. Your style. A real house plan in minutes, finished by our drafters.</p>
       </div>
 
+      {!canStart && (
+        <div className="preview" aria-label="What you get">
+          <figure>
+            <img src="/preview/house.jpg" alt="A farmhouse drafted in 3D on its lot" loading="lazy" />
+            <figcaption>Your house on your lot, in 3D</figcaption>
+          </figure>
+          <figure>
+            <img src="/preview/plan.jpg" alt="The floor plan with the setbacks drawn on the lot" loading="lazy" />
+            <figcaption>A real floor plan you change by chatting</figcaption>
+          </figure>
+        </div>
+      )}
+      {!canStart && <p className="fine credits-line">The first draft and 10 changes are free. More changes from $49 for 5, or talk to your drafter.</p>}
+
       {!canStart && user !== undefined && (
         <SignIn
           title="Start with your email"
