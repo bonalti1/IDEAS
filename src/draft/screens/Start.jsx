@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, Mark } from '../ui.jsx'
 import SignIn from './SignIn.jsx'
 import { STATUS } from '../lib/status.js'
+import TrustBlock from '../TrustBlock.jsx'
 
 const ago = (iso) => {
   const d = (Date.now() - Date.parse(iso)) / 60000
@@ -31,6 +32,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
         </h1>
         <p className="lede">Your lot. Your style. A real house plan in minutes, finished by our drafters.</p>
       </div>
+      <TrustBlock compact />
 
       {!canStart && (
         <div className="preview" aria-label="What you get">

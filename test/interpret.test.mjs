@@ -71,13 +71,13 @@ test('5. add a bedroom gets an egress window and passes', async () => {
   assert.ok(res.rooms.some((e) => e.kind === 'window' && e.room === beds[2].id))
 })
 
-test('6. bigger primary bath moves its fixtures with it', async () => {
-  const before = fresh()
-  const shower0 = before.find((e) => e.kind === 'fixture' && e.fixture === 'shower' && e.room === 'mbath')
+test('6. bigger primary bath keeps its fixtures inside it', async () => {
   const res = await ask('bigger primary bath')
   assert.equal(res.applied, true, res.reply)
-  const shower = res.rooms.find((e) => e.kind === 'fixture' && e.fixture === 'shower' && e.room === 'mbath')
-  assert.notDeepEqual(shower.local, shower0.local, 'shower moved with the room')
+  const bath = byId(res.rooms, 'mbath')
+  res.rooms.filter((e) => e.kind === 'fixture' && e.room === 'mbath').forEach((f) => {
+    assert.ok(f.x >= bath.x - 0.01 && f.x + f.w <= bath.x + bath.w + 0.01 && f.y >= bath.y - 0.01 && f.y + f.d <= bath.y + bath.d + 0.01, `${f.name} stayed inside the bath`)
+  })
 })
 
 test('7. remove the rear porch', async () => {
@@ -113,11 +113,11 @@ test('10. a move toward the street past the setback is rejected (fake Claude dif
   assert.match(res.reply, /setback|run into/)
 })
 
-test('a fake Claude resize that overlaps a neighbour is rejected, a sane one applies', async () => {
-  const bad = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 38, d: 19 }], reply: 'Huge kitchen.', confidence: 0.9 })
+test('a fake Claude resize past what the roof allows is rejected, a sane one applies', async () => {
+  const bad = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 60, d: 19 }], reply: 'Huge kitchen.', confidence: 0.9 })
   const r1 = await ask('giant kitchen', fresh(), bad)
   assert.equal(r1.applied, false)
-  assert.match(r1.reply, /run into|setback|cover/)
+  assert.match(r1.reply, /roof|setback|cover|in the way|too small/)
   const good = async () => ({ ops: [{ op: 'resize', room: 'office', w: 12, d: 7.5 }], reply: 'Widened the office to 12 feet.', confidence: 0.9 })
   const r2 = await ask('office 12 feet wide', fresh(), good)
   assert.equal(r2.applied, true, r2.reply)
@@ -161,10 +161,11 @@ const withGarage = () => generateRooms({ ...program, garage: 2, rearPorch: false
 const roomOf = (rooms, kind) => rooms.filter((r) => isRoom(r) && r.kind === kind).pop()
 const SIX = [
   ['make the garage 3 cars', withGarage, (rooms) => [{ op: 'resize', room: 'garage', w: 33, d: 22 }], (res) => assert.equal(byId(res.rooms, 'garage').w, 33)],
-  ['move the office next to the garage', withGarage, (rooms) => { const { dx, dy } = spotBeside(rooms, KIT, byId(rooms, 'office'), byId(rooms, 'garage')); return [{ op: 'move', room: 'office', dx, dy }] }, (res) => {
-    const l = byId(res.rooms, 'office'); const g = byId(res.rooms, 'garage')
+  ['move the office next to the laundry', withGarage, (rooms) => [{ op: 'moveBeside', room: 'office', target: 'laundry' }], (res) => {
+    const l = byId(res.rooms, 'office'); const g = byId(res.rooms, 'laundry')
     const touching = Math.abs(l.x - (g.x + g.w)) < 1 || Math.abs(g.x - (l.x + l.w)) < 1 || Math.abs(l.y - (g.y + g.d)) < 1 || Math.abs(g.y - (l.y + l.d)) < 1
-    assert.ok(touching, `office ${[l.x, l.y, l.w, l.d]} touches garage ${[g.x, g.y, g.w, g.d]}`)
+    assert.ok(touching, `office ${[l.x, l.y, l.w, l.d]} touches laundry ${[g.x, g.y, g.w, g.d]}`)
+    assert.ok(res.rooms.some((e) => e.kind === 'door' && e.room === 'office'), 'the office keeps a door')
   }],
   ['add a porch on the back', withGarage, () => [{ op: 'add', kind: 'rearPorch' }], (res) => assert.ok(roomOf(res.rooms, 'rearPorch'), 'a rear porch')],
   ['make the kitchen 2 feet wider', fresh, (rooms) => [{ op: 'resize', room: 'kitchen', w: byId(rooms, 'kitchen').w + 2, d: byId(rooms, 'kitchen').d }], (res, before) => {
@@ -199,10 +200,16 @@ test('"move the laundry next to the garage": the starter puts the garage on the 
   const res = await ask('move the laundry next to the garage', withGarage(), offline)
   assert.equal(res.applied, false)
   assert.match(res.reply, /already next to/)
-  // once the garage is elsewhere, the move goes through
-  const apart = applyOps([{ op: 'move', room: 'garage', dx: 0, dy: 36 }], withGarage(), KIT, 1).rooms
-  const res2 = await ask('move the laundry next to the garage', apart, offline)
-  assert.equal(res2.applied, true, `${res2.reply} ${(res2.reasons || []).join(' | ')}`)
+})
+
+test('"move the office next to the garage" is refused with the reason: beside the garage the office would only open into the garage', async () => {
+  const res = await ask('move the office next to the garage', withGarage(), offline)
+  assert.equal(res.applied, false)
+  assert.match(res.reply + (res.reasons || []).join(' '), /only open into the .*garage|door from the house/)
+  // a fake Claude diff that drops the office beside the garage with no door from the house is refused by the audit
+  const fake = async ({ rooms }) => { const { dx, dy } = spotBeside(rooms, KIT, byId(rooms, 'office'), byId(rooms, 'garage')); return { ops: [{ op: 'move', room: 'office', dx, dy }], reply: 'Moved.', confidence: 0.9 } }
+  const r2 = await ask('move the office next to the garage', withGarage(), fake)
+  assert.equal(r2.applied, false)
 })
 
 test('the fallback asks when a porch has no side, and when there is nothing to move next to', async () => {

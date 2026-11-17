@@ -2,6 +2,7 @@
 // can read. Run on the plan as it would be after a change, before applying it.
 import { isRoom, isConditioned, kitFor, lotOf } from './layout.js'
 import { DEFAULT_LOT } from './lot.js'
+import { auditPlan } from './audit.js'
 
 function inside(poly, [x, z]) {
   let c = false
@@ -52,7 +53,7 @@ const intrusion = (a, b) => Math.min(Math.max(0, Math.min(a.x + a.w, b.x + b.w) 
 /**
  * @returns {{ ok: boolean, reasons: string[] }}
  */
-export function checkRules(rooms, program, style, lot = DEFAULT_LOT) {
+export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: withAudit = true } = {}) {
   const L = lotOf(lot)
   const kit = kitFor(style)
   const R = kit.rules || {}
@@ -71,13 +72,14 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT) {
     }
   })
 
-  // 2. overlaps
+  // 2. overlaps beyond the wall thickness (the audit measures them; the wording stays the client's)
+  const maxIntrusion = ((kit.walls?.plumbing?.thicknessIn || 6) / 12) + 0.05
   for (let i = 0; i < solid.length; i++)
     for (let j = i + 1; j < solid.length; j++) {
       const a = solid[i]
       const b = solid[j]
       if (a.x === undefined || b.x === undefined) continue
-      if (intrusion(a, b) > 1) reasons.push(`${label(a)} would run into ${label(b).toLowerCase()}.`)
+      if (intrusion(a, b) > maxIntrusion) reasons.push(`${label(a)} would run into ${label(b).toLowerCase()}.`)
     }
 
   // 3. minimum sizes
@@ -87,14 +89,17 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT) {
     const fits = (Math.min(r.w, r.d) >= Math.min(mw, md) - 0.01 && Math.max(r.w, r.d) >= Math.max(mw, md) - 0.01)
     if (!fits) reasons.push(`${label(r)} would be ${r.w}' by ${r.d}', under the ${mw}' by ${md}' minimum.`)
     if (R.habitable?.includes(r.kind) && r.w * r.d < 70) reasons.push(`${label(r)} would be under 70 square feet, the code minimum for a living space.`)
-    if (R.maxRoomFt && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
+    if (R.maxRoomFt && r.kind !== 'hall' && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
   })
 
-  // 4. bedroom egress
-  const windows = rooms.filter((e) => e.kind === 'window')
-  solid.filter((r) => R.bedrooms?.includes(r.kind)).forEach((r) => {
-    if (!windows.some((w) => w.room === r.id)) reasons.push(`${label(r)} needs a window for emergency exit.`)
-  })
+  // 4. the plan audit: reachable rooms, doors on shared walls, windows and egress, halls, fixture
+  //    clearances, the garage, the suite, the kitchen (src/draft/lib/audit.js)
+  if (withAudit) {
+    const audit = auditPlan(rooms, program, kit, L)
+    audit.errors.forEach((f) => {
+      if (f.id !== 'overlap') reasons.push(f.message)
+    })
+  }
 
   // 5. wet rooms near plumbing
   const wet = solid.filter((r) => R.wet?.includes(r.kind) && r.x !== undefined)

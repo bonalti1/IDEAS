@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
+import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
 import { floorArea, isRoom, kitFor } from '../lib/layout.js'
+import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 
@@ -30,6 +32,7 @@ const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(M
 export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack, lot, project, setProject }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
+  const [sun, setSun] = useState(false)
   const [highlight, setHighlight] = useState(null)
   const [busy, setBusy] = useState(false)
   const [undo, setUndo] = useState([]) // snapshots before each applied change: { rooms, credits, text }
@@ -44,8 +47,13 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   }, [history])
 
   // a camera preset framed on the house, not the whole lot
+  const plan = useRef(null)
   const setCamera = (name) => {
     setView(name)
+    if (name === 'top') {
+      plan.current?.fit()
+      return
+    }
     const c = controls.current
     if (!c) return
     const { position, target } = camerasFor(lot, rooms)[name]
@@ -55,7 +63,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   }
 
   const area = floorArea(rooms, program.stories)
-  const estimate = area * style.psf + program.garage * 28000
+  const price = priceOf({ rooms, program, style, lot })
+  const estimate = price.mid
   const suggestions = useMemo(() => suggestionsFor(rooms, kit), [rooms, kit])
 
   /**
@@ -91,7 +100,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     let meta = null
     if (res.applied) {
       const a2 = floorArea(res.rooms, program.stories)
-      meta = { sf: a2 - before.area, cost: a2 * style.psf + program.garage * 28000 - before.estimate, credit: 1 }
+      meta = { sf: a2 - before.area, cost: priceOf({ rooms: res.rooms, program, style, lot }).mid - before.estimate, credit: 1 }
     }
     setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta }])
     if (res.credits !== undefined) setCredits(res.credits)
@@ -149,7 +158,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} />
+        {view === 'top' ? (
+          <PlanDrawing rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
+        ) : (
+          <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} />
+        )}
         <div className="viewport-tag">
           {style.name} · {program.beds} bed · {program.baths}
           {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}
@@ -168,8 +181,12 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} disabled={view === 'top'} />
             Roof
           </label>
+          <label className={'check' + (view === 'top' ? ' off' : '')} title="Shadows on July 15 at 5 pm, from the lot's real orientation">
+            <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} disabled={view === 'top'} />
+            Sun check
+          </label>
         </div>
-        <div className="viewport-hint">{view === 'top' ? 'Scroll to zoom · drag to pan' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
+        <div className="viewport-hint">{view === 'top' ? 'Floor plan · scroll to zoom · drag to pan' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
       </div>
       <aside className="side chat">
         <div className="side-head">
@@ -186,8 +203,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         </div>
         <div className="stats row2">
           <Stat k="Living area" v={sf(area)} />
-          <Stat k="Estimate" v={money(estimate)} />
+          <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
         </div>
+        <p className="fine price-line" title={price.note}>
+          {rateLine(price)} · {price.county}. {price.note}
+        </p>
         <div className="log" ref={logRef}>
           {history.length === 0 && (
             <div className="msg house">

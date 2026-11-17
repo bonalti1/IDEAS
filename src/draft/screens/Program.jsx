@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Button, Stepper, Stat, money, sf } from '../ui.jsx'
 import { kitFor, lotOf, programLimits } from '../lib/layout.js'
 import { fitsLot } from '../lib/fit.js'
+import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 
 const EXTRAS = [
   ['office', 'Office'],
@@ -18,7 +19,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const footprint = program.sqft / program.stories + (program.garage ? 22 * kit.rooms.garage.perCar * program.garage : 0)
   const maxFootprint = Math.min(L.envelopeSf, L.areaSf * (L.rules?.maxCoverage ?? 0.5))
   const fit = footprint / maxFootprint
-  const estimate = program.sqft * style.psf + program.garage * 28000
+  const price = priceOf({ program, style, lot })
   const set = (k) => (v) => onChange({ ...program, [k]: v })
   const toggle = (k) => () => onChange({ ...program, [k]: !program[k] })
   const ref = kit.reference
@@ -118,8 +119,10 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
             )}
           </p>
         )}
-        <Stat k="Rough estimate" v={money(estimate)} />
-        <p className="fine">Based on our recent builds in this style. Lot, permits, and site work not included.</p>
+        <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
+        <p className="fine">
+          {rateLine(price)} · {price.county}. {price.note}
+        </p>
       </div>
       <div className="actions">
         <Button ghost onClick={onBack}>

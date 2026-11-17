@@ -156,6 +156,11 @@ async function suite(base) {
   await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' } })
   assert.equal((await j(await maria.get('/api/review'))).body.waiting.length, 1)
   assert.equal((await maria.post(`/api/review/${prj.id}`, { decision: 'maybe' })).status, 400)
+  // the drafter sees the audit with the design: pass or fail per check, sf asked vs delivered, open questions
+  const det = await j(await maria.get(`/api/review/${prj.id}`))
+  assert.ok(det.body.audit && Array.isArray(det.body.audit.groups) && det.body.audit.groups.length >= 8, 'audit groups')
+  assert.equal(det.body.audit.ok, true, JSON.stringify(det.body.audit.groups.filter((g) => !g.ok)))
+  assert.ok(det.body.audit.measures.livingSf > 0 && det.body.audit.questions.some((q) => /rates are not confirmed/i.test(q)))
   const ok = await j(await maria.post(`/api/review/${prj.id}`, { decision: 'approved', note: 'Looks good.' }))
   assert.equal(ok.body.status, 'approved')
   assert.ok(ok.body.jobId)
@@ -290,4 +295,30 @@ test('/api/interpret answers 200 with the basic rules when the office has no Cla
   const r2 = await fetch(base + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make it nicer', rooms, program, kit: { id: 'farmhouse' } }) })
   assert.equal(r2.status, 200)
   assert.deepEqual((await r2.json()).ops, [])
+})
+
+test('a plan with audit errors is approved only over an override note, and the override is logged', async () => {
+  // Send blocks a plan that fails the audit, so the gate is for a design already in review (a kit or
+  // audit update after it was sent): exercised on the project module with a JSON store
+  const { openStore } = await import('../server/store/index.mjs')
+  const { makeProjects } = await import('../server/projects.mjs')
+  const store = openStore({ databaseUrl: '', dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-gate-')) })
+  const events = []
+  const projects = makeProjects({ store, interpreter: null, event: async (kind, message, ref) => events.push({ kind, message, ...ref }), logInterpret: async () => {}, lots: { lotOfProject: async (p) => p.lot } })
+  const user = { id: 'u1', email: 'ana@example.com', name: 'Ana Garza', credits: 10 }
+  await store.users.put(user)
+  const rooms = generateRooms(program, style).filter((e) => e.id !== 'd-bed2') // Bedroom 2 loses its hall door: unreachable
+  const p = await projects.create(user, { style: { id: 'farmhouse' }, program, rooms, client: 'Ana Garza' })
+  p.status = 'in_review'
+  await store.projects.put(p)
+  const det = await projects.detail(p)
+  assert.equal(det.audit.ok, false)
+  assert.ok(det.audit.groups.find((g) => g.id === 'reach' && !g.ok), 'the reach check fails')
+  const maria = { id: 'd1', email: 'maria@drafthouse.test', name: 'Maria', role: 'drafter' }
+  await assert.rejects(projects.review(p, maria, { decision: 'approved' }, async () => ({ id: 'job1' })), /override note/)
+  const yes = await projects.review(p, maria, { decision: 'approved', note: 'Door drawn by hand in Revit; client confirmed.' }, async () => ({ id: 'job1' }))
+  assert.equal(yes.status, 'approved')
+  assert.equal(yes.reviews[0].override, true)
+  assert.ok(yes.reviews[0].auditErrors.length >= 1)
+  assert.ok(events.some((e) => /approved over \d+ audit error/.test(e.message) && e.override), 'the override is in the log')
 })

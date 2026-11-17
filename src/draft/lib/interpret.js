@@ -65,7 +65,11 @@ export function decide(diff, rooms, program, style, kit, source, lot) {
   try {
     next = applyOps(diff.ops, rooms, kit, program.stories || 1, L)
   } catch (e) {
-    return { applied: false, rooms, reply: 'That change did not work out on this plan. Try a smaller step.', source, ops: diff.ops, reasons: [String(e.message || e)] }
+    // the reason is written for the client: it is the reply
+    const why = String(e.message || e)
+    const plain = /^[A-Za-z0-9]/.test(why) && !/at .*\.js|undefined|null|TypeError|ReferenceError/.test(why)
+    const fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
+    return { applied: false, rooms, reply: plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.', source, ops: diff.ops, reasons: [why], caused: [why], preexisting: [], fixes }
   }
   const rules = checkRules(next.rooms, program, style, L)
   if (!rules.ok) {

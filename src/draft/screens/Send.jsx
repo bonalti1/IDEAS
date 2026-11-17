@@ -2,8 +2,13 @@ import { useEffect, useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
 import { kitFor } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
+import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
+import { planSheetHTML, summaryHTML } from '../lib/plan-svg.js'
+import { auditSummary } from '../lib/audit.js'
+import { TRUST } from '../lib/trust.js'
+import TrustBlock from '../TrustBlock.jsx'
 import { checkRules } from '../lib/rules.js'
 import { api } from '../lib/api.js'
 import { STATUS, STEPS, EDITABLE } from '../lib/status.js'
@@ -26,7 +31,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const rules = checkRules(rooms, program, style, lot)
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
-  const estimate = t.areas.living * style.psf + program.garage * 28000
+  const price = priceOf({ rooms, program, style, lot })
 
   // a saved project: follow its status while the drafters and the office computer work on it
   const tracked = project && (['in_review', 'approved', 'built'].includes(project.status) || (project.status === 'returned' && !returnSeen))
@@ -74,6 +79,17 @@ export default function Send({ lot, style, program, rooms, history, project, set
     setSent(true)
   }
 
+  const openSummary = () => {
+    const design = buildDesign({ rooms, program, style, lot, history, client: project?.client || lot?.client })
+    const html = summaryHTML(design, price, auditSummary(rooms, program, kit, lot), TRUST, kit.titleBlock)
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => w.print(), 400)
+  }
+
   if (tracked) {
     const st = STATUS[project.status] || STATUS.in_review
     const pj = project.job
@@ -90,6 +106,10 @@ export default function Send({ lot, style, program, rooms, history, project, set
           ))}
         </ol>
         {project.status === 'in_review' && <p className="lede">A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day.</p>}
+        <Button ghost onClick={openSummary}>
+          Download your summary (PDF)
+        </Button>
+        <TrustBlock />
         {project.status === 'returned' && (
           <div className="card note">
             <h3>Note from {project.review?.drafter || 'your drafter'}</h3>
@@ -139,6 +159,10 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Mark size={56} />
         <h2>Sent to the drafting team</h2>
         <p className="lede">We have your lot, your layout, and every change you made. A drafter will have the first set to you within 5 business days.</p>
+        <Button ghost onClick={openSummary}>
+          Download your summary (PDF)
+        </Button>
+        <TrustBlock />
         {job && (
           <div className="card job">
             <h3>Office</h3>
@@ -208,7 +232,12 @@ export default function Send({ lot, style, program, rooms, history, project, set
             <Stat k="Program" v={`${program.beds} bed · ${program.baths}${program.halfBath ? '.5' : ''} bath · ${program.garage ? program.garage + '-car · ' : ''}${program.stories} story`} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
-            <Stat k="Rough estimate" v={money(estimate)} />
+            <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
+            <p className="fine">
+              {rateLine(price)} · {price.county}. Living {money(price.parts.living[0])}–{money(price.parts.living[1])}
+              {price.areas.garage ? `, garage ${money(price.parts.garage[0])}–${money(price.parts.garage[1])}` : ''}
+              {price.areas.porches ? `, porches ${money(price.parts.porches[0])}–${money(price.parts.porches[1])}` : ''}. {price.note}
+            </p>
           </div>
           <div className="card">
             <h3>Your changes</h3>
@@ -286,6 +315,23 @@ export default function Send({ lot, style, program, rooms, history, project, set
                 <tr className="total"><td colSpan={2}>Interior / exterior</td><td>{t.counts.interiorDoors} / {t.counts.exteriorDoors}{isRef && <span className="cmp"> · set: {ref.takeoff.interiorDoors} / {ref.takeoff.exteriorDoors}</span>}</td></tr>
               </tbody>
             </table>
+          </div>
+          <div className="card pdf">
+            <h3>Floor plan PDF</h3>
+            <p className="muted">The plan on a tabloid sheet with the South Texas Builders title block, at the largest standard scale that fits. Opens a print view: choose "Save as PDF".</p>
+            <Button
+              onClick={() => {
+                const html = planSheetHTML(buildDesign({ rooms, program, style, lot, client: project?.client }), kit.titleBlock)
+                const w = window.open('', '_blank')
+                if (!w) return
+                w.document.open()
+                w.document.write(html)
+                w.document.close()
+                setTimeout(() => w.print(), 400)
+              }}
+            >
+              Download PDF
+            </Button>
           </div>
           <div className="card ifc">
             <h3>3D model for Revit</h3>

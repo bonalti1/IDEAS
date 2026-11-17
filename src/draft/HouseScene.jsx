@@ -58,7 +58,7 @@ function toWorld(lx, lz, centre, lot) {
 function Box({ cx, cz, w, d, y0 = 0, h, rot = 0, color, opacity = 1, edges = true }) {
   return (
     <group position={[cx, 0, cz]} rotation-y={-rot}>
-      <mesh position={[0, y0 + h / 2, 0]}>
+      <mesh position={[0, y0 + h / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[w, h, d]} />
         <meshLambertMaterial color={color} transparent={opacity < 1} opacity={opacity} />
         {edges && <Edges color={INK} threshold={15} />}
@@ -83,6 +83,22 @@ function Door({ e, centre, lot }) {
   const [x, z] = toWorld(e.local[0], e.local[1], centre, lot)
   const rot = lot.angle + (e.axis === 'h' ? 0 : Math.PI / 2)
   if (e.cased) return <Box cx={x} cz={z} w={e.span} d={0.7} y0={DOOR_HEAD} h={0.4} rot={rot} color="#f4f1ec" />
+  if (e.size === 'overhead' || e.size === 'overheadSingle') {
+    // an overhead sectional door: a white slab set into the wall with four panel lines
+    const h = e.h && e.h !== 6.67 ? e.h : 7
+    return (
+      <group position={[x, 0, z]} rotation-y={-rot}>
+        <mesh position={[0, h / 2, 0]} castShadow>
+          <boxGeometry args={[e.span, h, 0.3]} />
+          <meshLambertMaterial color="#f7f5f0" />
+          <Edges color={INK} threshold={15} />
+        </mesh>
+        {[1, 2, 3].map((i) => (
+          <Line key={i} points={[[-e.span / 2, (h * i) / 4, 0.17], [e.span / 2, (h * i) / 4, 0.17]]} color="#b9b4ab" lineWidth={1} />
+        ))}
+      </group>
+    )
+  }
   const leaves = e.pair ? 2 : 1
   const leafW = e.span / leaves
   const dir = e.swing || 1
@@ -180,10 +196,10 @@ function Roof({ roof, centre, lot }) {
   }, [roof, centre])
   return (
     <group>
-      <mesh geometry={shingles}>
+      <mesh geometry={shingles} castShadow receiveShadow>
         <meshLambertMaterial color="#6f655c" side={THREE.DoubleSide} />
       </mesh>
-      <mesh geometry={metal}>
+      <mesh geometry={metal} castShadow receiveShadow>
         <meshLambertMaterial color="#8e8a84" side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={siding}>
@@ -194,6 +210,90 @@ function Roof({ roof, centre, lot }) {
       </lineSegments>
     </group>
   )
+}
+
+/** 8x8 posts along a porch's open sides: the corners and every 8 ft between. */
+function PorchColumns({ r, rooms, lot }) {
+  const posts = useMemo(() => {
+    const solid = rooms.filter((o) => isRoom(o) && !o.open && o.local)
+    const x0 = r.local[0] - r.w / 2
+    const x1 = r.local[0] + r.w / 2
+    const z0 = r.local[1] - r.d / 2
+    const z1 = r.local[1] + r.d / 2
+    const touches = (side) =>
+      solid.some((o) => {
+        const ox0 = o.local[0] - o.w / 2
+        const ox1 = o.local[0] + o.w / 2
+        const oz0 = o.local[1] - o.d / 2
+        const oz1 = o.local[1] + o.d / 2
+        const xo = Math.min(x1, ox1) - Math.max(x0, ox0) > 2
+        const zo = Math.min(z1, oz1) - Math.max(z0, oz0) > 2
+        return side === 'n' ? xo && Math.abs(oz1 - z0) < 1 : side === 's' ? xo && Math.abs(oz0 - z1) < 1 : side === 'w' ? zo && Math.abs(ox1 - x0) < 1 : zo && Math.abs(ox0 - x1) < 1
+      })
+    const open = ['n', 's', 'w', 'e'].filter((side) => !touches(side))
+    const pts = []
+    const inset = 0.5
+    const line = (ax, az, bx, bz) => {
+      const len = Math.hypot(bx - ax, bz - az)
+      const n = Math.max(1, Math.round(len / 8))
+      for (let i = 0; i <= n; i++) pts.push([ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n])
+    }
+    if (open.includes('s')) line(x0 + inset, z1 - inset, x1 - inset, z1 - inset)
+    if (open.includes('n')) line(x0 + inset, z0 + inset, x1 - inset, z0 + inset)
+    if (open.includes('w')) line(x0 + inset, z0 + inset, x0 + inset, z1 - inset)
+    if (open.includes('e')) line(x1 - inset, z0 + inset, x1 - inset, z1 - inset)
+    // one post per spot
+    const seen = new Set()
+    return pts.filter((p) => {
+      const k = `${p[0].toFixed(1)},${p[1].toFixed(1)}`
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
+  }, [r, rooms])
+  const centre = useMemo(() => {
+    const cos = Math.cos(lot.angle)
+    const sin = Math.sin(lot.angle)
+    return [r.center[0] - (r.local[0] * cos - r.local[1] * sin), r.center[1] - (r.local[0] * sin + r.local[1] * cos)]
+  }, [r, lot])
+  return posts.map((p, i) => {
+    const [x, z] = toWorld(p[0], p[1], centre, lot)
+    return <Box key={i} cx={x} cz={z} w={0.67} d={0.67} h={8} rot={lot.angle} color="#f7f5f0" />
+  })
+}
+
+/** The driveway: from the garage's overhead door to the street, on the ground. */
+function Driveway({ rooms, centre, lot }) {
+  const slabs = useMemo(() => {
+    const garage = rooms.find((r) => isRoom(r) && r.kind === 'garage' && r.local)
+    const door = rooms.find((e) => e.kind === 'door' && (e.size === 'overhead' || e.size === 'overheadSingle') && e.local)
+    if (!garage || !door) return []
+    // the lot's street edge in the house frame: the largest local z of the boundary
+    const cos = Math.cos(lot.angle)
+    const sin = Math.sin(lot.angle)
+    const toLocal = (p) => [(p[0] - centre[0]) * cos + (p[1] - centre[1]) * sin, -(p[0] - centre[0]) * sin + (p[1] - centre[1]) * cos]
+    const zs = (lot.boundary || []).map((p) => toLocal(p)[1])
+    const street = zs.length ? Math.max(...zs) : garage.local[1] + garage.d / 2 + 30
+    const out = []
+    if (door.axis === 'h') {
+      // front-load: straight out to the street
+      const z0 = door.local[1]
+      out.push({ x: door.local[0], z: (z0 + street) / 2, w: door.span + 2, d: street - z0 })
+    } else {
+      // side-load: 12 ft out from the door face, then down to the street
+      const dir = door.local[0] > garage.local[0] ? 1 : -1
+      const x0 = door.local[0]
+      const apron = { x: x0 + dir * 7, z: door.local[1], w: 14, d: door.span + 4 }
+      out.push(apron)
+      const z1 = door.local[1] - door.span / 2 - 2
+      out.push({ x: x0 + dir * 8, z: (z1 + street) / 2, w: 12, d: street - z1 })
+    }
+    return out
+  }, [rooms, centre, lot])
+  return slabs.map((s, i) => {
+    const [x, z] = toWorld(s.x, s.z, centre, lot)
+    return <Box key={i} cx={x} cz={z} w={s.w} d={s.d} y0={-0.3} h={0.32} rot={lot.angle} color="#d9d5cc" edges={false} />
+  })
 }
 
 function Room({ r, highlight, labels, lot }) {
@@ -207,7 +307,7 @@ function Room({ r, highlight, labels, lot }) {
   const dimSize = Math.min(1.2, Math.max(0.8, nameSize * 0.7))
   return (
     <group position={[x, 0, z]} rotation-y={-lot.angle}>
-      <mesh position={[0, -0.17, 0]}>
+      <mesh position={[0, -0.17, 0]} receiveShadow>
         <boxGeometry args={[r.w, 0.34, r.d]} />
         <meshLambertMaterial color={highlight ? '#e9dccf' : r.open ? '#e6e1d8' : '#efeae2'} />
         <Edges color={highlight ? '#4e3c30' : '#b9b4ab'} threshold={15} />
@@ -239,7 +339,21 @@ function RoomTag({ r, highlight, showRoof }) {
   )
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true }) {
+/** Where the sun is on July 15 at 5 pm in the Rio Grande Valley (26°N): azimuth about 275°, 28° up. World north is -z when the lot angle is 0. */
+function sunPosition(lot, dist = 700) {
+  const az = (275 * Math.PI) / 180
+  const alt = (28 * Math.PI) / 180
+  const dx = Math.sin(az) * Math.cos(alt)
+  const dz = -Math.cos(az) * Math.cos(alt)
+  const dy = Math.sin(alt)
+  // the lot's bearing turns the compass
+  const a = lot.angle || 0
+  const wx = dx * Math.cos(a) - dz * Math.sin(a)
+  const wz = dx * Math.sin(a) + dz * Math.cos(a)
+  return [wx * dist, dy * dist, wz * dist]
+}
+
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false }) {
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
   const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
   const cam = cams[view] || cams['3d']
@@ -255,14 +369,20 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
   const roomList = rooms.filter(isRoom)
   const hasPlan = rooms.some((r) => r.element)
   return (
-    <Canvas camera={{ position: cam.position, fov: 42, near: 1, far: 6000 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
-      <color attach="background" args={['#ebe9e5']} />
-      <ambientLight intensity={2.0} />
-      <directionalLight position={[-150, 300, -200]} intensity={1.4} />
+    <Canvas shadows camera={{ position: cam.position, fov: 42, near: 1, far: 6000 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      <color attach="background" args={[sun ? '#f3e9d6' : '#ebe9e5']} />
+      <ambientLight intensity={sun ? 1.1 : 2.0} />
+      <directionalLight position={sun ? sunPosition(L) : [-150, 300, -200]} intensity={sun ? 2.2 : 1.4} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-220} shadow-camera-right={220} shadow-camera-top={220} shadow-camera-bottom={-220} shadow-camera-near={10} shadow-camera-far={2000} shadow-bias={-0.0004} />
       <SitePlan lot={L} />
+      <mesh rotation-x={-Math.PI / 2} position={[L.centre[0], -0.36, L.centre[1]]} receiveShadow>
+        <planeGeometry args={[2000, 2000]} />
+        <shadowMaterial transparent opacity={sun ? 0.35 : 0.18} />
+      </mesh>
       {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels={view === 'top'} lot={L} />)}
       {showHouse && tags && view !== 'top' && roomList.filter((r) => Math.min(r.w, r.d) >= 5).map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} />)}
       {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
+      {showHouse && view !== 'top' && roomList.filter((r) => r.open && r.local).map((r) => <PorchColumns key={'col-' + r.id} r={r} rooms={rooms} lot={L} />)}
+      {showHouse && hasPlan && <Driveway rooms={rooms} centre={centre} lot={L} />}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} lot={L} />)}
