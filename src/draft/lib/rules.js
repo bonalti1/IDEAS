@@ -1,6 +1,6 @@
 // Rules engine. Checks a plan (rooms + elements) and returns reasons a client
 // can read. Run on the plan as it would be after a change, before applying it.
-import { isRoom, isConditioned, kitFor, lotOf } from './layout.js'
+import { isRoom, isConditioned, kitFor, lotOf, minSizeOf, planIdOf } from './layout.js'
 import { DEFAULT_LOT } from './lot.js'
 import { auditPlan } from './audit.js'
 
@@ -83,13 +83,14 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: wi
     }
 
   // 3. minimum sizes
+  const planId = planIdOf(rooms)
   solid.forEach((r) => {
-    const min = R.minSize?.[r.kind]
+    const min = minSizeOf(kit, r.kind, planId)
     const [mw, md] = min || (R.habitable?.includes(r.kind) ? [7, 7] : [3, 3])
     const fits = (Math.min(r.w, r.d) >= Math.min(mw, md) - 0.01 && Math.max(r.w, r.d) >= Math.max(mw, md) - 0.01)
     if (!fits) reasons.push(`${label(r)} would be ${r.w}' by ${r.d}', under the ${mw}' by ${md}' minimum.`)
     if (R.habitable?.includes(r.kind) && r.w * r.d < 70) reasons.push(`${label(r)} would be under 70 square feet, the code minimum for a living space.`)
-    if (R.maxRoomFt && r.kind !== 'hall' && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
+    if (R.maxRoomFt && r.kind !== 'hall' && r.kind !== 'garage' && Math.max(r.w, r.d) > R.maxRoomFt) reasons.push(`${label(r)} at ${Math.max(r.w, r.d)}' is longer than we can roof in this style (${R.maxRoomFt}' max).`)
   })
 
   // 4. the plan audit: reachable rooms, doors on shared walls, windows and egress, halls, fixture

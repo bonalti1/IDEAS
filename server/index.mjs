@@ -134,7 +134,7 @@ route('POST', '/api/auth/dev-login', 'app', async (req, res) => {
   }
 })
 route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: ctx.user, credits: ctx.user.credits || 0, freeCredits: users.freeCredits, auth: users.devMode ? 'local' : 'supabase' }, req))
-route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await store.projects.listForUser(ctx.user.id), req))
+route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, (await store.projects.listForUser(ctx.user.id)).map(projects.ownerView), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req)), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req)), req))

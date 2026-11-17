@@ -8,6 +8,7 @@
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
 import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
 import { withPlanCoords } from './ops.js'
+import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength } from './site.js'
 
 const BEDROOMS = ['bed', 'master', 'suite2']
 const BATHS = ['bath', 'mbath', 'jackjill', 'halfbath']
@@ -15,9 +16,11 @@ const CLOSETS = ['wic', 'mwic']
 const PRIVATE = [...BEDROOMS, ...BATHS, ...CLOSETS, 'garage'] // a garage is entered, never passed through
 const GARAGE_DOOR_ROOMS = ['mud', 'laundry', 'hall', 'foyer']
 const SERVICE = ['pantry', 'laundry', 'mud', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
-const SERVICE_HALL = ['mud', 'laundry', 'halfbath']
+const SERVICE_HALL = ['mud', 'laundry']
 export const EGRESS = { sf: 5.7, heightIn: 24, widthIn: 20, sillIn: 44 }
-export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, legMinFt: 4, legMaxFt: 9 }
+export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35 }
+const PUBLIC = ['living', 'kitchen', 'dining', 'foyer', 'office']
+const THROUGH_SERVICE = ['mud', 'laundry', 'garage']
 
 const centre = (e) => [e.x + e.w / 2, e.y + e.d / 2]
 const inside = (r, [x, y], tol = 0.05) => x > r.x + tol && x < r.x + r.w - tol && y > r.y + tol && y < r.y + r.d - tol
@@ -52,6 +55,7 @@ export function auditPlan(rooms, program, kit, lot) {
   const windows = flat.filter((e) => e.kind === 'window' && !e.dormer)
   const fixtures = flat.filter((e) => e.kind === 'fixture')
   const findings = []
+  const measures = {}
   const say = (id, severity, room, message) => findings.push({ id, severity, room: room?.name || room || null, message })
   const roomAt = (pt) => R.find((r) => inside(r, pt))
   const byId = Object.fromEntries(R.map((r) => [r.id, r]))
@@ -67,6 +71,37 @@ export function auditPlan(rooms, program, kit, lot) {
     return { a: roomAt(p1), b: roomAt(p2), p1, p2 }
   }
   const links = doors.map((d) => ({ d, ...link(d) }))
+  const swings = (d) => {
+    if (d.cased || d.pocket || d.barn || d.size === 'overhead' || d.size === 'overheadSingle') return []
+    const span = d.span || Math.max(d.w, d.d)
+    const swing = d.swing === -1 ? -1 : 1
+    const leaves = d.pair ? 2 : 1
+    const r = span / leaves
+    const wall = d.axis === 'h' ? d.y + d.d / 2 : d.x + d.w / 2
+    const lo = d.axis === 'h' ? d.x : d.y
+    const hi = lo + span
+    return Array.from({ length: leaves }, (_, i) => {
+      const atStart = d.pair ? i === 0 : d.hinge !== 'end'
+      const hinge = atStart ? lo : hi
+      const dir = atStart ? 1 : -1
+      // a point is under the leaf when it is on the swing side of the wall, between the hinge and the far jamb, within the leaf's reach
+      const has = ([x, y]) => {
+        const along = d.axis === 'h' ? x : y
+        const out = (d.axis === 'h' ? y : x) - wall
+        const u = (along - hinge) * dir
+        const v = out * swing
+        return u >= -0.02 && v >= -0.02 && u * u + v * v <= r * r + 0.02
+      }
+      const samples = []
+      for (let a = 0; a <= 1.0001; a += 1 / 8) for (let k = 1 / 6; k <= 1.0001; k += 1 / 6) {
+        const u = r * k * Math.cos((Math.PI / 2) * a) * dir
+        const v = r * k * Math.sin((Math.PI / 2) * a) * swing
+        samples.push(d.axis === 'h' ? [hinge + u, wall + v] : [wall + v, hinge + u])
+      }
+      return { d, has, samples, side: d.axis === 'h' ? [d.x + d.w / 2, wall + swing * 0.7] : [wall + swing * 0.7, d.y + d.d / 2] }
+    })
+  }
+  const doorLabel = (d) => `${byId[d.room]?.name || 'the'} door`
 
   // b) every door sits on a wall shared by the two spaces it connects
   links.forEach(({ d, a, b }) => {
@@ -222,6 +257,56 @@ export function auditPlan(rooms, program, kit, lot) {
     })
   })
 
+  // g3) swings: no leaf hits another leaf or a fixture; 30" clear in front of every door, on both sides;
+  // no fixture in front of an opening
+  const leaves = doors.flatMap(swings).map((s) => ({ ...s, room: roomAt(s.side) }))
+  const said = new Set()
+  leaves.forEach((p, i) => {
+    leaves.slice(i + 1).forEach((q) => {
+      if (p.d === q.d || !p.room || p.room !== q.room) return
+      const hit = p.samples.some(q.has) || q.samples.some(p.has)
+      const key = [p.d.id, q.d.id].sort().join('|')
+      if (hit && !said.has(key)) {
+        said.add(key)
+        say('swing-swing', 'error', p.room, `${p.room.name}: the ${doorLabel(p.d)} and the ${doorLabel(q.d)} hit each other when both are open.`)
+      }
+    })
+    if (!p.room) return
+    fixtures.filter((f) => f.room === p.room.id && f.fixture !== 'shelves').forEach((f) => {
+      const pts = []
+      for (let x = f.x + 0.05; x <= f.x + f.w - 0.04; x += Math.min(0.5, Math.max(0.1, (f.w - 0.1) / 2))) for (let y = f.y + 0.05; y <= f.y + f.d - 0.04; y += Math.min(0.5, Math.max(0.1, (f.d - 0.1) / 2))) pts.push([x, y])
+      pts.push([f.x + f.w - 0.05, f.y + f.d - 0.05], [f.x + f.w - 0.05, f.y + 0.05], [f.x + 0.05, f.y + f.d - 0.05])
+      const key = p.d.id + '|' + f.id
+      if (pts.some(p.has) && !said.has(key)) {
+        said.add(key)
+        say('swing-fixture', 'error', p.room, `${p.room.name}: the ${doorLabel(p.d)} swings into the ${(f.name || f.fixture || 'fixture').toLowerCase()}.`)
+      }
+    })
+  })
+  const approach = CLEAR.approachIn / 12
+  links.forEach(({ d, a, b }) => {
+    if (d.size === 'overhead' || d.size === 'overheadSingle') return
+    const span = d.span || Math.max(d.w, d.d)
+    const wall = d.axis === 'h' ? d.y + d.d / 2 : d.x + d.w / 2
+    ;[a, b].forEach((room, i) => {
+      if (!room || room.kind === 'garage') return
+      // a reach-in closet has no room to stand in: only the open side is checked
+      if (CLOSETS.includes(room.kind) && Math.min(room.w, room.d) < 3.5) return
+      // which side of the wall this room is on
+      const sign = i === 0 ? -1 : 1
+      const rect = d.axis === 'h' ? { x: d.x, y: sign > 0 ? wall : wall - approach, w: span, d: approach } : { x: sign > 0 ? wall : wall - approach, y: d.y, w: approach, d: span }
+      fixtures.filter((f) => f.room === room.id && f.fixture !== 'shelves').forEach((f) => {
+        const ox = Math.min(f.x + f.w, rect.x + rect.w) - Math.max(f.x, rect.x)
+        const oy = Math.min(f.y + f.d, rect.y + rect.d) - Math.max(f.y, rect.y)
+        const key = 'approach|' + d.id + '|' + f.id
+        if (ox > 0.1 && oy > 0.1 && !said.has(key)) {
+          said.add(key)
+          say('door-approach', 'error', room, `${room.name}: the ${(f.name || f.fixture || 'fixture').toLowerCase()} is in front of the ${doorLabel(d)}; a door needs ${CLEAR.approachIn}" clear in front of it.`)
+        }
+      })
+    })
+  })
+
   // h) the garage
   const garages = R.filter((r) => r.kind === 'garage')
   garages.forEach((g) => {
@@ -235,58 +320,31 @@ export function auditPlan(rooms, program, kit, lot) {
       if (!GARAGE_DOOR_ROOMS.includes(other.kind)) say('garage-door-room', 'error', g, `${g.name}'s house door opens into ${other.name}; it must open into a mud room, laundry or hall.`)
       if (!houseDoor.d.fireRated) say('garage-door-rating', 'error', g, `${g.name}'s house door must be solid or 20-minute rated and self-closing (R302.5.1).`)
     }
-    const overhead = doors.filter((d) => (d.size === 'overhead' || d.size === 'overheadSingle') && d.room === g.id)
     const carsNamed = +(g.name.match(/^(\d+)-Car/) || [])[1] || 0
-    const bays = Math.max(1, Math.round(Math.max(g.w, g.d) / (K.rooms?.garage?.perCar || 11)))
-    if (carsNamed && carsNamed !== bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' wide, ${bays} bay${bays === 1 ? '' : 's'}; the name says ${carsNamed}.`)
+    const perCar = K.rooms?.garage?.perCar || 11
+    const overhead = doors.filter((d) => (d.size === 'overhead' || d.size === 'overheadSingle') && d.room === g.id)
+    const tandem = !!g.tandem || /tandem/i.test(g.name)
+    // bays across the door wall; a tandem garage parks a car behind another (two deep)
+    // bays across the door wall: the wall the overhead doors sit on (a one-car garage is 11 ft wide, 22 deep)
+    const doorWall = overhead.length ? (overhead[0].axis === 'h' ? g.w : g.d) : Math.max(g.w, g.d)
+    const across = Math.max(1, Math.round((tandem ? Math.min(g.w, g.d) : doorWall) / perCar))
+    const deep = tandem ? Math.max(1, Math.floor(Math.max(g.w, g.d) / 20)) : 1
+    const bays = across * deep
+    if (carsNamed && carsNamed > bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' by ${g.d}', ${bays} bay${bays === 1 ? '' : 's'}; the name says ${carsNamed}.`)
+    if (carsNamed && !tandem && carsNamed < bays) say('garage-name', 'error', g, `${g.name} is ${g.w}' wide, ${bays} bays; the name says ${carsNamed}.`)
     if (!overhead.length) say('garage-overhead', 'error', g, `${g.name} has no overhead door.`)
     else {
       // the doors cover the bays: at least 8 ft of door per car
       const doorFt = overhead.reduce((a, d) => a + d.span, 0)
-      if (doorFt < bays * 8 - 0.01) say('garage-bays', 'error', g, `${g.name} has ${Math.round(doorFt)}' of overhead door for ${bays} bays; it needs at least 8' per car.`)
-      // the overhead doors' wall must be an outside wall with a driveway on the lot to the street
+      if (doorFt < across * 8 - 0.01) say('garage-bays', 'error', g, `${g.name} has ${Math.round(doorFt)}' of overhead door for ${across} bay${across === 1 ? '' : 's'} across; it needs at least 8' per bay.`)
+      // the driveway is a real path: door → apron → lane → street, inside the lot, through no room, a 20 ft
+      // pocket on the inside of every turn (site.js draws the same path on the site plan, in 3D and in design.json)
       const L = lotOf(lot)
-      const facing = (d) => {
-        const [cx, cy] = centre(d)
-        return d.axis === 'h' ? (Math.abs(cy - (g.y + g.d)) < 0.4 ? 's' : 'n') : Math.abs(cx - (g.x + g.w)) < 0.4 ? 'e' : 'w'
-      }
-      const reasons = overhead.map((d) => {
-        const [cx, cy] = centre(d)
-        const side = facing(d)
-        const outPt = side === 's' ? [cx, cy + 0.7] : side === 'n' ? [cx, cy - 0.7] : side === 'e' ? [cx + 0.7, cy] : [cx - 0.7, cy]
-        if (roomAt(outPt)) return 'opens into a room'
-        if (side === 'n' && !L.alley) return 'faces the rear yard, and this lot has no alley'
-        if (side === 's') {
-          // front-load: the driveway from the door to the street, inside the lot and clear of rooms
-          const strip = { x: cx - 5, y: g.y + g.d, w: 10, d: 24 }
-          if (house.some((r) => intrusion(r, strip) > 0.5)) return 'has a room in front of it'
-          let y = g.y + g.d + 1
-          while (y < g.y + g.d + 200 && insideLot(L, K, cx, y)) y += 1
-          if (!insideLot(L, K, cx - 5, y - 2) || !insideLot(L, K, cx + 5, y - 2)) return 'its driveway leaves the lot before the street'
-          return null
-        }
-        // side-load: 25 ft of apron from the door, inside the lot and clear of rooms, and a driveway to the
-        // street: straight down from the apron, or down the side yard the apron reaches (10 ft wide)
-        const dir = side === 'e' ? 1 : -1
-        const face = side === 'e' ? g.x + g.w : g.x
-        const apron = { x: side === 'e' ? face : face - 25, y: g.y, w: 25, d: g.d }
-        const inApron = house.find((r) => intrusion(r, apron) > 0.5)
-        if (inApron) return `has ${inApron.name} in front of it; a car needs 25' to turn in`
-        for (const t of [8, 16, 25]) if (!insideLot(L, K, face + dir * t, cy)) return `has ${t - 1}' or less to the lot line; a car needs 25' to turn in`
-        const front = Math.max(...house.map((r) => r.y + r.d))
-        const straight = { x: apron.x, y: g.y, w: 25, d: front + 30 - g.y }
-        if (!house.some((r) => intrusion(r, straight) > 0.5)) return null
-        // the driveway down a side yard: 10 ft between the house and the lot line, from the apron's row to the street
-        for (const edge of [Math.max(...house.map((r) => r.x + r.w)), Math.min(...house.map((r) => r.x))]) {
-          const out = edge > g.x ? 1 : -1
-          let ok = true
-          for (let y = g.y; y <= front + 1 && ok; y += 5) ok = insideLot(L, K, edge + out * 10, y) && insideLot(L, K, edge + out * 1, y)
-          if (ok) return null
-        }
-        return 'has no 10 ft driveway to the street'
-      })
-      const bad = reasons.find((r) => r)
-      if (!reasons.some((r) => r === null)) say('garage-street', 'error', g, `${g.name}'s overhead door ${bad}.`)
+      const frame = frameOf(flat, K.plan ? [K.plan.footprint.w / 2, K.plan.footprint.d / 2] : [0, 0])
+      const slabs = drivewaySlabs(frame.rooms, frame.doors, L)
+      const problem = drivewayProblem(slabs, frame.rooms, frame.doors, L)
+      if (problem) say('garage-street', 'error', g, `${g.name} cannot be driven to: ${problem}.`)
+      measures.driveway = { lengthFt: drivewayLength(slabs), pieces: slabs.length, problem }
     }
     // the garage must not cover another room's window or door
     windows.forEach((w) => {
@@ -303,7 +361,6 @@ export function auditPlan(rooms, program, kit, lot) {
   if (master && mwic && !connected(master, mwic) && !(mbath && connected(mbath, mwic))) say('suite-closet', 'error', mwic, `${mwic.name} does not open from the ${master.name.toLowerCase()} or its bath.`)
 
   // the kitchen: work triangle and aisles
-  const measures = {}
   const kitchen = R.find((r) => r.kind === 'kitchen')
   if (kitchen) {
     const pick = (k) => fixtures.find((f) => f.room === kitchen.id && f.fixture === k)
@@ -315,6 +372,7 @@ export function auditPlan(rooms, program, kit, lot) {
       const total = legs.reduce((a, b) => a + b, 0)
       measures.triangle = { legs: legs.map((l) => +l.toFixed(1)), total: +total.toFixed(1) }
       if (total > CLEAR.triangleMaxFt || legs.some((l) => l < CLEAR.legMinFt || l > CLEAR.legMaxFt)) say('triangle', 'error', kitchen, `Kitchen work triangle is ${total.toFixed(1)} ft (legs ${legs.map((l) => l.toFixed(1)).join(', ')}); it should be ${CLEAR.triangleMaxFt} ft or less with each leg ${CLEAR.legMinFt} to ${CLEAR.legMaxFt} ft.`)
+      else if (total > CLEAR.triangleGoodFt) say('triangle', 'warn', kitchen, `Kitchen work triangle is ${total.toFixed(1)} ft; 15 to ${CLEAR.triangleGoodFt} ft is the mark.`)
     } else say('triangle', 'warn', kitchen, 'Kitchen has no sink, range and refrigerator to check the work triangle.')
     // aisles: an island's free sides need 42" to the facing counter or wall
     const counters = fixtures.filter((f) => f.room === kitchen.id && ['counter', 'fridge', 'range', 'sink'].includes(f.fixture))
@@ -401,6 +459,10 @@ export function auditPlan(rooms, program, kit, lot) {
     deadEnds[h.id] = Math.round(dead * 10) / 10
     if (dead > CLEAR.deadEndFt + 0.05) say('dead-end', 'error', h, `${h.name} runs ${dead.toFixed(1)} ft past its last door; a hall should end within ${CLEAR.deadEndFt} ft of one.`)
   })
+  halls.forEach((h) => {
+    const len = Math.max(h.w, h.d)
+    if (len > CLEAR.hallLongFt + 0.05) say('hall-long', 'warn', h, `${h.name} is ${len.toFixed(1)} ft long; a hall over ${CLEAR.hallLongFt} ft is a corridor (split the plan or put rooms on both sides).`)
+  })
 
   // k) the primary suite is entered from a private hall or the living side, never from the service hall
   if (master) {
@@ -411,6 +473,60 @@ export function auditPlan(rooms, program, kit, lot) {
       const service = R.filter((o) => o !== hall && SERVICE_HALL.includes(o.kind) && (links.some(({ a: p, b: q }) => (p === hall && q === o) || (p === o && q === hall)) || ((openPairs.has(hall.id + '|' + o.id) || openPairs.has(hall.kind + '|' + o.kind)) && sharedEdge(hall, o) > 0)))
       if (service.length) say('suite-entry', 'warn', master, `${master.name}'s door shares ${hall.name.toLowerCase()} with the ${service.map((o) => o.name.toLowerCase()).join(' and ')}; enter the suite from a private vestibule or the living side.`)
     })
+  }
+
+  // k2) the powder room is the guests' bath: not reachable only through the mud room, laundry or garage;
+  // the primary suite is not reached only through the kitchen's work zone
+  if (front) {
+    const start = front.a || front.b
+    const reach = (avoid) => {
+      const adj = new Map(R.map((r) => [r.id, []]))
+      links.forEach(({ d, a, b }) => {
+        if (a && b && a !== b && d.size !== 'overhead') {
+          adj.get(a.id).push(b)
+          adj.get(b.id).push(a)
+        }
+      })
+      R.forEach((r) => R.forEach((o) => {
+        if (r !== o && (openPairs.has(r.id + '|' + o.id) || openPairs.has(r.kind + '|' + o.kind)) && sharedEdge(r, o) > 0) adj.get(r.id).push(o)
+      }))
+      const seen = new Set([start.id])
+      const queue = [start]
+      while (queue.length) {
+        const r = queue.shift()
+        for (const o of adj.get(r.id)) {
+          if (seen.has(o.id) || avoid(o)) continue
+          seen.add(o.id)
+          queue.push(o)
+        }
+      }
+      return seen
+    }
+    // the way to a room: through no bedroom, bath or closet but the room itself
+    const privateButSelf = (target) => (o) => o !== target && (BEDROOMS.includes(o.kind) || BATHS.includes(o.kind) || CLOSETS.includes(o.kind))
+    R.filter((r) => r.kind === 'halfbath').forEach((r) => {
+      const clean = reach((o) => privateButSelf(r)(o) || THROUGH_SERVICE.includes(o.kind))
+      if (!clean.has(r.id) && reach(privateButSelf(r)).has(r.id)) say('powder-reach', 'warn', r, `${r.name} is reached only through the mud room, laundry or garage; give the guests' bath a door off the foyer, living room or a hall.`)
+    })
+    if (master) {
+      const noKitchen = reach((o) => privateButSelf(master)(o) || o.kind === 'kitchen')
+      const kitchenRoom = R.find((r) => r.kind === 'kitchen')
+      if (kitchenRoom && !noKitchen.has(master.id) && reach(privateButSelf(master)).has(master.id)) say('suite-kitchen', 'warn', master, `${master.name} is reached from the front door only through the ${kitchenRoom.name.toLowerCase()}'s work zone; enter the suite from the living side or a gallery.`)
+    }
+  }
+  // a door from the family rooms to the back yard: an exterior door on the rear wall of a public room
+  {
+    const rearY = Math.min(...R.map((r) => r.y))
+    const frontY = Math.max(...R.map((r) => r.y + r.d))
+    const backDoor = links.some(({ d, a, b }) => {
+      if (!d.exterior || d.size === 'overhead' || d.size === 'overheadSingle') return false
+      const room = a && !b ? a : b && !a ? b : null
+      if (!room || !PUBLIC.includes(room.kind)) return false
+      const [, cy] = centre(d)
+      // on the room's wall away from the street (its rear wall), or on a side wall in the rear half of the house
+      return (d.axis === 'h' && Math.abs(cy - room.y) < 0.4) || (d.axis === 'v' && cy < (rearY + frontY) / 2)
+    })
+    if (!backDoor && R.some((r) => PUBLIC.includes(r.kind))) say('rear-door', 'warn', null, 'No door from the living room, kitchen or dining room to the back yard.')
   }
 
   // l) the street front is for living rooms: no pantry, laundry, mud room, bath or closet with a window toward the street
@@ -541,7 +657,7 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   }
 
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), deadEndFt: deadEnds[r.id] ?? null }))
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round(Math.max(r.w, r.d) * 10) / 10, deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')
@@ -565,16 +681,17 @@ export function auditDesign(design, kit) {
 /** The checks a drafter reads, grouped: [{ id, name, ok, findings: [message] }], plus the measures. */
 export const CHECK_GROUPS = [
   { id: 'doors', name: 'Every door on a wall its room shares, no two overlapping', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial', 'doors-overlap'] },
-  { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath', ids: ['reach'] },
+  { id: 'swings', name: 'No door swings into another door or a fixture; 30" clear in front of every door', ids: ['swing-swing', 'swing-fixture', 'door-approach'] },
+  { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath; the powder room not only through the mud room; a back door from the family rooms', ids: ['reach', 'powder-reach', 'rear-door'] },
   { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
-  { id: 'halls', name: 'Halls 42" clear, none running past its last door, under 12% of the living area', ids: ['hall', 'dead-end', 'circulation'] },
+  { id: 'halls', name: 'Halls 42" clear, none over 35 ft or running past its last door, under 12% of the living area', ids: ['hall', 'dead-end', 'circulation', 'hall-long'] },
   { id: 'overlap', name: 'No room over another or on a porch; no enclosed void, no jog under 2 ft', ids: ['overlap', 'porch', 'void', 'jog'] },
   { id: 'fixtures', name: 'Toilet and shower clearances', ids: ['toilet-front', 'toilet-side', 'shower-front'] },
   { id: 'garage', name: 'Garage attached, fire-rated house door, overhead doors for every bay, a driveway on the lot to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers', 'garage-bays', 'garage-name'] },
-  { id: 'suite', name: 'Primary bath and closet from the bedroom; the suite entered away from the service hall', ids: ['suite-bath', 'suite-closet', 'suite-entry'] },
+  { id: 'suite', name: 'Primary bath and closet from the bedroom; the suite entered away from the service hall and the kitchen', ids: ['suite-bath', 'suite-closet', 'suite-entry', 'suite-kitchen'] },
   { id: 'closets', name: 'Reach-in closets 24" clear, walk-ins 5\' x 5\'', ids: ['closet', 'walk-in'] },
   { id: 'front', name: 'Service rooms off the street front', ids: ['service-front'] },
-  { id: 'kitchen', name: 'Kitchen work triangle 26 ft or less, aisles 42"', ids: ['triangle', 'aisle'] },
+  { id: 'kitchen', name: 'Kitchen work triangle 15 to 22 ft (26 at most), aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },
   { id: 'west', name: 'West glass over 40 sf shaded', ids: ['west-glass'] },
 ]

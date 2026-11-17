@@ -367,3 +367,45 @@ test('with no Claude key the office answers a change in under a second (the rege
   assert.equal(two.body.credits, c.body.credits, 'no credit for an unsupported request')
   console.log(`  fallback change on the office API with no key: ${ms} ms`)
 })
+
+test('after an override approval, no owner view (list, detail, what update and rollback return) carries the override note, the errors it covered, drafter ids or lot-confirmation notes', async (t) => {
+  const { openStore } = await import('../server/store/index.mjs')
+  const { makeProjects } = await import('../server/projects.mjs')
+  const store = openStore({ databaseUrl: '', dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-own-')) })
+  const projects = makeProjects({ store, interpreter: null, event: async () => {}, logInterpret: async () => {}, lots: { lotOfProject: async (p) => p.lot } })
+  const user = { id: 'u9', email: 'ana9@example.com', name: 'Ana Garza', credits: 10 }
+  await store.users.put(user)
+  const rooms = generateRooms(program, style).filter((e) => e.id !== 'd-bed2')
+  const p = await projects.create(user, { style: { id: 'farmhouse' }, program, rooms, client: 'Ana Garza', lot: { address: 'Lot 514', spec: { kind: 'plat', confirmed: true, confirmedBy: 'maria@drafthouse.test', confirmNote: 'checked against the plat' }, plat: { notes: 'reader notes for the office' } } })
+  p.status = 'in_review'
+  await store.projects.put(p)
+  const maria = { id: 'd9', email: 'maria@drafthouse.test', name: 'Maria', role: 'drafter' }
+  const SECRET = 'The hall door is on the drafter sheet; the draft lost it on export.'
+  const yes = await projects.review(p, maria, { decision: 'approved', note: 'Approved.', override: SECRET }, async () => ({ id: 'job9' }))
+  assert.equal(yes.reviews[0].override.note, SECRET, 'the drafter view carries the override')
+  const views = {
+    list: (await store.projects.listForUser(user.id)).map(projects.ownerView),
+    detail: await projects.detail(await store.projects.get(p.id)),
+  }
+  for (const [name, v] of Object.entries(views)) {
+    const text = JSON.stringify(v)
+    assert.ok(!text.includes(SECRET), `${name}: no override note`)
+    assert.ok(!/"override":\{/.test(text) && !/"byId"/.test(text) && !/"auditErrors"/.test(text) && !/"drafterId"/.test(text) && !/"audit":\{/.test(text) && !/"questions":/.test(text) && !/confirmedBy|confirmNote|reader notes/.test(text), `${name}: no office-only fields: ${text.slice(0, 200)}`)
+    assert.ok(text.includes('"overridden":true') && text.includes('"decision":"approved"'), `${name}: the decision and the fact of an override stay`)
+  }
+})
+
+test('GET /api/projects goes through the owner view', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-list-')) })
+  const ana = await who(base, 'ana5@example.com', 'Ana Garza')
+  const maria = await who(base, 'maria@drafthouse.test', 'Maria')
+  const prj = (await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse', name: 'Modern Farmhouse' }, program, rooms: generateRooms(program, style), client: 'Ana Garza' }))).body
+  await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' } })
+  await maria.post(`/api/review/${prj.id}`, { decision: 'returned', note: 'Move the office window.' })
+  const list = await (await ana.get('/api/projects')).text()
+  const rows = JSON.parse(list)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].review.decision, 'returned')
+  assert.ok(!/"drafterId"|"override"|"audit":\{|"questions":/.test(list), 'no office-only fields in the list')
+  assert.equal(rows[0].review.overridden, false)
+})

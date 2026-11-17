@@ -1,6 +1,6 @@
 // Does a program fit a lot? The rooms step asks this before "Draft my house", so the first draft
 // a client sees always passes the rules. When it does not fit, the largest living area that does.
-import { starterDraft, isRoom, lotOf, kitFor, programWithin } from './layout.js'
+import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf } from './layout.js'
 import { checkRules } from './rules.js'
 import { DEFAULT_LOT } from './lot.js'
 
@@ -29,6 +29,11 @@ const TRIM = 0.95
 const passes = (program, style, lot) => {
   const draft = starterDraft(program, style, lot)
   const rules = checkRules(draft.rooms, program, style, lot)
+  // a garage asked for that found no spot a car can reach is a miss, not a quiet 0-car draft
+  if (program.garage > 0 && !draft.rooms.some((r) => isRoom(r) && r.kind === 'garage')) {
+    rules.ok = false
+    rules.reasons = [...(rules.reasons || []), `A ${program.garage}-car garage has no spot on this lot that a car can be driven to (front-load does not fit the setbacks, and a side driveway has no room to turn).`]
+  }
   return { ...rules, ok: rules.ok && draft.fitScale >= TRIM - 1e-9, draft }
 }
 
@@ -37,7 +42,7 @@ const passes = (program, style, lot) => {
  *   draft is what starterDraft returned (minSqft, clamped, fitScale); maxSqft is the largest living
  *   area with these rooms that passes on this lot, or null when none does.
  */
-export function fitsLot(program, style, lot = DEFAULT_LOT) {
+export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
   const rules = passes(program, style, lot)
   const draft = rules.draft
   if (rules.ok === false && !rules.reasons.length) rules.reasons.push(`This plan has to be trimmed to ${Math.round(draft.fitScale * 100)}% to fit the lot.`)
@@ -57,28 +62,48 @@ export function fitsLot(program, style, lot = DEFAULT_LOT) {
   }
   // nothing fits at any size: the first of a few smaller programs that does
   let suggestion = null
-  if (!rules.ok && maxSqft == null) {
+  if (!rules.ok && maxSqft == null && depth === 0) {
     const kit = kitFor(style)
+    // what the kit's other plans (the narrow one) can hold on this lot
+    // the plans drawn for this living area first; one drawn for another is offered at the edge of its range
+    const inRange = (plan) => !plan.sqft || !program.sqft || (program.sqft >= plan.sqft[0] && program.sqft <= plan.sqft[1])
+    const gap = (plan) => (!plan.sqft || !program.sqft ? 0 : program.sqft < plan.sqft[0] ? plan.sqft[0] - program.sqft : program.sqft > plan.sqft[1] ? program.sqft - plan.sqft[1] : 0)
+    const plansByFit = Object.values(kit.plans || {}).sort((a, b) => inRange(b) - inRange(a) || gap(a) - gap(b))
+    const otherPlans = plansByFit.map((plan) => {
+      const within = inRange(plan) ? programWithin(plan, program) : { ...programWithin(plan, program), sqft: Math.min(Math.max(program.sqft, plan.sqft[0]), plan.sqft[1]) }
+      const same = JSON.stringify(within) === JSON.stringify(program)
+      return same ? null : { label: `as ${within.beds} bed, ${within.baths}${within.halfBath ? '.5' : ''} bath${within.garage ? `, ${within.garage}-car` : ', no garage'}${within.office ? '' : program.office ? ', no office' : ''} (what the ${plan.id} plan holds)`, program: within, plan: plan.id }
+    })
+    // a narrow lot wants the narrow plan first; a wide one keeps the rooms asked for and gives up the garage before the plan
+    const narrowLot = envelopeSize(lot)[0] < 60
     const tries = [
-      // what the kit's other plans (the narrow one) can hold on this lot
-      ...Object.values(kit.plans || {}).map((plan) => {
-        const within = programWithin(plan, program)
-        const same = JSON.stringify(within) === JSON.stringify(program)
-        return same ? null : { label: `as ${within.beds} bed, ${within.baths}${within.halfBath ? '.5' : ''} bath${within.garage ? `, ${within.garage}-car` : ', no garage'}${within.office ? '' : program.office ? ', no office' : ''} (what the ${plan.id} plan holds)`, program: within }
-      }),
+      // one bay less first: it keeps every room the client asked for
+      program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },
+      ...(narrowLot ? otherPlans : []),
       program.office && { label: 'without the office', program: { ...program, office: false } },
       program.suite2 && { label: 'without the second suite', program: { ...program, suite2: false } },
-      program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },
       program.garage > 0 && { label: 'without the garage', program: { ...program, garage: 0 } },
+      ...(narrowLot ? [] : otherPlans),
       program.beds > 3 && { label: `with ${program.beds - 1} bedrooms`, program: { ...program, beds: program.beds - 1, baths: Math.min(program.baths, program.beds - 1) } },
       program.office && program.garage > 0 && { label: 'without the office or the garage', program: { ...program, office: false, garage: 0 } },
     ].filter(Boolean)
     for (const t of tries) {
-      const f = fitsLot(t.program, style, lot)
-      if (f.ok || f.maxSqft) {
-        suggestion = { label: t.label, program: f.ok ? t.program : { ...t.program, sqft: f.maxSqft } }
-        break
+      // one level only: an offer is checked at its size, it does not go looking for offers of its own
+      const f = fitsLot(t.program, style, lot, { depth: depth + 1 })
+      if (!(f.ok || f.maxSqft)) continue
+      let offered = f.ok ? t.program : { ...t.program, sqft: f.maxSqft }
+      if (t.plan) {
+        // the offer drafts on the plan it names: at the top of a plan's range the next plan is drawn
+        // instead, so the size steps down the range until this plan comes out and passes
+        const drawn = (p) => planIdOf(starterDraft(p, style, lot).rooms)
+        const floor = kit.plans[t.plan].sqft?.[0] || 0
+        let p = offered
+        for (let i = 0; i < 12 && drawn(p) !== t.plan && p.sqft - 50 >= floor; i++) p = { ...p, sqft: p.sqft - 50 }
+        if (drawn(p) !== t.plan || !passes(p, style, lot).ok) continue
+        offered = p
       }
+      suggestion = { label: t.label, program: offered }
+      break
     }
   }
   // when nothing helps: how wide this style's smallest plan is against the lot

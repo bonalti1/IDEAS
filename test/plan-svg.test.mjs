@@ -28,6 +28,14 @@ for (const [lotName, lot] of Object.entries(LOTS)) {
       assert.ok(plan.svg.includes('Test Client') && plan.svg.includes(lot.address || `${lot.spec.width}`.slice(0, 1)))
       assert.equal(plan.labels.length, design.rooms.length, 'a label per room')
       for (let i = 0; i < plan.labels.length; i++) for (let j = i + 1; j < plan.labels.length; j++) assert.ok(!intersects(plan.labels[i], plan.labels[j]), `labels ${plan.labels[i].id} and ${plan.labels[j].id} overlap`)
+      // every label sits inside its room's walls (unless led out of a room too small for its name) and over no fixture
+      const IN = 12
+      const fixBoxes = design.fixtures.map((f) => ({ id: f.id, x: (f.x - f.w / 2 - plan.minX) * IN, y: (f.z - f.d / 2 - plan.minZ) * IN, w: f.w * IN, h: f.d * IN }))
+      for (const l of plan.labels) {
+        if (l.leader) continue
+        assert.ok(l.x >= l.room.x - 0.01 && l.y >= l.room.y - 0.01 && l.x + l.w <= l.room.x + l.room.w + 0.01 && l.y + l.h <= l.room.y + l.room.h + 0.01, `label ${l.id} crosses its room's wall`)
+        for (const f of fixBoxes) assert.ok(!intersects(l, { x: f.x + plan.originX, y: f.y + plan.originY, w: f.w, h: f.h }), `label ${l.id} sits over fixture ${f.id}`)
+      }
       assert.equal((plan.svg.match(/class="leaf"/g) || []).length, design.doors.filter((d) => !d.cased && !d.overhead).reduce((n, d) => n + (d.pair ? 2 : 1), 0), 'a leaf per door')
       assert.equal((plan.svg.match(/class="glass"/g) || []).length, design.windows.length, 'a symbol per window')
       assert.ok((plan.svg.match(/class="fixture toilet"/g) || []).length >= 2 && plan.svg.includes('class="fixture range"') && plan.svg.includes('class="fixture fridge"'))

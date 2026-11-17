@@ -22,8 +22,21 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
   // what a homeowner sees of a review: the decision and the note written to them; the override and the
   // audit it covered stay in the office
   const clientReview = (r) => (r ? { id: r.id, projectId: r.projectId, drafter: r.drafter, decision: r.decision, note: r.note, at: r.at, overridden: !!r.override } : r)
+  /**
+   * Every project payload a homeowner receives (the list, the detail, what create/update/send/rollback
+   * return) goes through this one view: no audit, no office questions, no override notes or the errors
+   * they covered, no drafter ids, no plat-reader or lot-confirmation notes written for the office.
+   */
+  const ownerView = (p) => {
+    if (!p) return p
+    const { audit, questions, auditErrors, review, reviews, lot, ...rest } = p
+    const spec = lot?.spec ? (({ confirmedBy, confirmNote, ...keep }) => keep)(lot.spec) : lot?.spec
+    const plat = lot?.plat ? (({ notes, readNotes, ...keep }) => keep)(lot.plat) : lot?.plat
+    return { ...rest, lot: lot ? { ...lot, spec, plat: plat ?? null } : lot, review: clientReview(review), ...(reviews ? { reviews: reviews.map(clientReview) } : {}) }
+  }
   const auditCache = new Map() // project id + version → the audit of that version (the rooms do not change under a version)
 
+  const asBuiltCache = new Map()
   async function withRooms(p) {
     const v = await store.versions.get(p.id, p.version)
     return { ...p, rooms: v?.rooms || [] }
@@ -47,6 +60,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
   }
 
   return {
+    ownerView,
     async create(user, body) {
       if (!Array.isArray(body.rooms) || !body.rooms.length) throw fail(400, 'rooms required')
       if (!body.style?.id) throw fail(400, 'style required')
@@ -84,7 +98,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async detail(p, { drafter = false } = {}) {
       const [full, versions, reviews, job, owner] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null, store.users.get(p.userId)])
       const jobView = job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null
-      if (!drafter) return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews: reviews.map(clientReview), review: clientReview(full.review), job: jobView })
+      if (!drafter) return ownerView(publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, job: jobView }))
       return publicProject(full, { credits: owner?.credits ?? 0, versions, reviews, audit: this.auditCached(full), job: jobView })
     },
     auditCached(full) {
@@ -213,8 +227,21 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
     // drafter inbox: waiting first, then recent decisions, plus plat lots nobody has confirmed
     async inbox() {
-      // the counts a drafter reads come from the plan as it is, not the program the client started with
-      const asBuilt = async (list) => Promise.all(list.map(async (p) => ({ ...p, asBuilt: programOf((await withRooms(p)).rooms, p.program || {}) })))
+      // the counts a drafter reads come from the plan as it is, not the program the client started with;
+      // a version never changes once saved, so its counts are read once (asBuiltCache, keyed by project and version)
+      const asBuilt = async (list) =>
+        Promise.all(
+          list.map(async (p) => {
+            const key = `${p.id}:${p.version}`
+            let got = asBuiltCache.get(key)
+            if (!got) {
+              got = programOf((await withRooms(p)).rooms, p.program || {})
+              asBuiltCache.set(key, got)
+              if (asBuiltCache.size > 2000) asBuiltCache.delete(asBuiltCache.keys().next().value)
+            }
+            return { ...p, asBuilt: got }
+          }),
+        )
       const waiting = await asBuilt(await store.projects.listByStatus(['in_review']))
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)

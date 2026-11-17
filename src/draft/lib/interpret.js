@@ -2,9 +2,10 @@
 // Claude does the interpreting through the office API (key stays server-side);
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
-import { kitFor, lotOf } from './layout.js'
+import { kitFor, lotOf, minSizeOf, planIdOf, isRoom } from './layout.js'
 import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps } from './ops.js'
 import { checkRules } from './rules.js'
+import { fitsLot } from './fit.js'
 
 const MIN_CONFIDENCE = 0.5
 // the office said it has no interpreter: do not wait on it again for a while
@@ -79,9 +80,33 @@ export function sameRooms(a, b) {
 }
 
 /** The deterministic part: confidence gate, shape check, apply, rules. */
+/**
+ * A swap where a room lands in a spot under its new kind's minimum (the dining room in the office's
+ * 10 by 7) gets a resize to that minimum right after it, so the swap is one change, not a refusal.
+ */
+export function growSwaps(ops, rooms, kit) {
+  const planId = planIdOf(rooms)
+  const byId = Object.fromEntries(rooms.filter(isRoom).map((r) => [r.id, r]))
+  return ops.flatMap((o) => {
+    if (o.op !== 'swap') return [o]
+    const a = byId[o.room]
+    const b = byId[o.target]
+    if (!a || !b) return [o]
+    const grow = (room, kind) => {
+      const min = minSizeOf(kit, kind, planId)
+      if (!min) return null
+      // the minimum turned the way the room lies
+      const [mw, md] = room.w >= room.d ? [Math.max(...min), Math.min(...min)] : [Math.min(...min), Math.max(...min)]
+      if (room.w >= mw - 0.01 && room.d >= md - 0.01) return null
+      return { op: 'resize', room: room.id, w: Math.max(room.w, mw), d: Math.max(room.d, md) }
+    }
+    return [o, grow(a, b.kind), grow(b, a.kind)].filter(Boolean)
+  })
+}
+
 export function decide(diff, rooms, program, style, kit, source, lot) {
   const L = lotOf(lot)
-  diff = { ...diff, ops: normalizeOps(diff.ops, rooms) }
+  diff = { ...diff, ops: growSwaps(normalizeOps(diff.ops, rooms), rooms, kit) }
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }
@@ -110,6 +135,17 @@ export function decide(diff, rooms, program, style, kit, source, lot) {
     const preexisting = rules.reasons.filter((r) => before.includes(r))
     const caused = rules.reasons.filter((r) => !before.includes(r))
     const fixes = suggestFixes(diff.ops, caused.length ? caused : preexisting, rooms, next.rooms, program, style, kit, L, caused.length > 0)
+    // a whole-house size the lot cannot take: one line with the largest it takes, and that as the fix
+    const scaleOp = diff.ops.find((o) => o.op === 'scale')
+    if (scaleOp && caused.some((r) => /setback|cover|lot/i.test(r))) {
+      const f = fitsLot({ ...program, sqft: Math.round(scaleOp.sqft) }, style, L)
+      const max = f.maxSqft || (f.draft?.clamped ? f.draft.minSqft : null)
+      // the largest size is offered as the fix, unless the house is already there (within 1%)
+      const now = rooms.filter((r) => isRoom(r) && !r.open && r.kind !== 'garage').reduce((a, r) => a + r.w * r.d, 0) * (program.stories || 1)
+      const there = max && Math.abs(max - now) / now < 0.01
+      const reply2 = `At ${Math.round(scaleOp.sqft).toLocaleString()} sf this plan runs past the setbacks on this lot${max ? `; the largest it fits here with these rooms is about ${max.toLocaleString()} sf${there ? ', which is about where it is now' : ''}` : ''}.`
+      return { applied: false, rooms, reply: reply2, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes: max && !there ? [{ label: `Make it ${max.toLocaleString()} sf`, ops: [{ op: 'scale', sqft: max }] }] : there ? [] : fixes }
+    }
     const reply = caused.length
       ? `I can't do that one. ${caused.join(' ')}${preexisting.length ? ` The plan also has a problem from before: ${preexisting.join(' ')}` : ''}`
       : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting.join(' ')}`

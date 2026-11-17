@@ -1,7 +1,7 @@
 // IFC4 export of the draft: walls, floor slabs, and rooms as IfcSpace, placed
 // on the lot. Written as STEP text with no library so it runs in the browser.
 // Opens in Revit (Insert > Link IFC or Open IFC), BIMcollab Zoom, or any IFC viewer.
-import { isConditioned, lotOf } from './layout.js'
+import { isConditioned, lotOf, programOf } from './layout.js'
 import { hostWall } from './openings.js'
 import { openingMarks } from './contract.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
@@ -259,7 +259,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       const tag = marks.get(e.id) || ''
       if (e.kind === 'door') {
         const spec = kit.doors[e.size] || {}
-        const op = e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
+        const op = e.pocket || e.barn ? (e.hinge === 'end' ? '.SLIDING_TO_RIGHT.' : '.SLIDING_TO_LEFT.') : e.pair ? '.DOUBLE_DOOR_SINGLE_SWING.' : e.hinge === 'end' ? '.SINGLE_SWING_RIGHT.' : '.SINGLE_SWING_LEFT.'
         const name = [tag, e.size || 'door', e.pair && !spec.pair ? 'pair' : ''].filter(Boolean).join(' ')
         fill = add(`IFCDOOR(${g()},#${oh},'${esc(name)}','${esc(spec.material || '')}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.DOOR.,${op},$)`)
         pset('Pset_DoorCommon', [pBool('IsExternal', !!e.exterior), pText('FireRating', e.fireRated ? '20 min' : ''), pBool('SelfClosingDevice', !!e.selfClosing), pText('Reference', e.size || '')], [fill])
@@ -403,7 +403,8 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
   const props = [
     ['Style', style.name],
     ['Kit', `${kit.name} (${kit.source.plan} rev ${kit.source.rev})`],
-    ['Program', `${program.beds} bed, ${program.baths}${program.halfBath ? '.5' : ''} bath, ${program.garage}-car, ${program.stories} story`],
+    // the program as drawn (the client's asks changed it): beds, baths, garage from the rooms
+    ['Program', (({ beds, baths, halfBath, garage, stories }) => `${beds} bed, ${baths}${halfBath ? '.5' : ''} bath, ${garage}-car, ${stories || 1} story`)(programOf(rooms, program))],
     ['Roof', `${kit.roof.pitch}, ${kit.roof.rafters}, ${kit.roof.overhang} overhang`],
     ['Plates', `${kit.plates.default}' typ, ${kit.plates.public}' public, ${kit.plates.vaulted}' vault`],
     ['Exterior', `${kit.exterior.siding}; ${kit.exterior.accent}`],

@@ -55,10 +55,10 @@ function fixtureSymbol(f, x, y, w, h) {
       return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/>${[[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]].map(([a, b]) => `<circle cx="${r1(x + w * a)}" cy="${r1(y + h * b)}" r="${r1(rx)}" ${thin}/>`).join('')}`
     }
     case 'fridge':
-      return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/><text x="${r1(cx)}" y="${r1(cy + 2.5)}" font-size="6" text-anchor="middle" fill="#333" font-family="Helvetica, Arial, sans-serif">REF</text>`
+      return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/><text x="${r1(cx)}" y="${r1(cy + 2.5)}" font-size="6" text-anchor="middle" fill="#333" font-family="LiberationSans, Helvetica, Arial, sans-serif">REF</text>`
     case 'washer':
     case 'dryer':
-      return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/><circle cx="${r1(cx)}" cy="${r1(cy)}" r="${r1(Math.min(w, h) * 0.3)}" ${thin}/><text x="${r1(cx)}" y="${r1(cy + 2)}" font-size="5" text-anchor="middle" fill="#333" font-family="Helvetica, Arial, sans-serif">${f.kind === 'washer' ? 'W' : 'D'}</text>`
+      return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/><circle cx="${r1(cx)}" cy="${r1(cy)}" r="${r1(Math.min(w, h) * 0.3)}" ${thin}/><text x="${r1(cx)}" y="${r1(cy + 2)}" font-size="5" text-anchor="middle" fill="#333" font-family="LiberationSans, Helvetica, Arial, sans-serif">${f.kind === 'washer' ? 'W' : 'D'}</text>`
     case 'bed':
       return `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" ${thin}/><rect x="${r1(x + 3)}" y="${r1(y + 3)}" width="${r1(w - 6)}" height="${r1(Math.min(h * 0.18, 12))}" ${thin}/>`
     case 'counter':
@@ -83,6 +83,42 @@ function fixtureSymbol(f, x, y, w, h) {
  * @param {object} opts    { title, date, labelFont (default 9), showFixtures (default true) }
  * @returns {{ svg: string, width: number, height: number, labels: Array<{id, x, y, w, h, text}>, dims: number, scaleNote: string }}
  */
+/** A font size at which `text` fits `avail` units wide (no smaller than `min`); k is the mean glyph width as a share of the size. */
+export function fitFont(text, size, avail, min = size * 0.6, k = 0.6) {
+  const need = Math.max(1, String(text).length) * k
+  return Math.max(min, Math.min(size, avail / need))
+}
+
+/**
+ * The same drawing cropped to a box (drawing units): its viewBox narrows to the box, and a match line
+ * with its note is drawn on the edge named (for a plan split over two tabloid sheets).
+ * @param {string} svgText  a planSVG().svg
+ * @param {{x:number,y:number,w:number,h:number}} box
+ * @param {{ side: 'e'|'w'|'n'|'s', at: number, note: string }|null} match
+ */
+export function cropSVG(svgText, box, match = null) {
+  const head = (svgText.match(/^<svg[^>]*>/) || [''])[0]
+  if (!head) return svgText
+  const rest = svgText.slice(head.length)
+  const newHead = head
+    .replace(/viewBox="[^"]*"/, `viewBox="${r1(box.x)} ${r1(box.y)} ${r1(box.w)} ${r1(box.h)}"`)
+    .replace(/ width="[^"]*"/, ` width="${r1(box.w)}"`)
+    .replace(/ height="[^"]*"/, ` height="${r1(box.h)}"`)
+  let extra = ''
+  if (match) {
+    const vertical = match.side === 'e' || match.side === 'w'
+    const a = match.at
+    const line = vertical
+      ? `<line x1="${r1(a)}" y1="${r1(box.y)}" x2="${r1(a)}" y2="${r1(box.y + box.h)}" stroke="#1a1a1a" stroke-width="1.4" stroke-dasharray="14 7"/>`
+      : `<line x1="${r1(box.x)}" y1="${r1(a)}" x2="${r1(box.x + box.w)}" y2="${r1(a)}" stroke="#1a1a1a" stroke-width="1.4" stroke-dasharray="14 7"/>`
+    const tx = vertical ? a + (match.side === 'e' ? -6 : 10) : box.x + box.w / 2
+    const ty = vertical ? box.y + box.h / 2 : a + (match.side === 's' ? -5 : 11)
+    const text = `<text x="${r1(tx)}" y="${r1(ty)}" font-size="9" font-weight="700" letter-spacing="0.12em" text-anchor="middle" font-family="LiberationSans, Helvetica, Arial, sans-serif" fill="#1a1a1a"${vertical ? ` transform="rotate(-90 ${r1(tx)} ${r1(ty)})"` : ''}>${esc(match.note)}</text>`
+    extra = `<g class="match-line">${line}${text}</g>`
+  }
+  return newHead + rest.replace(/<\/svg>\s*$/, extra + '</svg>')
+}
+
 export function planSVG(design, opts = {}) {
   const rooms = design.rooms || []
   const walls = design.walls || []
@@ -104,7 +140,7 @@ export function planSVG(design, opts = {}) {
   const width = (maxX - minX + 2 * M) * IN
   const height = (maxZ - minZ + 2 * M + TOP) * IN
   const out = []
-  const font = 'font-family="Helvetica, Arial, sans-serif"'
+  const font = 'font-family="LiberationSans, Helvetica, Arial, sans-serif"'
 
   // ── rooms: floor fill, porches hatched ──
   rooms.forEach((r) => {
@@ -161,6 +197,12 @@ export function planSVG(design, opts = {}) {
     const gx = d.axis === 'h' ? cx - wIn / 2 : host ? X(host.at) - t / 2 : cx - t / 2
     const gy = d.axis === 'h' ? (host ? Y(host.at) - t / 2 : cy - t / 2) : cy - wIn / 2
     out.push(`<rect class="opening door" data-id="${esc(d.id)}" x="${r1(gx)}" y="${r1(gy)}" width="${r1(d.axis === 'h' ? wIn : t)}" height="${r1(d.axis === 'h' ? t : wIn)}" fill="#fbfaf7" stroke="none"/>`)
+    if (d.pocket || d.barn) {
+      // a pocket door: the leaf drawn half into its pocket in the wall; a barn door: the leaf on the wall face
+      if (d.axis === 'h') out.push(`<line class="leaf" x1="${r1(gx + wIn / 2)}" y1="${r1(gy + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" x2="${r1(gx + wIn + (d.barn ? 0 : wIn / 2))}" y2="${r1(gy + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" stroke="#333" stroke-width="1"${d.pocket ? ' stroke-dasharray="3 2"' : ''}/>`)
+      else out.push(`<line class="leaf" x1="${r1(gx + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" y1="${r1(gy + wIn / 2)}" x2="${r1(gx + t / 2 + (d.barn ? (d.swing === -1 ? -t : t) : 0))}" y2="${r1(gy + wIn + (d.barn ? 0 : wIn / 2))}" stroke="#333" stroke-width="1"${d.pocket ? ' stroke-dasharray="3 2"' : ''}/>`)
+      return
+    }
     if (d.cased || d.overhead) {
       // a cased opening or an overhead door: dashed head line
       out.push(`<line x1="${r1(gx)}" y1="${r1(d.axis === 'h' ? gy + t / 2 : gy)}" x2="${r1(d.axis === 'h' ? gx + wIn : gx + t / 2)}" y2="${r1(d.axis === 'h' ? gy + t / 2 : gy + wIn)}" stroke="#555" stroke-width="0.8" stroke-dasharray="4 3"/>`)
@@ -224,59 +266,90 @@ export function planSVG(design, opts = {}) {
     out.push(`<g class="fixture ${esc(f.kind)}" data-id="${esc(f.id)}">${fixtureSymbol(f, X(f.x - f.w / 2), Y(f.z - f.d / 2), f.w * IN, f.d * IN)}</g>`)
   })
 
-  // ── room labels: name and size, shrunk to fit, nudged apart, a leader when the room is too small ──
+  // ── room labels: name and size inside the room, on a spot clear of its fixtures and of other labels
+  // (the centre first, then outward), shrunk when the room is tight, a leader when nothing fits ──
   const labels = []
   const baseFont = opts.labelFont || 9
-  const textW = (s, size) => s.length * size * 0.58
+  const textW = (s, size) => s.length * size * 0.6
   const placed = []
+  const fixBoxes = fixtures.map((f) => ({ room: f.room, x: X(f.x - f.w / 2), y: Y(f.z - f.d / 2), w: f.w * IN, h: f.d * IN }))
   rooms
     .slice()
     .sort((a, b) => b.w * b.d - a.w * a.d)
     .forEach((r) => {
       const name = r.name.toUpperCase()
       const size = `${fmt(r.w)} × ${fmt(r.d)}`
-      const innerW = r.w * IN - 8
-      const innerH = r.d * IN - 8
-      let f = baseFont
-      let lines = [name, size]
-      let w = Math.max(textW(name, f), textW(size, f * 0.85))
-      let h = f * 2.3
-      while ((w > innerW || h > innerH) && f > 6) {
-        f -= 0.5
-        w = Math.max(textW(name, f), textW(size, f * 0.85))
-        h = f * 2.3
-      }
-      if (w > innerW || h > innerH) {
-        lines = [name]
-        w = textW(name, f)
-        h = f * 1.2
-        while (w > innerW && f > 5) {
-          f -= 0.5
-          w = textW(name, f)
-          h = f * 1.2
-        }
-      }
+      const inner = { x: X(r.x - r.w / 2) + 4, y: Y(r.z - r.d / 2) + 4, w: r.w * IN - 8, h: r.d * IN - 8 }
+      const mine = fixBoxes.filter((b) => b.room === r.id)
+      const clearAt = (box) => box.x >= inner.x - 0.01 && box.y >= inner.y - 0.01 && box.x + box.w <= inner.x + inner.w + 0.01 && box.y + box.h <= inner.y + inner.h + 0.01 && !mine.some((b) => overlapBox(b, box)) && !placed.some((p) => overlapBox(p.box, box))
       const cx = X(r.x)
       const cy = Y(r.z)
-      let box = { x: cx - w / 2, y: cy - h / 2, w, h }
+      // a spot for a w x h box: the centre, then rings of offsets inside the room's walls
+      const spotFor = (w, h) => {
+        if (w > inner.w + 0.01 || h > inner.h + 0.01) return null
+        const sx = Math.max(6, w * 0.25)
+        const sy = Math.max(4, h * 0.5)
+        const nx = Math.ceil((inner.w - w) / 2 / sx)
+        const ny = Math.ceil((inner.h - h) / 2 / sy)
+        const seen = new Set()
+        for (let ring = 0; ring <= Math.max(nx, ny); ring++) {
+          for (let j = 0; j <= Math.min(ring, ny); j++) {
+            for (let i = 0; i <= Math.min(ring, nx); i++) {
+              if (Math.max(i, j) !== ring) continue
+              for (const [si, sj] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+                const dx = i * si * sx
+                const dy = j * sj * sy
+                const key = dx + ',' + dy
+                if (seen.has(key)) continue
+                seen.add(key)
+                const box = { x: Math.min(Math.max(cx - w / 2 + dx, inner.x), inner.x + inner.w - w), y: Math.min(Math.max(cy - h / 2 + dy, inner.y), inner.y + inner.h - h), w, h }
+                if (clearAt(box)) return box
+              }
+            }
+          }
+        }
+        return null
+      }
+      let f = baseFont
+      let lines = [name, size]
+      let box = null
+      let w = 0
+      let h = 0
+      for (let size2 = baseFont; size2 >= 6 && !box; size2 -= 0.5) {
+        f = size2
+        w = Math.max(textW(name, f), textW(size, f * 0.85))
+        h = f * 2.3
+        box = spotFor(w, h)
+      }
+      if (!box) {
+        lines = [name]
+        for (let size2 = baseFont - 1; size2 >= 5 && !box; size2 -= 0.5) {
+          f = size2
+          w = textW(name, f)
+          h = f * 1.2
+          box = spotFor(w, h)
+        }
+      }
       let leader = null
-      if (w > innerW + 0.01 || h > innerH + 0.01) {
-        // too small even for the name: label outside the house with a leader, below the plan
+      if (!box) {
+        // nothing fits inside: the name outside the house with a leader, below the plan
+        f = 6
+        w = textW(name, f)
+        h = f * 1.2
         const lx = cx
         const ly = Y(maxZ) + 30 + placed.filter((p) => p.leader).length * 12
         box = { x: lx - w / 2, y: ly - h / 2, w, h }
-        leader = [cx, cy, lx, ly - h / 2]
+        for (let tries = 0; tries < 40 && placed.some((p) => overlapBox(p.box, box)); tries++) box = { ...box, y: box.y + 3 }
+        leader = [cx, cy, lx, box.y]
       }
-      // nudge down until it overlaps no earlier label
-      for (let tries = 0; tries < 40 && placed.some((p) => overlapBox(p.box, box)); tries++) box = { ...box, y: box.y + 3 }
-      placed.push({ r, box, f, lines, leader })
+      placed.push({ r, box, f, lines, leader, room: { x: inner.x - 4, y: inner.y - 4, w: inner.w + 8, h: inner.h + 8 } })
     })
-  placed.forEach(({ r, box, f, lines, leader }) => {
+  placed.forEach(({ r, box, f, lines, leader, room }) => {
     const cx = box.x + box.w / 2
     const y0 = box.y + f
-    labels.push({ id: r.id, x: box.x, y: box.y, w: box.w, h: box.h, text: lines.join(' ') })
+    labels.push({ id: r.id, x: box.x, y: box.y, w: box.w, h: box.h, text: lines.join(' '), leader: !!leader, room })
     if (leader) out.push(`<line class="leader" x1="${r1(leader[0])}" y1="${r1(leader[1])}" x2="${r1(leader[2])}" y2="${r1(leader[3])}" stroke="#555" stroke-width="0.6"/>`)
-    out.push(`<text class="label" data-id="${esc(r.id)}" x="${r1(cx)}" y="${r1(y0)}" text-anchor="middle" ${font} fill="#1a1a1a"><tspan font-size="${f}" font-weight="600" letter-spacing="0.06em">${esc(lines[0])}</tspan>${lines[1] ? `<tspan x="${r1(cx)}" dy="${r1(f * 1.1)}" font-size="${r1(f * 0.85)}">${esc(lines[1])}</tspan>` : ''}</text>`)
+    out.push(`<text class="label" data-id="${esc(r.id)}" x="${r1(cx)}" y="${r1(y0)}" text-anchor="middle" ${font} fill="#1a1a1a"><tspan font-size="${f}" font-weight="700" letter-spacing="0.06em">${esc(lines[0])}</tspan>${lines[1] ? `<tspan x="${r1(cx)}" dy="${r1(f * 1.1)}" font-size="${r1(f * 0.85)}">${esc(lines[1])}</tspan>` : ''}</text>`)
   })
 
   // ── exterior dimension strings: room breaks on each side, then the overall ──
@@ -343,11 +416,14 @@ export function planSVG(design, opts = {}) {
   const title = opts.title || `${design.client || 'Draft'} · ${lotTitle(design)}`
   const ab = design.asBuilt || design.program || {}
   const sub = `${design.style?.name || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`
-  out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN)}" font-size="13" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN + 15)}" font-size="8" ${font} fill="#555">FLOOR PLAN · ${esc(sub)}</text></g>`)
+  const availT = width - X(minX) - 36
+  const tf = fitFont(title, 13, availT, 8, 0.62)
+  const sf2 = fitFont(`FLOOR PLAN · ${sub}`, 8, availT, 5.5, 0.56)
+  out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN)}" font-size="${r1(tf)}" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN + 15)}" font-size="${r1(sf2)}" ${font} fill="#555">FLOOR PLAN · ${esc(sub)}</text></g>`)
 
   const defs = `<defs><pattern id="porchHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d8d3c8" stroke-width="1"/></pattern></defs>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r1(width)} ${r1(height)}" width="${r1(width)}" height="${r1(height)}" class="floor-plan"><rect width="${r1(width)}" height="${r1(height)}" fill="#fff"/>${defs}${out.join('')}</svg>`
-  return { svg, width, height, labels, dims, scaleNote: 'drawn in inches of the house: 1 ft = 12 units' }
+  return { svg, width, height, labels, dims, minX, minZ, originX: X(minX), originY: Y(minZ), scaleNote: 'drawn in inches of the house: 1 ft = 12 units' }
 }
 
 
@@ -381,7 +457,7 @@ export function sitePlanSVG(design, opts = {}) {
   const Y = (ft) => (ft - minZ + M + TOP) * IN
   const width = (maxX - minX + 2 * M) * IN
   const height = (maxZ - minZ + 2 * M + TOP) * IN
-  const font = 'font-family="Helvetica, Arial, sans-serif"'
+  const font = 'font-family="LiberationSans, Helvetica, Arial, sans-serif"'
   const out = []
   const poly = (pts) => pts.map((p) => `${r1(X(p[0]))},${r1(Y(p[1]))}`).join(' ')
   // a rotated rectangle in the house frame → world polygon
@@ -460,7 +536,12 @@ export function sitePlanSVG(design, opts = {}) {
   const date = opts.date || new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const title = opts.title || `${design.client || 'Draft'} · ${lotTitle(design)}`
   const coverText = cover.pct !== null ? `lot coverage ${cover.pct}% (${cover.footprintSf.toLocaleString()} sf of ${cover.lotSf.toLocaleString()} sf)` : `${cover.footprintSf.toLocaleString()} sf footprint`
-  out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN)}" font-size="${13 * F}" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 15 * F)}" font-size="${8 * F}" ${font} fill="#555">SITE PLAN · ${esc(lot.cityName || lot.city || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${esc(date)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 28 * F)}" font-size="${8 * F}" ${font} fill="#555" id="coverage">${esc(coverText)}</text></g>`)
+  const subSite = `SITE PLAN · ${lot.cityName || lot.city || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${date}`
+  const availS = width - X(minX) - 10 * F
+  const tfS = fitFont(title, 13 * F, availS, 8 * F, 0.62)
+  const sfS = fitFont(subSite, 8 * F, availS, 5.5 * F, 0.56)
+  const cfS = fitFont(coverText, 8 * F, availS, 5.5 * F, 0.56)
+  out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN)}" font-size="${r1(tfS)}" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 15 * F)}" font-size="${r1(sfS)}" ${font} fill="#555">${esc(subSite)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 28 * F)}" font-size="${r1(cfS)}" ${font} fill="#555" id="coverage">${esc(coverText)}</text></g>`)
   const defs = `<defs><pattern id="porchHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d8d3c8" stroke-width="1"/></pattern></defs>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r1(width)} ${r1(height)}" width="${r1(width)}" height="${r1(height)}" class="site-plan"><rect width="${r1(width)}" height="${r1(height)}" fill="#fff"/>${defs}${out.join('')}</svg>`
   return { svg, width, height, coverage: cover, slabs: [...slabs, ...walk] }
@@ -473,7 +554,7 @@ export function sitePlanSVG(design, opts = {}) {
  */
 export const SHEETS = {
   archD: { id: 'archD', name: '24 × 36 (ARCH D)', pageW: 36, pageH: 24, margin: 0.75, blockH: 1.4, plan: [0.25, '1/4" = 1\'-0"'], site: [1 / 20, '1" = 20\'-0"'] },
-  tabloid: { id: 'tabloid', name: '11 × 17 (tabloid)', pageW: 17, pageH: 11, margin: 0.4, blockH: 1.1, plan: [0.125, '1/8" = 1\'-0"'], site: [1 / 40, '1" = 40\'-0"'] },
+  tabloid: { id: 'tabloid', name: '11 × 17 (tabloid)', pageW: 17, pageH: 11, margin: 0.3, blockH: 0.9, plan: [0.125, '1/8" = 1\'-0"'], site: [1 / 40, '1" = 40\'-0"'] },
 }
 /** The site plan's scale on a sheet: the largest engineering scale (1" = 10', 20', 30', 40', 50') the lot fits at. */
 export function siteScaleFor(site, S) {
@@ -482,10 +563,14 @@ export function siteScaleFor(site, S) {
   const scales = [[1 / 10, '1" = 10\'-0"'], [1 / 20, '1" = 20\'-0"'], [1 / 30, '1" = 30\'-0"'], [1 / 40, '1" = 40\'-0"'], [1 / 50, '1" = 50\'-0"']]
   return scales.find(([sc]) => w * sc <= S.availW && h * sc <= S.availH) || scales[scales.length - 1]
 }
-/** The sheet a plan fits at its scale: ARCH D at 1/4" unless asked for tabloid; a plan too big for the scale says so. */
+/**
+ * The sheet a plan fits at its scale: ARCH D at 1/4" (3/16", 1/8" when the house is long) unless asked for
+ * tabloid, which is always 1/8": a plan too deep or too wide for one tabloid sheet goes on two, split
+ * across the overflowing axis with a match line (`split: 'rows'` top and bottom, `'cols'` left and right).
+ */
 export function sheetFor(plan, sheetId = 'archD') {
   const S = SHEETS[sheetId] || SHEETS.archD
-  const scales = S.id === 'archD' ? [[0.25, '1/4" = 1\'-0"'], [0.1875, '3/16" = 1\'-0"'], [0.125, '1/8" = 1\'-0"']] : [[0.125, '1/8" = 1\'-0"'], [0.09375, '3/32" = 1\'-0"'], [0.0625, '1/16" = 1\'-0"']]
+  const scales = S.id === 'archD' ? [[0.25, '1/4" = 1\'-0"'], [0.1875, '3/16" = 1\'-0"'], [0.125, '1/8" = 1\'-0"']] : [[0.125, '1/8" = 1\'-0"']]
   const w = plan.width / 12
   const h = plan.height / 12
   // the sheet's own scale, landscape; else turned portrait; else the next scale down, each a scale a builder reads
@@ -500,6 +585,11 @@ export function sheetFor(plan, sheetId = 'archD') {
   }
   const availW = S.pageW - 2 * S.margin
   const availH = S.pageH - 2 * S.margin - S.blockH
+  if (S.id === 'tabloid') {
+    const sc = 0.125
+    const split = h * sc > availH ? 'rows' : 'cols'
+    return { ...S, orientation: 'landscape', availW, availH, plan: [sc, '1/8" = 1\'-0"'], fits: true, split }
+  }
   return { ...S, orientation: 'landscape', availW, availH, fits: false }
 }
 
@@ -532,7 +622,7 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Draft')} floor plan</title>
 <style>
   @page { size: ${pageW}in ${pageH}in; margin: ${margin}in; }
-  html, body { margin: 0; background: #fff; font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; }
+  html, body { margin: 0; background: #fff; font-family: LiberationSans, Helvetica, Arial, sans-serif; color: #1a1a1a; }
   .sheet { width: ${availW}in; height: ${pageH - 2 * margin}in; position: relative; margin: ${margin}in auto; box-sizing: border-box; border: 1.5px solid #1a1a1a; page-break-after: always; }
   .sheet:last-child { page-break-after: auto; }
   .drawing { position: absolute; }
@@ -581,7 +671,7 @@ export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Your house')} · summary</title>
 <style>
   @page { size: letter portrait; margin: 0.5in; }
-  body { margin: 0; font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; background: #fff; }
+  body { margin: 0; font-family: LiberationSans, Helvetica, Arial, sans-serif; color: #1a1a1a; background: #fff; }
   .page { max-width: 7.5in; margin: 0 auto; padding: 0.3in 0; }
   h1 { font-size: 20pt; margin: 0 0 2px; } h2 { font-size: 12pt; margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase; }
   .sub { color: #555; font-size: 10pt; margin: 0 0 10px; }

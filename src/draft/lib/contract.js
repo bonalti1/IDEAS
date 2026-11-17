@@ -7,6 +7,7 @@ import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
 import { sheetPlan } from './sheets.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../../kits/modern-farmhouse.js'
+import { drivewaySlabs, walkSlabs, lotCoverage, drivewayLength } from './site.js'
 
 export const CONTRACT_VERSION = 1
 
@@ -21,6 +22,16 @@ export function openingMarks(rooms) {
     if (e.kind === 'window') marks.set(e.id, `W${String(++w).padStart(2, '0')}`)
   })
   return marks
+}
+
+/** The site in the house frame: the driveway pieces, the walk and the coverage, as drawn everywhere. */
+function siteOf(rooms, lot) {
+  const r2 = (v) => Math.round(v * 100) / 100
+  const list = rooms.filter((r) => !r.element && r.local).map((r) => ({ id: r.id, kind: r.kind, name: r.name, open: !!r.open, driveway: r.driveway, x: r.local[0], z: r.local[1], w: r.w, d: r.d }))
+  const doors = rooms.filter((e) => e.kind === 'door' && e.local).map((e) => ({ id: e.id, room: e.room, axis: e.axis, x: e.local[0], z: e.local[1], span: e.span, size: e.size, exterior: !!e.exterior }))
+  const drive = drivewaySlabs(list, doors, lot)
+  const slab = (s) => ({ x: r2(s.x), z: r2(s.z), w: r2(s.w), d: r2(s.d), part: s.part })
+  return { driveway: drive.map(slab), drivewayFt: drivewayLength(drive), walk: walkSlabs(list, doors, lot, drive).map(slab), coverage: lotCoverage(list, lot) }
 }
 
 export function buildDesign({ rooms, program, style, lot, client, history = [] }) {
@@ -40,13 +51,14 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     program,
     // the plan as it is after the client's changes: what the title block, the summary and the schedules say
     asBuilt: programOf(rooms, program),
+    site: siteOf(rooms, lot),
     units: 'feet',
     // local frame: x along the front of the house, z toward the street, y up; origin at the plan centre
     frame: { x: 'along front', z: 'toward street', y: 'up', origin: 'plan centre', lotRotationRad: null },
     levels: [{ name: 'Level 1', elevation: 0 }],
     rooms: roomList.map((r) => ({ id: r.id, kind: r.kind, name: r.name, x: r2(r.local[0]), z: r2(r.local[1]), w: r2(r.w), d: r2(r.d), plate: r2(r.plate), open: !!r.open, plumbing: !!r.plumbing })),
     walls: walls.map((w, i) => ({ id: `wall-${i + 1}`, a: w.a.map(r2), b: w.b.map(r2), thicknessIn: w.thicknessIn, plate: r2(w.plate), base: r2(w.base || 0), exterior: !!w.exterior, plumbing: !!w.plumbing, dormer: !!w.dormer, revitType: w.dormer || w.exterior ? kit.revit?.wallTypes?.exterior : w.plumbing ? kit.revit?.wallTypes?.plumbing : kit.revit?.wallTypes?.interior })),
-    doors: elements.filter((e) => e.kind === 'door').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), height: e.h ? r2(e.h) : DOOR_HEAD, swing: e.swing || null, hinge: e.hinge || null, pair: !!e.pair, cased: !!e.cased, exterior: !!e.exterior, size: e.size || null, fireRated: !!e.fireRated, selfClosing: !!e.selfClosing, overhead: e.size === 'overhead' || e.size === 'overheadSingle', revitFamily: kit.revit?.doors?.[e.size] || null })),
+    doors: elements.filter((e) => e.kind === 'door').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), height: e.h ? r2(e.h) : DOOR_HEAD, swing: e.swing || null, hinge: e.hinge || null, pair: !!e.pair, cased: !!e.cased, pocket: !!e.pocket, barn: !!e.barn, exterior: !!e.exterior, size: e.size || null, fireRated: !!e.fireRated, selfClosing: !!e.selfClosing, overhead: e.size === 'overhead' || e.size === 'overheadSingle', revitFamily: kit.revit?.doors?.[e.size] || null })),
     windows: elements.filter((e) => e.kind === 'window').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, mark: e.mark, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), sill: e.sill ?? WINDOW_SILL[e.mark] ?? 2, head: e.head ?? WINDOW_HEAD[e.mark] ?? 7, revitFamily: kit.revit?.windows?.[e.mark] || null })),
     fixtures: elements.filter((e) => e.kind === 'fixture').map((e) => ({ id: e.id, kind: e.fixture, name: e.name, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), w: r2(e.w), d: r2(e.d), h: r2(e.h), face: e.face || null, revitFamily: kit.revit?.fixtures?.[e.fixture] || null })),
     // the slab outline(s): the union of the solid rooms, grown a little so wall-thick gaps close; largest ring first (frame feet)
