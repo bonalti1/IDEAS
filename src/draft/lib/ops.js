@@ -59,6 +59,17 @@ function insideSetbacks(rect, centre, lot = DEFAULT_LOT) {
   })
 }
 
+/** Width and depth of the lot's setback envelope in the house frame. */
+function envelopeSize(lot) {
+  const cos = Math.cos(lot.angle)
+  const sin = Math.sin(lot.angle)
+  const pts = (lot.envelope || []).map(([X, Z]) => [(X - lot.centre[0]) * cos + (Z - lot.centre[1]) * sin, -(X - lot.centre[0]) * sin + (Z - lot.centre[1]) * cos])
+  if (!pts.length) return [Infinity, Infinity]
+  const xs = pts.map((p) => p[0])
+  const zs = pts.map((p) => p[1])
+  return [Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)]
+}
+
 const PRIVATE = ['bed', 'master', 'suite2', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
 const PUBLIC = ['living', 'dining', 'kitchen', 'foyer', 'office', 'pantry', 'mud', 'laundry']
 
@@ -66,7 +77,7 @@ const PUBLIC = ['living', 'dining', 'kitchen', 'foyer', 'office', 'pantry', 'mud
  * A spot for a new room: against the house, no collision, inside the setbacks.
  * Tries beside `near` first, then beside rooms of the same zone, then any room.
  */
-function findSpot(rooms, near, w, d, kind, centre, lot = DEFAULT_LOT) {
+function findSpot(rooms, near, w, d, kind, centre, lot = DEFAULT_LOT, starter = false) {
   const solid = rooms.filter((r) => isRoom(r) && !r.open)
   const fits = (c) => !solid.some((o) => intrusion({ ...c, w, d }, o) > 1) && insideSetbacks({ ...c, w, d }, centre, lot)
   const around = (nb) => [
@@ -81,6 +92,34 @@ function findSpot(rooms, near, w, d, kind, centre, lot = DEFAULT_LOT) {
   ]
   const zone = PRIVATE.includes(kind) ? PRIVATE : PUBLIC
   const order = [near, ...solid.filter((r) => zone.includes(r.kind) && r !== near), ...solid.filter((r) => !zone.includes(r.kind) && r !== near)].filter(Boolean)
+  if (starter) {
+    // the first draft is re-fitted to the lot afterwards, so a spot only has to keep the house small
+    // enough for the envelope (a little over is fine, the fit shrinks it): pick the spot that grows
+    // the footprint least, trying the mentioned neighbour first
+    const env = envelopeSize(lot)
+    const bbox = (c) => {
+      const xs = [...solid.flatMap((o) => [o.x, o.x + o.w]), c.x, c.x + w]
+      const ys = [...solid.flatMap((o) => [o.y, o.y + o.d]), c.y, c.y + d]
+      return [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]
+    }
+    const everything = rooms.filter((r) => isRoom(r)) // porches count as taken ground for a new room
+    const clear = (c) => !everything.some((o) => intrusion({ ...c, w, d }, o) > 1)
+    const roomy = (c) => {
+      const [bw, bd] = bbox(c)
+      return bw <= env[0] * 1.06 && bd <= env[1] * 1.06
+    }
+    let best = null
+    order.forEach((nb, ni) => {
+      around(nb).forEach((c) => {
+        if (!clear(c) || !roomy(c)) return
+        const [bw, bd] = bbox(c)
+        const over = bw > env[0] || bd > env[1] // the fit would have to shrink the house
+        const score = bw * bd + (over ? 3000 : 0) + (nb === near ? 0 : 400 + ni * 50)
+        if (!best || score < best.score) best = { ...c, score }
+      })
+    })
+    if (best) return { x: best.x, y: best.y }
+  }
   for (const nb of order) for (const c of around(nb)) if (fits(c)) return c
   // nothing touches: fall back to below the bedroom wing and let the rules speak
   const col = solid.filter((r) => PRIVATE.includes(r.kind))
@@ -122,7 +161,7 @@ function edgeCentre(room, side) {
  * Apply ops to the room list. Returns the new list (rooms + elements + roof),
  * fully placed, plus plain descriptions of what happened.
  */
-export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT) {
+export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { starter = false } = {}) {
   const L = lotOf(lot)
   const { rooms: flat, centre } = withPlanCoords(rooms, kit)
   const did = []
@@ -156,6 +195,8 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT) {
       r.d = d
       r.x = to.x
       r.y = to.y
+      // a garage is named by its cars
+      if (r.kind === 'garage' && kit.rooms.garage?.perCar && /-Car Garage$/.test(r.name)) r.name = `${Math.max(1, Math.round(w / kit.rooms.garage.perCar))}-Car Garage`
     } else if (o.op === 'move') {
       const r = rs[o.room]
       r.x += o.dx
@@ -180,8 +221,8 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT) {
       const w = q(o.w || t.w)
       const d = q(o.d || t.d)
       const near = o.near ? rs[o.near] : null
-      const spot = findSpot(flat, near, w, d, o.kind, centre, L)
-      const room = makeRoom(kit, o.kind, { name, w, d, x: spot.x, y: spot.y, id: `${o.kind}-${Date.now().toString(36)}-${n}` })
+      const spot = findSpot(flat, near, w, d, o.kind, centre, L, starter)
+      const room = makeRoom(kit, o.kind, { name, w, d, x: spot.x, y: spot.y, id: o.id || `${o.kind}-${Date.now().toString(36)}-${n}`, ...(o.kind === 'garage' ? { fill: '#dcd7cf' } : {}) })
       flat.push(room)
       // a door on the wall shared with a neighbour, a window on an outside wall
       const neighbours = flat.filter((r) => isRoom(r) && r !== room && !r.open)
@@ -212,8 +253,8 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT) {
     const ids = new Set(flat.filter(isRoom).map((r) => r.id))
     const masses = kit.plan.roof.filter((m) => !m.id || ids.has(m.id) || !kit.plan.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
     roof.masses = masses
-    roof.faces = roofSurfaces(masses, roof.scale || 1, roof.centre || centre)
-    roof.dormers = dormerWalls(masses, roof.scale || 1, roof.centre || centre)
+    roof.faces = roofSurfaces(masses, roof.scale || 1, roof.centre || centre, roof.offset || [0, 0])
+    roof.dormers = dormerWalls(masses, roof.scale || 1, roof.centre || centre, roof.offset || [0, 0])
   }
   const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
@@ -235,8 +276,9 @@ const KINDS = [
   ['bed', /bedroom|bed\b/],
   ['bath', /\bbath/],
   ['laundry', /laundry|utility/],
-  ['frontPorch', /front porch/],
-  ['rearPorch', /rear porch|back porch|patio/],
+  ['frontPorch', /front porch|porch (on|at|in|to) the front|porch out front/],
+  ['rearPorch', /rear porch|back porch|patio|porch (on|at|in|to) the (back|rear)|porch out back|covered patio/],
+  ['porch', /\bporch\b/],
   ['office', /office|study/],
   ['pantry', /pantry/],
   ['mud', /mud ?room/],
@@ -254,7 +296,24 @@ export function replaceOnLot(rooms, kit, stories, lot) {
   return placed
 }
 
-export function regexOps(text, rooms, kit) {
+/** A free spot for `room` against `target`: the move that puts it there, or null. */
+export function spotBeside(rooms, kit, room, target, lot = DEFAULT_LOT) {
+  const { rooms: flat, centre } = withPlanCoords(rooms, kit)
+  const r = flat.find((x) => x.id === room.id)
+  const t = flat.find((x) => x.id === target.id)
+  if (!r || !t) return null
+  const others = flat.filter((x) => x !== r)
+  const spot = findSpot(others, t, r.w, r.d, r.kind, centre, lotOf(lot))
+  if (!spot) return null
+  // findSpot falls back to "below the bedroom wing" when nothing touches; only a spot against the target counts
+  const touches = sharedSide({ ...r, x: spot.x, y: spot.y }, t)
+  if (!touches) return null
+  return { dx: q(spot.x - r.x), dy: q(spot.y - r.y) }
+}
+
+const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
+
+export function regexOps(text, rooms, kit, lot = DEFAULT_LOT) {
   const t = text.toLowerCase()
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
@@ -270,6 +329,37 @@ export function regexOps(text, rooms, kit) {
   const by = feet ? +feet[1] : null
 
   if (!kind) return { ops: [], reply: 'I did not catch which room you mean. Try "make the kitchen bigger", "add an office", or "remove the half bath".', confidence: 0.2 }
+  if (kind === 'porch') return { ops: [], reply: 'Front porch or back porch?', confidence: 0.3 }
+  // "make the garage 3 cars", "three-car garage"
+  const cars = t.match(/(\d+|one|two|three|four)[- ]?cars?\b/)
+  if (kind === 'garage' && cars && !add && !remove) {
+    const n = WORDS[cars[1]] || +cars[1]
+    if (!targets.length) return { ops: [{ op: 'add', kind: 'garage', name: `${n}-Car Garage`, w: kit.rooms.garage.perCar * n, d: kit.rooms.garage.d, near: roomsOnly.find((r) => r.kind === 'laundry' || r.kind === 'mud')?.id }], reply: `Adding a ${n}-car garage.`, confidence: 0.7 }
+    const g = targets[targets.length - 1]
+    return { ops: [{ op: 'resize', room: g.id, w: kit.rooms.garage.perCar * n, d: g.d }], reply: `Making the garage ${n} cars wide, ${kit.rooms.garage.perCar * n} feet.`, confidence: 0.75 }
+  }
+  // "move the office 10 feet toward the street", "shift the garage 5 ft east"
+  const byDist = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')\s*(?:toward|towards|to|closer to)?\s*(?:the\s+)?(street|front|back|rear|east|west|left|right|north|south)\b/)
+  if (/\b(move|push|pull|shift|slide|relocate)\b/.test(t) && byDist && targets.length) {
+    const n = +byDist[1]
+    const dir = byDist[2]
+    const dx = /east|right/.test(dir) ? n : /west|left/.test(dir) ? -n : 0
+    const dy = /street|front|south/.test(dir) ? n : /back|rear|north/.test(dir) ? -n : 0
+    const r = targets[targets.length - 1]
+    return { ops: [{ op: 'move', room: r.id, dx, dy }], reply: `Moving the ${r.name.toLowerCase()} ${n} feet ${dir === 'front' || dir === 'south' ? 'toward the street' : dir === 'rear' || dir === 'north' ? 'toward the back' : dir === 'street' ? 'toward the street' : dir === 'back' ? 'toward the back' : dir}.`, confidence: 0.7 }
+  }
+  // "move the laundry next to the garage"
+  const move = /\b(move|put|place|relocate|shift)\b/.test(t) && /\b(next to|beside|by|near|against|closer to)\b/.test(t)
+  if (move && targets.length) {
+    const nearKind = KINDS.find(([k, re]) => k !== kind && k !== 'porch' && re.test(rest))?.[0]
+    const target = nearKind ? roomsOnly.find((r) => r.kind === nearKind) : null
+    if (!target) return { ops: [], reply: `Next to which room? There is no ${nearKind ? kit.rooms[nearKind]?.name.toLowerCase() || nearKind : 'room by that name'} in this plan.`, confidence: 0.4 }
+    const r = targets[targets.length - 1]
+    const d = spotBeside(rooms, kit, r, target, lot)
+    if (!d) return { ops: [], reply: `There is no free spot for the ${r.name.toLowerCase()} against the ${target.name.toLowerCase()}.`, confidence: 0.6 }
+    if (d.dx === 0 && d.dy === 0) return { ops: [], reply: `The ${r.name.toLowerCase()} is already next to the ${target.name.toLowerCase()}.`, confidence: 0.6 }
+    return { ops: [{ op: 'move', room: r.id, dx: d.dx, dy: d.dy }], reply: `Moving the ${r.name.toLowerCase()} next to the ${target.name.toLowerCase()}.`, confidence: 0.7 }
+  }
   if (add) {
     if (!kit.rooms[kind]) return { ops: [], reply: `The ${kit.name} kit does not have that room yet.`, confidence: 0.4 }
     const nearKind = KINDS.find(([k, re]) => k !== kind && re.test(rest))?.[0]
@@ -279,12 +369,22 @@ export function regexOps(text, rooms, kit) {
   if (!targets.length) return { ops: [], reply: `There is no ${kit.rooms[kind]?.name.toLowerCase() || kind} in this plan.`, confidence: 0.6 }
   const last = targets[targets.length - 1]
   if (remove) return { ops: [{ op: 'remove', room: last.id }], reply: `Removing the ${last.name.toLowerCase()}.`, confidence: 0.7 }
+  // "make the kitchen 14 feet wide", "20 feet deep", "12 by 16": sizes stated outright
+  const abs = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*(wide|deep|long|across)\b/)
+  const both = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*(?:by|x|×)\s*(\d+(?:\.\d+)?)/)
+  if (both || (abs && !grow && !shrink)) {
+    const w = both ? +both[1] : abs[2] === 'wide' || abs[2] === 'across' ? +abs[1] : last.w
+    const d = both ? +both[2] : abs[2] !== 'wide' && abs[2] !== 'across' ? +abs[1] : last.d
+    return { ops: [{ op: 'resize', room: last.id, w: q(w), d: q(d) }], reply: `Making the ${last.name.toLowerCase()} ${q(w)} by ${q(d)} feet.`, confidence: 0.75 }
+  }
   if (grow || shrink) {
     const f = grow ? much : 1 / much
     const wider = /\bwider\b/.test(t)
     const deeper = /\bdeeper|longer\b/.test(t)
-    const ops = targets.map((r) => ({ op: 'resize', room: r.id, w: by && wider ? r.w + by : deeper ? r.w : q(r.w * f), d: by && deeper ? r.d + by : wider ? r.d : q(r.d * f) }))
-    return { ops, reply: `${grow ? 'Enlarging' : 'Reducing'} the ${last.name.toLowerCase()} by about ${Math.round(Math.abs(f - 1) * 100)} percent.`, confidence: 0.7 }
+    const sign = grow ? 1 : -1
+    const ops = targets.map((r) => ({ op: 'resize', room: r.id, w: by && wider ? r.w + sign * by : deeper ? r.w : by && !deeper ? r.w + sign * by : q(r.w * f), d: by && deeper ? r.d + sign * by : wider ? r.d : by ? r.d + sign * by : q(r.d * f) }))
+    const how = by ? `${by} feet ${wider ? 'wider' : deeper ? 'deeper' : grow ? 'bigger each way' : 'smaller each way'}` : `about ${Math.round(Math.abs(f - 1) * 100)} percent`
+    return { ops, reply: `${grow ? 'Making' : 'Making'} the ${last.name.toLowerCase()} ${how}.`, confidence: 0.7 }
   }
   return { ops: [], reply: 'Tell me what to do with that room: bigger, smaller, add one, or remove it.', confidence: 0.3 }
 }

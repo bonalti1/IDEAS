@@ -1,11 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
-import { floorArea } from '../lib/layout.js'
+import { floorArea, isRoom, kitFor } from '../lib/layout.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 
-const SUGGESTIONS = ['Make the kitchen bigger', 'Add a bedroom', 'Bigger primary bath', 'Remove the rear porch', 'Add a half bath']
+/** Suggestions that fit the plan as it is right now. */
+function suggestionsFor(rooms, kit) {
+  const list = rooms.filter(isRoom)
+  const has = (k) => list.some((r) => r.kind === k)
+  const out = []
+  if (has('kitchen')) out.push('Make the kitchen bigger')
+  if (!has('rearPorch')) out.push('Add a porch on the back')
+  else out.push('Remove the rear porch')
+  const garage = list.find((r) => r.kind === 'garage')
+  if (garage) {
+    const cars = Math.max(1, Math.round(garage.w / (kit.rooms.garage?.perCar || 11)))
+    if (cars < 3) out.push(`Make the garage ${cars + 1} cars`)
+  } else out.push('Add a 2-car garage')
+  if (list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind)).length < 5) out.push('Add a bedroom')
+  if (!has('office')) out.push('Add an office')
+  if (has('mbath')) out.push('Bigger primary bath')
+  if (!has('halfbath')) out.push('Add a half bath')
+  return out.slice(0, 5)
+}
+
+const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + unit
 
 export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack, lot, project, setProject }) {
   const [text, setText] = useState('')
@@ -17,40 +37,63 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const [showVersions, setShowVersions] = useState(false)
   const controls = useRef()
   const logRef = useRef()
+  const kit = kitFor(style)
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
   }, [history])
 
+  // a camera preset framed on the house, not the whole lot
   const setCamera = (name) => {
     setView(name)
     const c = controls.current
     if (!c) return
-    const { position, target } = camerasFor(lot)[name]
+    const { position, target } = camerasFor(lot, rooms)[name]
     c.object.position.set(...position)
     c.target.set(...target)
     c.update()
   }
 
-  const send = async (msg) => {
+  const area = floorArea(rooms, program.stories)
+  const estimate = area * style.psf + program.garage * 28000
+  const suggestions = useMemo(() => suggestionsFor(rooms, kit), [rooms, kit])
+
+  /**
+   * One request to the office, or a fix the client clicked (ops already decided).
+   * The reply carries what changed in square feet, dollars and credits.
+   */
+  const send = async (msg, fix = null) => {
     const q = (msg ?? text).trim()
     if (!q || credits <= 0 || busy) return
     setText('')
     setBusy(true)
     setHistory((h) => [...h, { who: 'you', text: q }])
+    const before = { area, estimate, rooms, credits }
     let res
     try {
       if (project) {
         // the office runs the change, checks the rules and takes the credit only when it applies
-        const r = await api.change(project.id, q)
+        const r = await api.change(project.id, q, fix?.ops)
         res = r
         if (r.applied) setProject((p) => ({ ...p, credits: r.credits, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, credit: 1, at: new Date().toISOString() }] }))
-      } else res = await interpretRequest(q, rooms, program, style, { lot })
+      } else {
+        const opts = { lot }
+        if (fix) {
+          opts.interpreter = async () => ({ ops: fix.ops, reply: q, confidence: 1 })
+          opts.report = false
+        }
+        res = await interpretRequest(q, rooms, program, style, opts)
+      }
     } catch (e) {
       res = e.status === 402 ? { applied: false, reply: 'No changes left on your account. Add more on the billing page and your draft is right here when you come back.', source: 'claude', credits: 0 } : e.status === 409 ? { applied: false, reply: 'This design is with the drafters now, so it cannot change.', source: 'claude' } : { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
     }
     setBusy(false)
-    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied }])
+    let meta = null
+    if (res.applied) {
+      const a2 = floorArea(res.rooms, program.stories)
+      meta = { sf: a2 - before.area, cost: a2 * style.psf + program.garage * 28000 - before.estimate, credit: 1 }
+    }
+    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta }])
     if (res.credits !== undefined) setCredits(res.credits)
     if (res.applied) {
       if (!project) {
@@ -90,11 +133,18 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     setUndo((u) => u.slice(0, -1))
     setRooms(snap.rooms)
     setCredits(snap.credits) // the credit comes back
-    setHistory((h) => [...h, { who: 'house', text: `Undid "${snap.text}". Credit returned.`, applied: true, source: 'undo' }])
+    setHistory((h) => {
+      // the last applied request is marked undone, so the send step does not list it
+      const out = [...h]
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].who === 'you' && out[i + 1]?.applied && !out[i].undone) {
+          out[i] = { ...out[i], undone: true }
+          break
+        }
+      }
+      return [...out, { who: 'house', text: `Undid "${snap.text}". Credit returned.`, applied: true, source: 'undo' }]
+    })
   }
-
-  const area = floorArea(rooms, program.stories)
-  const estimate = area * style.psf + program.garage * 28000
 
   return (
     <div className="screen split">
@@ -111,11 +161,15 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
             3D
           </button>
+          <button className="fit" onClick={() => setCamera(view)} title={view === 'top' ? 'Fit the plan to the view' : 'Reset the camera'}>
+            {view === 'top' ? 'Fit' : 'Reset'}
+          </button>
           <label className={'check' + (view === 'top' ? ' off' : '')}>
             <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} disabled={view === 'top'} />
             Roof
           </label>
         </div>
+        {view === 'top' && <div className="viewport-hint">Scroll to zoom · drag to pan</div>}
       </div>
       <aside className="side chat">
         <div className="side-head">
@@ -141,17 +195,36 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             </div>
           )}
           {history.map((m, i) => (
-            <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '')}>
+            <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '') + (m.undone ? ' undone' : '')}>
               {m.text}
-              {m.who === 'house' && m.source === 'fallback' && <span className="src"> · basic rules, assistant offline</span>}
-              {m.who === 'house' && m.source === 'timeout' && <span className="src"> · basic rules, assistant took too long</span>}
+              {m.meta && (
+                <span className="meta">
+                  {Math.round(m.meta.sf) || Math.round(m.meta.cost) ? (
+                    <>
+                      <b>{signed(m.meta.sf, ' sf')}</b> · <b>{signed(m.meta.cost).replace(/^([+−]?)/, '$1$')}</b>
+                    </>
+                  ) : (
+                    'same size and price'
+                  )}{' '}
+                  · {m.meta.credit} credit used
+                </span>
+              )}
+              {m.fixes?.length > 0 && (
+                <span className="fixes">
+                  {m.fixes.map((f) => (
+                    <button key={f.label} onClick={() => send(f.label.replace(/\?$/, ''), f)} disabled={busy || credits <= 0}>
+                      {f.label}
+                    </button>
+                  ))}
+                </span>
+              )}
             </div>
           ))}
           {busy && <div className="msg house thinking">Working on it…</div>}
         </div>
         <div className="chips">
-          {SUGGESTIONS.map((s) => (
-            <button key={s} onClick={() => send(s)} disabled={credits <= 0}>
+          {suggestions.map((s) => (
+            <button key={s} onClick={() => send(s)} disabled={credits <= 0 || busy}>
               {s}
             </button>
           ))}
@@ -163,27 +236,18 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             send()
           }}
         >
-          <input
-            placeholder={credits > 0 ? 'Move the laundry next to the primary closet…' : 'No changes left. Approve or buy more.'}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={credits <= 0 || busy}
-          />
+          <input placeholder={credits > 0 ? 'What would you like to change?' : 'No changes left. Send it, or buy more.'} value={text} onChange={(e) => setText(e.target.value)} disabled={credits <= 0 || busy} aria-label="Your change" />
           <Button primary small type="submit" disabled={!text.trim() || credits <= 0 || busy}>
             Change
           </Button>
         </form>
         <div className="chat-tools">
-          {project && versions.length > 1 && (
-            <button className="linkish" onClick={() => setShowVersions((v) => !v)}>
-              {showVersions ? 'Hide history' : `History (${versions.length})`}
-            </button>
-          )}
-          {canUndo && (
-            <button className="linkish undo" onClick={undoLast} disabled={busy}>
-              Undo last change
-            </button>
-          )}
+          <button className="linkish" onClick={() => setShowVersions((v) => !v)} disabled={!project || versions.length < 2} title={project ? '' : 'Sign in to keep a history'}>
+            {showVersions ? 'Hide history' : `History${project ? ` (${versions.length})` : ''}`}
+          </button>
+          <button className="linkish undo" onClick={undoLast} disabled={busy || !canUndo} title={canUndo ? 'Back one change, the credit comes back' : 'Nothing to undo yet'}>
+            Undo last change
+          </button>
         </div>
         {project && showVersions && (
           <ol className="versions">

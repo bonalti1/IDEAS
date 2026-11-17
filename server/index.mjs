@@ -134,7 +134,10 @@ route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200,
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req)), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) })), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req)), req))
-route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => json(res, 200, await projects.change(await projects.load(ctx.user, p.id), (await readJson(req)).text), req))
+route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
+  const body = await readJson(req)
+  json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
+})
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req)).version), req))
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req), saveDesign), req))
 
@@ -153,6 +156,10 @@ route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
     for await (const chunk of f.body) res.write(chunk)
     res.end()
   }
+})
+route('GET', '/api/lot/geocode', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  json(res, 200, await lots.geocode(url.searchParams.get('address')), req)
 })
 route('GET', '/api/lot/flood', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
@@ -376,7 +383,7 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
-    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}) }, req)
+    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })
 

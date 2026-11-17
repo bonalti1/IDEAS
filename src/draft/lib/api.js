@@ -44,7 +44,7 @@ export const api = {
   project: (id) => call(`/api/projects/${id}`),
   createProject: (body) => call('/api/projects', { method: 'POST', body: JSON.stringify(body) }, 20000),
   updateProject: (id, body) => call(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) }, 20000),
-  change: (id, text) => call(`/api/projects/${id}/change`, { method: 'POST', body: JSON.stringify({ text }) }, 20000),
+  change: (id, text, ops) => call(`/api/projects/${id}/change`, { method: 'POST', body: JSON.stringify(ops ? { text, ops } : { text }) }, 20000),
   rollback: (id, version) => call(`/api/projects/${id}/rollback`, { method: 'POST', body: JSON.stringify({ version }) }, 20000),
   sendProject: (id, design, ifc) => call(`/api/projects/${id}/send`, { method: 'POST', body: JSON.stringify({ design, ifc }) }, 30000),
   // lots
@@ -52,6 +52,7 @@ export const api = {
   setCity: (id, patch) => call(`/api/admin/cities/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   readPlat: (body) => call('/api/lot/plat', { method: 'POST', body: JSON.stringify(body) }, 150000),
   flood: (address) => call(`/api/lot/flood?address=${encodeURIComponent(address)}`, {}, 30000),
+  geocode: (address) => call(`/api/lot/geocode?address=${encodeURIComponent(address)}`, {}, 20000),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
   // billing

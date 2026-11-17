@@ -23,10 +23,10 @@ const rect = (x0, z0, x1, z1) => [
   ],
 ]
 
-/** Scale a plan rectangle about the plan centre and move to local coords. */
-function local(m, k, centre) {
-  const sx = (v) => centre[0] + (v - centre[0]) * k - centre[0]
-  const sz = (v) => centre[1] + (v - centre[1]) * k - centre[1]
+/** Scale a plan rectangle about the plan centre, shift it (plan feet), and move to local coords. */
+function local(m, k, centre, offset = [0, 0]) {
+  const sx = (v) => centre[0] + (v - centre[0]) * k + offset[0] - centre[0]
+  const sz = (v) => centre[1] + (v - centre[1]) * k + offset[1] - centre[1]
   return { x0: sx(m.x0), x1: sx(m.x1), z0: sz(m.y0 ?? m.face), z1: sz(m.y1 ?? m.face), face: m.face !== undefined ? sz(m.face) : undefined, cuts: (m.cuts || []).map((c) => ({ x0: sx(c.x0), x1: sx(c.x1), z0: sz(c.y0), z1: sz(c.y1) })) }
 }
 
@@ -35,12 +35,12 @@ function local(m, k, centre) {
  * footprint: MultiPolygon in plan, edges: outer eave/rake lines for fascia,
  * material }. Ends: vertical gable triangles { id, mass, kind: 'end', axis, at, tri }.
  */
-export function roofSheets(masses, k, centre) {
+export function roofSheets(masses, k, centre, offset = [0, 0]) {
   const sheets = []
   const ends = []
   const cutEdges = [] // { mass, a: [x, z], b: [x, z], out: [nx, nz] } edges of cut-outs, normal pointing into the remaining roof
   masses.forEach((m) => {
-    const L = local(m, k, centre)
+    const L = local(m, k, centre, offset)
     L.cuts.forEach((c) => {
       cutEdges.push({ mass: m.id, a: [c.x0, c.z0], b: [c.x1, c.z0], out: [0, -1] })
       cutEdges.push({ mass: m.id, a: [c.x0, c.z0], b: [c.x0, c.z1], out: [-1, 0] })
@@ -175,8 +175,8 @@ function clipMulti(mp, fa, fb, fc) {
  * Visible surfaces: for each sheet, its footprint minus every region where
  * another mass's sheet is higher. Returns faces with 3D rings.
  */
-export function roofSurfaces(masses, k, centre) {
-  const { sheets, ends, cutEdges } = roofSheets(masses, k, centre)
+export function roofSurfaces(masses, k, centre, offset = [0, 0]) {
+  const { sheets, ends, cutEdges } = roofSheets(masses, k, centre, offset)
   const faces = []
   sheets.forEach((A) => {
     const hidden = []
@@ -338,6 +338,6 @@ function insideRing(r, x, z) {
 }
 
 /** Dormer faces as walls: { x0, x1, face, top, base } in local feet. */
-export function dormerWalls(masses, k, centre) {
-  return roofSheets(masses, k, centre).sheets.filter((s) => s.dormer).map((s) => s.dormer)
+export function dormerWalls(masses, k, centre, offset = [0, 0]) {
+  return roofSheets(masses, k, centre, offset).sheets.filter((s) => s.dormer).map((s) => s.dormer)
 }
