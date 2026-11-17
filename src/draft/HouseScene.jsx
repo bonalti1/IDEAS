@@ -10,6 +10,7 @@ import { DEFAULT_LOT } from './lib/lot.js'
 import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
+import { drivewaySlabs, walkSlabs } from './lib/site.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
 
 /**
@@ -265,44 +266,14 @@ function PorchColumns({ r, rooms, lot }) {
 /** The driveway: from the garage's overhead door to the street, on the ground. */
 function Driveway({ rooms, centre, lot }) {
   const slabs = useMemo(() => {
-    const garage = rooms.find((r) => isRoom(r) && r.kind === 'garage' && r.local)
-    const door = rooms.find((e) => e.kind === 'door' && (e.size === 'overhead' || e.size === 'overheadSingle') && e.local)
-    if (!garage || !door) return []
-    // the lot's street edge in the house frame: the largest local z of the boundary
-    const cos = Math.cos(lot.angle)
-    const sin = Math.sin(lot.angle)
-    const toLocal = (p) => [(p[0] - centre[0]) * cos + (p[1] - centre[1]) * sin, -(p[0] - centre[0]) * sin + (p[1] - centre[1]) * cos]
-    const zs = (lot.boundary || []).map((p) => toLocal(p)[1])
-    const street = zs.length ? Math.max(...zs) : garage.local[1] + garage.d / 2 + 30
-    const out = []
-    if (door.axis === 'h') {
-      // front-load: straight out to the street
-      const z0 = door.local[1]
-      out.push({ x: door.local[0], z: (z0 + street) / 2, w: door.span + 2, d: street - z0 })
-    } else if (garage.driveway === 'courtyard' || door.local[0] < garage.local[0]) {
-      // the courtyard way: a 25 ft apron off the west-facing doors, across the rear to the east side yard, then down to the street
-      const x0 = door.local[0]
-      const solid = rooms.filter((r) => isRoom(r) && !r.open && r.local)
-      const east = Math.max(...solid.map((r) => r.local[0] + r.w / 2))
-      const apron = { x: x0 - 12.5, z: garage.local[1], w: 25, d: garage.d }
-      out.push(apron)
-      const legZ = garage.local[1] - garage.d / 2 + 6
-      out.push({ x: (x0 - 25 + east + 10) / 2, z: legZ, w: east + 10 - (x0 - 25), d: 12 })
-      out.push({ x: east + 5, z: (legZ + street) / 2, w: 10, d: street - legZ })
-    } else {
-      // side-load: 25 ft of apron off the door face, then down to the street
-      const dir = door.local[0] > garage.local[0] ? 1 : -1
-      const x0 = door.local[0]
-      const apron = { x: x0 + dir * 12.5, z: garage.local[1], w: 25, d: garage.d }
-      out.push(apron)
-      const z1 = garage.local[1] + garage.d / 2
-      out.push({ x: x0 + dir * 12, z: (z1 + street) / 2, w: 12, d: street - z1 })
-    }
-    return out
+    const flat = rooms.filter((r) => isRoom(r) && r.local).map((r) => ({ id: r.id, kind: r.kind, open: !!r.open, driveway: r.driveway, x: r.local[0], z: r.local[1], w: r.w, d: r.d }))
+    const doors = rooms.filter((e) => e.kind === 'door' && e.local).map((e) => ({ room: e.room, axis: e.axis, x: e.local[0], z: e.local[1], span: e.span, size: e.size, exterior: !!e.exterior }))
+    const drive = drivewaySlabs(flat, doors, lot)
+    return [...drive, ...walkSlabs(flat, doors, lot, drive)]
   }, [rooms, centre, lot])
   return slabs.map((s, i) => {
     const [x, z] = toWorld(s.x, s.z, centre, lot)
-    return <Box key={i} cx={x} cz={z} w={s.w} d={s.d} y0={-0.3} h={0.32} rot={lot.angle} color="#d9d5cc" edges={false} />
+    return <Box key={i} cx={x} cz={z} w={s.w} d={s.d} y0={-0.3} h={0.32} rot={lot.angle} color={s.part === 'walk' ? '#e0dcd3' : '#d9d5cc'} edges={false} />
   })
 }
 

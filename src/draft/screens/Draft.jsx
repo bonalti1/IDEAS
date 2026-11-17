@@ -50,7 +50,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const plan = useRef(null)
   const setCamera = (name) => {
     setView(name)
-    if (name === 'top') {
+    if (name === 'top' || name === 'site') {
       plan.current?.fit()
       return
     }
@@ -158,8 +158,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        {view === 'top' ? (
-          <PlanDrawing rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
+        {view === 'top' || view === 'site' ? (
+          <PlanDrawing mode={view === 'site' ? 'site' : 'plan'} rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
         ) : (
           <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} />
         )}
@@ -170,22 +170,29 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
             Plan
           </button>
+          <button className={view === 'site' ? 'on' : ''} onClick={() => setCamera('site')}>
+            Site
+          </button>
           <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
             3D
           </button>
-          <button className="fit" onClick={() => setCamera(view)} title={view === 'top' ? 'Fit the plan to the view' : 'Reset the camera'}>
-            {view === 'top' ? 'Fit' : 'Reset'}
-          </button>
-          <label className={'check' + (view === 'top' ? ' off' : '')}>
-            <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} disabled={view === 'top'} />
-            Roof
-          </label>
-          <label className={'check' + (view === 'top' ? ' off' : '')} title="Shadows on July 15 at 5 pm, from the lot's real orientation">
-            <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} disabled={view === 'top'} />
-            Sun check
-          </label>
+          {view === '3d' && (
+            <>
+              <button className="fit" onClick={() => setCamera(view)} title="Reset the camera">
+                Reset
+              </button>
+              <label className="check">
+                <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} />
+                Roof
+              </label>
+              <label className="check" title="Shadows on July 15 at 5 pm, from the lot's real orientation">
+                <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} />
+                Sun check
+              </label>
+            </>
+          )}
         </div>
-        <div className="viewport-hint">{view === 'top' ? 'Floor plan · scroll to zoom · drag to pan' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
+        <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, setbacks, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
       </div>
       <aside className="side chat">
         <div className="side-head">
