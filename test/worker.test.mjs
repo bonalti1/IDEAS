@@ -72,7 +72,7 @@ test('selfcheck with the example mapping and a template names file lists exactly
     wallTypes: ['Exterior - 2x4 Board and Batten', 'Interior - 2x4', 'Interior - 2x6 Plumbing'],
     floorTypes: ['Slab on Grade - 4in'],
     roofTypes: ['Architectural Shingles on 2x6'],
-    doors: ['Single-Flush : 30" x 80"', 'Single-Flush : 32" x 80"', 'Single-Flush : 24" x 80"', 'Single-Flush : 36" x 80"', 'Exterior - Single : 36" x 80"', 'Exterior - French Pair : 72" x 96"'],
+    doors: ['Single-Flush : 30" x 80"', 'Single-Flush : 32" x 80"', 'Single-Flush : 24" x 80"', 'Single-Flush : 28" x 80"', 'Single-Flush : 36" x 80"', 'Single-Flush - 20 min : 32" x 80"', 'Overhead-Sectional : 192" x 84"', 'Overhead-Sectional : 108" x 84"', 'Exterior - Single : 36" x 80"', 'Exterior - French Pair : 72" x 96"'],
     windows: ['Single Hung : 36" x 60"', 'Fixed : 42" x 36"', 'Fixed : 24" x 36"', 'Single Hung : 36" x 42"'],
     titleBlocks: ['STB Title Block : 24x36'],
     furniture: ['Bed - Queen', 'Sofa', 'Table - Dining', 'Desk', 'Bench', 'Coffee Table'],

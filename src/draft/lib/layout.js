@@ -5,7 +5,8 @@
 import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
-import { applyOps } from './ops.js'
+import { applyOps, envelopeSize, pushWall, settleIslands, settleKitchen } from './ops.js'
+import { auditPlan } from './audit.js'
 
 // the reference lot's envelope centre, kept for older call sites
 const ENVELOPE_CENTER = DEFAULT_LOT.centre
@@ -103,17 +104,9 @@ export function starterDraft(program, style, lot = DEFAULT_LOT) {
 }
 
 /** The smallest scale the plan can shrink to before a room falls under the kit's minimum size. */
-function minScale(rooms, kit) {
-  const R = kit.rules || {}
-  let k = 0.5
-  rooms.filter(isConditioned).forEach((r) => {
-    const min = R.minSize?.[r.kind]
-    const [mw, md] = min || (R.habitable?.includes(r.kind) ? [7, 7] : [3, 3])
-    k = Math.max(k, Math.min(mw, md) / Math.min(r.w, r.d), Math.max(mw, md) / Math.max(r.w, r.d))
-    if (R.habitable?.includes(r.kind)) k = Math.max(k, Math.sqrt(70 / (r.w * r.d)))
-  })
-  return k
-}
+// rooms that do not shrink with the house: baths, closets, halls and the service rooms keep their size
+// when a plan scales down (the living rooms and bedrooms give the space), as an architect would draw them
+export const KEEP_SIZE = ['bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic', 'hall', 'laundry', 'mud', 'pantry']
 
 export const isConditioned = (r) => !r.open && r.kind !== 'garage' && !r.element
 /** Rooms only: no doors, windows, or fixtures. */
@@ -143,18 +136,18 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
   if (!program.rearPorch) drop('rearPorch')
 
   // Bedrooms: the plan has (ref.beds - 1) secondary bedrooms. Remove from the bottom of the wing;
-  // extra bedrooms, baths and the garage are added after placement, like a client's "add" (so they
-  // get a door and a window, sit against the house, and stay inside the setbacks).
+  // extra bedrooms and baths extend the bedroom wing along the hallway (below), the garage attaches
+  // at the service end after placement.
   const want = program.beds - 1
   const have = rooms.filter((r) => r.kind === 'bed').length
   if (want < have) drop('bed', have - want)
-  const extras = []
-  for (let i = have; i < want; i++) extras.push({ op: 'add', kind: 'bed', name: `Bedroom ${i + 1}`, id: `bed-${i + 1}`, near: 'bed' })
+  const extraBeds = Math.max(0, want - have)
 
   // Full baths: plan has mbath + jackjill + bath1 (+ suite2's bath is bath1 here). When one has to go,
   // take the one whose removal leaves every wet room within reach of the plumbing (the kit's rule).
   const wantB = program.baths - 1
   const haveB = rooms.filter((r) => r.kind === 'bath' || r.kind === 'jackjill').length
+  const extraBaths = Math.max(0, wantB - haveB)
   for (let i = haveB; i > wantB; i--) {
     const wet = kit.rules?.wet || []
     const far = (list) => {
@@ -165,13 +158,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
     const pick = candidates.find((c) => !far(rooms.filter((r) => r !== c))) || candidates[0]
     if (pick) rooms.splice(rooms.indexOf(pick), 1)
   }
-  for (let i = haveB; i < wantB; i++) extras.push({ op: 'add', kind: 'bath', name: `Bath ${i + 1}`, id: `bath-${i + 1}`, near: 'bed' })
 
-  if (program.garage > 0) {
-    const g = kit.rooms.garage
-    const anchor = rooms.find((r) => r.kind === 'laundry') || rooms.find((r) => r.kind === 'mud')
-    extras.unshift({ op: 'add', kind: 'garage', name: `${program.garage}-Car Garage`, id: 'garage', w: g.perCar * program.garage, d: g.d, near: anchor?.id })
-  }
 
   // Doors, windows, fixtures ride along as elements (not rooms). Those whose
   // room was dropped are dropped too.
@@ -195,42 +182,373 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
     rooms.push({ ...f, id: `fx-${i}`, kind: 'fixture', fixture: f.k, element: true, open: true, name: FIXTURE_NAME[f.k] || f.k, h: FIXTURE_H[f.k] || 2 })
   })
 
-  // Scale to the requested square footage about the plan centre, but never so small that a room
-  // falls under the kit's minimum: the draft then comes out at the smallest size this plan allows.
-  const cond = rooms.filter(isConditioned)
-  const base = cond.reduce((a, r) => a + r.w * r.d, 0) * program.stories
-  const kMin = minScale(rooms, kit)
-  const kReq = Math.sqrt(program.sqft / base)
-  const k = Math.max(kReq, kMin)
-  const minSqft = Math.round((base * kMin * kMin) / 50) * 50
+  // the wing: extra bedrooms and baths slot in at the rear of the bedroom wing, the hall lengthens
+  const wingShift = extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths })
+  // Bath 1 served the mini primary; without it, the bath opens from Bedroom 1 (never the outside)
+  if (!program.suite2) {
+    const bath1 = rooms.find((r) => r.id === 'bath1')
+    const bed1 = rooms.find((r) => r.id === 'bed1')
+    const door = rooms.find((e) => e.id === 'd-bath1')
+    if (bath1 && bed1 && door) {
+      const x0 = Math.max(bath1.x, bed1.x) + 0.5
+      const x1 = Math.min(bath1.x + bath1.w, bed1.x + bed1.w) - 0.5
+      Object.assign(door, doorEl(kit, 'd-bath1', 'bath1', 'h', (x0 + x1) / 2, bath1.y, 'bath', { swing: 1, hinge: 'start' }))
+    }
+  }
+
+  // Scale to the requested square footage about the plan centre. Baths, closets, halls and the
+  // service rooms keep their drawn size when the house shrinks (the living rooms and bedrooms give
+  // the space); nothing goes under the kit's minimum room sizes, a bath never loses the clearances
+  // around its fixtures and a hall never its width: the draft then comes out at the smallest size
+  // this plan allows.
   const cx = T.footprint.w / 2
   const cy = T.footprint.d / 2
-  rooms.forEach((r) => {
-    if (r.dormer) return
-    r.x = cx + (r.x - cx) * k
-    r.y = cy + (r.y - cy) * k
-    r.w *= k
-    r.d *= k
-    if (r.span) r.span *= k
-  })
-  let placed = placeLocal(rooms, program.stories, kit, [cx, cy], lot)
   if (T.roof) {
-    // roof masses whose room was dropped are dropped too; the rest scale with the plan
-    const masses = T.roof.filter((m) => !m.id || ids.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids.has('suite2')))
-    placed.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: k, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, k, [cx, cy]), dormers: dormerWalls(masses, k, [cx, cy]) })
+    // roof masses whose room was dropped are dropped too; the bed wing's roof grows with the wing; the roof then scales with the rooms
+    const ids2 = new Set(rooms.filter(isRoom).map((r) => r.id))
+    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).map((m) => (m.id === 'bedwing' && wingShift ? { ...m, y0: m.y0 - wingShift } : { ...m }))
+    rooms.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: 1, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, 1, [cx, cy]), dormers: dormerWalls(masses, 1, [cx, cy]) })
   }
-  // the house sits where it fits on this lot before the extras go on, so they are placed against the real
+  const areaAt = (k) => {
+    const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
+    scalePlan(copy, k, cx, cy, kit)
+    return copy.filter(isConditioned).reduce((a, r) => a + r.w * r.d, 0) * program.stories
+  }
+  const base = areaAt(1)
+  const kReq = program.sqft >= base ? Math.sqrt(program.sqft / base) : search((k) => areaAt(k) >= program.sqft, 0.5, 1)
+  const kRoom = roomFloor(rooms, kit, cx, cy)
+  const kMin = Math.max(kRoom, fixtureFloor(rooms, kit, program, lot, kRoom, cx, cy))
+  const k = Math.max(kReq, kMin)
+  const minSqft = Math.round(areaAt(kMin) / 50) * 50
+  scalePlan(rooms, k, cx, cy, kit)
+  widenHalls(rooms, kit)
+  settleIslands(rooms)
+  settleKitchen(rooms)
+  const roofEl = rooms.find((r) => r.kind === 'roof')
+  let placed = placeLocal(rooms.filter((r) => r.kind !== 'roof'), program.stories, kit, [cx, cy], lot)
+  if (roofEl) placed.push(roofEl)
+  // the house sits where it fits on this lot before the garage goes on, so it is placed against the real
   // position; the fit may trim the house, but never under the kit's minimum room sizes
   const floor = { minScale: Math.max(0.85, kMin / k) }
   const first = fitToLot(placed, kit, program.stories, lot, floor)
   placed = first.rooms
-  if (extras.length) {
-    const near = (op) => (op.near === 'bed' ? placed.filter((r) => isRoom(r) && r.kind === 'bed').map((r) => r.id).pop() || placed.find((r) => isRoom(r) && r.kind === 'master')?.id : op.near)
-    const ops = extras.map((op) => ({ ...op, near: near(op) })).map((op) => (op.near && placed.some((r) => r.id === op.near) ? op : { ...op, near: undefined }))
-    placed = applyOps(ops, placed, kit, program.stories, lot, { starter: true }).rooms
-  }
+  if (program.garage > 0) placed = attachGarage(placed, kit, program.garage, lot, program.stories)
   const fit = fitToLot(placed, kit, program.stories, lot, { minScale: Math.max(0.85, kMin / (k * first.scale)) })
+  // the fit may have shrunk the rooms around their fixtures: aisles and the work triangle settle again
+  settleIslands(fit.rooms)
+  settleKitchen(fit.rooms)
   return { rooms: fit.rooms, planScale: k, minSqft, clamped: kReq < kMin - 1e-9, fitScale: first.scale * fit.scale, fitShift: [first.shift[0] + fit.shift[0], first.shift[1] + fit.shift[1]] }
+}
+
+/** The smallest k in [lo, hi] (to 0.01) for which `ok(k)` holds; ok is monotone (false below, true above). */
+function search(ok, lo, hi) {
+  if (ok(lo)) return lo
+  if (!ok(hi)) return hi
+  while (hi - lo > 0.005) {
+    const mid = (lo + hi) / 2
+    if (ok(mid)) hi = mid
+    else lo = mid
+  }
+  return Math.ceil(hi * 100) / 100
+}
+
+/** Piecewise map of one plan axis for a scale k < 1: the spans of rooms that keep their size map 1:1,
+ * everything else scales by k, and the plan centre c stays put. Uniform about c for k >= 1. */
+function bandMap(rooms, axis, k, c) {
+  if (k >= 1 - 1e-9) return (v) => c + (v - c) * k
+  const size = axis === 'x' ? 'w' : 'd'
+  const other = axis === 'x' ? 'd' : 'w'
+  const solid = rooms.filter((r) => isRoom(r))
+  // halls keep their width only; the rest of the service rooms keep both sizes
+  const fixed = solid.filter((r) => KEEP_SIZE.includes(r.kind) && (r.kind !== 'hall' || r[size] <= r[other])).map((r) => [r[axis], r[axis] + r[size]])
+  const edges = [...new Set(solid.flatMap((r) => [r[axis], r[axis] + r[size]]).concat([c]).map((v) => Math.round(v * 1000) / 1000))].sort((a, b) => a - b)
+  const out = [edges[0]]
+  for (let i = 1; i < edges.length; i++) {
+    const a = edges[i - 1]
+    const b = edges[i]
+    const keep = fixed.some(([f0, f1]) => f0 <= a + 1e-6 && b <= f1 + 1e-6)
+    out.push(out[i - 1] + (b - a) * (keep ? 1 : k))
+  }
+  const f = (v) => {
+    if (v <= edges[0]) return out[0] + (v - edges[0]) * k
+    const i = edges.findIndex((e) => e >= v - 1e-9)
+    if (i < 0) return out[out.length - 1] + (v - edges[edges.length - 1]) * k
+    if (i === 0) return out[0]
+    const a = edges[i - 1]
+    const t = (v - a) / (edges[i] - a)
+    return out[i - 1] + t * (out[i] - out[i - 1])
+  }
+  const shift = c - f(c)
+  return (v) => f(v) + shift
+}
+
+/** Scale the plan about (cx, cy): uniformly when it grows; when it shrinks, the baths, closets, halls
+ * and service rooms keep their size and the other rooms give the space (see bandMap). Elements keep
+ * their catalog size and their place in the room: a door or window stays where it was along its wall,
+ * a fixture keeps its distance from the nearest wall. The roof masses follow the rooms. In place. */
+export function scalePlan(rooms, k, cx, cy, kit) {
+  const fx = bandMap(rooms, 'x', k, cx)
+  const fy = bandMap(rooms, 'y', k, cy)
+  const anchors = rooms.filter((e) => e.element && !e.dormer && e.room).map((e) => {
+    const host = rooms.find((r) => r.id === e.room)
+    if (!host) return null
+    const nearX = e.x + e.w / 2 < host.x + host.w / 2
+    const nearY = e.y + e.d / 2 < host.y + host.d / 2
+    return { e, host, fx: (e.x + e.w / 2 - host.x) / host.w, fy: (e.y + e.d / 2 - host.y) / host.d, nearX, nearY, ox: nearX ? e.x - host.x : host.x + host.w - (e.x + e.w), oy: nearY ? e.y - host.y : host.y + host.d - (e.y + e.d) }
+  }).filter(Boolean)
+  rooms.forEach((r) => {
+    if (r.dormer) return
+    if (r.kind === 'roof') {
+      // masses to plan coordinates first (an earlier scale or shift is baked in), then through the map
+      const k0 = r.scale || 1
+      const off = r.offset || [0, 0]
+      const c0 = r.centre || [cx, cy]
+      const px = (v) => fx(c0[0] + (v - c0[0]) * k0 + off[0])
+      const py = (v) => fy(c0[1] + (v - c0[1]) * k0 + off[1])
+      r.masses = (r.masses || []).map((m) => ({ ...m, ...(m.x0 !== undefined ? { x0: px(m.x0), x1: px(m.x1) } : {}), ...(m.y0 !== undefined ? { y0: py(m.y0), y1: py(m.y1) } : {}), ...(m.face !== undefined ? { face: py(m.face) } : {}), ...(m.cuts ? { cuts: m.cuts.map((ct) => ({ ...ct, x0: px(ct.x0), x1: px(ct.x1), y0: py(ct.y0), y1: py(ct.y1) })) } : {}) }))
+      r.scale = 1
+      r.offset = [0, 0]
+      r.centre = [cx, cy]
+      r.faces = roofSurfaces(r.masses, 1, [cx, cy])
+      r.dormers = dormerWalls(r.masses, 1, [cx, cy])
+      return
+    }
+    if (r.element) {
+      const ex = fx(r.x + r.w / 2)
+      const ey = fy(r.y + r.d / 2)
+      r.x = ex - r.w / 2
+      r.y = ey - r.d / 2
+      return
+    }
+    const x1 = fx(r.x + r.w)
+    const y1 = fy(r.y + r.d)
+    r.x = fx(r.x)
+    r.y = fy(r.y)
+    r.w = x1 - r.x
+    r.d = y1 - r.y
+  })
+  anchors.forEach(({ e, host, fx, fy, nearX, nearY, ox, oy }) => {
+    if (e.kind === 'fixture') {
+      e.x = nearX ? host.x + ox : host.x + host.w - ox - e.w
+      e.y = nearY ? host.y + oy : host.y + host.d - oy - e.d
+      e.x = Math.min(Math.max(e.x, host.x), host.x + host.w - e.w)
+      e.y = Math.min(Math.max(e.y, host.y), host.y + host.d - e.d)
+    } else {
+      e.x = host.x + fx * host.w - e.w / 2
+      e.y = host.y + fy * host.d - e.d / 2
+    }
+  })
+  // a pair door wider than its wall becomes a single
+  rooms.filter((e) => e.kind === 'door' && e.pair && !e.exterior).forEach((e) => {
+    const host = rooms.find((r) => r.id === e.room)
+    const wall = e.axis === 'h' ? host?.w : host?.d
+    if (host && e.span > wall - 0.5) {
+      const spec = kit.doors[e.size] || kit.doors.interior
+      const span = spec.pair ? spec.w / 12 : Math.min(spec.w / 12, (kit.doors.interior?.w || 32) / 12)
+      const cxE = e.x + e.w / 2
+      const cyE = e.y + e.d / 2
+      e.pair = false
+      e.span = span
+      e.w = e.axis === 'h' ? span : 0.6
+      e.d = e.axis === 'h' ? 0.6 : span
+      e.x = cxE - e.w / 2
+      e.y = cyE - e.d / 2
+    }
+  })
+  return rooms
+}
+
+/** Do the rooms meet the kit's minimum sizes (the garage aside)? */
+export function roomsMeetMinimums(rooms, kit) {
+  const R = kit.rules || {}
+  return rooms.filter((r) => isRoom(r) && !r.open && r.kind !== 'garage').every((r) => {
+    const min = R.minSize?.[r.kind]
+    const [mw, md] = min || (R.habitable?.includes(r.kind) ? [7, 7] : [3, 3])
+    return Math.min(r.w, r.d) >= Math.min(mw, md) - 0.01 && Math.max(r.w, r.d) >= Math.max(mw, md) - 0.01 && (!R.habitable?.includes(r.kind) || r.w * r.d >= 70 - 0.01)
+  })
+}
+/** The smallest scale at which every room still meets the kit's minimum size. */
+function roomFloor(rooms, kit, cx, cy) {
+  return search((k) => {
+    const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
+    scalePlan(copy, k, cx, cy, kit)
+    return roomsMeetMinimums(copy, kit)
+  }, 0.5, 1)
+}
+
+/** Halls stay 42" wide whatever the plan scale: a narrow one pushes its side wall out. In place. */
+function widenHalls(rooms, kit) {
+  const HALL = kit.hallWidthFt || 3.5
+  rooms.filter((r) => isRoom(r) && r.kind === 'hall').forEach((h) => {
+    const narrow = h.w <= h.d ? 'w' : 'd'
+    const deficit = HALL - h[narrow]
+    if (deficit > 0.01) {
+      const sides = narrow === 'w' ? ['e', 'w'] : ['s', 'n']
+      if (typeof pushWall(rooms, h.id, sides[0], deficit, kit, { roof: null }) === 'string') pushWall(rooms, h.id, sides[1], deficit, kit, { roof: null })
+    }
+  })
+}
+
+const FIXTURE_IDS = new Set(['toilet-front', 'toilet-side', 'shower-front', 'hall', 'door-partial', 'overlap', 'aisle', 'door-nowall'])
+/** The smallest scale at which every bath keeps the clearances around its fixtures and every hall its width. */
+function fixtureFloor(rooms, kit, program, lot, from, cx, cy) {
+  const ok = (k) => {
+    const copy = rooms.map((r) => ({ ...r }))
+    scalePlan(copy, k, cx, cy, kit)
+    widenHalls(copy, kit)
+    settleIslands(copy)
+    settleKitchen(copy)
+    const bad = auditPlan(copy, program, kit, lot).errors.filter((f) => FIXTURE_IDS.has(f.id))
+    return !bad.length
+  }
+  if (from >= 1) return from
+  return search(ok, from, 1)
+}
+
+/** A door element centred at (x, y) on a wall along `axis`, at the kit's catalog size. */
+export function doorEl(kit, id, room, axis, x, y, size, opts = {}) {
+  const spec = kit.doors[size] || kit.doors.interior
+  const span = opts.pair && !spec.pair ? (spec.w * 2) / 12 : spec.w / 12
+  const w = axis === 'h' ? span : 0.6
+  const d = axis === 'h' ? 0.6 : span
+  return { id, kind: 'door', element: true, open: true, name: opts.cased ? 'Opening' : 'Door', room, axis, x: x - w / 2, y: y - d / 2, w, d, span, size, h: spec.overhead ? spec.h / 12 : 6.67, swing: opts.swing ?? 1, hinge: opts.hinge || 'start', pair: !!opts.pair || !!spec.pair, cased: !!opts.cased, exterior: !!opts.exterior || !!spec.overhead, fireRated: !!spec.fireRated, selfClosing: !!spec.selfClosing }
+}
+/** A window element centred at (x, y) on a wall along `axis`; a twin is two catalog units mulled. */
+export function windowEl(kit, id, room, axis, x, y, mark = 'A', twin = false) {
+  const spec = kit.windows[mark] || kit.windows.A
+  const span = (spec.w / 12) * (twin ? 2 : 1)
+  const w = axis === 'h' ? span : 0.6
+  const d = axis === 'h' ? 0.6 : span
+  const headFt = /(\d+)'-(\d+)"/.test(spec.head || '') ? +RegExp.$1 + +RegExp.$2 / 12 : 7
+  return { id, kind: 'window', element: true, open: true, name: `Window ${mark}`, room, mark, axis, x: x - w / 2, y: y - d / 2, w, d, span, sill: headFt - spec.h / 12, head: headFt, h: 7 }
+}
+const shiftEl = (e, dx, dy) => {
+  e.x += dx
+  e.y += dy
+}
+
+/**
+ * Extra bedrooms and baths extend the bedroom wing at its rear: the rooms at the rear of the wing
+ * (Bedroom 2 and its closets) move back, the hallway lengthens, and each new room slots in
+ * against the hall with its own hall door, a closet (bedrooms) or fixtures (baths), and an egress
+ * window on the outside wall. Plan feet, before scaling. Returns how far the wing grew.
+ */
+export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
+  if (!beds && !baths) return 0
+  const hall = rooms.find((r) => r.id === 'hall')
+  const bed2 = rooms.find((r) => r.id === 'bed2')
+  if (!hall || !bed2) return 0
+  // the rooms at the rear of the wing: everything in the wing's columns at or above Bedroom 2's bottom edge
+  const rearBlock = (top) => rooms.filter((r) => isRoom(r) && !r.open && r !== hall && r.y + r.d <= top + 0.3 && r.x < hall.x + hall.w + 0.5 && r.x + r.w > bed2.x - 0.5)
+  const elementsOf = (ids) => rooms.filter((e) => e.element && e.kind !== 'roof' && ids.has(e.room))
+  const bedX = bed2.x
+  const bedW = bed2.w
+  const wallX = hall.x // the hall's west edge: where bedroom doors sit
+  let total = 0
+  let bedNo = rooms.filter((r) => r.kind === 'bed').length
+  let bathNo = rooms.filter((r) => r.kind === 'bath').length
+  const slots = [...Array(baths).fill('bath'), ...Array(beds).fill('bed')]
+  slots.forEach((kind) => {
+    const D = kind === 'bed' ? 12.75 : 6.0
+    // everything at the rear of the wing moves back by D, the hall grows by D; the band Bedroom 2 vacates takes the new room
+    const top = bed2.y + bed2.d
+    const block = rearBlock(top)
+    const ids = new Set(block.map((r) => r.id))
+    block.forEach((r) => (r.y -= D))
+    elementsOf(ids).forEach((e) => shiftEl(e, 0, -D))
+    const bandY = top - D // the vacated band: y from bandY to top
+    hall.y -= D
+    hall.d += D
+    total += D
+    if (kind === 'bed') {
+      bedNo += 1
+      const id = `bed-${bedNo}`
+      const closetD = 2.25
+      const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: bedX, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
+      const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: bedX, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
+      rooms.push(room, closet)
+      rooms.push(doorEl(kit, `d-${id}`, id, 'v', wallX, room.y + room.d / 2, 'interiorWide', { swing: -1, hinge: 'start' }))
+      rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'h', bedX + 3.5, room.y, 'closet', { swing: 1, hinge: 'start', pair: true }))
+      rooms.push(windowEl(kit, `win-${id}`, id, 'v', bedX, room.y + room.d / 2, 'A', true))
+      rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: bedX + 0.5, y: room.y + 2, w: 7, d: 6.5, h: FIXTURE_H.bed })
+    } else {
+      bathNo += 1
+      const id = `bath-${bathNo}`
+      const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: bedX, y: bandY, w: bedW, d: D, zone: 'private', open: false, plumbing: true }
+      rooms.push(room)
+      rooms.push(doorEl(kit, `d-${id}`, id, 'v', wallX, room.y + room.d / 2, 'bath', { swing: -1, hinge: 'start' }))
+      rooms.push(windowEl(kit, `win-${id}`, id, 'v', bedX, room.y + room.d / 2, 'C'))
+      const fx = (k, x, y, w, d, extra = {}) => rooms.push({ id: `fx-${id}-${k}`, kind: 'fixture', fixture: k, element: true, open: true, name: FIXTURE_NAME[k], room: id, x, y, w, d, h: FIXTURE_H[k], ...extra })
+      fx('shower', bedX + 0.3, bandY + 0.3, 3, 5.4)
+      fx('toilet', bedX + 4.5, bandY + 0.3, 2.3, 1.5, { face: 's' })
+      fx('vanity', bedX + 8, bandY + 0.3, 3.5, 2, { face: 's' })
+    }
+  })
+  return total
+}
+
+/**
+ * The garage attaches at the service end, with its house door into the laundry (rated and self
+ * closing), an overhead door toward the street, and nothing covering a window. Front-load beside
+ * the laundry when the lot is wide enough, else behind it with the overhead door on its outer
+ * side wall and a driveway down the side. Placed rooms in; placed rooms out.
+ */
+export function attachGarage(placed, kit, cars, lot, stories = 1) {
+  const L = lotOf(lot)
+  const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
+  const flat = placed.map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
+  const laundry = flat.find((r) => r.id === 'laundry') || flat.find((r) => r.kind === 'laundry') || flat.find((r) => r.kind === 'mud')
+  if (!laundry) return placed
+  const g = kit.rooms.garage
+  const w = Math.max(g.perCar * cars, cars >= 3 ? 32 : 0)
+  const d = g.d
+  const solid = flat.filter((r) => isRoom(r) && !r.open)
+  const xs = solid.flatMap((r) => [r.x, r.x + r.w])
+  const [envW] = envelopeSize(L)
+  const eastFits = Math.max(...xs) + w - Math.min(...xs) <= envW + 0.01
+  const house = (x, y, cars) => ({ id: 'garage', kind: 'garage', name: `${cars}-Car Garage`, x, y, w, d, zone: 'service', open: false, plumbing: false, fill: '#dcd7cf' })
+  const elements = []
+  let room
+  if (eastFits) {
+    // front-load: beside the laundry, overhead door on the front wall, house door through the laundry's east wall
+    room = house(laundry.x + laundry.w, laundry.y, cars)
+    const occupied = flat.filter((e) => e.element && e.kind === 'fixture' && e.room === laundry.id && e.x + e.w > laundry.x + laundry.w - 1)
+    let dy = laundry.y + 2.5
+    if (occupied.some((f) => dy > f.y - 1.5 && dy < f.y + f.d + 1.5)) dy = laundry.y + laundry.d - 2.5
+    elements.push(doorEl(kit, 'd-garage', 'garage', 'v', room.x, dy, 'garage', { swing: 1, hinge: 'start' }))
+    elements.push(doorEl(kit, 'd-garage-overhead', 'garage', 'h', room.x + room.w / 2, room.y + room.d, cars >= 3 ? 'overhead' : 'overhead', { swing: 1 }))
+    if (cars >= 3) elements.push(doorEl(kit, 'd-garage-overhead-2', 'garage', 'h', room.x + room.w - 5.5, room.y + room.d, 'overheadSingle', { swing: 1 }))
+  } else {
+    // side-load behind the laundry: house door through the laundry's rear wall, overhead door on the garage's east wall
+    room = house(laundry.x + laundry.w - w, laundry.y - d, cars)
+    elements.push(doorEl(kit, 'd-garage', 'garage', 'h', laundry.x + laundry.w - 2.5, laundry.y, 'garage', { swing: -1, hinge: 'start' }))
+    elements.push(doorEl(kit, 'd-garage-overhead', 'garage', 'v', room.x + room.w, room.y + room.d / 2, 'overhead', { swing: 1 }))
+    // the laundry's rear window moves to its east wall, which stays outside
+    const win = flat.find((e) => e.kind === 'window' && e.room === laundry.id)
+    if (win) Object.assign(win, windowEl(kit, win.id, laundry.id, 'v', laundry.x + laundry.w, laundry.y + laundry.d - 3, win.mark || 'A'))
+  }
+  // never on another room's window or door
+  flat.filter((e) => e.element && (e.kind === 'window' || e.kind === 'door') && e.room !== laundry.id).forEach((e) => {
+    const c = [e.x + e.w / 2, e.y + e.d / 2]
+    if (c[0] > room.x - 0.3 && c[0] < room.x + room.w + 0.3 && c[1] > room.y - 0.3 && c[1] < room.y + room.d + 0.3) room.blocked = true
+  })
+  if (room.blocked) return placed
+  flat.push(room, ...elements)
+  // a gable over the garage, ridge along its long side, tied into the house roof
+  const roof = flat.find((r) => r.kind === 'roof')
+  if (roof && roof.masses) {
+    const k = roof.scale || 1
+    const off = roof.offset || [0, 0]
+    const c = roof.centre || centre
+    const base = (v, i) => c[i] + (v - off[i] - c[i]) / k
+    const ridgeEW = room.w >= room.d
+    roof.masses = [...roof.masses, { id: 'garage', kind: 'gable', x0: base(room.x, 0), x1: base(room.x + room.w, 0), y0: base(room.y, 1), y1: base(room.y + room.d, 1), ridge: ridgeEW ? 'ew' : 'ns', plate: 11, pitch: +String(kit.roof?.pitch || '10').split(':')[0] || 10, ends: eastFits ? (ridgeEW ? ['e'] : ['s']) : (ridgeEW ? ['w'] : ['n']) }]
+    roof.faces = roofSurfaces(roof.masses, k, c, off)
+    roof.dormers = dormerWalls(roof.masses, k, c, off)
+  }
+  const out = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
+  if (roof) out.push(roof)
+  return out
 }
 
 /** World → house frame (the inverse of worldOf). */
@@ -265,34 +583,47 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
   const flat = rooms.map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
   const solid = flat.filter((r) => isRoom(r) && !r.open)
   if (!solid.length) return { rooms, shift: [0, 0], scale: 1 }
-  const cornersOf = (r, s, dx, dy) => {
-    const x0 = centre[0] + (r.x - centre[0]) * s + dx - centre[0]
-    const y0 = centre[1] + (r.y - centre[1]) * s + dy - centre[1]
+  // the rooms at each trial scale (service rooms keep their size, see scalePlan)
+  const mapped = new Map()
+  const roomsAt = (s) => {
+    if (!mapped.has(s)) {
+      const copy = solid.map((r) => ({ ...r }))
+      if (s !== 1) scalePlan(copy, s, centre[0], centre[1], kit)
+      mapped.set(s, copy)
+    }
+    return mapped.get(s)
+  }
+  const cornersOf = (r, dx, dy) => {
+    const x0 = r.x + dx - centre[0]
+    const y0 = r.y + dy - centre[1]
     return [
       [x0, y0],
-      [x0 + r.w * s, y0],
-      [x0 + r.w * s, y0 + r.d * s],
-      [x0, y0 + r.d * s],
+      [x0 + r.w, y0],
+      [x0 + r.w, y0 + r.d],
+      [x0, y0 + r.d],
     ]
   }
-  const fits = (s, dx, dy) => solid.every((r) => cornersOf(r, s, dx, dy).every((p) => insidePoly(env, p)))
+  const fits = (s, dx, dy) => roomsAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(env, p)))
   // the house's box must fit the envelope's box at all before any shift is worth trying
   const ex = env.map((p) => p[0])
   const ez = env.map((p) => p[1])
   const envW = Math.max(...ex) - Math.min(...ex)
   const envD = Math.max(...ez) - Math.min(...ez)
-  const hx = solid.flatMap((r) => [r.x - centre[0], r.x + r.w - centre[0]])
-  const hz = solid.flatMap((r) => [r.y - centre[1], r.y + r.d - centre[1]])
-  const houseW = Math.max(...hx) - Math.min(...hx)
-  const houseD = Math.max(...hz) - Math.min(...hz)
+  const boxAt = (s) => {
+    const rs = roomsAt(s)
+    const hx = rs.flatMap((r) => [r.x, r.x + r.w])
+    const hz = rs.flatMap((r) => [r.y, r.y + r.d])
+    return [Math.max(...hx) - Math.min(...hx), Math.max(...hz) - Math.min(...hz)]
+  }
   // rings of whole-foot shifts, nearest first, at each scale step
   const rings = []
   for (let ring = 0; ring <= maxShift; ring++) for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) rings.push([dx, dy])
   let found = null
   for (let s = 1; s >= minScale - 1e-9 && !found; s = Math.round((s - 0.03) * 100) / 100) {
-    if (houseW * s > envW + 0.01 || houseD * s > envD + 0.01) continue
-    const slackX = Math.ceil((envW - houseW * s) / 2) + 2
-    const slackZ = Math.ceil((envD - houseD * s) / 2) + 2
+    const [houseW, houseD] = boxAt(s)
+    if (houseW > envW + 0.01 || houseD > envD + 0.01 || !roomsMeetMinimums(roomsAt(s), kit)) continue
+    const slackX = Math.ceil((envW - houseW) / 2) + 2
+    const slackZ = Math.ceil((envD - houseD) / 2) + 2
     for (const [dx, dy] of rings) {
       if (Math.abs(dx) > slackX + maxShift || Math.abs(dy) > slackZ + maxShift) continue
       if (fits(s, dx, dy)) {
@@ -303,22 +634,19 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
   }
   if (!found || (found.s === 1 && found.dx === 0 && found.dy === 0)) return { rooms, shift: [0, 0], scale: 1 }
   const { s, dx, dy } = found
-  flat.forEach((r) => {
-    if (r.dormer) return
-    if (r.kind === 'roof') {
-      r.scale = (r.scale || 1) * s
-      r.offset = [(r.offset?.[0] || 0) * s + dx, (r.offset?.[1] || 0) * s + dy]
-      r.faces = roofSurfaces(r.masses, r.scale, r.centre || centre, r.offset)
-      r.dormers = dormerWalls(r.masses, r.scale, r.centre || centre, r.offset)
-      return
-    }
-    r.x = centre[0] + (r.x - centre[0]) * s + dx
-    r.y = centre[1] + (r.y - centre[1]) * s + dy
-    r.w *= s
-    r.d *= s
-    if (r.span) r.span *= s
-  })
+  // doors, windows and fixtures keep their size through a trim and their place in their rooms; the roof follows
+  if (s !== 1) scalePlan(flat, s, centre[0], centre[1], kit)
   const roof = flat.find((r) => r.kind === 'roof')
+  if (roof) {
+    roof.offset = [(roof.offset?.[0] || 0) + dx, (roof.offset?.[1] || 0) + dy]
+    roof.faces = roofSurfaces(roof.masses, roof.scale || 1, roof.centre || centre, roof.offset)
+    roof.dormers = dormerWalls(roof.masses, roof.scale || 1, roof.centre || centre, roof.offset)
+  }
+  flat.forEach((r) => {
+    if (r.dormer || r.kind === 'roof') return
+    r.x += dx
+    r.y += dy
+  })
   const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
   return { rooms: placed, shift: [dx, dy], scale: s }

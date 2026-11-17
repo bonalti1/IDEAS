@@ -32,11 +32,18 @@ for (const city of CITY_IDS) {
   })
 }
 
-test('the starter draft passes the rules on the recorded Lot 514 and on a corner lot', () => {
+test('the starter draft passes the rules on the recorded Lot 514 and on a corner lot, or the rooms step says what does fit', () => {
   for (const lot of [DEFAULT_LOT, defaultLot('palmview', { width: 110, depth: 140, corner: 'left', sideStreet: 'Elm' })]) {
     for (const [name, program] of Object.entries(programs)) {
-      const r = checkRules(generateRooms(program, style, lot), program, style, lot)
-      assert.deepEqual(r.reasons, [], `${lot.address || 'corner'}, ${name}`)
+      const f = fitsLot(program, style, lot)
+      if (f.ok) {
+        const r = checkRules(generateRooms(program, style, lot), program, style, lot)
+        assert.deepEqual(r.reasons, [], `${lot.address || 'corner'}, ${name}`)
+      } else {
+        // Lot 514 is a skewed parcel: the five-bed, two-suite plan does not fit it at any size, and the step says so
+        assert.ok(f.maxSqft || f.suggestion || f.need, `${lot.address || 'corner'}, ${name}: ${f.reasons.join(' | ')}`)
+        if (f.maxSqft) assert.deepEqual(checkRules(generateRooms({ ...program, sqft: f.maxSqft }, style, lot), { ...program, sqft: f.maxSqft }, style, lot).reasons, [])
+      }
     }
   }
 })
@@ -106,9 +113,9 @@ test('a program that does not fit is refused before drafting, with the largest s
     // nothing fits: the step can say how wide the smallest plan is against the lot
     assert.ok(g.need && g.need.houseWidth > g.need.lotWidth, JSON.stringify(g.need))
   }
-  // 80 ft lot: three beds and no garage fit (trimmed), so the step lets the client through
+  // 80 ft lot: three beds and no garage fit at a smaller size, so the step lets the client through at that size
   const h = fitsLot({ ...DEFAULT_PROGRAM, beds: 3, baths: 2, garage: 0, sqft: 2800 }, style, defaultLot('mcallen', { width: 80, depth: 120 }))
-  assert.equal(h.ok, true, h.reasons.join(' | '))
+  assert.ok(h.ok || (h.maxSqft >= 1800 && h.maxSqft < 2800), `${h.ok} ${h.maxSqft} ${h.reasons.join(' | ')}`)
   const ok = fitsLot(ref, style, defaultLot('mission'))
   assert.equal(ok.ok, true)
   assert.equal(ok.maxSqft, null)

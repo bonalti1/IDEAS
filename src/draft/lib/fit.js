@@ -24,7 +24,13 @@ export function houseSize(rooms) {
   return [Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)]
 }
 
-const passes = (program, style, lot) => checkRules(starterDraft(program, style, lot).rooms, program, style, lot)
+// a draft fits when it passes the rules at (nearly) the size asked: a trim under 95% is a smaller house
+const TRIM = 0.95
+const passes = (program, style, lot) => {
+  const draft = starterDraft(program, style, lot)
+  const rules = checkRules(draft.rooms, program, style, lot)
+  return { ...rules, ok: rules.ok && draft.fitScale >= TRIM - 1e-9, draft }
+}
 
 /**
  * @returns {{ ok: boolean, reasons: string[], draft: object, maxSqft: number|null }}
@@ -32,8 +38,9 @@ const passes = (program, style, lot) => checkRules(starterDraft(program, style, 
  *   area with these rooms that passes on this lot, or null when none does.
  */
 export function fitsLot(program, style, lot = DEFAULT_LOT) {
-  const draft = starterDraft(program, style, lot)
-  const rules = checkRules(draft.rooms, program, style, lot)
+  const rules = passes(program, style, lot)
+  const draft = rules.draft
+  if (rules.ok === false && !rules.reasons.length) rules.reasons.push(`This plan has to be trimmed to ${Math.round(draft.fitScale * 100)}% to fit the lot.`)
   let maxSqft = null
   if (!rules.ok) {
     let lo = Math.max(draft.minSqft || 0, 800)
