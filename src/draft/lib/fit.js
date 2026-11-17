@@ -67,7 +67,8 @@ export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
     // what the kit's other plans (the narrow one) can hold on this lot
     // the plans drawn for this living area first; one drawn for another is offered at the edge of its range
     const inRange = (plan) => !plan.sqft || !program.sqft || (program.sqft >= plan.sqft[0] && program.sqft <= plan.sqft[1])
-    const plansByFit = Object.values(kit.plans || {}).sort((a, b) => inRange(b) - inRange(a))
+    const gap = (plan) => (!plan.sqft || !program.sqft ? 0 : program.sqft < plan.sqft[0] ? plan.sqft[0] - program.sqft : program.sqft > plan.sqft[1] ? program.sqft - plan.sqft[1] : 0)
+    const plansByFit = Object.values(kit.plans || {}).sort((a, b) => inRange(b) - inRange(a) || gap(a) - gap(b))
     const otherPlans = plansByFit.map((plan) => {
       const within = inRange(plan) ? programWithin(plan, program) : { ...programWithin(plan, program), sqft: Math.min(Math.max(program.sqft, plan.sqft[0]), plan.sqft[1]) }
       const same = JSON.stringify(within) === JSON.stringify(program)

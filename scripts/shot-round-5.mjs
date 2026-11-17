@@ -61,13 +61,17 @@ async function toDraft(page) {
   await page.getByText(/changes? left/).waitFor({ timeout: 30000 })
   await page.waitForTimeout(2500)
 }
-const ask = async (page, text) => {
-  await page.getByPlaceholder(/change|Move the laundry/).fill(text)
-  await page.getByRole('button', { name: 'Change', exact: true }).click()
+// the house's newest reply, once it has stopped thinking
+const lastReply = async (page) => {
   await page.locator('.msg.thinking').waitFor({ state: 'hidden', timeout: 90000 })
   await page.waitForTimeout(900)
   const last = page.locator('.msg.house').last()
   return { text: (await last.textContent()).trim(), held: (await last.getAttribute('class')).includes('held') }
+}
+const ask = async (page, text) => {
+  await page.getByPlaceholder(/change|Move the laundry/).fill(text)
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
+  return lastReply(page)
 }
 const run = (cmd, args) => spawnSync(cmd, args, { encoding: 'utf8' })
 
@@ -124,11 +128,21 @@ async function flow(viewport, tag) {
   if (phone) {
     // the chat: the user's bubble and the price note each in a row of its own
     await page.locator('.chat .log').scrollIntoViewIfNeeded()
+    // the log is scrolled to its newest line; show the whole user bubble and the reply under it
+    await page.locator('.msg.you').last().evaluate((el) => {
+      const log = el.closest('.log')
+      if (log) log.scrollTop = Math.max(0, el.offsetTop - log.offsetTop - 6)
+    })
+    await page.waitForTimeout(300)
     await shot('02-phone-chat')
+    // the price note sits above the chat log in a row of its own; the user's bubble is inside the log (which scrolls)
     const you = page.locator('.msg.you').last()
     const price = page.locator('.price-line')
-    const [yb, pb] = await Promise.all([you.boundingBox(), price.boundingBox()])
-    note(`${tag}: user bubble y ${Math.round(yb?.y)}–${Math.round(yb?.y + yb?.height)}, price note y ${Math.round(pb?.y)}–${Math.round(pb?.y + pb?.height)} → ${yb && pb && (yb.y >= pb.y + pb.height - 1 || yb.y + yb.height <= pb.y + 1) ? 'separate rows' : 'OVERLAP'}`)
+    const log = page.locator('.chat .log')
+    const [yb, pb, lb] = await Promise.all([you.boundingBox(), price.boundingBox(), log.boundingBox()])
+    const rows = pb && lb && (lb.y >= pb.y + pb.height - 1 || lb.y + lb.height <= pb.y + 1)
+    const inside = yb && lb && yb.y >= lb.y - 1 && yb.y + yb.height <= lb.y + lb.height + 1
+    note(`${tag}: price note y ${Math.round(pb?.y)}–${Math.round(pb?.y + pb?.height)}, chat log y ${Math.round(lb?.y)}–${Math.round(lb?.y + lb?.height)} → ${rows ? 'separate rows' : 'OVERLAP'}; user bubble y ${Math.round(yb?.y)}–${Math.round(yb?.y + yb?.height)} ${inside ? 'whole, inside the log' : 'CLIPPED'}`)
     const bar = await page.locator('.viewport-views').boundingBox()
     const stage = await page.locator('.viewport-stage').boundingBox()
     note(`${tag}: Plan/Site/3D bar y ${Math.round(bar?.y)}–${Math.round(bar?.y + bar?.height)} vs the drawing y ${Math.round(stage?.y)}–${Math.round(stage?.y + stage?.height)} → ${bar && stage && bar.y >= stage.y + stage.height - 1 ? 'its own row' : 'OVER THE DRAWING'}`)
@@ -161,17 +175,16 @@ async function flow(viewport, tag) {
   note(`${tag}: "show me options for the bedrooms" → ${await page.locator('.picker .option').count()} options: ${(await page.locator('.picker').last().locator('.option b').allTextContents()).join(' | ')}`)
   await shot('07-options-wing')
   const r5 = await ask(page, 'make the house 3,000 sf')
-  note(`${tag}: typed "make the house 3,000 sf" → ${r5.held ? 'REFUSED' : 'applied'}: ${r5.text.slice(0, 110)}`)
+  note(`${tag}: typed "make the house 3,000 sf" → ${r5.held ? 'REFUSED' : 'applied'}: ${r5.text.slice(0, 160)}`)
   if (r5.held) {
     // the refusal names the largest size that fits and offers it: take it
     const fix = page.locator('.fixes button').last()
     if (await fix.count()) {
       const label = await fix.textContent()
       await fix.click()
-      await page.waitForFunction(() => !document.querySelector('.busy, [aria-busy="true"]'), null, { timeout: 60000 }).catch(() => {})
-      await page.waitForTimeout(1500)
-      const last = await page.locator('.msg.bot, .bot').last().textContent().catch(() => '')
-      note(`${tag}: took the offered "${label.trim()}" → ${String(last).slice(0, 110)}`)
+      await page.waitForTimeout(400)
+      const r = await lastReply(page)
+      note(`${tag}: took the offered "${label.trim()}" → ${r.held ? 'REFUSED' : 'applied'}: ${r.text.slice(0, 140)}`)
     }
   }
   const r6 = await ask(page, 'swap the office and the dining room')
@@ -250,6 +263,9 @@ async function crops() {
     await page.waitForTimeout(300)
     await page.screenshot({ path: `${out}/${name}.png` })
     fs.unlinkSync(file)
+    // the crop is drawn on a canvas sized for the whole plan: cut the blank paper off, leaving a margin
+    const trim = spawnSync('convert', [`${out}/${name}.png`, '-fuzz', '2%', '-trim', '-bordercolor', 'white', '-border', '24', '+repage', `${out}/${name}.png`], { encoding: 'utf8' })
+    if (trim.status !== 0) console.log('  (not trimmed: convert is not here)')
     console.log('saved', name)
   }
   const mcallen = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'W Nolana Ave', setbacks: {} })
@@ -271,10 +287,12 @@ async function crops() {
 }
 
 const ONLY = process.env.ONLY || ''
+// VIEWPORTS=phone390,phone430 narrows a flow run to those sizes
+const VIEWPORTS = (process.env.VIEWPORTS || 'desktop,phone390,phone430').split(',')
 if (!ONLY || ONLY === 'flow') {
-  await flow({ width: 1440, height: 900 }, 'desktop')
-  await flow({ width: 390, height: 844 }, 'phone390')
-  await flow({ width: 430, height: 932 }, 'phone430')
+  if (VIEWPORTS.includes('desktop')) await flow({ width: 1440, height: 900 }, 'desktop')
+  if (VIEWPORTS.includes('phone390')) await flow({ width: 390, height: 844 }, 'phone390')
+  if (VIEWPORTS.includes('phone430')) await flow({ width: 430, height: 932 }, 'phone430')
 }
 if (!ONLY || ONLY === 'narrow') {
   await narrowLot({ width: 1440, height: 900 }, 'desktop')
@@ -306,7 +324,8 @@ for (const [viewport, tag] of ONLY && ONLY !== 'review' ? [] : [[{ width: 1440, 
   await ctx.close()
 }
 await browser.close()
-fs.writeFileSync(path.join(out, 'notes.txt'), notes.join('\n') + '\n')
+// a partial run (ONLY=...) keeps its notes beside the full run's
+fs.writeFileSync(path.join(out, ONLY ? `notes.${ONLY}.txt` : 'notes.txt'), notes.join('\n') + '\n')
 if (errors.length) {
   console.log('PAGE ERRORS:')
   errors.forEach((e) => console.log('  ' + e))

@@ -126,7 +126,7 @@ test('the compact plan: a 3/2 at 1,300, 1,450 and 1,600 sf, with a 2-car garage 
   assert.notEqual(draft(three2, LOTS['McAllen 100 x 150']).flat.find((r) => r.kind === 'roof')?.plan, 'compact')
 })
 
-test('a fit offer drafts on the plan it names: 5/4 3-car 3,500 sf on the 50 ft lot is offered as what the compact plan holds, and the compact plan is what comes out', () => {
+test('a fit offer drafts on the plan it names: 5/4 3-car 3,500 sf on the 50 ft lot is offered as what the plan nearest that size holds (the narrow plan), and that plan is what comes out', () => {
   const f = fitsLot({ ...DEFAULT_PROGRAM, beds: 5, baths: 4, halfBath: false, office: true, garage: 3, sqft: 3500 }, style, LOTS['narrow 50 x 120'])
   assert.ok(!f.ok && f.suggestion, 'the program does not fit and an offer is made')
   const m = f.suggestion.label.match(/what the (\w+) plan holds/)
