@@ -232,3 +232,40 @@ test('a stub op beside the real one (a resize with no size, a move with no dista
   assert.equal(r2.applied, true, r2.reply)
   assert.equal(byId(r2.rooms, 'kitchen').w, 12)
 })
+
+test('requests this style cannot take get a real answer, on the fallback and on the office server alike: two story, purple, a helipad', async () => {
+  const { unsupported, CAN_DO } = await import('../src/draft/lib/interpret.js')
+  const rooms = generateRooms(program, style)
+  const two = await interpretRequest('make it two story', rooms, program, style, { interpreter: offline })
+  assert.equal(two.applied, false)
+  assert.match(two.reply, /one story for now/)
+  assert.ok(two.reply.includes(CAN_DO))
+  const purple = await interpretRequest('paint the house purple', rooms, program, style, { interpreter: offline })
+  assert.equal(purple.applied, false)
+  assert.match(purple.reply, /finishes are picked with the drafter/)
+  const heli = await interpretRequest('add a helipad', rooms, program, style, { interpreter: offline })
+  assert.equal(heli.applied, false)
+  assert.match(heli.reply, /not something this plan can hold/)
+  // the model is never asked for these
+  let asked = false
+  await interpretRequest('add a second floor', rooms, program, style, { interpreter: async () => { asked = true; return { ops: [], reply: '', confidence: 1 } } })
+  assert.equal(asked, false)
+  assert.equal(unsupported('make the kitchen 2 feet wider', style), null)
+  assert.equal(unsupported('add a bedroom', style), null)
+})
+
+test('a change that changes nothing is not applied and costs nothing: a resize to the same size, a second rear porch; a porch add says its square feet', async () => {
+  const rooms = generateRooms(program, style)
+  const k = rooms.find((r) => r.id === 'kitchen')
+  const same = await interpretRequest('resize', rooms, program, style, { interpreter: async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: k.w, d: k.d }], reply: 'Same size.', confidence: 1 }) })
+  assert.equal(same.applied, false)
+  assert.match(same.reply, /would not change anything/)
+  assert.equal(same.noop, true)
+  const porch = await interpretRequest('add a porch on the back', rooms, program, style, { interpreter: offline })
+  if (porch.applied) {
+    assert.match(porch.reply, /\(\d[\d,]* sf\)/, 'the porch add says its square feet')
+    const again = await interpretRequest('add a porch on the back', porch.rooms, program, style, { interpreter: offline })
+    assert.equal(again.applied, false)
+    assert.match(again.reply, /already has a rear porch/)
+  } else assert.match(porch.reply, /already has a rear porch/)
+})

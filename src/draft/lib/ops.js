@@ -688,7 +688,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
         }
       }
       if (!room) throw new Error(`there is no sound spot for ${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name.toLowerCase()}`)
-      did.push(`Added ${room.name.toLowerCase()}, ${q(room.w)}' by ${q(room.d)}'${near ? ` next to the ${near.name.toLowerCase()}` : room.kind === 'bed' || room.kind === 'bath' || room.kind === 'office' ? ' off the hallway' : ''}`)
+      did.push(`Added ${room.name.toLowerCase()}, ${q(room.w)}' by ${q(room.d)}' (${Math.round(room.w * room.d).toLocaleString()} sf)${near ? ` next to the ${near.name.toLowerCase()}` : room.kind === 'bed' || room.kind === 'bath' || room.kind === 'office' ? ' off the hallway' : ''}`)
     }
   })
 

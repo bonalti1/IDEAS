@@ -2,7 +2,7 @@
 // A change runs here, not in the browser: Claude (or the basic rules when it is unavailable),
 // then the plan rules, and a credit is taken only when the change is applied.
 import crypto from 'node:crypto'
-import { decide } from '../src/draft/lib/interpret.js'
+import { decide, unsupported } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor, programOf } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
@@ -132,6 +132,11 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       let diff
       let source = 'claude'
       let meta = {}
+      const no = unsupported(request, style)
+      if (no) {
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'unsupported', reply: no, ops: [] })
+        return { applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], credits: owner.credits, version: p.version }
+      }
       if (Array.isArray(fixOps) && fixOps.length) {
         diff = { ops: fixOps.slice(0, 8), reply: request, confidence: 1 }
         source = 'fix'

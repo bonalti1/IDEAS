@@ -36,6 +36,9 @@ export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
  */
 export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const kit = kitFor(style)
+  // what this style cannot do yet, said plainly, before any model is asked
+  const no = unsupported(text, style)
+  if (no) return { applied: false, rooms, reply: no, source: 'fallback', ops: [], unsupported: true }
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
   let source = 'claude'
@@ -49,6 +52,30 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot))
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return result
+}
+
+/** What a request can change on a plan, for the answers below. */
+export const CAN_DO = 'On the plan I can add or remove rooms and porches, make a room bigger or smaller, move a room beside another, and set the garage to 1, 2 or 3 cars.'
+
+/**
+ * A request this style cannot take yet, answered plainly (or null): a second story, colours and
+ * finishes, and things no plan here has (a pool, a helipad, a basement). Checked before any model is
+ * asked, so the answer is the same on the office server and in the fallback.
+ */
+export function unsupported(text, style) {
+  const t = String(text || '').toLowerCase()
+  const oneStory = (style?.stories || 1) === 1
+  if (oneStory && /\b(two|2|second|another)[ -]?(story|stories|storey|floor|level)\b|\bupstairs\b|\btwo-story\b|\bsecond floor\b/.test(t)) return `${style?.name || 'This style'} is one story for now; a second story is on the list, not drawn yet. ${CAN_DO}`
+  if (/\b(basement|cellar)\b/.test(t)) return `Houses here sit on a slab; there is no basement in this plan. ${CAN_DO}`
+  if (/\b(helipad|heliport|pool|swimming|elevator|lift|casita|guest house|barn|workshop|shop building|tennis|bunker|moat|tower|turret)\b/.test(t)) return `That is not something this plan can hold (the lot and the kit draw the house only). ${CAN_DO}`
+  if (/\b(paint|painted|colou?r|purple|pink|red|blue|green|yellow|orange|black|white|grey|gray|brick|stucco|stone|siding|shingles?|tile roof|metal roof|countertops?|cabinets?|flooring|carpet|hardwood)\b/.test(t) && !/\b(room|bedroom|bath|kitchen|garage|porch|office|closet|pantry|laundry|dining|living)\b.*\b(bigger|smaller|wider|deeper|add|remove)\b/.test(t)) return `Colours and finishes are picked with the drafter once the plan is set; the kit's finishes (board and batten, stone, shingles) are on the sheet. ${CAN_DO}`
+  return null
+}
+
+/** Two room lists that draw the same house: same ids, same rectangles (to an inch), same elements. */
+export function sameRooms(a, b) {
+  const key = (list) => list.map((r) => `${r.id}:${r.kind}:${Math.round((r.x ?? r.local?.[0] ?? 0) * 12)}:${Math.round((r.y ?? r.local?.[1] ?? 0) * 12)}:${Math.round((r.w || 0) * 12)}:${Math.round((r.d || 0) * 12)}:${r.name || ''}`).sort().join('|')
+  return a.length === b.length && key(a) === key(b)
 }
 
 /** The deterministic part: confidence gate, shape check, apply, rules. */
@@ -70,6 +97,11 @@ export function decide(diff, rooms, program, style, kit, source, lot) {
     const plain = /^[A-Za-z0-9]/.test(why) && !/at .*\.js|undefined|null|TypeError|ReferenceError/.test(why)
     const fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
     return { applied: false, rooms, reply: plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.', source, ops: diff.ops, reasons: [why], caused: [why], preexisting: [], fixes }
+  }
+  // a change that draws the same house is no change: nothing applied, nothing charged
+  if (sameRooms(rooms, next.rooms)) {
+    const what = diff.ops.map((o) => (o.op === 'resize' ? `${rooms.find((r) => r.id === o.room)?.name || 'that room'} is already ${o.w}' by ${o.d}'` : o.op === 'move' ? 'that room is already there' : o.op === 'garage' ? `the garage is already ${o.cars} cars` : 'the plan already has that')).join('; ')
+    return { applied: false, rooms, reply: `That would not change anything: ${what}. No change was used.`, source, ops: diff.ops, reasons: ['no change'], noop: true }
   }
   const rules = checkRules(next.rooms, program, style, L)
   if (!rules.ok) {

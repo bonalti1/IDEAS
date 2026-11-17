@@ -350,3 +350,20 @@ test('the homeowner never receives the audit, the office questions or an overrid
   assert.equal(seen.audit, undefined)
   // the override itself (20 characters, who, when, which errors) is covered on the module above
 })
+
+test('with no Claude key the office answers a change in under a second (the regex fallback), and an unsupported request without a model call', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-fast-')) })
+  const ana = await who(base, 'ana3@example.com', 'Ana Garza')
+  const prj = (await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse', name: 'Modern Farmhouse' }, program, rooms: generateRooms(program, style), client: 'Ana Garza' }))).body
+  const t0 = Date.now()
+  const c = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen 2 feet wider' }))
+  const ms = Date.now() - t0
+  assert.equal(c.body.applied, true, c.body.reply)
+  assert.equal(c.body.source, 'fallback')
+  assert.ok(ms < 1000, `fallback took ${ms} ms`)
+  const two = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make it two story' }))
+  assert.equal(two.body.applied, false)
+  assert.match(two.body.reply, /one story for now/)
+  assert.equal(two.body.credits, c.body.credits, 'no credit for an unsupported request')
+  console.log(`  fallback change on the office API with no key: ${ms} ms`)
+})
