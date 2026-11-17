@@ -268,9 +268,15 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           </Button>
         </form>
         <div className="chat-tools">
-          <button className="linkish" onClick={() => setShowVersions((v) => !v)} disabled={!project || versions.length < 2} title={project ? '' : 'Sign in to keep a history'}>
-            {showVersions ? 'Hide history' : `History${project ? ` (${versions.length})` : ''}`}
-          </button>
+          {project ? (
+            <button className="linkish" onClick={() => setShowVersions((v) => !v)} disabled={versions.length < 2}>
+              {showVersions ? 'Hide history' : `History (${versions.length})`}
+            </button>
+          ) : (
+            <span className="muted small">
+              <a href="#/" onClick={(e) => { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('#signin-email')?.focus() }}>Sign in</a> to keep a history
+            </span>
+          )}
           <button className="linkish undo" onClick={undoLast} disabled={busy || !canUndo} title={canUndo ? 'Back one change, the credit comes back' : 'Nothing to undo yet'}>
             Undo last change
           </button>

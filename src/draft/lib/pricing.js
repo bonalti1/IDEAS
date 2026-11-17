@@ -32,7 +32,7 @@ export const RATES = {
 
 /** The county a lot is in, from its city preset; the default county when the lot has none. */
 export function countyOf(lot) {
-  return CITIES[lot?.city]?.county || RATES.defaultCounty
+  return CITIES[lot?.city]?.county || (RATES.counties[lot?.spec?.county] ? lot.spec.county : null)
 }
 
 /**
@@ -43,6 +43,7 @@ export function countyOf(lot) {
  */
 export function estimate({ rooms, program, style, lot, county: countyOverride }) {
   const kit = kitFor(style)
+  // no county, no price: the lot step asks for one (the default county's rates size the parts for the math only)
   const county = countyOverride || countyOf(lot)
   const rate = RATES.counties[county] || RATES.counties[RATES.defaultCounty]
   const mult = RATES.styles[style?.id] ?? 1
@@ -70,11 +71,11 @@ export function estimate({ rooms, program, style, lot, county: countyOverride })
   }
   const low = parts.living[0] + parts.garage[0] + parts.porches[0]
   const high = parts.living[1] + parts.garage[1] + parts.porches[1]
-  return { low, high, mid: (low + high) / 2, perSf, county, areas: { living, garage, porches }, parts, note: RATES.note, confirmed: RATES.confirmed }
+  return { low, high, mid: (low + high) / 2, perSf, county, needsCounty: !county, fromRooms: !!(rooms && rooms.length), areas: { living, garage, porches }, parts, note: RATES.note, confirmed: RATES.confirmed }
 }
 
 const k = (n) => '$' + Math.round(n / 1000).toLocaleString() + 'k'
-/** "$231k–$241k" */
-export const range = (e) => k(e.low) + '–' + k(e.high)
+/** "$231k–$241k", or what is missing for one */
+export const range = (e) => (e.needsCounty ? 'pick the county on the lot step' : k(e.low) + '–' + k(e.high))
 /** "$115–120/sf living · garage $45–55/sf · porches $35–45/sf" */
 export const rateLine = (e) => '$' + e.perSf[0] + '–' + e.perSf[1] + '/sf living · garage $' + RATES.garagePerSf[0] + '–' + RATES.garagePerSf[1] + '/sf · porches $' + RATES.porchPerSf[0] + '–' + RATES.porchPerSf[1] + '/sf'

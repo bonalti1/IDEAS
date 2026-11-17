@@ -12,6 +12,20 @@ export const CITY_DEFAULTS = {
   hidalgo: { name: 'Hidalgo County (unincorporated)', county: 'Hidalgo County', zoning: 'County subdivision rules', front: 25, side: 5, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
 }
 export const CITY_IDS = Object.keys(CITY_DEFAULTS)
+/** The counties we price in (src/draft/lib/pricing.js has the rates); the first four are the Rio Grande Valley. */
+export const COUNTIES = ['Hidalgo County', 'Cameron County', 'Starr County', 'Willacy County', 'Jim Wells County', 'Nueces County', 'Kleberg County', 'San Patricio County']
+export const RGV = COUNTIES.slice(0, 4)
+
+/** What the lot step says about a geocoded address: our city rules, county defaults, or outside the Valley. */
+export function geoMessage(geo, table = CITY_DEFAULTS) {
+  if (!geo) return ''
+  if (!geo.found) return geo.note || 'The address was not found. Check it, or type the lot in.'
+  if (geo.cityId && table[geo.cityId]) return `We have the ${table[geo.cityId].name} rules.`
+  const county = geo.county || ''
+  if (RGV.includes(county)) return `We don't have rules for this address yet. ${county} is in the Valley, so the county defaults are used and a drafter checks the city's setbacks.`
+  if (COUNTIES.includes(county)) return `We don't have rules for this address yet. ${county} is outside the Rio Grande Valley; we price it, and a drafter checks the setbacks before anything is drawn.`
+  return `We don't have rules for this address yet. ${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'It'} is outside the Rio Grande Valley, where we build. You can still draft to see a plan; pick a county below for a price.`
+}
 export const RULE_FIELDS = ['front', 'side', 'rear', 'streetSide', 'maxCoverage', 'maxHeightFt', 'minLotSf']
 
 /** The city table with the office's edits applied. */

@@ -150,11 +150,33 @@ function outwardNormal(boundary, i) {
 
 const labelFor = (edge) => `${edge.setback}' — ${edge.street ? edge.street.toUpperCase() : edge.kind === 'rear' ? 'REAR' : 'SIDE'}`
 
+/**
+ * Why a lot cannot be drafted on yet, in one sentence, or null: a size still being typed (under 20 ft),
+ * setbacks that leave no buildable area, or a lot under the city's minimum. The Lot step shows the
+ * last good lot while this is set, so a half-typed depth never blanks the page.
+ */
+export function lotProblem(spec, lot) {
+  if (spec?.kind === 'manual') {
+    const W = +spec.width
+    const D = +spec.depth
+    if (!(W >= 20)) return 'Enter the lot width in feet (20 ft or more).'
+    if (!(D >= 20)) return 'Enter the lot depth in feet (20 ft or more).'
+  }
+  if (!lot) return 'The lot could not be built from these numbers.'
+  if (!lot.envelope || lot.envelope.length < 3 || !(lot.envelopeSf > 0)) {
+    const r = lot.rules || {}
+    return `The setbacks leave no buildable area: ${r.front ?? 25}' front and ${r.rear ?? 10}' rear need a lot deeper than ${(r.front ?? 25) + (r.rear ?? 10)} ft, ${r.side ?? 5}' each side a lot wider than ${2 * (r.side ?? 5)} ft.`
+  }
+  if (lot.envelopeSf < 1500) return 'The buildable area is very small. Check the dimensions and the setbacks.'
+  return null
+}
+
 /** Build the full lot from a spec. Deterministic, so the server can repeat it. */
 export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
   if (!spec || spec.kind === 'reference') return referenceLot()
   const rules = rulesFor(spec.city || 'hidalgo', spec.setbacks || {}, table)
-  const city = table[spec.city] ? spec.city : 'hidalgo'
+  // no city rules yet: the lot keeps its empty city (the price asks for a county); the county defaults shape the envelope
+  const city = table[spec.city] ? spec.city : spec.city === '' ? '' : 'hidalgo'
   let boundary
   let corners
   let edges // per corner-edge: { kind, street, setback }
@@ -234,7 +256,7 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     spec,
     address: spec.address || '',
     city,
-    cityName: rules.name,
+    cityName: city ? rules.name : 'no city rules yet (county defaults)',
     rules,
     boundary: boundary.map(([x, z]) => [r2(x), r2(z)]),
     corners: corners.map(([x, z]) => [r2(x), r2(z)]),
