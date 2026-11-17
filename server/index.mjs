@@ -17,6 +17,10 @@ import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
 import { makeBilling } from './billing.mjs'
+import { regexOps } from '../src/draft/lib/ops.js'
+import { kitFor } from '../src/draft/lib/layout.js'
+import { STYLES } from '../src/draft/lib/styles.js'
+import { buildLot } from '../src/draft/lib/lot.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = +(process.env.PORT || 8787)
@@ -134,7 +138,10 @@ route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200,
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req)), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) })), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req)), req))
-route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => json(res, 200, await projects.change(await projects.load(ctx.user, p.id), (await readJson(req)).text), req))
+route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
+  const body = await readJson(req)
+  json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
+})
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req)).version), req))
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req), saveDesign), req))
 
@@ -153,6 +160,10 @@ route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
     for await (const chunk of f.body) res.write(chunk)
     res.end()
   }
+})
+route('GET', '/api/lot/geocode', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  json(res, 200, await lots.geocode(url.searchParams.get('address')), req)
 })
 route('GET', '/api/lot/flood', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
@@ -322,7 +333,16 @@ route('POST', '/api/interpret', 'app', async (req, res) => {
       logInterpret({ request: input.request, client: body.client || null, verdict: e.timeout ? 'timeout' : e.refusal ? 'refusal' : e.noDiff ? 'no-diff' : 'error', error: String(e.message).slice(0, 200), ms: e.ms, usage: e.usage, cost: e.cost, model: interpreter.model })
       await event('error', `interpreter: ${e.timeout ? `no answer in ${interpreter.timeoutMs} ms` : e.message}`)
     }
-    json(res, e.status || 500, { error: e.message, timeout: !!e.timeout, blocked: !!e.blocked, category: e.category }, req)
+    // no key, a timeout, a refusal: the basic rules answer, with 200, so a chat message is never an error
+    const kit = kitFor(STYLES.find((st) => st.id === body.kit?.id) || STYLES.find((st) => st.ready))
+    let lot
+    try {
+      lot = body.lot?.spec ? buildLot(body.lot.spec, await lots.table()) : undefined
+    } catch {
+      lot = undefined
+    }
+    const out = regexOps(input.request, body.rooms, kit, lot)
+    json(res, 200, { ...out, source: e.timeout ? 'timeout' : 'fallback', reason: e.unconfigured ? 'not configured' : e.timeout ? 'timeout' : String(e.message || e).slice(0, 120), ms: e.ms }, req)
   }
 })
 route('POST', '/api/interpret/verdict', 'app', async (req, res) => {
@@ -376,7 +396,7 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
-    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}) }, req)
+    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })
 

@@ -1,11 +1,10 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App.jsx'
 import DraftApp from './draft/DraftApp.jsx'
 import './brand/tokens.css'
 import './styles.css'
 
-// #/lot514 keeps the original drafter-side site plan review reachable.
+// #/lot514 is the original drafter-side site plan review; DraftApp shows it to drafters only.
 function Root() {
   const [hash, setHash] = React.useState(window.location.hash)
   React.useEffect(() => {
@@ -13,7 +12,7 @@ function Root() {
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
-  return hash === '#/lot514' ? <App /> : <DraftApp admin={hash === '#/admin'} review={hash === '#/review'} billing={hash === '#/billing'} />
+  return <DraftApp admin={hash === '#/admin'} review={hash === '#/review'} billing={hash === '#/billing'} lot514={hash === '#/lot514'} />
 }
 
 createRoot(document.getElementById('root')).render(

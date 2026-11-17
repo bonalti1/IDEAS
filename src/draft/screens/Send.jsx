@@ -4,6 +4,7 @@ import { kitFor } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
+import { checkRules } from '../lib/rules.js'
 import { api } from '../lib/api.js'
 import { STATUS, STEPS, EDITABLE } from '../lib/status.js'
 
@@ -18,7 +19,11 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const [tab, setTab] = useState('summary')
   const kit = kitFor(style)
   const t = takeoff(rooms, program, kit)
-  const changes = history.filter((m) => m.who === 'you')
+  // only changes that were applied and not undone: from the saved versions, or from the chat pairs
+  const changes = project?.versions?.length
+    ? project.versions.filter((v) => v.kind === 'change' && !v.refunded && v.n <= project.version).map((v) => ({ text: v.text }))
+    : history.filter((m, i) => m.who === 'you' && history[i + 1]?.who === 'house' && history[i + 1].applied && !m.undone)
+  const rules = checkRules(rooms, program, style, lot)
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
   const estimate = t.areas.living * style.psf + program.garage * 28000
@@ -216,8 +221,19 @@ export default function Send({ lot, style, program, rooms, history, project, set
                 ))}
               </ol>
             )}
-            <p className="fine">Drafters see this list with the model, so nothing you asked for gets lost.</p>
+            <p className="fine">Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost.</p>
           </div>
+          {!rules.ok && (
+            <div className="card note bad">
+              <h3>This plan cannot be sent yet</h3>
+              <ul className="list">
+                {rules.reasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+              <p className="fine">Go back to the draft and fix these first. The drafters only take plans that pass the rules.</p>
+            </div>
+          )}
         </>
       )}
 
@@ -300,7 +316,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={onBack}>
           Keep editing
         </Button>
-        <Button primary disabled={sending} onClick={send}>
+        <Button primary disabled={sending || !rules.ok} onClick={send} title={rules.ok ? '' : 'Fix the problems listed above first'}>
           {sending ? 'Sending…' : 'Send to drafters'}
         </Button>
       </div>

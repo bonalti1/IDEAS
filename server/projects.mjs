@@ -5,6 +5,7 @@ import crypto from 'node:crypto'
 import { decide } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
+import { checkRules } from '../src/draft/lib/rules.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 
 const id = (p) => p + '_' + crypto.randomBytes(5).toString('hex')
@@ -80,8 +81,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       return this.detail(p)
     },
 
-    // one plain-language request → Claude or the basic rules → plan rules → charged only if applied
-    async change(p, text) {
+    // one plain-language request → Claude or the basic rules → plan rules → charged only if applied.
+    // With `ops` (a fix the client clicked), the ops are taken as given and only the rules run.
+    async change(p, text, fixOps = null) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
@@ -92,21 +94,26 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const current = await store.versions.get(p.id, p.version)
       const rooms = current?.rooms || []
       const kitMeta = { id: kit.id, name: kit.name, kinds: Object.fromEntries(Object.entries(kit.rooms).map(([k, t]) => [k, { name: t.name, w: t.w, d: t.d, zone: t.zone }])), minSize: kit.rules?.minSize || {} }
+      const lot = await lots.lotOfProject(p)
       let diff
       let source = 'claude'
       let meta = {}
+      if (Array.isArray(fixOps) && fixOps.length) {
+        diff = { ops: fixOps.slice(0, 8), reply: request, confidence: 1 }
+        source = 'fix'
+      } else
       try {
         diff = await interpreter.ask({ request, program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
         meta = { usage: diff.usage, cost: diff.cost, ms: diff.ms, model: diff.model }
         logInterpret({ request, client: p.email, projectId: p.id, rooms: rooms.length, diff: { ops: diff.ops, reply: diff.reply, confidence: diff.confidence }, verdict: diff.confidence < 0.5 || !diff.ops.length ? 'unsure' : 'diff', ...meta })
       } catch (e) {
         if (!e.unconfigured) logInterpret({ request, client: p.email, projectId: p.id, verdict: e.timeout ? 'timeout' : e.refusal ? 'refusal' : 'error', error: String(e.message).slice(0, 200), ms: e.ms, cost: e.cost, usage: e.usage, model: interpreter.model })
-        diff = regexOps(request, rooms, kit)
+        diff = regexOps(request, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      const result = decide(diff, rooms, p.program, style, kit, source, await lots.lotOfProject(p))
+      const result = decide(diff, rooms, p.program, style, kit, source, lot)
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
-      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], credits: owner.credits, version: p.version }
+      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], credits: owner.credits, version: p.version }
       const charged = await store.users.charge(p.userId, now())
       if (!charged) throw fail(402, 'no changes left on your account; add more on the billing page', { credits: 0 })
       const n = p.version + 1
@@ -151,6 +158,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
       if (p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
+      // the plan as saved here, on the lot as the office rebuilds it, must pass the rules
+      const current = await store.versions.get(p.id, p.version)
+      const rules = checkRules(current?.rooms || [], p.program || {}, styleOf(p), await lots.lotOfProject(p))
+      if (!rules.ok) throw fail(409, `the plan breaks ${rules.reasons.length} rule${rules.reasons.length === 1 ? '' : 's'}: ${rules.reasons[0]}`, { rules: rules.reasons })
       const d = await saveDesign({ ...design, client: design.client || p.client, projectId: p.id }, ifc, { projectId: p.id })
       p.designId = d.id
       p.status = 'in_review'

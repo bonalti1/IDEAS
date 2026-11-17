@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Edges, Line } from '@react-three/drei'
+import { OrbitControls, Edges, Line, Html } from '@react-three/drei'
 import SitePlan from '../components/SitePlan.jsx'
 import { FlatLabel } from '../components/labels.jsx'
 import { DEFAULT_LOT } from './lib/lot.js'
@@ -12,21 +12,36 @@ import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
 
-/** Camera presets centred on a lot, scaled to its size. */
-export function camerasFor(lot = DEFAULT_LOT) {
-  const [CX, CZ] = lot.centroid || lot.centre
-  const xs = (lot.boundary || []).map((p) => p[0])
-  const zs = (lot.boundary || []).map((p) => p[1])
-  const extent = xs.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) : 200
-  const span = Math.max(140, extent * 1.35)
+/**
+ * Camera presets. With rooms, the plan view frames the house (readable labels) and the 3D view
+ * looks at it from the street; without rooms, both frame the lot.
+ */
+export function camerasFor(lot = DEFAULT_LOT, rooms = []) {
+  const solid = rooms.filter((r) => isRoom(r) && r.center)
+  let CX, CZ, span
+  if (solid.length) {
+    const xs = solid.flatMap((r) => [r.center[0] - r.w / 2 - r.d / 2, r.center[0] + r.w / 2 + r.d / 2])
+    const zs = solid.flatMap((r) => [r.center[1] - r.w / 2 - r.d / 2, r.center[1] + r.w / 2 + r.d / 2])
+    CX = (Math.min(...xs) + Math.max(...xs)) / 2
+    CZ = (Math.min(...zs) + Math.max(...zs)) / 2
+    const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs))
+    span = Math.max(70, ext * 0.95)
+  } else {
+    ;[CX, CZ] = lot.centroid || lot.centre
+    const xs = (lot.boundary || []).map((p) => p[0])
+    const zs = (lot.boundary || []).map((p) => p[1])
+    const extent = xs.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) : 200
+    span = Math.max(140, extent * 1.35)
+  }
   const cos = Math.cos(lot.angle || 0)
   const sin = Math.sin(lot.angle || 0)
   // the 3D view looks from the street side (local +z) toward the rear
   const back = (lx, lz) => [CX + lx * cos - lz * sin, CZ + lx * sin + lz * cos]
-  const [px, pz] = back(-span * 0.55, span * 0.75)
+  const d3 = solid.length ? Math.max(120, span * 1.3) : span
+  const [px, pz] = back(-d3 * 0.55, d3 * 0.75)
   return {
-    top: { position: [CX, span * 1.25, CZ + 2], target: [CX, 0, CZ] },
-    '3d': { position: [px, span * 0.55, pz], target: [CX, 0, CZ] },
+    top: { position: [CX, span * 1.25, CZ + 0.5], target: [CX, 0, CZ] },
+    '3d': { position: [px, d3 * 0.55, pz], target: [CX, 0, CZ] },
   }
 }
 export const CAMERAS = camerasFor(DEFAULT_LOT)
@@ -183,7 +198,13 @@ function Roof({ roof, centre, lot }) {
 
 function Room({ r, highlight, labels, lot }) {
   const [x, z] = r.center
-  const nameSize = Math.min(2.6, Math.max(1.5, (r.w - 1) / (r.name.length * 0.62)))
+  // labels sit above the walls and furniture, where the plan view can read them
+  const LY = 10.2
+  // every room gets its name and size, sized to fit inside the room (plan view only)
+  const sideways = r.d > r.w * 1.4
+  const along = sideways ? r.d : r.w
+  const nameSize = Math.min(1.9, Math.max(0.9, (along - 1.5) / (r.name.length * 0.62)))
+  const dimSize = Math.min(1.2, Math.max(0.8, nameSize * 0.7))
   return (
     <group position={[x, 0, z]} rotation-y={-lot.angle}>
       <mesh position={[0, -0.17, 0]}>
@@ -193,12 +214,12 @@ function Room({ r, highlight, labels, lot }) {
       </mesh>
       {labels && (
         <>
-          <FlatLabel x={0} z={-1.4} y={0.02} angle={lot.angle} size={nameSize} bold color={highlight ? '#4e3c30' : '#2a2520'}>
+          <FlatLabel x={sideways ? -0.9 : 0} z={sideways ? 0 : -0.9} y={LY} angle={lot.angle + (sideways ? Math.PI / 2 : 0)} size={nameSize} bold color={highlight ? '#4e3c30' : '#2a2520'}>
             {r.name.toUpperCase()}
           </FlatLabel>
-          {r.w >= 8 && (
-            <FlatLabel x={0} z={1.8} y={0.02} angle={lot.angle} size={1.8} color="#7a6558">
-              {r.w}' × {r.d}'
+          {Math.min(r.w, r.d) >= 4 && (
+            <FlatLabel x={sideways ? 1.1 : 0} z={sideways ? 0 : 1.1} y={LY} angle={lot.angle + (sideways ? Math.PI / 2 : 0)} size={dimSize} color="#7a6558">
+              {Math.round(r.w * 4) / 4}' × {Math.round(r.d * 4) / 4}'
             </FlatLabel>
           )}
         </>
@@ -207,9 +228,20 @@ function Room({ r, highlight, labels, lot }) {
   )
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT }) {
+/** A room's name in the 3D view: a small tag above the room that always faces the viewer. */
+function RoomTag({ r, highlight, showRoof }) {
+  const [x, z] = r.center
+  const y = r.open ? 2 : showRoof ? (r.plate || 9) + 7 : (r.plate || 9) + 1.5
+  return (
+    <Html position={[x, y, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+      <span className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '')}>{r.name}</span>
+    </Html>
+  )
+}
+
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true }) {
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
-  const cams = useMemo(() => camerasFor(L), [L])
+  const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
   const cam = cams[view] || cams['3d']
   const kit = kitFor(style)
   const centre = useMemo(() => {
@@ -228,13 +260,14 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       <ambientLight intensity={2.0} />
       <directionalLight position={[-150, 300, -200]} intensity={1.4} />
       <SitePlan lot={L} />
-      {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels lot={L} />)}
+      {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels={view === 'top'} lot={L} />)}
+      {showHouse && tags && view !== 'top' && roomList.filter((r) => Math.min(r.w, r.d) >= 5).map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} />)}
       {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'door').map((e) => <Door key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'window').map((e) => <Window key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} lot={L} />)}
-      <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={20} maxDistance={1200} />
+      <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={15} maxDistance={1200} enableRotate={view !== 'top'} screenSpacePanning />
     </Canvas>
   )
 }

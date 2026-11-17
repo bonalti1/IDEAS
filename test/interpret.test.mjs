@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { generateRooms, isRoom } from '../src/draft/lib/layout.js'
 import { interpretRequest } from '../src/draft/lib/interpret.js'
-import { regexOps, applyOps, validateOps } from '../src/draft/lib/ops.js'
+import { regexOps, applyOps, validateOps, spotBeside } from '../src/draft/lib/ops.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
@@ -154,4 +154,74 @@ test('a timeout on the Claude call falls back and is labelled', async () => {
   const res = await ask('make the kitchen bigger', fresh(), slow)
   assert.equal(res.source, 'timeout')
   assert.equal(res.applied, true, res.reply)
+})
+
+// ── the six requests from the live test, through the basic rules and through a fake Claude ──
+const withGarage = () => generateRooms({ ...program, garage: 2, rearPorch: false }, style)
+const roomOf = (rooms, kind) => rooms.filter((r) => isRoom(r) && r.kind === kind).pop()
+const SIX = [
+  ['make the garage 3 cars', withGarage, (rooms) => [{ op: 'resize', room: 'garage', w: 33, d: 22 }], (res) => assert.equal(byId(res.rooms, 'garage').w, 33)],
+  ['move the office next to the garage', withGarage, (rooms) => { const { dx, dy } = spotBeside(rooms, KIT, byId(rooms, 'office'), byId(rooms, 'garage')); return [{ op: 'move', room: 'office', dx, dy }] }, (res) => {
+    const l = byId(res.rooms, 'office'); const g = byId(res.rooms, 'garage')
+    const touching = Math.abs(l.x - (g.x + g.w)) < 1 || Math.abs(g.x - (l.x + l.w)) < 1 || Math.abs(l.y - (g.y + g.d)) < 1 || Math.abs(g.y - (l.y + l.d)) < 1
+    assert.ok(touching, `office ${[l.x, l.y, l.w, l.d]} touches garage ${[g.x, g.y, g.w, g.d]}`)
+  }],
+  ['add a porch on the back', withGarage, () => [{ op: 'add', kind: 'rearPorch' }], (res) => assert.ok(roomOf(res.rooms, 'rearPorch'), 'a rear porch')],
+  ['make the kitchen 2 feet wider', fresh, (rooms) => [{ op: 'resize', room: 'kitchen', w: byId(rooms, 'kitchen').w + 2, d: byId(rooms, 'kitchen').d }], (res, before) => {
+    assert.equal(byId(res.rooms, 'kitchen').w, byId(before, 'kitchen').w + 2)
+    assert.equal(byId(res.rooms, 'kitchen').d, byId(before, 'kitchen').d)
+  }],
+  ['remove the rear porch', fresh, () => [{ op: 'remove', room: 'rearPorch' }], (res) => assert.ok(!byId(res.rooms, 'rearPorch'))],
+  ['add a half bath', fresh, () => [{ op: 'add', kind: 'halfbath' }], (res) => assert.equal(res.rooms.filter((r) => isRoom(r) && r.kind === 'halfbath').length, 2)],
+]
+for (const [text, start, claudeOps, check] of SIX) {
+  test(`fallback: "${text}"`, async () => {
+    const before = start()
+    const t0 = Date.now()
+    const res = await ask(text, before, offline)
+    assert.ok(Date.now() - t0 < 1000, `fallback answered in ${Date.now() - t0} ms`)
+    assert.equal(res.source, 'fallback')
+    assert.equal(res.applied, true, `${res.reply} ${(res.reasons || []).join(' | ')}`)
+    check(res, before)
+    assert.deepEqual(checkRules(res.rooms, program, style).reasons, [])
+  })
+  test(`Claude path: "${text}"`, async () => {
+    const before = start()
+    const fake = async ({ rooms }) => ({ ops: claudeOps(rooms), reply: 'Done.', confidence: 0.9 })
+    const res = await ask(text, before, fake)
+    assert.equal(res.source, 'claude')
+    assert.equal(res.applied, true, `${res.reply} ${(res.reasons || []).join(' | ')}`)
+    check(res, before)
+  })
+}
+
+test('"move the laundry next to the garage": the starter puts the garage on the laundry, and the fallback says so', async () => {
+  const res = await ask('move the laundry next to the garage', withGarage(), offline)
+  assert.equal(res.applied, false)
+  assert.match(res.reply, /already next to/)
+  // once the garage is elsewhere, the move goes through
+  const apart = applyOps([{ op: 'move', room: 'garage', dx: 0, dy: 36 }], withGarage(), KIT, 1).rooms
+  const res2 = await ask('move the laundry next to the garage', apart, offline)
+  assert.equal(res2.applied, true, `${res2.reply} ${(res2.reasons || []).join(' | ')}`)
+})
+
+test('the fallback asks when a porch has no side, and when there is nothing to move next to', async () => {
+  const r1 = await ask('add a porch', fresh(), offline)
+  assert.equal(r1.applied, false)
+  assert.match(r1.reply, /Front porch or back porch/)
+  const r2 = await ask('move the laundry next to the pool', fresh(), offline)
+  assert.equal(r2.applied, false)
+})
+
+test('a stub op beside the real one (a resize with no size, a move with no distance) does not sink the change', async () => {
+  const stubs = async () => ({ ops: [{ op: 'resize', room: 'garage', w: 33, d: 22 }, { op: 'resize', room: 'laundry' }, { op: 'move', room: 'mud' }], reply: 'Three cars.', confidence: 0.9 })
+  const res = await ask('make the garage 3 cars', withGarage(), stubs)
+  assert.equal(res.applied, true, res.reply)
+  assert.equal(byId(res.rooms, 'garage').w, 33)
+  assert.equal(res.ops.length, 1)
+  // a resize with one side keeps the other
+  const oneSide = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 12 }], reply: 'Narrower.', confidence: 0.9 })
+  const r2 = await ask('kitchen 12 wide', fresh(), oneSide)
+  assert.equal(r2.applied, true, r2.reply)
+  assert.equal(byId(r2.rooms, 'kitchen').w, 12)
 })

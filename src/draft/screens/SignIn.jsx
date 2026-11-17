@@ -13,7 +13,11 @@ export default function SignIn({ title = 'Sign in', lede, askName = true, onSign
 
   const go = async (e) => {
     e?.preventDefault()
-    if (!valid || busy) return
+    if (busy) return
+    if (!valid) {
+      setError(email.trim() ? 'That email does not look right. Check it and try again.' : 'Enter your email to continue.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -38,7 +42,7 @@ export default function SignIn({ title = 'Sign in', lede, askName = true, onSign
     )
 
   return (
-    <form className="card signin" onSubmit={go}>
+    <form className="card signin" onSubmit={go} noValidate>
       <h3>{title}</h3>
       {lede && <p className="muted small">{lede}</p>}
       {askName && (
@@ -49,17 +53,27 @@ export default function SignIn({ title = 'Sign in', lede, askName = true, onSign
       )}
       <label className="field">
         <span>Email</span>
-        <input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoFocus={!askName} />
+        <input
+          id="signin-email"
+          type="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            if (error) setError('')
+          }}
+          autoComplete="email"
+          autoFocus={!askName}
+        />
       </label>
       {error && <p className="fine bad">{error}</p>}
-      <Button primary type="submit" disabled={!valid || busy}>
+      <Button primary type="submit" disabled={busy}>
         {busy ? 'One moment…' : AUTH_MODE === 'local' ? 'Continue' : 'Email me a sign-in link'}
       </Button>
-      <p className="fine">{AUTH_MODE === 'local' ? 'Local office: no email is sent, you are signed in at once.' : 'Your house is saved to this email. Every change you make stays with it.'}</p>
       {onSkip && (
-        <button type="button" className="linkish" onClick={onSkip}>
+        <Button type="button" ghost onClick={onSkip}>
           Try it without an account
-        </button>
+        </Button>
       )}
     </form>
   )

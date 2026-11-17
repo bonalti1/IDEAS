@@ -125,6 +125,35 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       return store.meta.get(`plat:${platId}`)
     },
 
+    /** Where an address is: the Census geocoder's match, with city, county, state and the street name. */
+    async geocode(address) {
+      const a = String(address || '').trim()
+      if (a.length < 6) throw fail(400, 'address required')
+      const key = 'geo:' + a.toLowerCase().replace(/\s+/g, ' ')
+      const cached = await store.meta.get(key)
+      if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return cached
+      const geo = await fetch(`https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(a)}&benchmark=Public_AR_Current&vintage=Current_Current&layers=Counties,Incorporated%20Places&format=json`, { signal: AbortSignal.timeout(12000) })
+      if (!geo.ok) throw fail(502, `geocoder answered ${geo.status}`)
+      const match = (await geo.json()).result?.addressMatches?.[0]
+      const table = await this.table()
+      let rec
+      if (!match) rec = { address: a, found: false, note: 'The Census geocoder did not find this address. Check the street number and the city, or type the lot in.', at: now() }
+      else {
+        const c = match.addressComponents || {}
+        const title = (t) => String(t || '').replace(/\b\w+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+        const incorporated = match.geographies?.['Incorporated Places']?.[0]?.NAME // "McAllen city": the Census appends the kind
+        const place = incorporated ? title(incorporated.replace(/ (city|town|village|CDP|municipality)$/i, '')) : title(c.city)
+        const county = match.geographies?.Counties?.[0]?.NAME || ''
+        const street = [c.preDirection, c.streetName, c.suffixType, c.suffixDirection].filter(Boolean).join(' ')
+        const cityId = Object.keys(table).find((id) => id !== 'hidalgo' && table[id].name.split(',')[0].toLowerCase() === String(place).toLowerCase()) || null
+        const inCounty = /hidalgo/i.test(county)
+        const placeName = cityId ? table[cityId].name.split(',')[0] : place
+        rec = { address: a, found: true, matched: match.matchedAddress, lat: match.coordinates.y, lon: match.coordinates.x, place: placeName || null, county: county || null, state: c.state || null, zip: c.zip || null, street: street || null, cityId, supported: !!cityId || inCounty, note: cityId ? null : inCounty ? `${place || 'This address'} is in ${county} but not one of the cities we have rules for; county rules are used and a drafter checks them.` : `${place ? place + ', ' + (c.state || '') : 'This address'} is outside the area we build in (${Object.values(table).map((t) => t.name.split(',')[0]).filter((n) => !/County/.test(n)).join(', ')} and Hidalgo County). You can still draft; the setbacks shown are our county defaults.`, at: now() }
+      }
+      await store.meta.set(key, rec)
+      return rec
+    },
+
     /** FEMA flood zone for an address: Census geocoder, then the National Flood Hazard Layer. */
     async flood(address) {
       const a = String(address || '').trim()

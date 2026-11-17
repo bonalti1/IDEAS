@@ -131,6 +131,8 @@ await step('enter the lot', async () => {
     await page.locator('#lot-width').fill('150')
     await page.locator('#lot-depth').fill('260')
     await page.locator('#lot-street').fill('N FM 2360')
+    const confirm = page.locator('#lot-confirm')
+    if (await confirm.count()) await confirm.check()
   }
   await page.waitForTimeout(2500)
   const flood = await page.locator('.stats').getByText(/Flood zone/).locator('..').textContent().catch(() => '')

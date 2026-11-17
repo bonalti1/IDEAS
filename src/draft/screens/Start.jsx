@@ -13,7 +13,11 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
   const [name, setName] = useState(user?.name || '')
   const [file, setFile] = useState(null)
   const [guest, setGuest] = useState(false)
-  const ready = address.trim().length > 4 || file
+  // a street address (number, street, city) or a lot and subdivision; anything shorter gets a hint
+  const a = address.trim()
+  const looksLikeAddress = (/\d/.test(a) && /\s/.test(a) && a.length >= 8) || /\blot\b/i.test(a)
+  const ready = looksLikeAddress || !!file
+  const hint = a && !looksLikeAddress && !file ? (a.length < 8 ? 'Type the full street address with the city, like 1300 W Nolana Ave, McAllen, TX.' : 'Add the street number and the city, like 1300 W Nolana Ave, McAllen, TX. Or upload the plat.') : ''
   const canStart = !!user || guest
 
   return (
@@ -27,6 +31,20 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
         </h1>
         <p className="lede">Your lot. Your style. A real house plan in minutes, finished by our drafters.</p>
       </div>
+
+      {!canStart && (
+        <div className="preview" aria-label="What you get">
+          <figure>
+            <img src="/preview/house.jpg" alt="A farmhouse drafted in 3D on its lot" loading="lazy" />
+            <figcaption>Your house on your lot, in 3D</figcaption>
+          </figure>
+          <figure>
+            <img src="/preview/plan.jpg" alt="The floor plan with the setbacks drawn on the lot" loading="lazy" />
+            <figcaption>A real floor plan you change by chatting</figcaption>
+          </figure>
+        </div>
+      )}
+      {!canStart && <p className="fine credits-line">The first draft and 10 changes are free. More changes from $49 for 5, or talk to your drafter.</p>}
 
       {!canStart && user !== undefined && (
         <SignIn
@@ -73,8 +91,13 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           )}
           <label className="field">
             <span>Address</span>
-            <input id="start-address" placeholder="Street address, or lot and subdivision" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input id="start-address" placeholder="Street address, or lot and subdivision" value={address} onChange={(e) => setAddress(e.target.value)} aria-describedby="start-address-hint" />
           </label>
+          {hint && (
+            <p id="start-address-hint" className="fine warn" style={{ marginTop: -6 }}>
+              {hint}
+            </p>
+          )}
           <div className="or">or</div>
           <label className={'drop' + (file ? ' has-file' : '')}>
             <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} hidden />

@@ -236,3 +236,58 @@ test('accounts on Postgres', { skip: !process.env.TEST_DATABASE_URL && 'set TEST
   assert.match(log(), /applied 001_init\.sql, 002_accounts\.sql/)
   await suite(base)
 })
+
+test('a plan that breaks the rules cannot be sent: 409 with the reasons, then it sends once fixed', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  const good = generateRooms(program, style)
+  // the kitchen pushed 60 ft east crosses the side setback; the office rebuilds the lot from the spec, so geometry sent by a browser cannot bypass the rules
+  const broken = good.map((r) => (r.id === 'kitchen' ? { ...r, center: [r.center[0] + 200, r.center[1]] } : r))
+  const prj = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms: broken, lot: { spec: { kind: 'reference' } } }))).body
+  const refused = await j(await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' }, ifc: 'ISO-10303-21;' }))
+  assert.equal(refused.status, 409)
+  assert.match(refused.body.error, /breaks 1 rule/)
+  assert.ok(refused.body.rules.some((x) => /setback/.test(x)), refused.body.rules.join(' | '))
+  assert.equal((await j(await ana.get(`/api/projects/${prj.id}`))).body.status, 'drafting')
+  await ana.put(`/api/projects/${prj.id}`, { rooms: good, note: 'fixed' })
+  const sent = await j(await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' }, ifc: 'ISO-10303-21;' }))
+  assert.equal(sent.status, 200)
+  assert.equal(sent.body.status, 'in_review')
+})
+
+test('a fix the client clicked applies its ops without the interpreter and costs one credit', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  // a 100 by 150 ft lot in McAllen: a 40 ft primary bedroom crosses the side setback there
+  const { buildLot } = await import('../src/draft/lib/lot.js')
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const prj = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, lot), lot }))).body
+  // too wide: refused with the whole list and at least one fix to click
+  const no = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the primary bedroom 40 feet wide' }))
+  assert.equal(no.body.applied, false)
+  assert.ok(no.body.reasons.length >= 1)
+  assert.ok(no.body.fixes.length >= 1, 'a fix is offered')
+  assert.ok(no.body.fixes[0].label.endsWith('?'))
+  assert.equal(no.body.credits, 10, 'a refusal costs nothing')
+  const yes = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: no.body.fixes[0].label, ops: no.body.fixes[0].ops }))
+  assert.equal(yes.body.applied, true, yes.body.reply)
+  assert.equal(yes.body.source, 'fix')
+  assert.equal(yes.body.credits, 9)
+})
+
+test('/api/interpret answers 200 with the basic rules when the office has no Claude key', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
+  const { summarizeRooms } = await import('../src/draft/lib/ops.js')
+  const rooms = summarizeRooms(generateRooms(program, style))
+  const r = await fetch(base + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make the kitchen bigger', rooms, program, kit: { id: 'farmhouse' } }) })
+  assert.equal(r.status, 200)
+  const body = await r.json()
+  assert.equal(body.source, 'fallback')
+  assert.equal(body.reason, 'not configured')
+  assert.equal(body.ops[0].op, 'resize')
+  assert.equal(body.ops[0].room, 'kitchen')
+  // a request the rules cannot read is still 200, with a question back and no ops
+  const r2 = await fetch(base + '/api/interpret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'make it nicer', rooms, program, kit: { id: 'farmhouse' } }) })
+  assert.equal(r2.status, 200)
+  assert.deepEqual((await r2.json()).ops, [])
+})

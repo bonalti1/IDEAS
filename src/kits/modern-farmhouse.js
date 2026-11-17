@@ -344,11 +344,11 @@ export const KIT = {
   // Rules the change interpreter checks before any client edit is applied.
   rules: {
     // minimum outside dimensions in feet by room kind; habitable rooms also need 70 sf (IRC R304)
-    minSize: { bed: [10, 10], master: [12, 12], suite2: [11, 11], bath: [5, 8], mbath: [6, 8], jackjill: [5, 8], halfbath: [3, 5], kitchen: [9, 9], living: [12, 12], dining: [9, 9], office: [7, 7], laundry: [5, 6], mud: [4, 5], pantry: [3, 3], wic: [3, 3], mwic: [4, 5], foyer: [4, 4], hall: [3, 3], garage: [11, 20] },
+    minSize: { bed: [10, 10], master: [12, 12], suite2: [11, 11], bath: [5, 8], mbath: [6, 8], jackjill: [5, 8], halfbath: [3, 5], kitchen: [9, 9], living: [12, 12], dining: [9, 9], office: [7, 7], laundry: [5, 6], mud: [4, 5], pantry: [3, 3], wic: [2, 3], mwic: [4, 5], foyer: [4, 4], hall: [3, 3], garage: [11, 20] },
     habitable: ['bed', 'master', 'suite2', 'kitchen', 'living', 'dining', 'office'],
     bedrooms: ['bed', 'master', 'suite2'],
     wet: ['bath', 'mbath', 'jackjill', 'halfbath', 'kitchen', 'laundry'],
-    wetDistanceFt: 20,
+    wetDistanceFt: 40, // the Garza bed wing's baths sit 31 to 35 ft from the kitchen; 40 still catches a bath at the far end of a garage
     required: [['kitchen'], ['living'], ['bed', 'master', 'suite2'], ['bath', 'mbath', 'jackjill']],
     maxRoomFt: 40,
   },
