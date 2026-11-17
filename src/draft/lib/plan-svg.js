@@ -17,6 +17,16 @@ const r1 = (v) => Math.round(v * 10) / 10
 
 const overlapBox = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
+/** The lot's name for a title: its address, or "100 × 150 lot, McAllen" for a typed-in lot. */
+export function lotTitle(design) {
+  const lot = design.lot || {}
+  if (lot.address) return lot.address
+  const spec = lot.spec || {}
+  const city = lot.cityName || (lot.city ? lot.city.charAt(0).toUpperCase() + lot.city.slice(1) : '')
+  if (spec.width && spec.depth) return `${spec.width} × ${spec.depth} lot${city ? `, ${city.replace(/, TX$/, '')}` : ''}`
+  return city ? `lot in ${city}` : 'lot'
+}
+
 /** Fixture symbols, drawn in a box (x, y, w, h) in SVG units. */
 function fixtureSymbol(f, x, y, w, h) {
   const cx = x + w / 2
@@ -328,8 +338,9 @@ export function planSVG(design, opts = {}) {
   const sy = Y(maxZ) + 5 * IN
   out.push(`<g id="scale" class="scale">${[0, 5, 10, 20].slice(0, -1).map((a, i, arr) => `<rect x="${r1(sx + a * IN)}" y="${r1(sy)}" width="${r1(([5, 10, 20][i] - a) * IN)}" height="4" fill="${i % 2 ? '#fff' : '#1a1a1a'}" stroke="#1a1a1a" stroke-width="0.6"/>`).join('')}${[0, 5, 10, 20].map((a) => `<text x="${r1(sx + a * IN)}" y="${r1(sy + 12)}" font-size="6" text-anchor="middle" ${font} fill="#1a1a1a">${a}'</text>`).join('')}<text x="${r1(sx + 20 * IN + 14)}" y="${r1(sy + 5)}" font-size="6" ${font} fill="#1a1a1a">graphic scale, feet</text></g>`)
   const date = opts.date || new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-  const title = opts.title || `${design.client || 'Draft'} · ${design.lot?.address || 'lot'}`
-  const sub = `${design.style?.name || ''} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`
+  const title = opts.title || `${design.client || 'Draft'} · ${lotTitle(design)}`
+  const ab = design.asBuilt || design.program || {}
+  const sub = `${design.style?.name || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`
   out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN)}" font-size="13" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN + 15)}" font-size="8" ${font} fill="#555">FLOOR PLAN · ${esc(sub)}</text></g>`)
 
   const defs = `<defs><pattern id="porchHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d8d3c8" stroke-width="1"/></pattern></defs>`
@@ -356,6 +367,7 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
   const drawW = (plan.width / 12) * scale
   const drawH = (plan.height / 12) * scale
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  const ab = design.asBuilt || design.program || {}
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Draft')} floor plan</title>
 <style>
@@ -378,7 +390,7 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
   <div class="drawing">${plan.svg}</div>
   <div class="block">
     <div><b>${esc(titleBlock.firm || 'South Texas Builders')}</b><small>${esc(titleBlock.address || '')}</small><small>${esc(titleBlock.phone || '')}</small></div>
-    <div><b>${esc(design.client || 'Client')}</b><small>${esc(design.lot?.address || '')}</small><small>${esc(design.style?.name || '')} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath${design.program?.garage ? `, ${design.program.garage}-car` : ''}</small></div>
+    <div><b>${esc(design.client || 'Client')}</b><small>${esc(lotTitle(design))}</small><small>${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''}</small></div>
     <div><b>Floor plan</b><small>Scale ${esc(scaleLabel)}</small><small>${esc(date)}</small></div>
     <div><b>A-200</b><small>Draft House ${design.contract ? 'v' + design.contract : ''}</small><small>preliminary, not for construction</small></div>
   </div>
@@ -396,6 +408,7 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
  */
 export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
   const plan = planSVG(design)
+  const ab = design.asBuilt || design.program || {}
   const k = (n) => '$' + Math.round(n / 1000).toLocaleString() + 'k'
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const checks = (audit?.groups || []).map((g) => `<li class="${g.ok ? 'ok' : 'bad'}">${g.ok ? '✓' : '✗'} ${esc(g.name)}</li>`).join('')
@@ -423,7 +436,7 @@ export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
 <p class="print-hint">Print this page and choose "Save as PDF".</p>
 <div class="page">
   <h1>${esc(design.client || 'Your house')}</h1>
-  <p class="sub">${esc(design.lot?.address || '')} · ${esc(design.style?.name || '')} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath${design.program?.garage ? `, ${design.program.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
+  <p class="sub">${esc(lotTitle(design))} · ${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
   <div class="plan">${plan.svg}</div>
   <h2>Price range</h2>
   <p class="price">${price ? `${k(price.low)}–${k(price.high)}` : '—'}</p>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
-import { floorArea, isRoom, kitFor } from '../lib/layout.js'
+import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
 import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
@@ -164,8 +164,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} />
         )}
         <div className="viewport-tag">
-          {style.name} · {program.beds} bed · {program.baths}
-          {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}
+          {style.name} · {programLine(programOf(rooms, program))}
         </div>
         <div className="viewport-views">
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>

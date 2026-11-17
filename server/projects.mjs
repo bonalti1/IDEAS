@@ -4,7 +4,7 @@
 import crypto from 'node:crypto'
 import { decide } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
-import { kitFor } from '../src/draft/lib/layout.js'
+import { kitFor, programOf } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
 import { RATES } from '../src/draft/lib/pricing.js'
@@ -193,8 +193,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
     // drafter inbox: waiting first, then recent decisions, plus plat lots nobody has confirmed
     async inbox() {
-      const waiting = await store.projects.listByStatus(['in_review'])
-      const recent = await store.projects.listByStatus(['returned', 'approved', 'built'], 30)
+      // the counts a drafter reads come from the plan as it is, not the program the client started with
+      const asBuilt = async (list) => Promise.all(list.map(async (p) => ({ ...p, asBuilt: programOf((await withRooms(p)).rooms, p.program || {}) })))
+      const waiting = await asBuilt(await store.projects.listByStatus(['in_review']))
+      const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       const lots = open.filter((p) => p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed)
       return { waiting, recent, lots }

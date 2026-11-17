@@ -2,7 +2,7 @@
 // worker. Everything the worker needs to build the model in the office
 // template is in here. Version it; the worker refuses versions it does not know.
 import polygonClipping from 'polygon-clipping'
-import { kitFor, isRoom, floorArea } from './layout.js'
+import { kitFor, isRoom, floorArea, programOf } from './layout.js'
 import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
 import { sheetPlan } from './sheets.js'
@@ -35,9 +35,11 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     contract: CONTRACT_VERSION,
     createdAt: new Date().toISOString(),
     client: client || null,
-    lot: lot ? { address: lot.address, city: lot.city, cityName: lot.cityName, source: lot.source, confirmed: lot.confirmed, areaSf: lot.areaSf, boundary: lot.boundary, envelope: lot.envelope, angle: lot.angle, centre: lot.centre, setbacks: lot.edges?.map((e) => e.label), flood: lot.flood || null } : null,
+    lot: lot ? { address: lot.address, city: lot.city, cityName: lot.cityName, spec: lot.spec ? { kind: lot.spec.kind, width: lot.spec.width, depth: lot.spec.depth } : null, source: lot.source, confirmed: lot.confirmed, areaSf: lot.areaSf, boundary: lot.boundary, envelope: lot.envelope, angle: lot.angle, centre: lot.centre, setbacks: lot.edges?.map((e) => e.label), flood: lot.flood || null } : null,
     style: { id: style.id, name: style.name, kitId: kit.id, kitSource: kit.source },
     program,
+    // the plan as it is after the client's changes: what the title block, the summary and the schedules say
+    asBuilt: programOf(rooms, program),
     units: 'feet',
     // local frame: x along the front of the house, z toward the street, y up; origin at the plan centre
     frame: { x: 'along front', z: 'toward street', y: 'up', origin: 'plan centre', lotRotationRad: null },

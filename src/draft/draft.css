@@ -407,3 +407,6 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
   .plan-drawing-inner { top: 56px; }
   .plan-drawing-inner svg { max-height: 92%; }
 }
+
+.checks li.warn .mark { color: #b8860b; }
+.card.audit.pass.warned h3 { color: #b8860b; }

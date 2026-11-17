@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
-import { kitFor } from '../lib/layout.js'
+import { kitFor, programOf, programLine } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
 import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
@@ -229,7 +229,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
           <div className="card stats">
             <Stat k="Lot" v={lot?.address} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Program" v={`${program.beds} bed · ${program.baths}${program.halfBath ? '.5' : ''} bath · ${program.garage ? program.garage + '-car · ' : ''}${program.stories} story`} />
+            <Stat k="Program" v={programLine(programOf(rooms, program))} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
             <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />

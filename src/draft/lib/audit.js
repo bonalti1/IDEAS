@@ -332,7 +332,8 @@ export function auditPlan(rooms, program, kit, lot) {
   }
 
   // i) living area within 3% of what was asked
-  const living = R.filter((r) => !r.open && r.kind !== 'garage').reduce((s, r) => s + r.w * r.d, 0) * (rooms.some((r) => r.kind === 'hall') ? 1 : 1.22) * (program?.stories || 1)
+  // what is drawn, nothing more: the conditioned rooms' area (walls and halls are rooms of their own)
+  const living = R.filter((r) => !r.open && r.kind !== 'garage').reduce((s, r) => s + r.w * r.d, 0) * (program?.stories || 1)
   measures.livingSf = Math.round(living)
   if (program?.sqft) {
     const off = (living - program.sqft) / program.sqft
@@ -388,7 +389,7 @@ export function auditSummary(rooms, program, kit, lot) {
   const groups = CHECK_GROUPS.map((g) => {
     const errors = a.errors.filter((f) => g.ids.includes(f.id)).map((f) => f.message)
     const warnings = a.warnings.filter((f) => g.ids.includes(f.id)).map((f) => f.message)
-    return { id: g.id, name: g.name, ok: errors.length === 0, errors, warnings }
+    return { id: g.id, name: g.name, ok: errors.length === 0, state: errors.length ? 'fail' : warnings.length ? 'warn' : 'pass', errors, warnings }
   })
   return { ok: a.ok, errors: a.errors.length, warnings: a.warnings.length, groups, measures: a.measures }
 }

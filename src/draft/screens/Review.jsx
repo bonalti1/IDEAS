@@ -5,7 +5,7 @@ import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, sf } from '../ui.jsx'
 import { api } from '../lib/api.js'
 import { STYLES } from '../lib/styles.js'
-import { floorArea } from '../lib/layout.js'
+import { floorArea, programOf, programLine } from '../lib/layout.js'
 import { STATUS } from '../lib/status.js'
 
 const ago = (iso) => {
@@ -21,8 +21,7 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || 'no address'} · {p.style?.name} · {p.program?.beds} bed, {p.program?.baths}
-          {p.program?.halfBath ? '.5' : ''} bath · {p.version - 1} version{p.version - 1 === 1 ? '' : 's'}
+          {p.address || 'no address'} · {p.style?.name} · {programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · {p.version - 1} version{p.version - 1 === 1 ? '' : 's'}
         </span>
       </span>
       <span className="inbox-side">
@@ -119,7 +118,7 @@ export default function Review({ user }) {
           <div className="stats">
             <Stat k="Lot" v={open.address || '—'} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Rooms" v={`${open.program?.beds} bed · ${open.program?.baths}${open.program?.halfBath ? '.5' : ''} bath · ${open.program?.garage ? open.program.garage + '-car · ' : ''}${open.program?.stories} story`} />
+            <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
             <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
           </div>
@@ -179,8 +178,8 @@ export default function Review({ user }) {
               )}
               <ul className="list small checks">
                 {open.audit.groups.map((g) => (
-                  <li key={g.id} className={g.ok ? 'ok' : 'bad'}>
-                    <span className="mark">{g.ok ? '✓' : '✗'}</span> {g.name}
+                  <li key={g.id} className={g.state === 'fail' ? 'bad' : g.state === 'warn' ? 'warn' : 'ok'}>
+                    <span className="mark">{g.state === 'fail' ? '✗' : g.state === 'warn' ? '⚠' : '✓'}</span> {g.name}
                     {g.errors.map((m, i) => (
                       <span key={i} className="fine bad block">
                         {m}

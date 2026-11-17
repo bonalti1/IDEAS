@@ -945,6 +945,38 @@ export function floorArea(rooms, stories = 1) {
   return rooms.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0) * (planBased ? 1 : CIRCULATION) * stories
 }
 
+/**
+ * The program as the plan actually has it: bedrooms, full and half baths, the garage's cars, the
+ * office, the porches and the living area, counted from the rooms. Every screen, design.json, the
+ * summary and the title block read this, so "add a bedroom" shows up everywhere at once.
+ */
+export function programOf(rooms, program = {}) {
+  const list = rooms.filter(isRoom)
+  const count = (...kinds) => list.filter((r) => kinds.includes(r.kind)).length
+  const garage = list.find((r) => r.kind === 'garage')
+  const cars = garage ? +(garage.name.match(/^(\d+)-Car/) || [])[1] || Math.max(1, Math.round(Math.max(garage.w, garage.d) / 11)) : 0
+  return {
+    ...program,
+    beds: count('bed', 'master', 'suite2'),
+    baths: count('bath', 'mbath', 'jackjill'),
+    halfBath: count('halfbath') > 0,
+    halfBaths: count('halfbath'),
+    office: count('office') > 0,
+    garage: cars,
+    suite2: count('suite2') > 0,
+    frontPorch: count('frontPorch') > 0,
+    rearPorch: count('rearPorch') > 0,
+    stories: program.stories || 1,
+    livingSf: Math.round(floorArea(rooms, program.stories || 1)),
+    asked: program.sqft || null,
+  }
+}
+/** "4 bed · 3.5 bath · 2-car · 1 story" */
+export function programLine(p, sep = ' · ') {
+  const baths = `${p.baths}${p.halfBaths > 1 ? `.${p.halfBaths}` : p.halfBath ? '.5' : ''}`
+  return [`${p.beds} bed`, `${baths} bath`, p.garage ? `${p.garage}-car` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
+}
+
 /** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */
 export function outline(rooms) {
   const solid = rooms.filter((r) => !r.open && !r.element)
