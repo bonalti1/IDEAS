@@ -15,7 +15,7 @@ Commits, in order:
 | b246711 | Unsupported requests get a real answer; no-op changes cost nothing; porch adds say their sf; fallback timing (round 2 items 2, 5, 6) |
 | abbd1cc | "Show me options", 3D in the kit's materials with tags that follow the zoom, the phone in one column (P2 items 18, 19; round 2 item 8) |
 
-Tests: `npm test` → **202 tests, 200 pass, 0 fail, 2 skipped** (the two `LIVE=1` tests: Claude reading the Garza site plan and the FEMA lookup, which need the key and the internet). `vite build` clean. The IFC round-trip tests ran (python with IfcOpenShell is in this container).
+Tests: `npm test` → **202 tests, 200 pass, 0 fail, 2 skipped** (the two `LIVE=1` tests: a Stripe Checkout session in test mode, which needs `STRIPE_SECRET_KEY`, and Claude reading the Garza site plan with the FEMA lookup, which need the key and the internet). `vite build` clean. The IFC round-trip tests ran (python with IfcOpenShell is in this container).
 
 ## Item by item
 
