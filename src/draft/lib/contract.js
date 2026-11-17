@@ -2,7 +2,7 @@
 // worker. Everything the worker needs to build the model in the office
 // template is in here. Version it; the worker refuses versions it does not know.
 import polygonClipping from 'polygon-clipping'
-import { kitFor, isRoom, floorArea } from './layout.js'
+import { kitFor, isRoom, floorArea, programOf } from './layout.js'
 import { wallsFrom } from './ifc.js'
 import { takeoff } from './takeoff.js'
 import { sheetPlan } from './sheets.js'
@@ -35,16 +35,18 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     contract: CONTRACT_VERSION,
     createdAt: new Date().toISOString(),
     client: client || null,
-    lot: lot ? { address: lot.address, city: lot.city, cityName: lot.cityName, source: lot.source, confirmed: lot.confirmed, areaSf: lot.areaSf, boundary: lot.boundary, envelope: lot.envelope, angle: lot.angle, centre: lot.centre, setbacks: lot.edges?.map((e) => e.label), flood: lot.flood || null } : null,
+    lot: lot ? { address: lot.address, city: lot.city, cityName: lot.cityName, spec: lot.spec ? { kind: lot.spec.kind, width: lot.spec.width, depth: lot.spec.depth } : null, source: lot.source, confirmed: lot.confirmed, areaSf: lot.areaSf, boundary: lot.boundary, corners: lot.corners || null, envelope: lot.envelope, angle: lot.angle, centre: lot.centre, setbacks: lot.edges?.map((e) => e.label), edges: lot.edges?.map((e) => ({ kind: e.kind, street: e.street || null, setback: e.setback, label: e.label })) || null, frontStreet: lot.edges?.find((e) => e.kind === 'front')?.street || lot.spec?.frontStreet || null, alley: !!lot.alley, flood: lot.flood || null } : null,
     style: { id: style.id, name: style.name, kitId: kit.id, kitSource: kit.source },
     program,
+    // the plan as it is after the client's changes: what the title block, the summary and the schedules say
+    asBuilt: programOf(rooms, program),
     units: 'feet',
     // local frame: x along the front of the house, z toward the street, y up; origin at the plan centre
     frame: { x: 'along front', z: 'toward street', y: 'up', origin: 'plan centre', lotRotationRad: null },
     levels: [{ name: 'Level 1', elevation: 0 }],
     rooms: roomList.map((r) => ({ id: r.id, kind: r.kind, name: r.name, x: r2(r.local[0]), z: r2(r.local[1]), w: r2(r.w), d: r2(r.d), plate: r2(r.plate), open: !!r.open, plumbing: !!r.plumbing })),
     walls: walls.map((w, i) => ({ id: `wall-${i + 1}`, a: w.a.map(r2), b: w.b.map(r2), thicknessIn: w.thicknessIn, plate: r2(w.plate), base: r2(w.base || 0), exterior: !!w.exterior, plumbing: !!w.plumbing, dormer: !!w.dormer, revitType: w.dormer || w.exterior ? kit.revit?.wallTypes?.exterior : w.plumbing ? kit.revit?.wallTypes?.plumbing : kit.revit?.wallTypes?.interior })),
-    doors: elements.filter((e) => e.kind === 'door').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), height: e.h && e.h !== 6.67 ? r2(e.h) : DOOR_HEAD, swing: e.swing || null, hinge: e.hinge || null, pair: !!e.pair, cased: !!e.cased, exterior: !!e.exterior, size: e.size || null, fireRated: !!e.fireRated, selfClosing: !!e.selfClosing, overhead: e.size === 'overhead' || e.size === 'overheadSingle', revitFamily: kit.revit?.doors?.[e.size] || null })),
+    doors: elements.filter((e) => e.kind === 'door').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), height: e.h ? r2(e.h) : DOOR_HEAD, swing: e.swing || null, hinge: e.hinge || null, pair: !!e.pair, cased: !!e.cased, exterior: !!e.exterior, size: e.size || null, fireRated: !!e.fireRated, selfClosing: !!e.selfClosing, overhead: e.size === 'overhead' || e.size === 'overheadSingle', revitFamily: kit.revit?.doors?.[e.size] || null })),
     windows: elements.filter((e) => e.kind === 'window').map((e) => ({ id: e.id, tag: marks.get(e.id) || null, room: e.room, mark: e.mark, x: r2(e.local[0]), z: r2(e.local[1]), axis: e.axis, width: r2(e.span), sill: e.sill ?? WINDOW_SILL[e.mark] ?? 2, head: e.head ?? WINDOW_HEAD[e.mark] ?? 7, revitFamily: kit.revit?.windows?.[e.mark] || null })),
     fixtures: elements.filter((e) => e.kind === 'fixture').map((e) => ({ id: e.id, kind: e.fixture, name: e.name, room: e.room, x: r2(e.local[0]), z: r2(e.local[1]), w: r2(e.w), d: r2(e.d), h: r2(e.h), face: e.face || null, revitFamily: kit.revit?.fixtures?.[e.fixture] || null })),
     // the slab outline(s): the union of the solid rooms, grown a little so wall-thick gaps close; largest ring first (frame feet)

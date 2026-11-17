@@ -22,7 +22,9 @@ test('the same plan costs more in Cameron County, and the garage and porches are
   const program = { ...DEFAULT_PROGRAM, sqft: 2400, garage: 2 }
   const rooms = generateRooms(program, style, mcallen)
   const hidalgo = estimate({ rooms, program, style, lot: mcallen })
-  assert.equal(countyOf({ city: 'brownsville' }), RATES.defaultCounty, 'a city without a preset falls back to the default county')
+  assert.equal(countyOf({ city: 'brownsville' }), null, 'a city without a preset has no county until the lot step asks for one (no silent Hidalgo)')
+  assert.equal(countyOf({ city: 'brownsville', spec: { county: 'Cameron County' } }), 'Cameron County')
+  assert.equal(estimate({ rooms, program, style, lot: { city: 'brownsville' } }).needsCounty, true)
   const cameron = estimate({ rooms, program, style, lot: mcallen, county: 'Cameron County' })
   assert.deepEqual(cameron.perSf, [120, 130])
   assert.ok(cameron.low > hidalgo.low && cameron.high > hidalgo.high, `${cameron.low} > ${hidalgo.low}`)

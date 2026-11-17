@@ -5,6 +5,8 @@
 //
 // The frame is design.json's: x along the front, z toward the street (down the page).
 
+import { drivewaySlabs, walkSlabs, lotCoverage } from './site.js'
+
 const IN = 12
 const fmt = (ft) => {
   const total = Math.round(ft * 12)
@@ -16,6 +18,16 @@ const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').
 const r1 = (v) => Math.round(v * 10) / 10
 
 const overlapBox = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+
+/** The lot's name for a title: its address, or "100 × 150 lot, McAllen" for a typed-in lot. */
+export function lotTitle(design) {
+  const lot = design.lot || {}
+  if (lot.address) return lot.address
+  const spec = lot.spec || {}
+  const city = lot.cityName || (lot.city ? lot.city.charAt(0).toUpperCase() + lot.city.slice(1) : '')
+  if (spec.width && spec.depth) return `${spec.width} × ${spec.depth} lot${city ? `, ${city.replace(/, TX$/, '')}` : ''}`
+  return city ? `lot in ${city}` : 'lot'
+}
 
 /** Fixture symbols, drawn in a box (x, y, w, h) in SVG units. */
 function fixtureSymbol(f, x, y, w, h) {
@@ -328,8 +340,9 @@ export function planSVG(design, opts = {}) {
   const sy = Y(maxZ) + 5 * IN
   out.push(`<g id="scale" class="scale">${[0, 5, 10, 20].slice(0, -1).map((a, i, arr) => `<rect x="${r1(sx + a * IN)}" y="${r1(sy)}" width="${r1(([5, 10, 20][i] - a) * IN)}" height="4" fill="${i % 2 ? '#fff' : '#1a1a1a'}" stroke="#1a1a1a" stroke-width="0.6"/>`).join('')}${[0, 5, 10, 20].map((a) => `<text x="${r1(sx + a * IN)}" y="${r1(sy + 12)}" font-size="6" text-anchor="middle" ${font} fill="#1a1a1a">${a}'</text>`).join('')}<text x="${r1(sx + 20 * IN + 14)}" y="${r1(sy + 5)}" font-size="6" ${font} fill="#1a1a1a">graphic scale, feet</text></g>`)
   const date = opts.date || new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-  const title = opts.title || `${design.client || 'Draft'} · ${design.lot?.address || 'lot'}`
-  const sub = `${design.style?.name || ''} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`
+  const title = opts.title || `${design.client || 'Draft'} · ${lotTitle(design)}`
+  const ab = design.asBuilt || design.program || {}
+  const sub = `${design.style?.name || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`
   out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN)}" font-size="13" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 6.6 * IN + 15)}" font-size="8" ${font} fill="#555">FLOOR PLAN · ${esc(sub)}</text></g>`)
 
   const defs = `<defs><pattern id="porchHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d8d3c8" stroke-width="1"/></pattern></defs>`
@@ -337,51 +350,212 @@ export function planSVG(design, opts = {}) {
   return { svg, width, height, labels, dims, scaleNote: 'drawn in inches of the house: 1 ft = 12 units' }
 }
 
+
 /**
- * A printable sheet: the plan at 1/4" = 1'-0" on a tabloid (17 x 11 in) page when it fits, else
- * 3/16" or 1/8", with the title block. Returns a complete HTML document.
+ * The site plan from design.json: lot lines with their lengths, the setback envelope (dashed) with each
+ * setback labelled, the house footprint on the lot, the driveway and the front walk, the street name(s),
+ * a north arrow, a graphic scale, and the lot coverage. World feet on the page (north up): 1 ft = 12 units
+ * like the floor plan, so the same sheet scales apply.
+ */
+export function sitePlanSVG(design, opts = {}) {
+  const lot = design.lot
+  const rooms = design.rooms || []
+  if (!lot?.boundary?.length || !rooms.length) return { svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>', width: 10, height: 10, coverage: null, slabs: [] }
+  const angle = lot.angle || 0
+  const c = lot.centre || [0, 0]
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const world = (lx, lz) => [c[0] + lx * cos - lz * sin, c[1] + lx * sin + lz * cos]
+  const boundary = lot.boundary
+  const envelope = lot.envelope || []
+  const xs = boundary.map((p) => p[0])
+  const zs = boundary.map((p) => p[1])
+  const M = 24 // margin feet for labels, the street and the north arrow
+  const F = 4.5 // lettering is sized for 1" = 20': 4.5 times the floor plan's
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  const TOP = 24
+  const X = (ft) => (ft - minX + M) * IN
+  const Y = (ft) => (ft - minZ + M + TOP) * IN
+  const width = (maxX - minX + 2 * M) * IN
+  const height = (maxZ - minZ + 2 * M + TOP) * IN
+  const font = 'font-family="Helvetica, Arial, sans-serif"'
+  const out = []
+  const poly = (pts) => pts.map((p) => `${r1(X(p[0]))},${r1(Y(p[1]))}`).join(' ')
+  // a rotated rectangle in the house frame → world polygon
+  const rectPoly = (x, z, w, d) => [[x - w / 2, z - d / 2], [x + w / 2, z - d / 2], [x + w / 2, z + d / 2], [x - w / 2, z + d / 2]].map(([lx, lz]) => world(lx, lz))
+
+  // ── the lot, the envelope ──
+  out.push(`<polygon id="lot-lines" points="${poly(boundary)}" fill="#f6f5f0" stroke="#1a1a1a" stroke-width="3"/>`)
+  if (envelope.length >= 3) out.push(`<polygon id="setbacks" points="${poly(envelope)}" fill="none" stroke="#7a7266" stroke-width="1.8" stroke-dasharray="24 12"/>`)
+  // ── the driveway and the walk, then the house ──
+  const slabs = drivewaySlabs(rooms, design.doors || [], lot)
+  const walk = walkSlabs(rooms, design.doors || [], lot, slabs)
+  slabs.forEach((sl) => out.push(`<polygon class="driveway" points="${poly(rectPoly(sl.x, sl.z, sl.w, sl.d))}" fill="#e3dfd6" stroke="#8d8578" stroke-width="1.5"/>`))
+  walk.forEach((sl) => out.push(`<polygon class="walk" points="${poly(rectPoly(sl.x, sl.z, sl.w, sl.d))}" fill="#e3dfd6" stroke="#8d8578" stroke-width="1.5"/>`))
+  rooms.forEach((r) => {
+    out.push(`<polygon class="footprint ${r.open ? 'porch' : r.kind}" points="${poly(rectPoly(r.x, r.z, r.w, r.d))}" fill="${r.open ? 'url(#porchHatch)' : r.kind === 'garage' ? '#ebe8e1' : '#fbfaf7'}" stroke="#1a1a1a" stroke-width="${r.open ? 1 : 2}"/>`)
+  })
+  // the house, named once at its centre; the garage and the porches named small
+  const solid = rooms.filter((r) => !r.open)
+  const hx = solid.reduce((s2, r) => s2 + r.x * r.w * r.d, 0) / solid.reduce((s2, r) => s2 + r.w * r.d, 0)
+  const hz = solid.reduce((s2, r) => s2 + r.z * r.w * r.d, 0) / solid.reduce((s2, r) => s2 + r.w * r.d, 0)
+  const [hwx, hwz] = world(hx, hz)
+  const ab = design.asBuilt || design.program || {}
+  out.push(`<text x="${r1(X(hwx))}" y="${r1(Y(hwz))}" font-size="${9 * F}" font-weight="700" text-anchor="middle" ${font} fill="#1a1a1a" transform="rotate(${r1((angle * 180) / Math.PI)} ${r1(X(hwx))} ${r1(Y(hwz))})">${esc(design.style?.name || 'House')} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''}</text>`)
+  rooms.filter((r) => r.open || r.kind === 'garage').forEach((r) => {
+    const [wx, wz] = world(r.x, r.z)
+    out.push(`<text x="${r1(X(wx))}" y="${r1(Y(wz) + 2 * F)}" font-size="${5.5 * F}" text-anchor="middle" ${font} fill="#555">${esc(r.name)}</text>`)
+  })
+  slabs.filter((sl) => sl.part === 'drive').slice(-1).forEach((sl) => {
+    const [wx, wz] = world(sl.x, sl.z)
+    out.push(`<text x="${r1(X(wx))}" y="${r1(Y(wz) + 2 * F)}" font-size="${5.5 * F}" text-anchor="middle" ${font} fill="#555" transform="rotate(${r1((angle * 180) / Math.PI + (sl.d > sl.w ? 90 : 0))} ${r1(X(wx))} ${r1(Y(wz))})">driveway</text>`)
+  })
+
+  // ── lot lines: length on each edge, the street names and setbacks ──
+  const corners = lot.corners && lot.corners.length >= 3 ? lot.corners : boundary
+  const edges = lot.edges || []
+  const cx0 = corners.reduce((s2, p) => s2 + p[0], 0) / corners.length
+  const cz0 = corners.reduce((s2, p) => s2 + p[1], 0) / corners.length
+  corners.forEach((a, i) => {
+    const b = corners[(i + 1) % corners.length]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    const mx = (a[0] + b[0]) / 2
+    const mz = (a[1] + b[1]) / 2
+    // outward: away from the lot's centre
+    let nx = -(b[1] - a[1]) / len
+    let nz = (b[0] - a[0]) / len
+    if ((mx - cx0) * nx + (mz - cz0) * nz < 0) {
+      nx = -nx
+      nz = -nz
+    }
+    let deg = (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI
+    if (deg > 90 || deg < -90) deg += 180
+    const lx = X(mx + nx * 4)
+    const ly = Y(mz + nz * 4)
+    out.push(`<text class="lot-dim" x="${r1(lx)}" y="${r1(ly + 2)}" font-size="${6.5 * F}" text-anchor="middle" ${font} fill="#1a1a1a" transform="rotate(${r1(deg)} ${r1(lx)} ${r1(ly)})">${fmt(len)}</text>`)
+    const e = edges[i]
+    if (e?.street) {
+      const sx = X(mx + nx * 11)
+      const sy = Y(mz + nz * 11)
+      out.push(`<text class="street" x="${r1(sx)}" y="${r1(sy + 3)}" font-size="${8 * F}" letter-spacing="${2 * F}" text-anchor="middle" ${font} fill="#1a1a1a" transform="rotate(${r1(deg)} ${r1(sx)} ${r1(sy)})">${esc(String(e.street).toUpperCase())}</text>`)
+    }
+    if (e?.setback) {
+      const ix = X(mx - nx * (e.setback / 2))
+      const iy = Y(mz - nz * (e.setback / 2))
+      out.push(`<text class="setback" x="${r1(ix)}" y="${r1(iy + 2)}" font-size="${5 * F}" text-anchor="middle" ${font} fill="#7a7266" transform="rotate(${r1(deg)} ${r1(ix)} ${r1(iy)})">${e.setback}' ${e.kind === 'front' ? 'front' : e.kind === 'rear' ? 'rear' : e.kind === 'streetSide' ? 'street side' : 'side'} setback</text>`)
+    }
+  })
+
+  // ── north arrow, scale, coverage, title ──
+  const nx = X(maxX) + 14 * IN
+  const ny = Y(minZ) + 6 * IN
+  out.push(`<g id="north" class="north" transform="translate(${r1(nx)} ${r1(ny)}) scale(${F})"><circle r="14" fill="none" stroke="#1a1a1a" stroke-width="0.8"/><polygon points="0,-13 -5,4 0,0 5,4" fill="#1a1a1a"/><text y="-17" font-size="8" text-anchor="middle" ${font} font-weight="700" fill="#1a1a1a">N</text></g>`)
+  const sx = X(minX)
+  const sy = Y(maxZ) + 18 * IN
+  out.push(`<g id="scale" class="scale">${[0, 10, 20].map((a, i) => `<rect x="${r1(sx + a * IN)}" y="${r1(sy)}" width="${r1(([10, 20, 40][i] - a) * IN)}" height="${4 * F}" fill="${i % 2 ? '#fff' : '#1a1a1a'}" stroke="#1a1a1a" stroke-width="1.5"/>`).join('')}${[0, 10, 20, 40].map((a) => `<text x="${r1(sx + a * IN)}" y="${r1(sy + 12 * F)}" font-size="${6 * F}" text-anchor="middle" ${font} fill="#1a1a1a">${a}'</text>`).join('')}<text x="${r1(sx + 40 * IN + 14 * F)}" y="${r1(sy + 5 * F)}" font-size="${6 * F}" ${font} fill="#1a1a1a">graphic scale, feet</text></g>`)
+  const cover = lotCoverage(rooms, lot)
+  const date = opts.date || new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  const title = opts.title || `${design.client || 'Draft'} · ${lotTitle(design)}`
+  const coverText = cover.pct !== null ? `lot coverage ${cover.pct}% (${cover.footprintSf.toLocaleString()} sf of ${cover.lotSf.toLocaleString()} sf)` : `${cover.footprintSf.toLocaleString()} sf footprint`
+  out.push(`<g id="title" class="title"><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN)}" font-size="${13 * F}" font-weight="700" ${font} fill="#1a1a1a">${esc(title)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 15 * F)}" font-size="${8 * F}" ${font} fill="#555">SITE PLAN · ${esc(lot.cityName || lot.city || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''} · ${esc(date)}</text><text x="${r1(X(minX))}" y="${r1(Y(minZ) - 20 * IN + 28 * F)}" font-size="${8 * F}" ${font} fill="#555" id="coverage">${esc(coverText)}</text></g>`)
+  const defs = `<defs><pattern id="porchHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#d8d3c8" stroke-width="1"/></pattern></defs>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r1(width)} ${r1(height)}" width="${r1(width)}" height="${r1(height)}" class="site-plan"><rect width="${r1(width)}" height="${r1(height)}" fill="#fff"/>${defs}${out.join('')}</svg>`
+  return { svg, width, height, coverage: cover, slabs: [...slabs, ...walk] }
+}
+
+/**
+ * Sheet sizes and the scales a builder or a bank reads: 1/4" = 1'-0" on 24 x 36 (ARCH D), 1/8" on
+ * tabloid (17 x 11). The site plan goes at 1" = 20' (engineering) on either. The drawing is 12 units
+ * per foot, so `scale` is inches of paper per foot of house.
+ */
+export const SHEETS = {
+  archD: { id: 'archD', name: '24 × 36 (ARCH D)', pageW: 36, pageH: 24, margin: 0.75, blockH: 1.4, plan: [0.25, '1/4" = 1\'-0"'], site: [1 / 20, '1" = 20\'-0"'] },
+  tabloid: { id: 'tabloid', name: '11 × 17 (tabloid)', pageW: 17, pageH: 11, margin: 0.4, blockH: 1.1, plan: [0.125, '1/8" = 1\'-0"'], site: [1 / 40, '1" = 40\'-0"'] },
+}
+/** The site plan's scale on a sheet: the largest engineering scale (1" = 10', 20', 30', 40', 50') the lot fits at. */
+export function siteScaleFor(site, S) {
+  const w = site.width / 12
+  const h = site.height / 12
+  const scales = [[1 / 10, '1" = 10\'-0"'], [1 / 20, '1" = 20\'-0"'], [1 / 30, '1" = 30\'-0"'], [1 / 40, '1" = 40\'-0"'], [1 / 50, '1" = 50\'-0"']]
+  return scales.find(([sc]) => w * sc <= S.availW && h * sc <= S.availH) || scales[scales.length - 1]
+}
+/** The sheet a plan fits at its scale: ARCH D at 1/4" unless asked for tabloid; a plan too big for the scale says so. */
+export function sheetFor(plan, sheetId = 'archD') {
+  const S = SHEETS[sheetId] || SHEETS.archD
+  const scales = S.id === 'archD' ? [[0.25, '1/4" = 1\'-0"'], [0.1875, '3/16" = 1\'-0"'], [0.125, '1/8" = 1\'-0"']] : [[0.125, '1/8" = 1\'-0"'], [0.09375, '3/32" = 1\'-0"'], [0.0625, '1/16" = 1\'-0"']]
+  const w = plan.width / 12
+  const h = plan.height / 12
+  // the sheet's own scale, landscape; else turned portrait; else the next scale down, each a scale a builder reads
+  for (const [scale, label] of scales) {
+    for (const orientation of ['landscape', 'portrait']) {
+      const pageW = orientation === 'landscape' ? Math.max(S.pageW, S.pageH) : Math.min(S.pageW, S.pageH)
+      const pageH = orientation === 'landscape' ? Math.min(S.pageW, S.pageH) : Math.max(S.pageW, S.pageH)
+      const availW = pageW - 2 * S.margin
+      const availH = pageH - 2 * S.margin - S.blockH
+      if (w * scale <= availW && h * scale <= availH) return { ...S, pageW, pageH, orientation, availW, availH, plan: [scale, label], fits: true }
+    }
+  }
+  const availW = S.pageW - 2 * S.margin
+  const availH = S.pageH - 2 * S.margin - S.blockH
+  return { ...S, orientation: 'landscape', availW, availH, fits: false }
+}
+
+/**
+ * Printable sheets: the floor plan at 1/4" = 1'-0" on 24 x 36 (ARCH D), or 1/8" on tabloid when asked,
+ * and the site plan at 1" = 20' (1" = 40' on tabloid), each with the title block. A complete HTML
+ * document (the print preview; the PDF file is built by pdf.js from the same drawings).
  */
 export function planSheetHTML(design, titleBlock = {}, opts = {}) {
   const plan = planSVG(design, opts)
-  const pageW = 17
-  const pageH = 11
-  const margin = 0.4
-  const blockH = 1.1
-  const availW = pageW - 2 * margin
-  const availH = pageH - 2 * margin - blockH
-  // scale in inches of paper per foot of house; the drawing is 12 units per foot
-  const options = [[0.25, '1/4" = 1\'-0"'], [0.1875, '3/16" = 1\'-0"'], [0.125, '1/8" = 1\'-0"'], [0.09375, '3/32" = 1\'-0"'], [0.0625, '1/16" = 1\'-0"']]
-  const pick = options.find(([s]) => (plan.width / 12) * s <= availW && (plan.height / 12) * s <= availH) || options[options.length - 1]
-  const [scale, scaleLabel] = pick
-  const drawW = (plan.width / 12) * scale
-  const drawH = (plan.height / 12) * scale
+  const site = sitePlanSVG(design, opts)
+  const S = sheetFor(plan, opts.sheet)
+  const { pageW, pageH, margin, blockH, availW, availH } = S
+  const [scale, scaleLabel] = S.plan
+  const [siteScale, siteLabel] = siteScaleFor(site, S)
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  const ab = design.asBuilt || design.program || {}
+  const place = (drawing, sc) => {
+    const w = (drawing.width / 12) * sc
+    const h = (drawing.height / 12) * sc
+    return `left: ${((availW - w) / 2).toFixed(3)}in; top: ${(Math.max(0, availH - h) / 2).toFixed(3)}in; width: ${w.toFixed(3)}in; height: ${h.toFixed(3)}in;`
+  }
+  const block = (what, scaleText, number) => `<div class="block">
+    <div><b>${esc(titleBlock.firm || 'South Texas Builders')}</b><small>${esc(titleBlock.address || '')}</small><small>${esc(titleBlock.phone || '')}</small></div>
+    <div><b>${esc(design.client || 'Client')}</b><small>${esc(lotTitle(design))}</small><small>${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car` : ''}</small></div>
+    <div><b>${esc(what)}</b><small>Scale ${esc(scaleText)}</small><small>${esc(date)}</small></div>
+    <div><b>${esc(number)}</b><small>Draft House ${design.contract ? 'v' + design.contract : ''} · ${esc(S.name)}</small><small>preliminary, not for construction</small></div>
+  </div>`
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Draft')} floor plan</title>
 <style>
   @page { size: ${pageW}in ${pageH}in; margin: ${margin}in; }
   html, body { margin: 0; background: #fff; font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; }
-  .sheet { width: ${availW}in; height: ${pageH - 2 * margin}in; position: relative; margin: ${margin}in auto; box-sizing: border-box; border: 1.5px solid #1a1a1a; }
-  .drawing { position: absolute; left: ${((availW - drawW) / 2).toFixed(3)}in; top: ${((availH - drawH) / 2).toFixed(3)}in; width: ${drawW.toFixed(3)}in; height: ${drawH.toFixed(3)}in; }
+  .sheet { width: ${availW}in; height: ${pageH - 2 * margin}in; position: relative; margin: ${margin}in auto; box-sizing: border-box; border: 1.5px solid #1a1a1a; page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+  .drawing { position: absolute; }
   .drawing svg { width: 100%; height: 100%; }
-  .block { position: absolute; left: 0; right: 0; bottom: 0; height: ${blockH}in; border-top: 1.5px solid #1a1a1a; display: grid; grid-template-columns: 2.2fr 2fr 1.4fr 1fr; font-size: 9pt; }
+  .block { position: absolute; left: 0; right: 0; bottom: 0; height: ${blockH}in; border-top: 1.5px solid #1a1a1a; display: grid; grid-template-columns: 2.2fr 2fr 1.4fr 1fr; font-size: ${S.id === 'archD' ? 11 : 9}pt; background: #fff; }
   .block > div { padding: 0.08in 0.14in; border-right: 1px solid #1a1a1a; }
   .block > div:last-child { border-right: 0; }
-  .block b { display: block; font-size: 11pt; margin-bottom: 2px; }
-  .block small { color: #555; font-size: 7.5pt; display: block; }
+  .block b { display: block; font-size: ${S.id === 'archD' ? 13 : 11}pt; margin-bottom: 2px; }
+  .block small { color: #555; font-size: ${S.id === 'archD' ? 9 : 7.5}pt; display: block; }
+  .note { position: absolute; left: 0.2in; bottom: ${blockH + 0.1}in; font-size: 8pt; color: #b3261e; }
   @media screen { body { background: #e9e6df; } .sheet { background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,0.2); } .print-hint { text-align: center; font-size: 12px; color: #555; margin: 6px 0 14px; } }
   @media print { .print-hint { display: none; } }
 </style></head>
 <body>
-<p class="print-hint">Print this page and choose "Save as PDF" (tabloid 17 × 11, landscape). Scale ${esc(scaleLabel)}.</p>
+<p class="print-hint">Print this page and choose "Save as PDF" (${esc(S.name)}, landscape). Floor plan at ${esc(scaleLabel)}, site plan at ${esc(siteLabel)}.</p>
 <div class="sheet">
-  <div class="drawing">${plan.svg}</div>
-  <div class="block">
-    <div><b>${esc(titleBlock.firm || 'South Texas Builders')}</b><small>${esc(titleBlock.address || '')}</small><small>${esc(titleBlock.phone || '')}</small></div>
-    <div><b>${esc(design.client || 'Client')}</b><small>${esc(design.lot?.address || '')}</small><small>${esc(design.style?.name || '')} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath${design.program?.garage ? `, ${design.program.garage}-car` : ''}</small></div>
-    <div><b>Floor plan</b><small>Scale ${esc(scaleLabel)}</small><small>${esc(date)}</small></div>
-    <div><b>A-200</b><small>Draft House ${design.contract ? 'v' + design.contract : ''}</small><small>preliminary, not for construction</small></div>
-  </div>
+  <div class="drawing" style="${place(plan, scale)}">${plan.svg}</div>
+  ${S.fits ? '' : `<p class="note">This plan is too large for ${esc(scaleLabel)} on ${esc(S.name)}; it is drawn to fit.</p>`}
+  ${block('Floor plan', scaleLabel, 'A-200')}
+</div>
+<div class="sheet">
+  <div class="drawing" style="${place(site, siteScale)}">${site.svg}</div>
+  ${block('Site plan', siteLabel, 'A-100')}
 </div>
 </body></html>`
 }
@@ -396,6 +570,7 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
  */
 export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
   const plan = planSVG(design)
+  const ab = design.asBuilt || design.program || {}
   const k = (n) => '$' + Math.round(n / 1000).toLocaleString() + 'k'
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const checks = (audit?.groups || []).map((g) => `<li class="${g.ok ? 'ok' : 'bad'}">${g.ok ? '✓' : '✗'} ${esc(g.name)}</li>`).join('')
@@ -423,7 +598,7 @@ export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
 <p class="print-hint">Print this page and choose "Save as PDF".</p>
 <div class="page">
   <h1>${esc(design.client || 'Your house')}</h1>
-  <p class="sub">${esc(design.lot?.address || '')} · ${esc(design.style?.name || '')} · ${design.program?.beds} bed, ${design.program?.baths}${design.program?.halfBath ? '.5' : ''} bath${design.program?.garage ? `, ${design.program.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
+  <p class="sub">${esc(lotTitle(design))} · ${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
   <div class="plan">${plan.svg}</div>
   <h2>Price range</h2>
   <p class="price">${price ? `${k(price.low)}–${k(price.high)}` : '—'}</p>

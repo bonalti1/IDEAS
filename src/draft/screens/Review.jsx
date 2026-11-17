@@ -5,7 +5,7 @@ import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, sf } from '../ui.jsx'
 import { api } from '../lib/api.js'
 import { STYLES } from '../lib/styles.js'
-import { floorArea } from '../lib/layout.js'
+import { floorArea, programOf, programLine } from '../lib/layout.js'
 import { STATUS } from '../lib/status.js'
 
 const ago = (iso) => {
@@ -21,8 +21,7 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || 'no address'} · {p.style?.name} · {p.program?.beds} bed, {p.program?.baths}
-          {p.program?.halfBath ? '.5' : ''} bath · {p.version - 1} version{p.version - 1 === 1 ? '' : 's'}
+          {p.address || 'no address'} · {p.style?.name} · {programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · {p.version - 1} version{p.version - 1 === 1 ? '' : 's'}
         </span>
       </span>
       <span className="inbox-side">
@@ -37,6 +36,7 @@ export default function Review({ user }) {
   const [inbox, setInbox] = useState(null)
   const [open, setOpen] = useState(null) // project detail
   const [note, setNote] = useState('')
+  const [override, setOverride] = useState('') // the office-only note that approves a plan over audit errors
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -76,7 +76,7 @@ export default function Review({ user }) {
     if (!open || busy) return
     setBusy(true)
     try {
-      const p = await api.review(open.id, decision, note)
+      const p = await api.review(open.id, decision, note, override)
       setOpen({ ...open, ...p })
       await refresh()
     } catch (e) {
@@ -119,7 +119,7 @@ export default function Review({ user }) {
           <div className="stats">
             <Stat k="Lot" v={open.address || '—'} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Rooms" v={`${open.program?.beds} bed · ${open.program?.baths}${open.program?.halfBath ? '.5' : ''} bath · ${open.program?.garage ? open.program.garage + '-car · ' : ''}${open.program?.stories} story`} />
+            <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
             <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
           </div>
@@ -179,8 +179,8 @@ export default function Review({ user }) {
               )}
               <ul className="list small checks">
                 {open.audit.groups.map((g) => (
-                  <li key={g.id} className={g.ok ? 'ok' : 'bad'}>
-                    <span className="mark">{g.ok ? '✓' : '✗'}</span> {g.name}
+                  <li key={g.id} className={g.state === 'fail' ? 'bad' : g.state === 'warn' ? 'warn' : 'ok'}>
+                    <span className="mark">{g.state === 'fail' ? '✗' : g.state === 'warn' ? '⚠' : '✓'}</span> {g.name}
                     {g.errors.map((m, i) => (
                       <span key={i} className="fine bad block">
                         {m}
@@ -236,8 +236,10 @@ export default function Review({ user }) {
                 {open.reviews.map((r) => (
                   <li key={r.id}>
                     <b>{r.decision}</b> {ago(r.at)}
-                    {r.override ? ' (override)' : ''}
                     {r.note ? `: ${r.note}` : ''}
+                    {r.override && (
+                      <span className="fine"> · override by {r.override.by}: "{r.override.note}" ({r.override.errors?.length || 0} error{r.override.errors?.length === 1 ? '' : 's'})</span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -246,17 +248,23 @@ export default function Review({ user }) {
           {open.status === 'in_review' ? (
             <>
               <label className="field">
-                <span>{open.audit && !open.audit.ok ? 'Note to the client, or your override note' : 'Note to the client'}</span>
-                <textarea id="review-note" rows={3} placeholder={open.audit && !open.audit.ok ? 'The plan has audit errors. Say why it can go to Revit anyway; the override is logged with your name.' : 'What to fix, or a word of welcome. The client sees this.'} value={note} onChange={(e) => setNote(e.target.value)} />
+                <span>Note to the client</span>
+                <textarea id="review-note" rows={3} placeholder="What to fix, or a word of welcome. The client sees this." value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
+              {open.audit && !open.audit.ok && (
+                <label className="field">
+                  <span>Override note · office only, at least 20 characters</span>
+                  <textarea id="review-override" rows={3} placeholder="The plan has audit errors. Say why it can go to Revit anyway. The client never sees this; it is stored with your name, the time and the errors it covers." value={override} onChange={(e) => setOverride(e.target.value)} />
+                  <small className={'fine' + (override.trim().length >= 20 ? '' : ' bad')}>{override.trim().length >= 20 ? 'Approve will log this override.' : `Approve is off while the audit has errors: ${20 - override.trim().length} more character${20 - override.trim().length === 1 ? '' : 's'} to override, or fix the plan.`}</small>
+                </label>
+              )}
               {error && <p className="fine bad">{error}</p>}
-              {open.audit && !open.audit.ok && <p className="fine bad">Approve is off while the audit has errors. Fix the plan, or type an override note to approve anyway.</p>}
               <div className="actions">
                 <Button ghost disabled={busy || !note.trim()} onClick={() => decide('returned')} title={note.trim() ? '' : 'A returned design needs a note'}>
                   Return with note
                 </Button>
-                <Button primary disabled={busy || (open.audit && !open.audit.ok && !note.trim())} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'Type an override note to approve a plan with audit errors' : ''}>
-                  {open.audit && !open.audit.ok && note.trim() ? 'Approve with override, build in Revit' : 'Approve, build in Revit'}
+                <Button primary disabled={busy || (open.audit && !open.audit.ok && override.trim().length < 20)} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'An override note of 20 characters or more approves a plan with audit errors' : ''}>
+                  {open.audit && !open.audit.ok && override.trim().length >= 20 ? 'Approve with override, build in Revit' : 'Approve, build in Revit'}
                 </Button>
               </div>
             </>

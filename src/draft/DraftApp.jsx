@@ -1,6 +1,6 @@
 // Draft House client flow. Five steps after the start screen. With an account the project is
 // saved on the office API (every version, credits, status); without one it lives in this tab.
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import App from '../App.jsx'
 import { Mark } from './ui.jsx'
 import Start from './screens/Start.jsx'
@@ -21,6 +21,38 @@ import { EDITABLE, historyFrom } from './lib/status.js'
 import './draft.css'
 
 const STEPS = ['Lot', 'Style', 'Rooms', 'Draft', 'Send']
+
+/** A step that throws shows what happened and a way back, instead of a blank page. */
+class StepBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+  componentDidUpdate(prev) {
+    if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null })
+  }
+  render() {
+    if (!this.state.error)
+      return this.props.children
+    return (
+      <div className="screen padded narrow center">
+        <div className="card signin">
+          <h3>Something went wrong on this step</h3>
+          <p className="muted small">{String(this.state.error?.message || this.state.error)}</p>
+          <button className="btn btn-primary" onClick={() => this.setState({ error: null })}>
+            Try again
+          </button>{' '}
+          <button className="btn btn-ghost" onClick={() => this.props.onBack?.()}>
+            Go back a step
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
 const CREDITS = 10
 const isDrafter = (u) => u && (u.role === 'drafter' || u.role === 'admin')
 
@@ -198,6 +230,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
         </nav>
       </header>
       <main className="dh-main">
+        <StepBoundary resetKey={step} onBack={() => go(Math.max(0, step - 1))}>
         {admin && (
           <OfficeGate user={user} onUser={setUser}>
             <Admin />
@@ -268,6 +301,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
           />
         )}
         {!office && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} project={project} setProject={setProject} returnSeen={returnSeen} onBackToDraft={backToDraft} onBack={() => go(4)} onRestart={restart} />}
+        </StepBoundary>
       </main>
     </div>
   )

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
-import { floorArea, isRoom, kitFor } from '../lib/layout.js'
+import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
 import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
+import { optionTopic, optionsFor, TOPIC_NAMES } from '../lib/options.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 
@@ -24,7 +25,19 @@ function suggestionsFor(rooms, kit) {
   if (!has('office')) out.push('Add an office')
   if (has('mbath')) out.push('Bigger primary bath')
   if (!has('halfbath')) out.push('Add a half bath')
-  return out.slice(0, 5)
+  return [...out.slice(0, 4), 'Show me garage options']
+}
+
+/** A phone-width screen: no 3D tags, they pile up. */
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)')
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return narrow
 }
 
 const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + unit
@@ -50,7 +63,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   const plan = useRef(null)
   const setCamera = (name) => {
     setView(name)
-    if (name === 'top') {
+    if (name === 'top' || name === 'site') {
       plan.current?.fit()
       return
     }
@@ -71,10 +84,23 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
    * One request to the office, or a fix the client clicked (ops already decided).
    * The reply carries what changed in square feet, dollars and credits.
    */
+  const narrow = useNarrow()
   const send = async (msg, fix = null) => {
     const q = (msg ?? text).trim()
     if (!q || credits <= 0 || busy) return
     setText('')
+    // "show me options for the garage": two or three sound options side by side, no credit until one is picked
+    const topic = !fix && optionTopic(q)
+    if (topic) {
+      setBusy(true)
+      setHistory((h) => [...h, { who: 'you', text: q }])
+      await new Promise((r) => setTimeout(r, 30))
+      const { options } = optionsFor(topic, rooms, program, style, lot)
+      const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
+      setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; the others cost nothing.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
+      setBusy(false)
+      return
+    }
     setBusy(true)
     setHistory((h) => [...h, { who: 'you', text: q }])
     const before = { area, estimate, rooms, credits }
@@ -158,35 +184,41 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   return (
     <div className="screen split">
       <div className="viewport">
-        {view === 'top' ? (
-          <PlanDrawing rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
+        {view === 'top' || view === 'site' ? (
+          <PlanDrawing mode={view === 'site' ? 'site' : 'plan'} rooms={rooms} program={program} style={style} lot={lot} client={project?.client} api={plan} highlightKind={highlight} />
         ) : (
-          <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} />
+          <HouseScene rooms={rooms} style={style} view={view} highlightKind={highlight} controlsRef={controls} showRoof={roof} lot={lot} sun={sun} tags={!narrow} />
         )}
         <div className="viewport-tag">
-          {style.name} · {program.beds} bed · {program.baths}
-          {program.halfBath ? '.5' : ''} bath · {program.stories === 2 ? 'two story' : 'one story'}
+          {style.name} · {programLine(programOf(rooms, program))}
         </div>
         <div className="viewport-views">
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
             Plan
           </button>
+          <button className={view === 'site' ? 'on' : ''} onClick={() => setCamera('site')}>
+            Site
+          </button>
           <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
             3D
           </button>
-          <button className="fit" onClick={() => setCamera(view)} title={view === 'top' ? 'Fit the plan to the view' : 'Reset the camera'}>
-            {view === 'top' ? 'Fit' : 'Reset'}
-          </button>
-          <label className={'check' + (view === 'top' ? ' off' : '')}>
-            <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} disabled={view === 'top'} />
-            Roof
-          </label>
-          <label className={'check' + (view === 'top' ? ' off' : '')} title="Shadows on July 15 at 5 pm, from the lot's real orientation">
-            <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} disabled={view === 'top'} />
-            Sun check
-          </label>
+          {view === '3d' && (
+            <>
+              <button className="fit" onClick={() => setCamera(view)} title="Reset the camera">
+                Reset
+              </button>
+              <label className="check">
+                <input type="checkbox" checked={roof} onChange={(e) => setRoof(e.target.checked)} />
+                Roof
+              </label>
+              <label className="check" title="Shadows on July 15 at 5 pm, from the lot's real orientation">
+                <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} />
+                Sun check
+              </label>
+            </>
+          )}
         </div>
-        <div className="viewport-hint">{view === 'top' ? 'Floor plan · scroll to zoom · drag to pan' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
+        <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, setbacks, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
       </div>
       <aside className="side chat">
         <div className="side-head">
@@ -229,6 +261,30 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
                   · {m.meta.credit} credit used
                 </span>
               )}
+              {m.picker && (
+                <div className="picker">
+                  {m.picker.map((o) => (
+                    <button key={o.id} className="option" onClick={() => send(o.label, { ops: o.ops, label: o.label })} disabled={busy || credits <= 0} title={o.did.join('. ')}>
+                      <span className="thumb" dangerouslySetInnerHTML={{ __html: o.svg }} />
+                      <b>{o.label}</b>
+                      <span className="delta">
+                        {signed(o.sf, ' sf')} · {signed(o.cost).replace(/^([+−]?)/, '$1$')}
+                      </span>
+                      <span className="pick">Pick · 1 change</span>
+                    </button>
+                  ))}
+                  {m.others && (
+                    <span className="more">
+                      Also:{' '}
+                      {m.others.map((k) => (
+                        <button key={k} className="linkish" onClick={() => send(`show me options for ${TOPIC_NAMES[k]}`)} disabled={busy}>
+                          {TOPIC_NAMES[k]}
+                        </button>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              )}
               {m.fixes?.length > 0 && (
                 <span className="fixes">
                   {m.fixes.map((f) => (
@@ -262,9 +318,15 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           </Button>
         </form>
         <div className="chat-tools">
-          <button className="linkish" onClick={() => setShowVersions((v) => !v)} disabled={!project || versions.length < 2} title={project ? '' : 'Sign in to keep a history'}>
-            {showVersions ? 'Hide history' : `History${project ? ` (${versions.length})` : ''}`}
-          </button>
+          {project ? (
+            <button className="linkish" onClick={() => setShowVersions((v) => !v)} disabled={versions.length < 2}>
+              {showVersions ? 'Hide history' : `History (${versions.length})`}
+            </button>
+          ) : (
+            <span className="muted small">
+              <a href="#/" onClick={(e) => { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('#signin-email')?.focus() }}>Sign in</a> to keep a history
+            </span>
+          )}
           <button className="linkish undo" onClick={undoLast} disabled={busy || !canUndo} title={canUndo ? 'Back one change, the credit comes back' : 'Nothing to undo yet'}>
             Undo last change
           </button>

@@ -17,8 +17,7 @@ import { STYLES } from '../src/draft/lib/styles.js'
 import { GENERATED } from '../src/kits/generated.js'
 import { DEFAULT_LOT } from '../src/draft/lib/lot.js'
 
-const py = ['/usr/bin/python3.13', 'python3.13', 'python3', 'python'].find((p) => spawnSync(p, ['-c', 'import ifcopenshell, numpy'], { stdio: 'ignore' }).status === 0)
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dh-kits-'))
+import { py, scratch as dir } from './helpers.mjs'
 
 /** The checks every kit must pass: it drafts its reference house, the house obeys the rules, the elements sit on walls, the IFC is well formed. */
 function referenceChecks(kit, label) {
@@ -27,15 +26,11 @@ function referenceChecks(kit, label) {
   const rooms = generateRooms(program, style, DEFAULT_LOT)
   const roomList = rooms.filter(isRoom)
   assert.ok(roomList.length >= 8, `${label}: ${roomList.length} rooms`)
-  // the geometry rules (setbacks, sizes, overlaps, plumbing, roof). The architect audit is checked for the
-  // hand-traced kit; a kit read back from an IFC does not yet carry every door's room and exterior flag
-  // (see scripts/kit-from-ifc.py), so it is reported, not asserted, here
-  const rules = checkRules(rooms, program, style, DEFAULT_LOT, { audit: !kit.generated })
-  assert.deepEqual(rules.reasons, [], `${label}: reference house passes the rules`)
-  if (kit.generated) {
-    const audit = checkRules(rooms, program, style, DEFAULT_LOT)
-    if (audit.reasons.length) console.log(`  (${label}: ${audit.reasons.length} audit findings on the converted kit, not asserted)`)
-  }
+  // the geometry rules (setbacks, sizes, overlaps, plumbing, roof) and the architect's audit, for the
+  // hand-traced kit and for one read back from an IFC alike (the export carries room ids, kinds, fixture
+  // faces and opening ids, and the converter snaps openings onto the room walls)
+  const rules = checkRules(rooms, program, style, DEFAULT_LOT)
+  assert.deepEqual(rules.reasons, [], `${label}: reference house passes the rules and the audit`)
   const walls = wallsFrom(rooms, kitFor(style))
   assert.ok(walls.length > 20, `${label}: walls`)
   const doors = rooms.filter((e) => e.kind === 'door')
@@ -77,6 +72,7 @@ test('a generated kit module loads, registers, and drafts a house that passes th
   fs.mkdirSync(out, { recursive: true })
   // the generated module imports the base kit by relative path, so it must sit beside it
   fs.copyFileSync('src/kits/modern-farmhouse.js', path.join(out, 'modern-farmhouse.js'))
+  fs.copyFileSync('src/kits/farmhouse-narrow.js', path.join(out, 'farmhouse-narrow.js'))
   const r = spawnSync(py, ['-I', 'scripts/kit-from-ifc.py', ifcPath, '--id', 'spanish', '--name', 'Spanish', '--out', out, '--quiet'], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stderr)
   assert.ok(fs.existsSync(path.join(out, 'spanish.ifc.js')))

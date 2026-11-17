@@ -1,6 +1,6 @@
 // Does a program fit a lot? The rooms step asks this before "Draft my house", so the first draft
 // a client sees always passes the rules. When it does not fit, the largest living area that does.
-import { starterDraft, isRoom, lotOf } from './layout.js'
+import { starterDraft, isRoom, lotOf, kitFor, programWithin } from './layout.js'
 import { checkRules } from './rules.js'
 import { DEFAULT_LOT } from './lot.js'
 
@@ -58,7 +58,14 @@ export function fitsLot(program, style, lot = DEFAULT_LOT) {
   // nothing fits at any size: the first of a few smaller programs that does
   let suggestion = null
   if (!rules.ok && maxSqft == null) {
+    const kit = kitFor(style)
     const tries = [
+      // what the kit's other plans (the narrow one) can hold on this lot
+      ...Object.values(kit.plans || {}).map((plan) => {
+        const within = programWithin(plan, program)
+        const same = JSON.stringify(within) === JSON.stringify(program)
+        return same ? null : { label: `as ${within.beds} bed, ${within.baths}${within.halfBath ? '.5' : ''} bath${within.garage ? `, ${within.garage}-car` : ', no garage'}${within.office ? '' : program.office ? ', no office' : ''} (what the ${plan.id} plan holds)`, program: within }
+      }),
       program.office && { label: 'without the office', program: { ...program, office: false } },
       program.suite2 && { label: 'without the second suite', program: { ...program, suite2: false } },
       program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },

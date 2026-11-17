@@ -1,8 +1,8 @@
 // 3D scene for the Draft step: the lot plus the house as walls, floor slabs,
 // doors with swings, windows, and fixtures, all from the kit plan.
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Edges, Line, Html } from '@react-three/drei'
 import SitePlan from '../components/SitePlan.jsx'
 import { FlatLabel } from '../components/labels.jsx'
@@ -10,6 +10,7 @@ import { DEFAULT_LOT } from './lib/lot.js'
 import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
+import { drivewaySlabs, walkSlabs } from './lib/site.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
 
 /**
@@ -67,16 +68,78 @@ function Box({ cx, cz, w, d, y0 = 0, h, rot = 0, color, opacity = 1, edges = tru
   )
 }
 
+// board and batten: an 8" board with a batten line, drawn once and repeated along each wall
+let battenTexture = null
+function battens() {
+  if (battenTexture || typeof document === 'undefined') return battenTexture
+  const c = document.createElement('canvas')
+  c.width = 32
+  c.height = 32
+  const g = c.getContext('2d')
+  g.fillStyle = '#ede7dc'
+  g.fillRect(0, 0, 32, 32)
+  g.fillStyle = '#d9d2c5'
+  g.fillRect(0, 0, 3, 32)
+  g.fillStyle = '#f3efe6'
+  g.fillRect(3, 0, 1, 32)
+  battenTexture = new THREE.CanvasTexture(c)
+  battenTexture.wrapS = THREE.RepeatWrapping
+  battenTexture.wrapT = THREE.RepeatWrapping
+  battenTexture.colorSpace = THREE.SRGBColorSpace
+  return battenTexture
+}
+const STONE = '#a69c8d'
+const TRIM = '#f7f5f0'
+const SHINGLES = '#4a4541'
+const WAINSCOT_FT = 3.33 // the kit's 3'-4" stone wainscot (kit.exterior.stoneWainscotFt)
+
 function Walls({ rooms, kit, centre, lot }) {
   const pieces = useMemo(() => splitWalls(wallsFrom(rooms, kit), rooms.filter((r) => r.element)), [rooms, kit])
+  const wainscot = kit.exterior?.stoneWainscotFt || WAINSCOT_FT
+  // a street-facing outside wall: nothing of the house beyond it toward the street (+z in the house frame)
+  const solid = useMemo(() => rooms.filter((r) => isRoom(r) && !r.open && r.local), [rooms])
+  const facesStreet = (w) => {
+    if (!w.exterior || Math.abs(w.a[1] - w.b[1]) > 0.01) return false
+    const mid = [(w.a[0] + w.b[0]) / 2, w.a[1] + 0.7]
+    return !solid.some((r) => Math.abs(mid[0] - r.local[0]) < r.w / 2 && Math.abs(mid[1] - r.local[1]) < r.d / 2)
+  }
+  const tex = useMemo(() => battens(), [])
   return pieces.map((w, i) => {
     const t = w.thicknessIn / 12
     const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])
     const mid = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2]
     const [x, z] = toWorld(mid[0], mid[1], centre, lot)
     const ang = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0])
-    return <Box key={i} cx={x} cz={z} w={len} d={t} y0={w.y0} h={w.h} rot={lot.angle + ang} color={w.exterior ? '#efe9df' : '#f4f1ec'} />
+    const rot = lot.angle + ang
+    if (!w.exterior || w.dormer) return <Box key={i} cx={x} cz={z} w={len} d={t} y0={w.y0} h={w.h} rot={rot} color={w.dormer ? TRIM : '#f4f1ec'} />
+    const stone = facesStreet(w) && w.y0 < 0.5
+    return (
+      <group key={i}>
+        <SidingBox cx={x} cz={z} w={len} d={t} y0={w.y0} h={w.h} rot={rot} tex={tex} />
+        {stone && <Box cx={x} cz={z} w={len + 0.1} d={t + 0.25} y0={-0.3} h={wainscot + 0.3} rot={rot} color={STONE} />}
+      </group>
+    )
   })
+}
+
+/** An outside wall in board and batten: the batten texture repeats every 8" along the wall. */
+function SidingBox({ cx, cz, w, d, y0 = 0, h, rot = 0, tex }) {
+  const map = useMemo(() => {
+    if (!tex) return null
+    const m = tex.clone()
+    m.repeat.set(Math.max(1, Math.round(w / 0.67)), 1)
+    m.needsUpdate = true
+    return m
+  }, [tex, w])
+  return (
+    <group position={[cx, 0, cz]} rotation-y={-rot}>
+      <mesh position={[0, y0 + h / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[w, h, d]} />
+        {map ? <meshLambertMaterial map={map} /> : <meshLambertMaterial color="#efe9df" />}
+        <Edges color={INK} threshold={15} />
+      </mesh>
+    </group>
+  )
 }
 
 function Door({ e, centre, lot }) {
@@ -162,14 +225,15 @@ function Fixture({ e, centre, lot }) {
 }
 
 function Roof({ roof, centre, lot }) {
-  const { shingles, metal, siding, edges } = useMemo(() => {
+  const { shingles, metal, siding, fascia, edges } = useMemo(() => {
     const cos = Math.cos(lot.angle)
     const sin = Math.sin(lot.angle)
     const W = ([x, y, z]) => [centre[0] + x * cos - z * sin, y, centre[1] + x * sin + z * cos]
-    const buckets = { shingles: [], metal: [], siding: [] }
+    const buckets = { shingles: [], metal: [], siding: [], fascia: [] }
     const lines = []
     roof.faces.forEach((f) => {
-      const bucket = f.kind === 'end' ? 'siding' : f.kind === 'fascia' ? 'siding' : /metal/.test(f.material) ? 'metal' : 'shingles'
+      // gable ends in siding, the fascia in white trim, metal where the kit says so, dark shingles elsewhere
+      const bucket = f.kind === 'end' ? 'siding' : f.kind === 'fascia' ? 'fascia' : /metal/.test(f.material) ? 'metal' : 'shingles'
       // triangulate in the face's own 2D frame: plan (x, z) for slopes, (along, y) for vertical faces
       const is2d = f.kind === 'slope' ? (p) => new THREE.Vector2(p[0], p[2]) : Math.abs(f.rings[0][0][0] - f.rings[0][1][0]) < 0.01 && Math.abs(f.rings[0][0][0] - f.rings[0][2][0]) < 0.01 ? (p) => new THREE.Vector2(p[2], p[1]) : (p) => new THREE.Vector2(p[0], p[1])
       const contour = f.rings[0].map(is2d)
@@ -192,18 +256,21 @@ function Roof({ roof, centre, lot }) {
     }
     const e = new THREE.BufferGeometry()
     e.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
-    return { shingles: geo(buckets.shingles), metal: geo(buckets.metal), siding: geo(buckets.siding), edges: e }
+    return { shingles: geo(buckets.shingles), metal: geo(buckets.metal), siding: geo(buckets.siding), fascia: geo(buckets.fascia), edges: e }
   }, [roof, centre])
   return (
     <group>
       <mesh geometry={shingles} castShadow receiveShadow>
-        <meshLambertMaterial color="#6f655c" side={THREE.DoubleSide} />
+        <meshLambertMaterial color={SHINGLES} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={metal} castShadow receiveShadow>
         <meshLambertMaterial color="#8e8a84" side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={siding}>
-        <meshLambertMaterial color="#efe9df" side={THREE.DoubleSide} />
+        <meshLambertMaterial color="#ede7dc" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={fascia}>
+        <meshLambertMaterial color={TRIM} side={THREE.DoubleSide} />
       </mesh>
       <lineSegments geometry={edges}>
         <lineBasicMaterial color={INK} />
@@ -265,34 +332,14 @@ function PorchColumns({ r, rooms, lot }) {
 /** The driveway: from the garage's overhead door to the street, on the ground. */
 function Driveway({ rooms, centre, lot }) {
   const slabs = useMemo(() => {
-    const garage = rooms.find((r) => isRoom(r) && r.kind === 'garage' && r.local)
-    const door = rooms.find((e) => e.kind === 'door' && (e.size === 'overhead' || e.size === 'overheadSingle') && e.local)
-    if (!garage || !door) return []
-    // the lot's street edge in the house frame: the largest local z of the boundary
-    const cos = Math.cos(lot.angle)
-    const sin = Math.sin(lot.angle)
-    const toLocal = (p) => [(p[0] - centre[0]) * cos + (p[1] - centre[1]) * sin, -(p[0] - centre[0]) * sin + (p[1] - centre[1]) * cos]
-    const zs = (lot.boundary || []).map((p) => toLocal(p)[1])
-    const street = zs.length ? Math.max(...zs) : garage.local[1] + garage.d / 2 + 30
-    const out = []
-    if (door.axis === 'h') {
-      // front-load: straight out to the street
-      const z0 = door.local[1]
-      out.push({ x: door.local[0], z: (z0 + street) / 2, w: door.span + 2, d: street - z0 })
-    } else {
-      // side-load: 12 ft out from the door face, then down to the street
-      const dir = door.local[0] > garage.local[0] ? 1 : -1
-      const x0 = door.local[0]
-      const apron = { x: x0 + dir * 7, z: door.local[1], w: 14, d: door.span + 4 }
-      out.push(apron)
-      const z1 = door.local[1] - door.span / 2 - 2
-      out.push({ x: x0 + dir * 8, z: (z1 + street) / 2, w: 12, d: street - z1 })
-    }
-    return out
+    const flat = rooms.filter((r) => isRoom(r) && r.local).map((r) => ({ id: r.id, kind: r.kind, open: !!r.open, driveway: r.driveway, x: r.local[0], z: r.local[1], w: r.w, d: r.d }))
+    const doors = rooms.filter((e) => e.kind === 'door' && e.local).map((e) => ({ room: e.room, axis: e.axis, x: e.local[0], z: e.local[1], span: e.span, size: e.size, exterior: !!e.exterior }))
+    const drive = drivewaySlabs(flat, doors, lot)
+    return [...drive, ...walkSlabs(flat, doors, lot, drive)]
   }, [rooms, centre, lot])
   return slabs.map((s, i) => {
     const [x, z] = toWorld(s.x, s.z, centre, lot)
-    return <Box key={i} cx={x} cz={z} w={s.w} d={s.d} y0={-0.3} h={0.32} rot={lot.angle} color="#d9d5cc" edges={false} />
+    return <Box key={i} cx={x} cz={z} w={s.w} d={s.d} y0={-0.3} h={0.32} rot={lot.angle} color={s.part === 'walk' ? '#e0dcd3' : '#d9d5cc'} edges={false} />
   })
 }
 
@@ -329,12 +376,34 @@ function Room({ r, highlight, labels, lot }) {
 }
 
 /** A room's name in the 3D view: a small tag above the room that always faces the viewer. */
-function RoomTag({ r, highlight, showRoof }) {
+/** How far the camera is from what it looks at, a few times a second: tags shrink with it and hide when it is far. */
+function useCameraDistance(controlsRef) {
+  const [dist, setDist] = useState(200)
+  const last = useRef(0)
+  useFrame(({ camera, clock }) => {
+    if (clock.elapsedTime - last.current < 0.25) return
+    last.current = clock.elapsedTime
+    const target = controlsRef?.current?.target
+    const d = target ? camera.position.distanceTo(target) : camera.position.length()
+    setDist((v) => (Math.abs(v - d) > d * 0.08 ? d : v))
+  })
+  return dist
+}
+
+function RoomTags({ rooms, highlightKind, showRoof, controlsRef }) {
+  const dist = useCameraDistance(controlsRef)
+  // far away the tags would pile up: they go; close in they are small labels on the rooms
+  if (dist > 520) return null
+  const size = dist > 340 ? ' tiny' : dist > 200 ? ' small' : ''
+  return rooms.map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} size={size} />)
+}
+
+function RoomTag({ r, highlight, showRoof, size = '' }) {
   const [x, z] = r.center
   const y = r.open ? 2 : showRoof ? (r.plate || 9) + 7 : (r.plate || 9) + 1.5
   return (
     <Html position={[x, y, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-      <span className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '')}>{r.name}</span>
+      <span className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '') + size}>{r.name}</span>
     </Html>
   )
 }
@@ -379,7 +448,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
         <shadowMaterial transparent opacity={sun ? 0.35 : 0.18} />
       </mesh>
       {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels={view === 'top'} lot={L} />)}
-      {showHouse && tags && view !== 'top' && roomList.filter((r) => Math.min(r.w, r.d) >= 5).map((r) => <RoomTag key={'tag-' + r.id} r={r} highlight={r.kind === highlightKind} showRoof={showRoof} />)}
+      {showHouse && tags && view !== 'top' && <RoomTags rooms={roomList.filter((r) => Math.min(r.w, r.d) >= 5)} highlightKind={highlightKind} showRoof={showRoof} controlsRef={controlsRef} />}
       {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
       {showHouse && view !== 'top' && roomList.filter((r) => r.open && r.local).map((r) => <PorchColumns key={'col-' + r.id} r={r} rooms={rooms} lot={L} />)}
       {showHouse && hasPlan && <Driveway rooms={rooms} centre={centre} lot={L} />}

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene from '../HouseScene.jsx'
 import { Button, Stat, sf } from '../ui.jsx'
 import { api } from '../lib/api.js'
-import { buildLot, traverse } from '../lib/lot.js'
+import { buildLot, traverse, lotProblem } from '../lib/lot.js'
+import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
 
 const fileToBase64 = (file) =>
@@ -143,7 +144,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       .then((g) => {
         setGeo(g)
         if (!g.found) return
-        setSpec((sp) => ({ ...sp, city: g.cityId || sp.city, frontStreet: sp.frontStreet || (g.street ? g.street.replace(/\b\w+/g, (w) => (/^(FM|US|TX|N|S|E|W|NE|NW|SE|SW)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase())) : '') }))
+        setSpec((sp) => ({ ...sp, city: g.cityId || (g.found ? '' : sp.city), county: g.cityId ? '' : (sp.county || (g.county && COUNTIES.includes(g.county) ? g.county : '')), frontStreet: sp.frontStreet || (g.street ? g.street.replace(/\b\w+/g, (w) => (/^(FM|US|TX|N|S|E|W|NE|NW|SE|SW)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase())) : '') }))
       })
       .catch((e) => setGeoErr(e.message))
   }, [address])
@@ -167,7 +168,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
     if (intake?.file && !read && !saved?.spec) readFile(intake.file)
   }, [])
 
-  const lot = useMemo(() => {
+  const built = useMemo(() => {
     try {
       const L = buildLot({ ...spec, address, flood }, table)
       return { ...L, plat: read || null, geo: geo || null }
@@ -175,16 +176,22 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       return null
     }
   }, [spec, table, address, flood, read, geo])
-  const city = table[spec.city] || table.hidalgo
+  // what is wrong with the lot as typed; the last good lot stays on the screen until it is right
+  const problem = lotProblem(spec, built)
+  const lastGood = useRef(null)
+  if (!problem && built) lastGood.current = built
+  const lot = problem ? null : built
+  const shown = lot || lastGood.current
+  const city = table[spec.city] || { name: 'No city rules yet', county: null }
   const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))
-  const tooSmall = lot && lot.envelopeSf < 1500
+  const tooSmall = !!problem
 
   return (
     <div className="screen split">
       <div className="viewport lot-view">
-        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={lot || undefined} />}
-        <div className="viewport-tag">{lot ? `${lot.address || 'your lot'} · ${city.name}` : 'Enter the lot'}</div>
+        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} />}
+        <div className="viewport-tag">{shown ? `${shown.address || 'your lot'} · ${city.name}` : 'Enter the lot'}</div>
         {mode === 'plat' && read && (
           <div className="viewport-views">
             <button className={showPlat ? 'on' : ''} onClick={() => setShowPlat(true)}>
@@ -202,7 +209,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         {geo?.found && (
           <p className={'fine ' + (geo.cityId ? 'good' : 'warn')}>
             Found: {geo.matched}
-            {geo.place ? ` · ${geo.place}, ${geo.county || ''}` : geo.county ? ` · ${geo.county}` : ''}.{geo.note ? ` ${geo.note}` : ` We have the ${table[geo.cityId]?.name} rules.`}
+            {geo.place ? ` · ${geo.place}, ${geo.county || ''}` : geo.county ? ` · ${geo.county}` : ''}. {geoMessage(geo, table)}
           </p>
         )}
         {geo && !geo.found && <p className="fine warn">{geo.note}</p>}
@@ -219,7 +226,8 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
         <label className="field">
           <span>City</span>
-          <select id="lot-city" value={spec.city} onChange={(e) => set('city', e.target.value)}>
+          <select id="lot-city" value={spec.city || ''} onChange={(e) => set('city', e.target.value)}>
+            <option value="">No rules for this city yet (county defaults, a drafter checks them)</option>
             {CITY_IDS.map((id) => (
               <option key={id} value={id}>
                 {table[id].name}
@@ -227,6 +235,20 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             ))}
           </select>
         </label>
+        {!table[spec.city] && (
+          <label className="field">
+            <span>County, for the price</span>
+            <select id="lot-county" value={spec.county || ''} onChange={(e) => set('county', e.target.value)}>
+              <option value="">Pick the county</option>
+              {COUNTIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <small className="fine">We price by county. Without one the rooms step shows no price.</small>
+          </label>
+        )}
 
         {mode === 'manual' && (
           <>
@@ -319,7 +341,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             <Stat k="Flood zone" v={flood ? (flood.zone ? `${flood.zone}${flood.sfha ? ' · special flood hazard area' : ' · outside the 1% flood area'}` : 'not found for this address') : floodErr ? 'lookup unavailable' : address ? 'checking FEMA…' : '—'} />
           </div>
         )}
-        {tooSmall && <p className="fine bad">The buildable area is very small. Check the dimensions and the setbacks.</p>}
+        {problem && <p className="fine bad">{problem}</p>}
         <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
         {mode === 'manual' && (
           <label className="confirm">

@@ -67,6 +67,6 @@ export const api = {
   // drafter review
   inbox: () => call('/api/review'),
   reviewProject: (id) => call(`/api/review/${id}`),
-  review: (id, decision, note) => call(`/api/review/${id}`, { method: 'POST', body: JSON.stringify({ decision, note }) }, 20000),
+  review: (id, decision, note, override = '') => call(`/api/review/${id}`, { method: 'POST', body: JSON.stringify({ decision, note, override }) }, 20000),
   backup: () => call('/api/admin/backup', { method: 'POST' }, 60000),
 }

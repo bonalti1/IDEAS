@@ -9,7 +9,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { bearingToVector, vectorToBearing, traverse, buildLot, envelopeOf, referenceCalls, DEFAULT_LOT, worldOf } from '../src/draft/lib/lot.js'
 import { cityTable, rulesFor, guessCity, CITY_IDS } from '../src/draft/lib/cities.js'
-import { generateRooms, isRoom } from '../src/draft/lib/layout.js'
+import { generateRooms, isRoom, DEFAULT_PROGRAM } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { interpretRequest } from '../src/draft/lib/interpret.js'
 import { STYLES } from '../src/draft/lib/styles.js'
@@ -139,7 +139,8 @@ test('the Garza plan drafts and changes on a 100 by 150 McAllen lot, and refuses
   })
   const res = await interpretRequest('make the kitchen bigger', rooms, program, style, { lot, interpreter: async () => { throw new Error('offline') } })
   assert.equal(res.applied, true, res.reply)
-  const narrow = buildLot({ kind: 'manual', width: 60, depth: 150, city: 'mcallen', frontStreet: 'Elm St' })
+  // a 60 ft lot takes the kit's narrow plan now; 30 ft takes nothing
+  const narrow = buildLot({ kind: 'manual', width: 30, depth: 150, city: 'mcallen', frontStreet: 'Elm St' })
   const r2 = checkRules(generateRooms(program, style, narrow), program, style, narrow)
   assert.ok(r2.reasons.some((x) => /setback/.test(x)), r2.reasons.join(' | '))
   // and the move rule names the right street on the new lot
@@ -247,4 +248,39 @@ test('live: Claude reads the Garza site plan and FEMA answers for its address', 
   assert.deepEqual(checkRules(rooms, program, style, lot).reasons, [], 'the Garza house fits its own lot')
   const f = await (await fetch(base + `/api/lot/flood?address=${encodeURIComponent('2554 N FM 2360, Rio Grande City, TX 78582')}`)).json()
   assert.ok(f.matched || f.note, JSON.stringify(f))
+})
+
+test('a half-typed lot size never builds a bad lot: the Lot step keeps the last good one and says what is missing', async () => {
+  const { lotProblem } = await import('../src/draft/lib/lot.js')
+  for (const v of ['', '1', '12', 'abc', null, undefined, '-5', '19.9']) {
+    const spec = { kind: 'manual', width: 100, depth: v, city: 'mcallen', setbacks: {} }
+    const lot = buildLot(spec)
+    assert.ok(lot, `buildLot copes with ${JSON.stringify(v)}`)
+    assert.match(lotProblem(spec, lot) || '', /depth|buildable/, `${JSON.stringify(v)} is reported`)
+  }
+  // deep enough to type, not deep enough for the setbacks
+  const shallow = { kind: 'manual', width: 100, depth: 30, city: 'mcallen', setbacks: {} }
+  assert.match(lotProblem(shallow, buildLot(shallow)), /setbacks leave no buildable area/)
+  const fine = { kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} }
+  assert.equal(lotProblem(fine, buildLot(fine)), null)
+})
+
+test('an address outside the Valley clears the city preset message: no rules yet, outside the Rio Grande Valley; the county decides the price', async () => {
+  const { geoMessage, COUNTIES } = await import('../src/draft/lib/cities.js')
+  const { estimate, countyOf } = await import('../src/draft/lib/pricing.js')
+  assert.match(geoMessage({ found: true, cityId: 'mcallen' }), /McAllen, TX rules/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Travis County', place: 'Austin', state: 'TX' }), /don't have rules for this address yet.*outside the Rio Grande Valley/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Cameron County', place: 'Harlingen' }), /don't have rules.*in the Valley/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Nueces County', place: 'Corpus Christi' }), /outside the Rio Grande Valley; we price it/)
+  // no city preset, no county: no silent Hidalgo
+  const noCity = buildLot({ kind: 'manual', width: 100, depth: 150, city: '', setbacks: {} })
+  assert.equal(countyOf(noCity), null)
+  const style = STYLES.find((s) => s.id === 'farmhouse')
+  const e = estimate({ program: { ...DEFAULT_PROGRAM, sqft: 2000 }, style, lot: noCity })
+  assert.equal(e.needsCounty, true)
+  assert.equal(e.county, null)
+  const withCounty = buildLot({ kind: 'manual', width: 100, depth: 150, city: '', county: 'Nueces County', setbacks: {} })
+  assert.equal(countyOf(withCounty), 'Nueces County')
+  assert.deepEqual(estimate({ program: { ...DEFAULT_PROGRAM, sqft: 2000 }, style, lot: withCounty }).perSf, [130, 145])
+  assert.ok(COUNTIES.includes('Nueces County'))
 })

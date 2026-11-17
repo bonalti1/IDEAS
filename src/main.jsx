@@ -12,7 +12,8 @@ function Root() {
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
-  return <DraftApp admin={hash === '#/admin'} review={hash === '#/review'} billing={hash === '#/billing'} lot514={hash === '#/lot514'} />
+  // #/office and #/drafter are the review inbox too: a guest lands on the office sign-in
+  return <DraftApp admin={hash === '#/admin'} review={hash === '#/review' || hash === '#/office' || hash === '#/drafter'} billing={hash === '#/billing'} lot514={hash === '#/lot514'} />
 }
 
 createRoot(document.getElementById('root')).render(

@@ -7,17 +7,17 @@ import { fitsLot } from '../src/draft/lib/fit.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { planSVG, planSheetHTML } from '../src/draft/lib/plan-svg.js'
 import { STYLES } from '../src/draft/lib/styles.js'
-import { LOTS, PROGRAMS } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
 const intersects = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
-for (const [lotName, lot] of Object.entries(LOTS).filter(([n]) => !n.startsWith('narrow'))) {
+for (const [lotName, lot] of Object.entries(LOTS)) {
   for (const [progName, program] of Object.entries(PROGRAMS)) {
     test(`floor plan drawing: ${progName} on ${lotName}`, () => {
-      const f = fitsLot(program, style, lot)
-      const drafted = f.ok ? program : { ...program, sqft: f.maxSqft }
+      const drafted = draftable(program, lot)
+      assert.ok(drafted)
       const rooms = generateRooms(drafted, style, lot)
       const design = buildDesign({ rooms, program: drafted, style, lot, client: 'Test Client' })
       const plan = planSVG(design)
@@ -33,7 +33,12 @@ for (const [lotName, lot] of Object.entries(LOTS).filter(([n]) => !n.startsWith(
       assert.ok((plan.svg.match(/class="fixture toilet"/g) || []).length >= 2 && plan.svg.includes('class="fixture range"') && plan.svg.includes('class="fixture fridge"'))
       assert.ok((plan.svg.match(/class="wall exterior"/g) || []).length >= 10)
       const sheet = planSheetHTML(design, kit.titleBlock)
-      assert.ok(sheet.includes('@page { size: 17in 11in') && sheet.includes(kit.titleBlock.firm) && /Scale (1\/4|3\/16|1\/8|3\/32|1\/16)&quot; = 1'-0&quot;/.test(sheet))
+      // 24 x 36 at 1/4" = 1'-0" (turned portrait when the plan is deeper than wide; the 5/4 with its 3-car garage and
+      // longer wing takes 3/16"), the site plan at 1" = 20' on a second sheet
+      assert.ok(/@page \{ size: (36in 24in|24in 36in)/.test(sheet) && sheet.includes(kit.titleBlock.firm) && /Scale (1\/4|3\/16)&quot; = 1'-0&quot;/.test(sheet) && /Scale 1&quot; = (10|20|30|40|50)'-0&quot;/.test(sheet) && sheet.includes('Site plan'), sheet.slice(0, 400))
+      if (!progName.startsWith('5/4')) assert.ok(sheet.includes('Scale 1/4&quot; = 1\'-0&quot;'), '1/4" for the 3-bed and 4-bed plans')
+      const tabloid = planSheetHTML(design, kit.titleBlock, { sheet: 'tabloid' })
+      assert.ok(/@page \{ size: (17in 11in|11in 17in)/.test(tabloid) && /Scale (1\/8|3\/32|1\/16)&quot; = 1'-0&quot;/.test(tabloid))
     })
   }
 }

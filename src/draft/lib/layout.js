@@ -6,6 +6,7 @@ import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-far
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { DEFAULT_LOT, worldOf } from './lot.js'
 import { applyOps, envelopeSize, pushWall, settleIslands, settleKitchen } from './ops.js'
+import { fillVoid } from './add.js'
 import { auditPlan } from './audit.js'
 
 // the reference lot's envelope centre, kept for older call sites
@@ -106,7 +107,7 @@ export function starterDraft(program, style, lot = DEFAULT_LOT) {
 /** The smallest scale the plan can shrink to before a room falls under the kit's minimum size. */
 // rooms that do not shrink with the house: baths, closets, halls and the service rooms keep their size
 // when a plan scales down (the living rooms and bedrooms give the space), as an architect would draw them
-export const KEEP_SIZE = ['bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic', 'hall', 'laundry', 'mud', 'pantry']
+export const KEEP_SIZE = ['bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic', 'hall', 'laundry', 'mud', 'pantry', 'office', 'foyer']
 
 export const isConditioned = (r) => !r.open && r.kind !== 'garage' && !r.element
 /** Rooms only: no doors, windows, or fixtures. */
@@ -118,19 +119,59 @@ export const isRoom = (r) => !r.element
  * ends, add a garage beside the service wing, then scale to the square
  * footage. Positions stay where the drafter put them.
  */
-export function fromPlan(program, kit, lot = DEFAULT_LOT) {
+/** Can a plan hold this program? A plan with no stated capacity holds anything the kit can draft. */
+export function planHolds(plan, program) {
+  const c = plan?.capacity
+  if (!c) return true
+  return program.beds <= c.beds && program.baths <= c.baths && (!program.halfBath || c.halfBath) && (!program.office || c.office) && (program.garage || 0) <= c.garage && (!program.suite2 || c.suite2)
+}
+/** The largest program a plan holds, from this one: what the rooms step offers on a lot only that plan fits. */
+export function programWithin(plan, program) {
+  const c = plan?.capacity
+  if (!c) return program
+  return { ...program, beds: Math.min(program.beds, c.beds), baths: Math.min(program.baths, c.baths), halfBath: program.halfBath && c.halfBath, office: program.office && c.office, garage: Math.min(program.garage || 0, c.garage), suite2: program.suite2 && c.suite2 }
+}
+
+/** Every solid room inside the lot's setback envelope? Placed rooms (with `local`). */
+export function fitsEnvelope(placed, kit, lot) {
+  const L = lotOf(lot)
+  if (!L.envelope || L.envelope.length < 3) return true
+  const env = L.envelope.map((p) => localOf(L, p))
+  return placed
+    .filter((r) => isRoom(r) && !r.open && r.local)
+    .every((r) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => insidePoly(env, [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + sy * (r.d / 2 - 0.05)])))
+}
+
+/**
+ * The plan for this program on this lot: the kit's standard plan when it fits the lot's envelope,
+ * else the first of the kit's other plans (the narrow one) that does; the standard plan when none
+ * does, so the rooms step can say what would fit.
+ */
+export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
+  if (!planId && kit.plans && Object.keys(kit.plans).length) {
+    const standard = fromPlan(program, kit, lot, 'standard')
+    if (fitsEnvelope(standard.rooms, kit, lot) || !lotOf(lot).envelope) return standard
+    for (const id of Object.keys(kit.plans)) {
+      if (!planHolds(kit.plans[id], program)) continue
+      const alt = fromPlan(program, kit, lot, id)
+      if (fitsEnvelope(alt.rooms, kit, lot)) return alt
+    }
+    return standard
+  }
   const ref = kit.reference?.program || {}
-  const T = kit.plan
+  const T = planId && planId !== 'standard' && kit.plans?.[planId] ? kit.plans[planId] : kit.plan
   let rooms = T.rooms.map((r) => ({ ...r, zone: kit.rooms[r.kind]?.zone || 'private', open: !!kit.rooms[r.kind]?.open, plumbing: !!kit.rooms[r.kind]?.plumbing, fill: kit.rooms[r.kind]?.open ? '#e6e1d8' : r.kind === 'garage' ? '#dcd7cf' : undefined, h: kit.rooms[r.kind]?.open ? 0.6 : undefined }))
 
+  const dropped = []
   const drop = (kind, n = 1) => {
     for (let i = 0; i < n; i++) {
       const idx = rooms.map((r) => r.kind).lastIndexOf(kind)
-      if (idx >= 0) rooms.splice(idx, 1)
+      if (idx >= 0) dropped.push(...rooms.splice(idx, 1))
     }
   }
   if (!program.office) drop('office')
-  if (!program.suite2) { drop('suite2'); rooms = rooms.filter((r) => r.id !== 'wic2') }
+  if (!program.garage) drop('garage')
+  if (!program.suite2) { drop('suite2'); dropped.push(...rooms.filter((r) => r.id === 'wic2')); rooms = rooms.filter((r) => r.id !== 'wic2') }
   if (!program.halfBath) drop('halfbath')
   if (!program.frontPorch) drop('frontPorch')
   if (!program.rearPorch) drop('rearPorch')
@@ -156,9 +197,31 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
     }
     const candidates = [...rooms.filter((r) => r.kind === 'bath').reverse(), ...rooms.filter((r) => r.kind === 'jackjill')]
     const pick = candidates.find((c) => !far(rooms.filter((r) => r !== c))) || candidates[0]
-    if (pick) rooms.splice(rooms.indexOf(pick), 1)
+    if (pick) dropped.push(...rooms.splice(rooms.indexOf(pick), 1))
   }
 
+
+  // rooms that go with a dropped room (a bedroom's closet), and what shortens with it (the hall)
+  {
+    const present = new Set(rooms.map((r) => r.id))
+    Object.entries(T.companions || {}).forEach(([owner, list]) => {
+      if (!present.has(owner)) rooms = rooms.filter((r) => !list.includes(r.id))
+    })
+    // a neighbour grows into an enclosed space a dropped room leaves (the primary closet takes the half bath's)
+    Object.entries(T.companions || {}).forEach(([owner, list]) => {
+      if (!present.has(owner)) dropped.push(...T.rooms.filter((r) => list.includes(r.id)))
+    })
+    dropped.forEach((gone) => fillVoid(rooms, gone, T.fills?.[gone.id]))
+    ;(T.trims || []).forEach((t) => {
+      if (present.has(t.when)) return
+      const r = rooms.find((x) => x.id === t.room)
+      if (r && t.y !== undefined && t.y > r.y) {
+        r.d -= t.y - r.y
+        r.y = t.y
+      }
+      if (r && t.y1 !== undefined) r.d = t.y1 - r.y
+    })
+  }
 
   // Doors, windows, fixtures ride along as elements (not rooms). Those whose
   // room was dropped are dropped too.
@@ -167,7 +230,8 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
   ;(T.doors || []).filter(keep).forEach((d, i) => {
     const w = d.axis === 'h' ? d.w : 0.6
     const dd = d.axis === 'h' ? 0.6 : d.w
-    rooms.push({ ...d, id: d.id || `door-${i}`, kind: 'door', element: true, open: true, name: d.cased ? 'Opening' : 'Door', x: d.x - w / 2, y: d.y - dd / 2, w, d: dd, span: d.w, h: 6.67 })
+    const spec = (d.size && kit.doors?.[d.size]) || null
+    rooms.push({ ...d, id: d.id || `door-${i}`, kind: 'door', element: true, open: true, name: d.cased ? 'Opening' : 'Door', x: d.x - w / 2, y: d.y - dd / 2, w, d: dd, span: d.w, h: spec?.h ? spec.h / 12 : 6.67, pair: !!d.pair || !!spec?.pair, exterior: !!d.exterior || !!spec?.overhead, fireRated: !!spec?.fireRated, selfClosing: !!spec?.selfClosing })
   })
   ;(T.windows || []).filter(keep).forEach((win, i) => {
     if (win.dormer) {
@@ -182,8 +246,20 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
     rooms.push({ ...f, id: `fx-${i}`, kind: 'fixture', fixture: f.k, element: true, open: true, name: FIXTURE_NAME[f.k] || f.k, h: FIXTURE_H[f.k] || 2 })
   })
 
+  // a plan that draws its own garage sizes it by the cars asked for and lays its overhead doors out by bay
+  const drawnGarage = rooms.find((r) => r.kind === 'garage')
+  if (drawnGarage && program.garage > 0) {
+    const g = kit.rooms.garage
+    const drawnCars = +(drawnGarage.name.match(/^(\d+)-Car/) || [])[1] || 2
+    if (program.garage !== drawnCars) drawnGarage.w = Math.max(g.perCar * program.garage, program.garage >= 3 ? 32 : 0)
+    drawnGarage.name = `${program.garage}-Car Garage`
+    const side = garageFacing(drawnGarage, rooms) || 's'
+    for (let i = rooms.length - 1; i >= 0; i--) if (rooms[i].kind === 'door' && rooms[i].room === drawnGarage.id && /overhead/.test(rooms[i].size || '')) rooms.splice(i, 1)
+    rooms.push(...overheadDoors(kit, drawnGarage, program.garage, side))
+  }
+
   // the wing: extra bedrooms and baths slot in at the rear of the bedroom wing, the hall lengthens
-  const wingShift = extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths })
+  const wingShift = T.id === 'narrow' ? 0 : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths })
   // Bath 1 served the mini primary; without it, the bath opens from Bedroom 1 (never the outside)
   if (!program.suite2) {
     const bath1 = rooms.find((r) => r.id === 'bath1')
@@ -192,7 +268,14 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
     if (bath1 && bed1 && door) {
       const x0 = Math.max(bath1.x, bed1.x) + 0.5
       const x1 = Math.min(bath1.x + bath1.w, bed1.x + bed1.w) - 0.5
-      Object.assign(door, doorEl(kit, 'd-bath1', 'bath1', 'h', (x0 + x1) / 2, bath1.y, 'bath', { swing: 1, hinge: 'start' }))
+      // where no fixture stands against that wall
+      const span = (kit.doors.bath?.w || 28) / 12
+      const against = rooms.filter((f) => f.kind === 'fixture' && f.room === 'bath1' && f.y < bath1.y + 0.6)
+      let at = (x0 + x1) / 2
+      for (let c = x1 - span / 2; c >= x0 + span / 2; c -= 0.25) {
+        if (!against.some((f) => f.x < c + span / 2 + 0.2 && f.x + f.w > c - span / 2 - 0.2)) { at = c; break }
+      }
+      Object.assign(door, doorEl(kit, 'd-bath1', 'bath1', 'h', at, bath1.y, 'bath', { swing: 1, hinge: 'start' }))
     }
   }
 
@@ -206,8 +289,22 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
   if (T.roof) {
     // roof masses whose room was dropped are dropped too; the bed wing's roof grows with the wing; the roof then scales with the rooms
     const ids2 = new Set(rooms.filter(isRoom).map((r) => r.id))
-    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).map((m) => (m.id === 'bedwing' && wingShift ? { ...m, y0: m.y0 - wingShift } : { ...m }))
-    rooms.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: 1, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, 1, [cx, cy]), dormers: dormerWalls(masses, 1, [cx, cy]) })
+    const masses = T.roof.filter((m) => !m.id || ids2.has(m.id) || !T.rooms.some((r) => r.id === m.id)).filter((m) => !(m.id === 'leftwing' && !ids2.has('suite2'))).filter((m) => !(m.id && m.id.startsWith('awning-') && T.rooms.some((r) => r.id === m.id.slice(7)) && !ids2.has(m.id.slice(7)))).map((m) => {
+      // a mass drawn for a room that is not there takes its 'absent' shape (the bed wing runs on over Bath 1 without the mini primary)
+      const { absent, ...mass } = m
+      Object.entries(absent || {}).forEach(([id, over]) => { if (!ids2.has(id)) Object.assign(mass, over) })
+      return m.id === 'bedwing' && wingShift ? { ...mass, y0: mass.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...mass, x1: drawnGarage.x + drawnGarage.w } : mass
+    })
+    // an awning over the west window of a room the wing grew by (the drawn rooms carry their own)
+    const drawnIds = new Set(T.rooms.map((r) => r.id))
+    const west = Math.min(...rooms.filter((r) => isRoom(r) && !r.open).map((r) => r.x))
+    rooms.filter((r) => isRoom(r) && !r.open && !drawnIds.has(r.id) && Math.abs(r.x - west) < 0.5).forEach((r) => {
+      rooms.filter((e) => e.kind === 'window' && e.room === r.id && e.axis === 'v' && Math.abs(e.x + e.w / 2 - r.x) < 0.4).forEach((win) => {
+        const cy = win.y + win.d / 2
+        masses.push({ id: `awning-${r.id}`, kind: 'shed', x0: r.x - 2.5, x1: r.x, y0: cy - win.span / 2 - 0.5, y1: cy + win.span / 2 + 0.5, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 })
+      })
+    })
+    rooms.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: 1, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, 1, [cx, cy]), dormers: dormerWalls(masses, 1, [cx, cy]), plan: T.id || 'standard' })
   }
   const areaAt = (k) => {
     const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
@@ -232,7 +329,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
   const floor = { minScale: Math.max(0.85, kMin / k) }
   const first = fitToLot(placed, kit, program.stories, lot, floor)
   placed = first.rooms
-  if (program.garage > 0) placed = attachGarage(placed, kit, program.garage, lot, program.stories)
+  if (program.garage > 0 && !placed.some((r) => isRoom(r) && r.kind === 'garage')) placed = attachGarage(placed, kit, program.garage, lot, program.stories)
   const fit = fitToLot(placed, kit, program.stories, lot, { minScale: Math.max(0.85, kMin / (k * first.scale)) })
   // the fit may have shrunk the rooms around their fixtures: aisles and the work triangle settle again
   settleIslands(fit.rooms)
@@ -244,23 +341,25 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT) {
 function search(ok, lo, hi) {
   if (ok(lo)) return lo
   if (!ok(hi)) return hi
-  while (hi - lo > 0.005) {
+  while (hi - lo > 0.0025) {
     const mid = (lo + hi) / 2
     if (ok(mid)) hi = mid
     else lo = mid
   }
-  return Math.ceil(hi * 100) / 100
+  return Math.ceil(hi * 200) / 200
 }
 
 /** Piecewise map of one plan axis for a scale k < 1: the spans of rooms that keep their size map 1:1,
  * everything else scales by k, and the plan centre c stays put. Uniform about c for k >= 1. */
 function bandMap(rooms, axis, k, c) {
-  if (k >= 1 - 1e-9) return (v) => c + (v - c) * k
   const size = axis === 'x' ? 'w' : 'd'
   const other = axis === 'x' ? 'd' : 'w'
   const solid = rooms.filter((r) => isRoom(r))
-  // halls keep their width only; the rest of the service rooms keep both sizes
-  const fixed = solid.filter((r) => KEEP_SIZE.includes(r.kind) && (r.kind !== 'hall' || r[size] <= r[other])).map((r) => [r[axis], r[axis] + r[size]])
+  // a garage is sized by its cars whatever the house does; when the house shrinks, halls keep their
+  // width and the service rooms keep both sizes
+  const keep = k >= 1 - 1e-9 ? ['garage'] : [...KEEP_SIZE, 'garage']
+  if (k >= 1 - 1e-9 && !solid.some((r) => r.kind === 'garage')) return (v) => c + (v - c) * k
+  const fixed = solid.filter((r) => keep.includes(r.kind) && (r.kind !== 'hall' || r[size] <= r[other])).map((r) => [r[axis], r[axis] + r[size]])
   const edges = [...new Set(solid.flatMap((r) => [r[axis], r[axis] + r[size]]).concat([c]).map((v) => Math.round(v * 1000) / 1000))].sort((a, b) => a - b)
   const out = [edges[0]]
   for (let i = 1; i < edges.length; i++) {
@@ -413,7 +512,7 @@ export function doorEl(kit, id, room, axis, x, y, size, opts = {}) {
   const span = opts.pair && !spec.pair ? (spec.w * 2) / 12 : spec.w / 12
   const w = axis === 'h' ? span : 0.6
   const d = axis === 'h' ? 0.6 : span
-  return { id, kind: 'door', element: true, open: true, name: opts.cased ? 'Opening' : 'Door', room, axis, x: x - w / 2, y: y - d / 2, w, d, span, size, h: spec.overhead ? spec.h / 12 : 6.67, swing: opts.swing ?? 1, hinge: opts.hinge || 'start', pair: !!opts.pair || !!spec.pair, cased: !!opts.cased, exterior: !!opts.exterior || !!spec.overhead, fireRated: !!spec.fireRated, selfClosing: !!spec.selfClosing }
+  return { id, kind: 'door', element: true, open: true, name: opts.cased ? 'Opening' : 'Door', room, axis, x: x - w / 2, y: y - d / 2, w, d, span, size, h: spec.h ? spec.h / 12 : 6.67, swing: opts.swing ?? 1, hinge: opts.hinge || 'start', pair: !!opts.pair || !!spec.pair, cased: !!opts.cased, exterior: !!opts.exterior || !!spec.overhead, fireRated: !!spec.fireRated, selfClosing: !!spec.selfClosing }
 }
 /** A window element centred at (x, y) on a wall along `axis`; a twin is two catalog units mulled. */
 export function windowEl(kit, id, room, axis, x, y, mark = 'A', twin = false) {
@@ -465,7 +564,7 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
     if (kind === 'bed') {
       bedNo += 1
       const id = `bed-${bedNo}`
-      const closetD = 2.25
+      const closetD = 2.5 // 26" clear: a reach-in you can hang a coat in
       const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: bedX, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
       const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: bedX, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
       rooms.push(room, closet)
@@ -495,6 +594,90 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0 }) {
  * the laundry when the lot is wide enough, else behind it with the overhead door on its outer
  * side wall and a driveway down the side. Placed rooms in; placed rooms out.
  */
+/**
+ * The overhead doors for a garage with `cars` bays on one wall: one 16' door or two 9' doors for
+ * two cars, 16' + 9' or three 9' doors for three, two 16' for four, one 9' for one. No two doors
+ * overlap, at least 2 ft of wall between doors and at the ends, each door centred on its bays when
+ * that leaves the 2 ft, else spread evenly. `side` is the wall: 's' (front) 'n' 'e' 'w'.
+ */
+export function overheadDoors(kit, room, cars, side = 's') {
+  const wide = (kit.doors.overhead?.w || 192) / 12
+  const single = (kit.doors.overheadSingle?.w || 108) / 12
+  const wallLen = side === 's' || side === 'n' ? room.w : room.d
+  const n = Math.max(1, Math.round(cars))
+  // the widths, in bay order, and how many bays each covers
+  const plans = n === 1 ? [[single, 1]] : n === 2 ? [[wide, 2]] : n === 3 ? [[wide, 2], [single, 1]] : n === 4 ? [[wide, 2], [wide, 2]] : [[wide, 2], [wide, 2], [single, 1]]
+  let doors = plans
+  const sum = (list) => list.reduce((a, [w]) => a + w, 0)
+  if (sum(doors) + 2 * (doors.length + 1) > wallLen + 0.01) {
+    // too tight for the wide doors: singles, one per bay, as many as fit with 2 ft walls
+    const singles = []
+    for (let i = 0; i < n && (i + 1) * single + 2 * (i + 2) <= wallLen + 0.01; i++) singles.push([single, 1])
+    if (singles.length) doors = singles
+    else doors = [[Math.min(single, wallLen - 4), 1]]
+  }
+  const bays = doors.reduce((a, [, b]) => a + b, 0)
+  const bayW = wallLen / Math.max(bays, 1)
+  // centred on the bays
+  let starts = []
+  let at = 0
+  doors.forEach(([w, b]) => {
+    starts.push(at * bayW + (b * bayW - w) / 2)
+    at += b
+  })
+  const gapsOk = (st) => st.every((x, i) => x >= 2 - 0.01 && x + doors[i][0] <= wallLen - 2 + 0.01 && (i === 0 || x - (st[i - 1] + doors[i - 1][0]) >= 2 - 0.01))
+  if (!gapsOk(starts)) {
+    // spread evenly: equal wall between the doors and at the ends
+    const gap = (wallLen - sum(doors)) / (doors.length + 1)
+    starts = []
+    let x = gap
+    doors.forEach(([w]) => {
+      starts.push(x)
+      x += w + gap
+    })
+  }
+  return doors.map(([w], i) => {
+    const size = w >= wide - 0.01 ? 'overhead' : 'overheadSingle'
+    const id = i === 0 ? 'd-garage-overhead' : `d-garage-overhead-${i + 1}`
+    const c = starts[i] + w / 2
+    const el =
+      side === 's' ? doorEl(kit, id, room.id, 'h', room.x + c, room.y + room.d, size, { swing: 1 })
+      : side === 'n' ? doorEl(kit, id, room.id, 'h', room.x + c, room.y, size, { swing: -1 })
+      : side === 'e' ? doorEl(kit, id, room.id, 'v', room.x + room.w, room.y + c, size, { swing: 1 })
+      : doorEl(kit, id, room.id, 'v', room.x, room.y + c, size, { swing: -1 })
+    // a narrowed single keeps its drawn width
+    if (Math.abs(el.span - w) > 0.01) {
+      el.span = w
+      if (el.axis === 'h') {
+        el.w = w
+        el.x = room.x + c - w / 2
+      } else {
+        el.d = w
+        el.y = room.y + c - w / 2
+      }
+    }
+    return el
+  })
+}
+
+/** Which wall of the garage its overhead doors are on: 's' 'n' 'e' 'w', or null. */
+export function garageFacing(room, doors) {
+  const d = doors.find((e) => e.kind === 'door' && e.room === room.id && (e.size === 'overhead' || e.size === 'overheadSingle'))
+  if (!d) return null
+  const cx = d.x + d.w / 2
+  const cy = d.y + d.d / 2
+  if (d.axis === 'h') return Math.abs(cy - (room.y + room.d)) < Math.abs(cy - room.y) ? 's' : 'n'
+  return Math.abs(cx - (room.x + room.w)) < Math.abs(cx - room.x) ? 'e' : 'w'
+}
+
+/** Is a plan point inside the lot boundary? Plan coords, the kit's plan centre at the lot centre. */
+export function insideLot(lot, kit, x, y) {
+  const L = lotOf(lot)
+  if (!L.boundary || L.boundary.length < 3) return true
+  const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
+  return insidePoly(L.boundary, worldOf(L, x - centre[0], y - centre[1]))
+}
+
 export function attachGarage(placed, kit, cars, lot, stories = 1) {
   const L = lotOf(lot)
   const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
@@ -508,26 +691,96 @@ export function attachGarage(placed, kit, cars, lot, stories = 1) {
   const xs = solid.flatMap((r) => [r.x, r.x + r.w])
   const [envW] = envelopeSize(L)
   const eastFits = Math.max(...xs) + w - Math.min(...xs) <= envW + 0.01
-  const house = (x, y, cars) => ({ id: 'garage', kind: 'garage', name: `${cars}-Car Garage`, x, y, w, d, zone: 'service', open: false, plumbing: false, fill: '#dcd7cf' })
+  // a garage that would reach past the rear lot line can still go on when the whole house can slide
+  // toward the street by that much (the fit after this attaches it does the sliding)
+  const envL = L.envelope && L.envelope.length >= 3 ? L.envelope.map((pt) => localOf(L, pt)) : null
+  const envRear = envL ? Math.min(...envL.map((pt) => pt[1])) + centre[1] : -Infinity
+  const envFront = envL ? Math.max(...envL.map((pt) => pt[1])) + centre[1] : Infinity
+  const houseFront = Math.max(...solid.map((r) => r.y + r.d))
+  const slackFront = Math.max(0, envFront - houseFront)
+  const slideFor = (rect) => Math.max(0, Math.min(slackFront, envRear - rect.y))
+  const inLotShifted = (x, y, shift) => insideLot(L, kit, x, y + shift)
+  // side-load needs 25 ft clear from the overhead door to the lot line (a car has to turn in): the
+  // garage sits behind the laundry, and steps west along the rear of the house until it has them
+  const clearAt = (face, y) => {
+    const shift = slideFor({ y })
+    return inLotShifted(face + 25, y + w / 2, shift) && inLotShifted(face + 25, y + 1, shift) && inLotShifted(face + 25, y + w - 1, shift) && y + shift >= envRear - 0.01
+  }
+  // a side-load garage turns: its bays run front to back, the doors along its long side
+  const sw = d
+  const sd = w
+  let sideRoom = { x: laundry.x + laundry.w - sw, y: laundry.y - sd, w: sw, d: sd }
+  let sideClear = clearAt(sideRoom.x + sideRoom.w, sideRoom.y)
+  for (let shift = 1; !sideClear && shift <= 30; shift++) {
+    const r = { x: laundry.x + laundry.w - sw - shift, y: laundry.y - sd, w: sw, d: sd }
+    if (clearAt(r.x + r.w, r.y)) {
+      sideRoom = r
+      sideClear = true
+    }
+  }
+  // it must still touch a room it can open into (mud room, laundry, hall or foyer) along its front wall
+  let hostRow = solid.filter((r) => ['laundry', 'mud', 'hall', 'foyer'].includes(r.kind) && Math.abs(r.y - (sideRoom.y + sideRoom.d)) < 0.75 && Math.min(r.x + r.w, sideRoom.x + sideRoom.w) - Math.max(r.x, sideRoom.x) >= 3.5)
+  if (sideClear && !hostRow.length) sideClear = false
+  // or the courtyard way: the doors on the garage's west face toward the rear yard, 25 ft of apron
+  // there, and a 10 ft driveway down the east side yard from the street to the rear
+  let courtyard = false
+  if (!eastFits && !sideClear) {
+    const r = { x: laundry.x + laundry.w - sw, y: laundry.y - sd, w: sw, d: sd }
+    const apron = { x: r.x - 25, y: r.y, w: 25, d: r.d }
+    const shift = slideFor(r)
+    const apronClear = r.y + shift >= envRear - 0.01 && !solid.some((o) => Math.min(o.x + o.w, apron.x + apron.w) - Math.max(o.x, apron.x) > 0.5 && Math.min(o.y + o.d, apron.y + apron.d) - Math.max(o.y, apron.y) > 0.5) && inLotShifted(apron.x, apron.y + 1, shift) && inLotShifted(apron.x, apron.y + apron.d - 1, shift)
+    // the lane down the east side yard, 10 ft wide; the house may slide west by what its west yard has
+    // beyond the setback (the fit after this does the sliding)
+    const east = Math.max(...xs)
+    const envWest = envL ? Math.min(...envL.map((pt) => pt[0])) + centre[0] : -Infinity
+    const westSlack = Math.max(0, Math.min(...xs) - envWest)
+    const lane = [r.y, Math.max(...solid.map((o) => o.y + o.d)) + 30]
+    const laneAt = (dxShift) => {
+      let ok = insideLot(L, kit, east + 10 - dxShift, r.y + 1 + shift)
+      for (let y = r.y; y < lane[1] && ok; y += 5) ok = insideLot(L, kit, east + 10 - dxShift, y + shift)
+      return ok
+    }
+    const laneClear = laneAt(0) || laneAt(westSlack)
+    const hostW = solid.filter((o) => ['laundry', 'mud', 'hall', 'foyer'].includes(o.kind) && Math.abs(o.y - (r.y + r.d)) < 0.75 && Math.min(o.x + o.w, r.x + r.w) - Math.max(o.x, r.x) >= 3.5)
+    if (apronClear && laneClear && hostW.length) {
+      courtyard = true
+      sideRoom = r
+      hostRow = hostW
+    }
+  }
+  const house = (x, y, cars, gw = w, gd = d) => ({ id: 'garage', kind: 'garage', name: `${cars}-Car Garage`, x, y, w: gw, d: gd, zone: 'service', open: false, plumbing: false, fill: '#dcd7cf' })
   const elements = []
   let room
-  if (eastFits) {
-    // front-load: beside the laundry, overhead door on the front wall, house door through the laundry's east wall
+  if (eastFits || (!sideClear && !courtyard)) {
+    // front-load: beside the laundry, overhead doors on the front wall, house door through the laundry's east wall
     room = house(laundry.x + laundry.w, laundry.y, cars)
     const occupied = flat.filter((e) => e.element && e.kind === 'fixture' && e.room === laundry.id && e.x + e.w > laundry.x + laundry.w - 1)
     let dy = laundry.y + 2.5
     if (occupied.some((f) => dy > f.y - 1.5 && dy < f.y + f.d + 1.5)) dy = laundry.y + laundry.d - 2.5
     elements.push(doorEl(kit, 'd-garage', 'garage', 'v', room.x, dy, 'garage', { swing: 1, hinge: 'start' }))
-    elements.push(doorEl(kit, 'd-garage-overhead', 'garage', 'h', room.x + room.w / 2, room.y + room.d, cars >= 3 ? 'overhead' : 'overhead', { swing: 1 }))
-    if (cars >= 3) elements.push(doorEl(kit, 'd-garage-overhead-2', 'garage', 'h', room.x + room.w - 5.5, room.y + room.d, 'overheadSingle', { swing: 1 }))
+    elements.push(...overheadDoors(kit, room, cars, 's'))
   } else {
-    // side-load behind the laundry: house door through the laundry's rear wall, overhead door on the garage's east wall
-    room = house(laundry.x + laundry.w - w, laundry.y - d, cars)
-    elements.push(doorEl(kit, 'd-garage', 'garage', 'h', laundry.x + laundry.w - 2.5, laundry.y, 'garage', { swing: -1, hinge: 'start' }))
-    elements.push(doorEl(kit, 'd-garage-overhead', 'garage', 'v', room.x + room.w, room.y + room.d / 2, 'overhead', { swing: 1 }))
-    // the laundry's rear window moves to its east wall, which stays outside
-    const win = flat.find((e) => e.kind === 'window' && e.room === laundry.id)
-    if (win) Object.assign(win, windowEl(kit, win.id, laundry.id, 'v', laundry.x + laundry.w, laundry.y + laundry.d - 3, win.mark || 'A'))
+    // side-load behind the house: house door through the rear wall of the laundry (or mud room / hall it
+    // touches), overhead doors on the garage's east wall
+    room = house(sideRoom.x, sideRoom.y, cars, sideRoom.w, sideRoom.d)
+    const host = hostRow.find((r) => r.id === laundry.id) || hostRow.sort((a, b) => Math.min(b.x + b.w, room.x + room.w) - Math.max(b.x, room.x) - (Math.min(a.x + a.w, room.x + room.w) - Math.max(a.x, room.x)))[0]
+    const x0 = Math.max(host.x, room.x) + 0.5
+    const x1 = Math.min(host.x + host.w, room.x + room.w) - 0.5
+    elements.push(doorEl(kit, 'd-garage', 'garage', 'h', (x0 + x1) / 2, host.y, 'garage', { swing: -1, hinge: 'start' }))
+    elements.push(...overheadDoors(kit, room, cars, courtyard ? 'w' : 'e'))
+    if (courtyard) room.driveway = 'courtyard' // the driveway runs down the east side yard and across the rear to the west-facing doors
+    // a rear window of a room the garage covers moves to that room's outside side wall when it has one
+    flat.filter((e) => e.kind === 'window' && e.room !== 'garage').forEach((win) => {
+      const home = solid.find((r) => r.id === win.room)
+      if (!home) return
+      const c = [win.x + win.w / 2, win.y + win.d / 2]
+      const covered = c[0] > room.x - 0.3 && c[0] < room.x + room.w + 0.3 && c[1] > room.y - 0.3 && c[1] < room.y + room.d + 0.3
+      if (!covered) return
+      const eastFree = !solid.some((r) => r !== home && Math.abs(r.x - (home.x + home.w)) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && home.x + home.w >= room.x + room.w - 0.3
+      const westFree = !solid.some((r) => r !== home && Math.abs(r.x + r.w - home.x) < 0.75 && Math.min(r.y + r.d, home.y + home.d) - Math.max(r.y, home.y) > 1) && home.x <= room.x + 0.3
+      if (eastFree) Object.assign(win, windowEl(kit, win.id, home.id, 'v', home.x + home.w, home.y + home.d - 3, win.mark || 'A'))
+      else if (westFree) Object.assign(win, windowEl(kit, win.id, home.id, 'v', home.x, home.y + home.d - 3, win.mark || 'A'))
+    })
   }
   // never on another room's window or door
   flat.filter((e) => e.element && (e.kind === 'window' || e.kind === 'door') && e.room !== laundry.id).forEach((e) => {
@@ -605,7 +858,18 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
       [x0, y0 + r.d],
     ]
   }
-  const fits = (s, dx, dy) => roomsAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(env, p)))
+  const bound = L.boundary && L.boundary.length >= 3 ? L.boundary.map((p) => localOf(L, p)) : null
+  const lanesAt = (s) => {
+    const rs = roomsAt(s)
+    return rs
+      .filter((r) => r.kind === 'garage' && r.driveway === 'courtyard')
+      .map((g) => {
+        const east = Math.max(...rs.map((r) => r.x + r.w))
+        const front = Math.max(...rs.map((r) => r.y + r.d))
+        return { x: east, y: g.y, w: 10, d: front + 20 - g.y }
+      })
+  }
+  const fits = (s, dx, dy) => roomsAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(env, p))) && (!bound || lanesAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(bound, p))))
   // the house's box must fit the envelope's box at all before any shift is worth trying
   const ex = env.map((p) => p[0])
   const ez = env.map((p) => p[1])
@@ -708,6 +972,38 @@ export function place(rooms, stories = 1, kit = FARMHOUSE, lot = DEFAULT_LOT) {
 export function floorArea(rooms, stories = 1) {
   const planBased = rooms.some((r) => r.kind === 'hall')
   return rooms.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0) * (planBased ? 1 : CIRCULATION) * stories
+}
+
+/**
+ * The program as the plan actually has it: bedrooms, full and half baths, the garage's cars, the
+ * office, the porches and the living area, counted from the rooms. Every screen, design.json, the
+ * summary and the title block read this, so "add a bedroom" shows up everywhere at once.
+ */
+export function programOf(rooms, program = {}) {
+  const list = rooms.filter(isRoom)
+  const count = (...kinds) => list.filter((r) => kinds.includes(r.kind)).length
+  const garage = list.find((r) => r.kind === 'garage')
+  const cars = garage ? +(garage.name.match(/^(\d+)-Car/) || [])[1] || Math.max(1, Math.round(Math.max(garage.w, garage.d) / 11)) : 0
+  return {
+    ...program,
+    beds: count('bed', 'master', 'suite2'),
+    baths: count('bath', 'mbath', 'jackjill'),
+    halfBath: count('halfbath') > 0,
+    halfBaths: count('halfbath'),
+    office: count('office') > 0,
+    garage: cars,
+    suite2: count('suite2') > 0,
+    frontPorch: count('frontPorch') > 0,
+    rearPorch: count('rearPorch') > 0,
+    stories: program.stories || 1,
+    livingSf: Math.round(floorArea(rooms, program.stories || 1)),
+    asked: program.sqft || null,
+  }
+}
+/** "4 bed · 3.5 bath · 2-car · 1 story" */
+export function programLine(p, sep = ' · ') {
+  const baths = `${p.baths}${p.halfBaths > 1 ? `.${p.halfBaths}` : p.halfBath ? '.5' : ''}`
+  return [`${p.beds} bed`, `${baths} bath`, p.garage ? `${p.garage}-car` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
 }
 
 /** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */

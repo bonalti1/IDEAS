@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Button, Stat, Mark, money, sf } from '../ui.jsx'
-import { kitFor } from '../lib/layout.js'
+import { kitFor, programOf, programLine } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
 import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
 import { planSheetHTML, summaryHTML } from '../lib/plan-svg.js'
+import { planPDF, summaryPDF, pdfName } from '../lib/pdf.js'
 import { auditSummary } from '../lib/audit.js'
 import { TRUST } from '../lib/trust.js'
 import TrustBlock from '../TrustBlock.jsx'
@@ -79,15 +80,44 @@ export default function Send({ lot, style, program, rooms, history, project, set
     setSent(true)
   }
 
-  const openSummary = () => {
-    const design = buildDesign({ rooms, program, style, lot, history, client: project?.client || lot?.client })
-    const html = summaryHTML(design, price, auditSummary(rooms, program, kit, lot), TRUST, kit.titleBlock)
+  // the print view, only when a PDF cannot be built in this browser
+  const printFallback = (html) => {
     const w = window.open('', '_blank')
-    if (!w) return
+    if (!w) {
+      setPdfNote('The PDF could not be built here and the print view was blocked as a pop-up. Allow pop-ups for this site, or try another browser.')
+      return
+    }
     w.document.open()
     w.document.write(html)
     w.document.close()
     setTimeout(() => w.print(), 400)
+  }
+  const [pdfNote, setPdfNote] = useState('')
+  const [pdfBusy, setPdfBusy] = useState('')
+  const openSummary = async () => {
+    const design = buildDesign({ rooms, program, style, lot, history, client: project?.client || lot?.client })
+    const audit = auditSummary(rooms, program, kit, lot)
+    setPdfBusy('summary')
+    setPdfNote('')
+    try {
+      const doc = await summaryPDF(design, price, audit, TRUST, kit.titleBlock)
+      doc.save(pdfName(design, 'summary'))
+    } catch (e) {
+      printFallback(summaryHTML(design, price, audit, TRUST, kit.titleBlock))
+    }
+    setPdfBusy('')
+  }
+  const downloadPlan = async (sheet) => {
+    const design = buildDesign({ rooms, program, style, lot, client: project?.client })
+    setPdfBusy(sheet)
+    setPdfNote('')
+    try {
+      const doc = await planPDF(design, kit.titleBlock, { sheet })
+      doc.save(pdfName(design, sheet === 'tabloid' ? 'floor plan 11x17' : 'floor plan 24x36'))
+    } catch (e) {
+      printFallback(planSheetHTML(design, kit.titleBlock, { sheet }))
+    }
+    setPdfBusy('')
   }
 
   if (tracked) {
@@ -229,7 +259,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
           <div className="card stats">
             <Stat k="Lot" v={lot?.address} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Program" v={`${program.beds} bed · ${program.baths}${program.halfBath ? '.5' : ''} bath · ${program.garage ? program.garage + '-car · ' : ''}${program.stories} story`} />
+            <Stat k="Program" v={programLine(programOf(rooms, program))} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
             <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
@@ -317,21 +347,17 @@ export default function Send({ lot, style, program, rooms, history, project, set
             </table>
           </div>
           <div className="card pdf">
-            <h3>Floor plan PDF</h3>
-            <p className="muted">The plan on a tabloid sheet with the South Texas Builders title block, at the largest standard scale that fits. Opens a print view: choose "Save as PDF".</p>
-            <Button
-              onClick={() => {
-                const html = planSheetHTML(buildDesign({ rooms, program, style, lot, client: project?.client }), kit.titleBlock)
-                const w = window.open('', '_blank')
-                if (!w) return
-                w.document.open()
-                w.document.write(html)
-                w.document.close()
-                setTimeout(() => w.print(), 400)
-              }}
-            >
-              Download PDF
-            </Button>
+            <h3>Floor plan and site plan PDF</h3>
+            <p className="muted">Two sheets with the South Texas Builders title block: the floor plan at 1/4" = 1'-0" and the site plan (lot lines, setbacks, driveway, walk, coverage) at 1" = 20', on 24 × 36. The tabloid version prints at home at 1/8" = 1'-0".</p>
+            <div className="row gap">
+              <Button onClick={() => downloadPlan('archD')} disabled={!!pdfBusy}>
+                {pdfBusy === 'archD' ? 'Building…' : 'Download PDF · 24 × 36'}
+              </Button>
+              <Button ghost onClick={() => downloadPlan('tabloid')} disabled={!!pdfBusy}>
+                {pdfBusy === 'tabloid' ? 'Building…' : '11 × 17'}
+              </Button>
+            </div>
+            {pdfNote && <p className="muted small">{pdfNote}</p>}
           </div>
           <div className="card ifc">
             <h3>3D model for Revit</h3>

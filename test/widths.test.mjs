@@ -9,7 +9,7 @@ import { buildDesign } from '../src/draft/lib/contract.js'
 import { toIFC } from '../src/draft/lib/ifc.js'
 import { doorSchedule, windowSchedule } from '../src/draft/lib/takeoff.js'
 import { STYLES } from '../src/draft/lib/styles.js'
-import { LOTS, PROGRAMS } from './audit.test.mjs'
+import { LOTS, PROGRAMS, draftable } from './helpers.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
@@ -27,14 +27,12 @@ function ifcOpenings(ifc) {
   return out
 }
 
-const cases = Object.entries(LOTS)
-  .filter(([n]) => !n.startsWith('narrow'))
-  .flatMap(([lotName, lot]) => Object.entries(PROGRAMS).map(([progName, program]) => [lotName, lot, progName, program]))
+const cases = Object.entries(LOTS).flatMap(([lotName, lot]) => Object.entries(PROGRAMS).map(([progName, program]) => [lotName, lot, progName, program]))
 
 for (const [lotName, lot, progName, program] of cases) {
   test(`opening widths agree: ${progName} on ${lotName}`, () => {
-    const f = fitsLot(program, style, lot)
-    const drafted = f.ok ? program : { ...program, sqft: f.maxSqft }
+    const drafted = draftable(program, lot)
+    assert.ok(drafted)
     const rooms = generateRooms(drafted, style, lot)
     const design = buildDesign({ rooms, program: drafted, style, lot, client: 'Test' })
     const ifc = ifcOpenings(toIFC({ rooms, program: drafted, kit, style, lot }))
@@ -50,6 +48,10 @@ for (const [lotName, lot, progName, program] of cases) {
       assert.ok(inIfc, `${d.tag} is in the IFC`)
       assert.ok(Math.abs(inIfc.widthIn - d.width * 12) <= 0.5, `${d.tag}: IFC ${inIfc.widthIn.toFixed(1)}" vs design ${d.width * 12}"`)
       assert.ok(!/\s$/.test(inIfc.name), `no trailing space in "${inIfc.name}"`)
+      // heights agree too: the catalog (French pairs 96", overhead 84", the rest 80"), design.json, the schedule and the IFC
+      assert.ok(Math.abs(row.h - d.height * 12) <= 0.5, `${d.tag}: schedule ${row.h}" high vs design ${Math.round(d.height * 12)}"`)
+      assert.ok(Math.abs(inIfc.heightIn - d.height * 12) <= 0.5, `${d.tag}: IFC ${inIfc.heightIn.toFixed(1)}" high vs design ${Math.round(d.height * 12)}"`)
+      assert.equal(Math.round(d.height * 12), kit.doors[d.size].h, `${d.tag} ${d.size}: ${Math.round(d.height * 12)}" is the catalog height`)
     })
     const winWidths = new Set(Object.values(kit.windows).flatMap((w) => [w.w, w.w * 2]))
     design.windows.forEach((w) => {
@@ -62,6 +64,30 @@ for (const [lotName, lot, progName, program] of cases) {
     assert.equal(design.windows.length, ifc.windows.length, 'every window is in the IFC')
   })
 }
+
+test('door heights still agree after chat edits (a bedroom added, the garage made 3 cars, a rear porch)', async () => {
+  const { interpretRequest } = await import('../src/draft/lib/interpret.js')
+  const { DEFAULT_PROGRAM } = await import('../src/draft/lib/layout.js')
+  const offline = async () => { throw new Error('no api') }
+  const lot = LOTS['reference (Lot 514)']
+  let rooms = generateRooms(DEFAULT_PROGRAM, style, lot)
+  for (const t of ['add a bedroom', 'make the garage 3 cars', 'add a porch on the back']) {
+    const r = await interpretRequest(t, rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline })
+    assert.equal(r.applied, true, `${t}: ${r.reply}`)
+    rooms = r.rooms
+  }
+  const design = buildDesign({ rooms, program: DEFAULT_PROGRAM, style, lot, client: 'Test' })
+  const ifc = ifcOpenings(toIFC({ rooms, program: DEFAULT_PROGRAM, kit, style, lot }))
+  const schedule = doorSchedule(rooms, kit)
+  assert.ok(design.doors.some((d) => /^bed-/.test(d.room)) && design.doors.some((d) => d.size === 'overheadSingle'), 'the new rooms brought doors')
+  design.doors.filter((d) => !d.cased).forEach((d) => {
+    const row = schedule.find((r) => r.key === d.size && !!r.pair === !!d.pair)
+    const inIfc = ifc.doors.find((x) => x.tag === d.tag)
+    assert.ok(row && inIfc, `${d.tag} ${d.size} on the schedule and in the IFC`)
+    assert.equal(Math.round(d.height * 12), kit.doors[d.size].h, `${d.tag} ${d.size}: ${Math.round(d.height * 12)}" is the catalog height`)
+    assert.ok(Math.abs(row.h - d.height * 12) <= 0.5 && Math.abs(inIfc.heightIn - d.height * 12) <= 0.5, `${d.tag}: ${row.h}" / ${inIfc.heightIn.toFixed(1)}" / ${Math.round(d.height * 12)}"`)
+  })
+})
 
 test('the IFC carries wall, door and window types, materials, Pset_WallCommon, Pset_SpaceCommon, an area for every space, and marks', () => {
   const program = PROGRAMS['4/3.5 office 2-car 2,800 sf']

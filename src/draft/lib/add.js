@@ -252,8 +252,36 @@ function extendWingOffice(flat, kit) {
 }
 
 /** Remove a room and everything in it. */
-export function removeRoom(flat, id) {
+/**
+ * A room that left an enclosed space behind hands it to a neighbour on the same wall line (the plan may
+ * name which; else storage and halls first), so no unlabeled void is left in the house. Returns the
+ * room that grew, or null when the space opens to the outside or no neighbour lines up.
+ */
+export function fillVoid(flat, gone, named = null) {
+  if (!gone || gone.open || exteriorSides(flat, gone).length) return null
+  const solid = flat.filter((r) => isRoom(r) && !r.open)
+  const sameRow = (n) => Math.abs(n.y - gone.y) < 0.3 && Math.abs(n.d - gone.d) < 0.3 && (Math.abs(n.x + n.w - gone.x) < 0.6 || Math.abs(gone.x + gone.w - n.x) < 0.6)
+  const sameCol = (n) => Math.abs(n.x - gone.x) < 0.3 && Math.abs(n.w - gone.w) < 0.3 && (Math.abs(n.y + n.d - gone.y) < 0.6 || Math.abs(gone.y + gone.d - n.y) < 0.6)
+  const order = ['wic', 'mwic', 'pantry', 'hall', 'laundry', 'mud', 'halfbath', 'bath', 'foyer', 'office', 'dining', 'kitchen', 'living', 'bed', 'suite2', 'master']
+  const cands = solid.filter((n) => sameRow(n) || sameCol(n)).sort((a, b) => (a.id === named ? -1 : b.id === named ? 1 : order.indexOf(a.kind) - order.indexOf(b.kind)))
+  const n = cands[0]
+  if (!n) return null
+  if (sameRow(n)) {
+    const x0 = Math.min(n.x, gone.x)
+    n.w = Math.max(n.x + n.w, gone.x + gone.w) - x0
+    n.x = x0
+  } else {
+    const y0 = Math.min(n.y, gone.y)
+    n.d = Math.max(n.y + n.d, gone.y + gone.d) - y0
+    n.y = y0
+  }
+  return n
+}
+
+export function removeRoom(flat, id, kit = null) {
+  const gone = flat.find((r) => r.id === id)
   for (let i = flat.length - 1; i >= 0; i--) if (flat[i].id === id || (flat[i].element && flat[i].room === id)) flat.splice(i, 1)
+  if (gone) fillVoid(flat, gone, kit?.plan?.fills?.[id])
   const roof = flat.find((r) => r.kind === 'roof')
   if (roof && roof.masses?.some((m) => m.id === id)) {
     roof.masses = roof.masses.filter((m) => m.id !== id)
