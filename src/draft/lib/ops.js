@@ -287,6 +287,8 @@ export function pushWall(flat, roomId, side, delta, kit, { roof: roofOverride } 
       r[size] += d
     }
   }
+  // the rooms' rectangles before the wall moves, so each room's own roof mass can follow its edges
+  const before = new Map(rooms.map((r) => [r.id, { x: r.x, y: r.y, w: r.w, d: r.d }]))
   moved.forEach((r) => (r[axis] += move))
   stretched.forEach((r) => grow(r, delta))
   shrinkers.forEach((r) => {
@@ -338,16 +340,33 @@ export function pushWall(flat, roomId, side, delta, kit, { roof: roofOverride } 
     const mHi = (m) => m[a1] ?? m.face
     const mBeyond = (m) => (outward > 0 ? mLo(m) >= Lb - tol : mHi(m) <= Lb + tol)
     const inLane = (m, c0b, c1b) => Math.min(m[b1] ?? m[b0] ?? 0, c1b) - Math.max(m[b0] ?? 0, c0b) > 0.5
+    const byId = new Map(rooms.map((r) => [r.id, r]))
     roof.masses = roof.masses.map((m) => {
       const mm = { ...m }
       const shift = outward * db
-      const movesWith = mBeyond(m) && (inLane(m, laneB[0], laneB[1]) || movedB.some((r) => inLane(m, r.c0, r.c1) && mLo(m) < r.hi + 0.75 && mHi(m) > r.lo - 0.75))
+      // a mass that is a room's own roof follows that room's edges exactly
+      const own = m.id && byId.get(m.id) && before.get(m.id)
+      if (own) {
+        const r = byId.get(m.id)
+        const o = before.get(m.id)
+        const dLo = (r[axis] - o[axis]) / k
+        const dHi = (r[axis] + r[size] - (o[axis] + o[size])) / k
+        if (Math.abs(dLo) < 1e-9 && Math.abs(dHi) < 1e-9) return mm
+        if (mm[a0] !== undefined) mm[a0] += dLo
+        if (mm[a1] !== undefined) mm[a1] += dHi
+        if (axis === 'y' && mm.face !== undefined) mm.face += Math.abs(mm.face - toB(o.y, 1)) < Math.abs(mm.face - toB(o.y + o.d, 1)) ? dLo : dHi
+        if (mm.cuts) mm.cuts = mm.cuts.map((ct) => ({ ...ct, [a0]: ct[a0] + (Math.abs(ct[a0] - mLo(m)) < 0.75 ? dLo : 0), [a1]: ct[a1] + (Math.abs(ct[a1] - mHi(m)) < 0.75 ? dHi : 0) }))
+        return mm
+      }
+      // a mass with no room of its own (the main roof, a dormer, an awning): moves with the rooms that moved under it, stretches across the line
+      const movesWith = mBeyond(m) && movedB.some((r) => inLane(m, r.c0, r.c1) && mLo(m) < r.hi + 0.75 && mHi(m) > r.lo - 0.75)
       if (movesWith && !m.id?.endsWith('Porch')) {
         if (mm[a0] !== undefined) mm[a0] += shift
         if (mm[a1] !== undefined) mm[a1] += shift
         if (axis === 'y' && mm.face !== undefined) mm.face += shift
         if (mm.cuts) mm.cuts = mm.cuts.map((ct) => ({ ...ct, [a0]: ct[a0] + shift, [a1]: ct[a1] + shift }))
-      } else if (!mBeyond(m) && mLo(m) < Lb - tol && mHi(m) > Lb + tol && inLane(m, laneB[0], laneB[1])) {
+      } else if (!mBeyond(m) && mLo(m) < Lb - tol && mHi(m) > Lb + tol && inLane(m, laneB[0], laneB[1]) && movedB.some((r) => inLane(m, r.c0, r.c1) && (outward > 0 ? Math.abs(r.hi - mHi(m)) < 0.75 : Math.abs(r.lo - mLo(m)) < 0.75))) {
+        // the wall moved inside the mass, and the rooms at the mass's far edge moved with it: the mass stretches
         if (outward > 0) mm[a1] += db
         else mm[a0] -= db
       } else if (m.id?.endsWith('Porch') && mBeyond(m) && inLane(m, laneB[0], laneB[1])) {
