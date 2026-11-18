@@ -2,8 +2,8 @@
 // Claude does the interpreting through the office API (key stays server-side);
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
-import { kitFor, lotOf, minSizeOf, planIdOf, isRoom, programOf, generateRooms, floorArea } from './layout.js'
-import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps } from './ops.js'
+import { kitFor, lotOf, minSizeOf, maxSizeOf, planIdOf, isRoom, programOf, generateRooms, floorArea } from './layout.js'
+import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 
@@ -37,9 +37,11 @@ export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
  */
 export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const kit = kitFor(style)
-  // what this style cannot do yet, said plainly, before any model is asked
-  const no = unsupported(text, style)
-  if (no) return { applied: false, rooms, reply: no, source: 'fallback', ops: [], unsupported: true }
+  // what this style cannot do yet, said plainly, before any model is asked: clause by clause, so "make the
+  // kitchen bigger and add a pool" does the kitchen and names the pool
+  const split = dropUnsupported(text, style)
+  if (!split.text) return { applied: false, rooms, reply: split.dropped.map((d) => d.why).join(' '), source: 'fallback', ops: [], unsupported: true }
+  text = split.text
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
   let source = 'claude'
@@ -50,9 +52,29 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
     diff = regexOps(text, rooms, kit, lotOf(opts.lot))
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
-  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [] })
+  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [], unsupported: split.dropped })
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return result
+}
+
+/**
+ * A request with the clauses this style cannot take set aside: { text: what is left to interpret (joined with
+ * "; "), dropped: [{ text, why }] }. With nothing left, text is '' and the answer is the dropped clauses' reasons.
+ */
+export function dropUnsupported(text, style) {
+  const clauses = splitClauses(text)
+  if (clauses.length <= 1) {
+    const why = unsupported(text, style)
+    return why ? { text: '', dropped: [{ text: String(text || '').trim(), why }] } : { text: String(text || '').trim(), dropped: [] }
+  }
+  const kept = []
+  const dropped = []
+  for (const c of clauses) {
+    const why = unsupported(c, style)
+    if (why) dropped.push({ text: c, why: why.replace(` ${CAN_DO}`, '') })
+    else kept.push(c)
+  }
+  return { text: kept.join('; '), dropped }
 }
 
 /** What a request can change on a plan, for the answers below. */
@@ -154,6 +176,7 @@ export function redraft(sqft, rooms, program, style, lot, edits = [], over = {})
   if (!fit.ok) return { ok: false, max: fit.maxSqft || (fit.draft?.clamped ? fit.draft.minSqft : null), reasons: fit.reasons || [], program: base }
   // under the plan's floor the draft comes out at the floor: that is not the size asked for
   if (fit.draft?.clamped && fit.draft.minSqft && Math.abs(fit.draft.minSqft - base.sqft) / base.sqft > 0.05) return { ok: false, max: fit.draft.minSqft, reasons: [`the smallest this plan goes with these rooms is about ${num(fit.draft.minSqft)} sf`], program: base, floor: true }
+  const atFloor = !!fit.draft?.clamped && !!fit.draft.minSqft
   let next = fit.draft?.rooms || generateRooms(base, style, L)
   const kept = []
   const dropped = []
@@ -174,7 +197,7 @@ export function redraft(sqft, rooms, program, style, lot, edits = [], over = {})
   }
   const rules = checkRules(next, base, style, L)
   if (!rules.ok) return { ok: false, max: null, reasons: rules.reasons, program: base }
-  return { ok: true, rooms: next, program: base, planId: planIdOf(next), kept, dropped }
+  return { ok: true, rooms: next, program: base, planId: planIdOf(next), kept, dropped, atFloor, floor: atFloor ? fit.draft.minSqft : null }
 }
 
 /** The kept-and-dropped tail of a re-draft reply. */
@@ -237,6 +260,17 @@ const GARAGE_WORDS = (why) => {
  * @param {object} opts  { history: the client's edits so far [{text, ops}] (for a re-draft), depth }
  */
 export function decide(diff, rooms, program, style, kit, source, lot, opts = {}) {
+  const out = decideCore(diff, rooms, program, style, kit, source, lot, opts)
+  // what the request asked for that was not done: a clause this style cannot take, or one that was not understood
+  const notes = []
+  for (const d of opts.unsupported || []) notes.push(`"${d.text}": ${d.why.replace(/\.$/, '')}`)
+  for (const u of diff.unread || []) notes.push(`"${u.text}" (say which room, and what to change)`)
+  if (!notes.length) return out
+  const tail = ` I didn't do: ${notes.join('; ')}.${out.applied ? ' The change counts once, for what was done.' : ''}`
+  return { ...out, reply: out.reply.replace(/\s+$/, '') + tail, notDone: notes }
+}
+
+function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
   const L = lotOf(lot)
   const depth = opts.depth || 0
   const edits = opts.history || []
@@ -245,6 +279,8 @@ export function decide(diff, rooms, program, style, kit, source, lot, opts = {})
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }
+  const v = validateOps(diff.ops, rooms, kit)
+  if (!v.ok) return { applied: false, rooms, reply: v.errors[0], source, ops: diff.ops, reasons: v.errors }
   // a new draft of the house as it stands, with a program change or at a size (what a fix button sends
   // when the plan cannot take the change in place)
   const redraftOp = diff.ops.find((o) => o.op === 'redraft')
@@ -255,8 +291,28 @@ export function decide(diff, rooms, program, style, kit, source, lot, opts = {})
     const reply = `Drew ${what} on the ${PLAN_WORDS[r.planId] || r.planId || 'same'} plan: ${num(floorArea(r.rooms, stories))} sf of living area.${editsLine(r)}`
     return { applied: true, rooms: r.rooms, reply, source, ops: diff.ops, did: [`New draft: ${what}`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
   }
-  const v = validateOps(diff.ops, rooms, kit)
-  if (!v.ok) return { applied: false, rooms, reply: `I could not apply that: ${v.errors[0]}.`, source, ops: diff.ops, reasons: v.errors }
+  // a resize past the largest the kit draws for that room: out of range, with the largest as the fix
+  for (const o of diff.ops) {
+    if (o.op !== 'resize') continue
+    const r = rooms.find((x) => x.id === o.room)
+    if (!r) continue
+    const [mw, md] = maxSizeOf(kit, r.kind)
+    const [MW, MD] = r.w >= r.d ? [Math.max(mw, md), Math.min(mw, md)] : [Math.min(mw, md), Math.max(mw, md)]
+    if (o.w > MW + 0.01 || o.d > MD + 0.01) {
+      const capped = { ...o, w: Math.min(o.w, MW), d: Math.min(o.d, MD) }
+      const name = r.name.toLowerCase()
+      let fix = null
+      if (capped.w !== r.w || capped.d !== r.d) {
+        try {
+          const out = applyOps([capped], rooms, kit, stories, L)
+          if (checkRules(out.rooms, program, style, L).ok) fix = { label: `Make the ${name} ${ft(capped.w)}' by ${ft(capped.d)}' instead?`, ops: [capped] }
+        } catch {
+          fix = null
+        }
+      }
+      return { applied: false, rooms, reply: `The ${name} in this kit goes up to ${ft(MW)}' by ${ft(MD)}'; ${ft(o.w)}' by ${ft(o.d)}' is past that.`, source, ops: diff.ops, reasons: ['out of range'], fixes: fix ? [fix] : [] }
+    }
+  }
 
   const scaleOp = diff.ops.length === 1 && diff.ops[0].op === 'scale' ? diff.ops[0] : null
   const now = floorArea(rooms, stories)
@@ -269,7 +325,11 @@ export function decide(diff, rooms, program, style, kit, source, lot, opts = {})
     if (r.ok) {
       const got = floorArea(r.rooms, stories)
       const plan = PLAN_WORDS[r.planId] || r.planId
-      const reply = `Re-drafted the house at ${num(got)} sf${plan && r.planId !== planIdOf(rooms) ? ` on the ${plan} plan` : ''}: stretching the rooms as they were ${why}.${editsLine(r)}`
+      const onPlan = plan && r.planId !== planIdOf(rooms) ? ` on the ${plan} plan` : ''
+      // one floor, said once: the plan's (the stretch has its own, which is not the client's concern)
+      const reply = r.atFloor
+        ? `The smallest this house goes is about ${num(r.floor)} sf; I drew it at ${num(got)}${onPlan}.${editsLine(r)}`
+        : `Re-drafted the house at ${num(got)} sf${onPlan}: stretching the rooms as they were ${/smallest/.test(why) ? 'would not work' : why}.${editsLine(r)}`
       return { applied: true, rooms: r.rooms, reply, source, ops: diff.ops, did: [`${num(got)} sf of living area (was ${num(now)}), re-drafted`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
     }
     // the largest size this lot takes with these rooms, as a fix that is itself checked
@@ -327,7 +387,8 @@ export function decide(diff, rooms, program, style, kit, source, lot, opts = {})
       reply = gWords
       fixes = garageFallbacks(diff.ops, rooms, program, style, kit, L, edits, depth)
     }
-    return { applied: false, rooms, reply, source, ops: diff.ops, reasons: [why], caused: [why], preexisting: [], fixes }
+    const reason = plain ? why : 'that change did not work out on this plan'
+    return { applied: false, rooms, reply, source, ops: diff.ops, reasons: [reason], caused: [reason], preexisting: [], fixes }
   }
   // a change that draws the same house is no change: nothing applied, nothing charged
   if (sameRooms(rooms, next.rooms)) {
@@ -428,9 +489,11 @@ export function suggestFixes(ops, reasons, rooms, nextRooms, program, style, kit
       const r = rooms.find((x) => x.id === o.room)
       if (!r) continue
       // the largest step toward what was asked that still passes
+      const [mw, md] = maxSizeOf(kit, r.kind)
+      const [MW, MD] = r.w >= r.d ? [Math.max(mw, md), Math.min(mw, md)] : [Math.min(mw, md), Math.max(mw, md)]
       for (const part of [0.75, 0.5, 0.25, 0.1]) {
-        const w = Math.round((r.w + (o.w - r.w) * part) * 4) / 4
-        const d = Math.round((r.d + (o.d - r.d) * part) * 4) / 4
+        const w = Math.min(MW, Math.round((r.w + (o.w - r.w) * part) * 4) / 4)
+        const d = Math.min(MD, Math.round((r.d + (o.d - r.d) * part) * 4) / 4)
         if (w === r.w && d === r.d) continue
         const n = fixes.length
         offer(`Make the ${r.name.toLowerCase()} ${ft(w)}' by ${ft(d)}' instead?`, ops.map((x) => (x === o ? { ...o, w, d } : x)))
