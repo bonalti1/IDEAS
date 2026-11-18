@@ -288,7 +288,8 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   }
 
   // the wing: extra bedrooms and baths slot in at the rear of the bedroom wing, the hall lengthens
-  const wing = T.id && T.id !== 'standard' && !T.wing ? { shift: 0, east: null } : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths })
+  // with `wingSplit` the extra bedrooms stack on both sides of the hall (two rooms a band) so the hall stays short
+  const wing = T.id && T.id !== 'standard' && !T.wing ? { shift: 0, east: null } : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths, prefer: program.wingSplit ? 'split' : null })
   const wingShift = wing.shift
   // Bath 1 served the mini primary; without it (and no bedroom in its spot), the bath opens from Bedroom 1 (never the outside)
   if (!program.suite2 && !frontSlot) {
@@ -674,12 +675,43 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
   const D = 12.75
   let eastBed = null
   let eastBath = null
+  let westFree = null // a band the hall opened for an east room, left for the next west room (split wing)
   const wantBath = baths > 0
+  // a split wing pays off only when a second bedroom can stack behind the first across the hall and the rest fills the band it opens
+  const splitWorks = prefer === 'split' && beds >= 2 && (beds >= 3 || baths >= 2)
   const slots = [...Array(beds).fill('bed'), ...Array(baths).fill('bath')]
-  slots.forEach((kind) => {
+  slots.forEach((kind, i) => {
     const SD = kind === 'bed' ? D : 6.0
     if (kind === 'bath' && eastBath && !eastBath.counted) {
       eastBath.counted = true
+      return
+    }
+    // a split wing: the next bedroom stacks behind the one across the hall, and the band the hall opens for
+    // its door is left for the rooms after it on the west side (two rooms a band). Only when what is left to
+    // place fills that band: two baths, or a bedroom
+    const left = slots.slice(i + 1)
+    const fills = left.filter((k) => k === 'bed').length > 0 || left.filter((k) => k === 'bath').length * 6 >= D - 1
+    const behindFree = () => splitWorks && fills && east && eastBed && !eastBath && !rooms.some((r) => isRoom(r) && !r.open && r.x + r.w > eastX - 0.3 && r.x < eastX + bedW && r.y + r.d > east.y0 - D - 0.3 && r.y < east.y0 - 0.3)
+    if (kind === 'bed' && behindFree()) {
+      const x0 = eastX
+      const bandY = east.y0 - D
+      const doorY = east.y0 - 0.5 - 1.335
+      const need = Math.max(0, hall.y - (doorY - 1.335 - 0.3))
+      if (need > 0) {
+        const vacated = growRear(need, true)
+        westFree = { y: vacated, d: need }
+      }
+      bedNo += 1
+      const id = `bed-${bedNo}`
+      const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: x0, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
+      const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: x0, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
+      rooms.push(room, closet)
+      rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'h', x0 + bedW / 2, closet.y + closet.d, 'closet', { swing: 1, hinge: 'start', pair: true }))
+      rooms.push(windowEl(kit, `win-${id}`, id, 'v', x0 + bedW, room.y + room.d / 2, 'A'))
+      rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: x0 + 3.25, y: room.y + room.d - 6.7, w: 7, d: 6.5, h: FIXTURE_H.bed, head: 's' })
+      rooms.push(doorEl(kit, `d-${id}`, id, 'v', x0, doorY, 'interiorWide', { swing: 1, hinge: 'end' }))
+      east = { ...east, y0: bandY }
+      eastBed = room
       return
     }
     // a bedroom across the hall, when the corner is free: the room runs the band's full depth with its window
@@ -695,7 +727,7 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
       if (need > 0) growRear(need, false)
       bedNo += 1
       const id = `bed-${bedNo}`
-      const withBath = wantBath && !eastBath
+      const withBath = wantBath && !eastBath && !splitWorks // a split wing stacks a bedroom behind this one, so it keeps its east wall for the window
       let room
       let right = x0 + bedW
       if (withBath) {
@@ -750,8 +782,17 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
       eastBath.counted = true
       return
     }
-    // west: everything at the rear of the wing moves back by a room, the hall grows by it; the band Bedroom 2 vacates takes the new room
-    const bandY = growRear(SD, true) // the vacated band: y from bandY to bandY + SD
+    // west: everything at the rear of the wing moves back by a room, the hall grows by it; the band Bedroom 2 vacates takes
+    // the new room (in a split wing, the band the hall already opened for the room across from it)
+    let bandY
+    let depth = SD
+    if (westFree && westFree.d >= SD - 0.01) {
+      // a bath takes the front of the free band; the last one that fits takes what is left, so no sliver is walled off
+      if (kind === 'bath' && westFree.d - SD < 6) depth = westFree.d
+      bandY = westFree.y + westFree.d - depth
+      westFree = { y: westFree.y, d: westFree.d - depth }
+      if (westFree.d < 0.01) westFree = null
+    } else bandY = growRear(SD, true) // the vacated band: y from bandY to bandY + SD
     if (kind === 'bed') {
       bedNo += 1
       const id = `bed-${bedNo}`
@@ -766,7 +807,7 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
     } else {
       bathNo += 1
       const id = `bath-${bathNo}`
-      const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: bedX, y: bandY, w: bedW, d: SD, zone: 'private', open: false, plumbing: true }
+      const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: bedX, y: bandY, w: bedW, d: depth, zone: 'private', open: false, plumbing: true }
       rooms.push(room)
       // the door at the front end of the hall wall, hinged on the front jamb: its swing clears the vanity on the rear wall
       rooms.push(doorEl(kit, `d-${id}`, id, 'v', wallX, room.y + room.d - 1.5, 'bath', { swing: -1, hinge: 'end' }))
