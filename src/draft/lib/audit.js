@@ -60,7 +60,10 @@ export function auditPlan(rooms, program, kit, lot) {
   const roomAt = (pt) => R.find((r) => inside(r, pt))
   const byId = Object.fromEntries(R.map((r) => [r.id, r]))
   const wallFt = (K.walls?.interior?.thicknessIn || 4) / 12
-  const openPairs = new Set((K.plan?.open || []).flatMap(([a, b]) => [a + '|' + b, b + '|' + a]))
+  // the rooms open to each other (no wall between), from the plan these rooms were drawn on
+  const planId = flat.find((r) => r.kind === 'roof')?.plan
+  const openList = (planId && planId !== 'standard' && K.plans?.[planId]?.open) || K.plan?.open || []
+  const openPairs = new Set(openList.flatMap(([a, b]) => [a + '|' + b, b + '|' + a]))
 
   // ── doors: what each one connects ──
   const link = (d) => {
@@ -459,8 +462,34 @@ export function auditPlan(rooms, program, kit, lot) {
     deadEnds[h.id] = Math.round(dead * 10) / 10
     if (dead > CLEAR.deadEndFt + 0.05) say('dead-end', 'error', h, `${h.name} runs ${dead.toFixed(1)} ft past its last door; a hall should end within ${CLEAR.deadEndFt} ft of one.`)
   })
+  // a hall's length is its enclosed run: the stretch beside a living room, kitchen or dining room it is open
+  // to (no wall between) is that room's floor, not a corridor; the longest walled stretch is what is measured
+  const runOf = (h) => {
+    const along = h.d >= h.w ? 'y' : 'x'
+    const size = along === 'y' ? 'd' : 'w'
+    const h0 = h[along]
+    const h1 = h[along] + h[size]
+    const covered = []
+    R.forEach((o) => {
+      if (o === h || !PUBLIC.includes(o.kind)) return
+      if (!(openPairs.has(h.id + '|' + o.id) || openPairs.has(h.kind + '|' + o.kind)) || sharedEdge(h, o) <= 0) return
+      const lo = Math.max(h0, o[along])
+      const hi = Math.min(h1, o[along] + o[size])
+      if (hi - lo > 0.5) covered.push([lo, hi])
+    })
+    covered.sort((a, b) => a[0] - b[0])
+    let best = 0
+    let at = h0
+    covered.forEach(([lo, hi]) => {
+      best = Math.max(best, lo - at)
+      at = Math.max(at, hi)
+    })
+    return Math.max(best, h1 - at)
+  }
+  const hallRun = {}
   halls.forEach((h) => {
-    const len = Math.max(h.w, h.d)
+    const len = runOf(h)
+    hallRun[h.id] = len
     if (len > CLEAR.hallLongFt + 0.05) say('hall-long', 'warn', h, `${h.name} is ${len.toFixed(1)} ft long; a hall over ${CLEAR.hallLongFt} ft is a corridor (split the plan or put rooms on both sides).`)
   })
 
@@ -657,7 +686,7 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   }
 
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round(Math.max(r.w, r.d) * 10) / 10, deadEndFt: deadEnds[r.id] ?? null }))
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] ?? Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')

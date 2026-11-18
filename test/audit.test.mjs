@@ -31,7 +31,9 @@ test('the Garza sample passes the audit, and its work triangle and halls measure
 test('the audit catches a bedroom reached through another, a door to the outside, a blocked window and a garage with no door', () => {
   const rooms = generateRooms(PROGRAMS['4/3.5 office 2-car 2,800 sf'], style, DEFAULT_LOT)
   // Bedroom 3 loses its hall door: unreachable
-  const noDoor = rooms.filter((e) => e.id !== 'd-bed-3')
+  const fourth = rooms.find((r) => isRoom(r) && r.kind === 'bed' && r.name === 'Bedroom 3')
+  const fourthDoor = rooms.find((e) => e.kind === 'door' && e.room === fourth.id && !e.cased)
+  const noDoor = rooms.filter((e) => e !== fourthDoor)
   assert.ok(ids(auditPlan(noDoor, DEFAULT_PROGRAM, kit, DEFAULT_LOT)).includes('reach'))
   // Bedroom 1's door moved onto its outside wall
   const bed1 = rooms.find((r) => r.id === 'bed1')

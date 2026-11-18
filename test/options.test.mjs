@@ -116,6 +116,7 @@ test('on a lot the plan already fills, "make the house 3,000 sf" names the large
     const d = decide({ ops: f.ops, reply: f.label, confidence: 1 }, rooms, program, style, kit, 'fix', mcallen)
     assert.ok(d.applied, `the offered fix "${f.label}" must apply: ${d.reply}`)
   }
-  const same = await interpretRequest('make the house 2,350 sf', rooms, program, style, { lot: mcallen, interpreter: offline, report: false })
+  const drawn = Math.round(auditPlan(rooms, program, kit, mcallen).measures.livingSf / 50) * 50
+  const same = await interpretRequest(`make the house ${drawn.toLocaleString()} sf`, rooms, program, style, { lot: mcallen, interpreter: offline, report: false })
   assert.ok(!same.applied && /already about/.test(same.reply), same.reply)
 })
