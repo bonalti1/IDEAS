@@ -8,7 +8,7 @@
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
 import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
 import { withPlanCoords } from './ops.js'
-import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength } from './site.js'
+import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength, insideLotFrame } from './site.js'
 
 const BEDROOMS = ['bed', 'master', 'suite2']
 const BATHS = ['bath', 'mbath', 'jackjill', 'halfbath']
@@ -18,7 +18,7 @@ const GARAGE_DOOR_ROOMS = ['mud', 'laundry', 'hall', 'foyer']
 const SERVICE = ['pantry', 'laundry', 'mud', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
 const SERVICE_HALL = ['mud', 'laundry']
 export const EGRESS = { sf: 5.7, heightIn: 24, widthIn: 20, sillIn: 44 }
-export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35 }
+export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35, swingRoomSf: 25, sideYardFt: 10 }
 const PUBLIC = ['living', 'kitchen', 'dining', 'foyer', 'office']
 const THROUGH_SERVICE = ['mud', 'laundry', 'garage']
 
@@ -275,6 +275,11 @@ export function auditPlan(rooms, program, kit, lot) {
       }
     })
     if (!p.room) return
+    // a leaf needs room to open: no door swings into a room under 25 sf (a pantry, a reach-in); pocket it or swing it out
+    if (!['hall', 'foyer'].includes(p.room.kind) && p.room.w * p.room.d < CLEAR.swingRoomSf - 0.01 && !said.has('small|' + p.d.id)) {
+      said.add('small|' + p.d.id)
+      say('swing-small', 'error', p.room, `${p.room.name} is ${Math.round(p.room.w * p.room.d)} sf; the ${doorLabel(p.d)} swings into it. A door into a room under ${CLEAR.swingRoomSf} sf is a pocket door or swings out.`)
+    }
     fixtures.filter((f) => f.room === p.room.id && f.fixture !== 'shelves').forEach((f) => {
       const pts = []
       for (let x = f.x + 0.05; x <= f.x + f.w - 0.04; x += Math.min(0.5, Math.max(0.1, (f.w - 0.1) / 2))) for (let y = f.y + 0.05; y <= f.y + f.d - 0.04; y += Math.min(0.5, Math.max(0.1, (f.d - 0.1) / 2))) pts.push([x, y])
@@ -543,6 +548,17 @@ export function auditPlan(rooms, program, kit, lot) {
       if (kitchenRoom && !noKitchen.has(master.id) && reach(privateButSelf(master)).has(master.id)) say('suite-kitchen', 'warn', master, `${master.name} is reached from the front door only through the ${kitchenRoom.name.toLowerCase()}'s work zone; enter the suite from the living side or a gallery.`)
     }
   }
+  // the side yard outside a door on a side wall: feet from the wall to the lot line, 99 when the lot is not known
+  const sideYardAt = (room, cx, cy) => {
+    const L = lot && lot.boundary && room.local ? lot : null
+    if (!L) return 99
+    const east = cx > room.x + room.w / 2
+    const lx = room.local[0] + (east ? room.w / 2 : -room.w / 2)
+    const lz = room.local[1] + (cy - (room.y + room.d / 2))
+    let out = 0
+    while (out < 30 && insideLotFrame(L, lx + (east ? 1 : -1) * (out + 0.25), lz)) out += 0.25
+    return out
+  }
   // a door from the family rooms to the back yard: an exterior door on the rear wall of a public room
   {
     const rearY = Math.min(...R.map((r) => r.y))
@@ -551,9 +567,12 @@ export function auditPlan(rooms, program, kit, lot) {
       if (!d.exterior || d.size === 'overhead' || d.size === 'overheadSingle') return false
       const room = a && !b ? a : b && !a ? b : null
       if (!room || !PUBLIC.includes(room.kind)) return false
-      const [, cy] = centre(d)
+      const [cx, cy] = centre(d)
       // on the room's wall away from the street (its rear wall), or on a side wall in the rear half of the house
-      return (d.axis === 'h' && Math.abs(cy - room.y) < 0.4) || (d.axis === 'v' && cy < (rearY + frontY) / 2)
+      // when the side yard there is a yard (10 ft) and not a passage
+      if (d.axis === 'h' && Math.abs(cy - room.y) < 0.4) return true
+      if (d.axis !== 'v' || cy >= (rearY + frontY) / 2) return false
+      return sideYardAt(room, cx, cy) >= CLEAR.sideYardFt - 0.01
     })
     if (!backDoor && R.some((r) => PUBLIC.includes(r.kind))) say('rear-door', 'warn', null, 'No door from the living room, kitchen or dining room to the back yard.')
   }
@@ -710,7 +729,7 @@ export function auditDesign(design, kit) {
 /** The checks a drafter reads, grouped: [{ id, name, ok, findings: [message] }], plus the measures. */
 export const CHECK_GROUPS = [
   { id: 'doors', name: 'Every door on a wall its room shares, no two overlapping', ids: ['door-nowall', 'door-outside', 'door-exterior-inside', 'door-room', 'door-partial', 'doors-overlap'] },
-  { id: 'swings', name: 'No door swings into another door or a fixture; 30" clear in front of every door', ids: ['swing-swing', 'swing-fixture', 'door-approach'] },
+  { id: 'swings', name: 'No door swings into another door, a fixture or a room under 25 sf; 30" clear in front of every door', ids: ['swing-swing', 'swing-fixture', 'swing-small', 'door-approach'] },
   { id: 'reach', name: 'Every room reached from the front door, never through a bedroom or bath; the powder room not only through the mud room; a back door from the family rooms', ids: ['reach', 'powder-reach', 'rear-door'] },
   { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
   { id: 'halls', name: 'Halls 42" clear, none over 35 ft or running past its last door, under 12% of the living area', ids: ['hall', 'dead-end', 'circulation', 'hall-long'] },

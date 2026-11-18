@@ -99,18 +99,20 @@ test('the 5-bed wing: Bedroom 3 takes the front of the wing, Bedroom 4 and its b
   assert.ok(grew.shift < 12.75 + 6, `the hall grew ${grew.shift} ft`)
 })
 
-test('the narrow plan: the hall bath sits by Bedrooms 3 and 4, the dining room has a door to the yard, the laundry and a drop zone sit off a short cross hall', () => {
+test('the narrow plan: the hall bath sits beside Bedroom 3 off its short hall, the dining room opens to the rear porch through its back wall, the laundry and a drop zone sit off a short cross hall', () => {
   const lot = LOTS['narrow 50 x 120']
-  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2350 })]) {
+  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2200 })]) {
     const { audit: a, flat } = draft(program, lot)
     assert.equal(flat.find((r) => r.kind === 'roof')?.plan, 'narrow')
     assert.deepEqual(a.errors.map((e) => e.message), [])
     const bath = flat.find((r) => r.id === 'bath2')
     const bed3 = flat.find((r) => r.id === 'bed3')
-    assert.ok(bath && bed3 && Math.abs(bath.y - (bed3.y + bed3.d)) < 0.5, 'Bath 2 is right behind Bedroom 3')
+    const hall3 = flat.find((r) => r.id === 'hall3')
+    assert.ok(bath && bed3 && hall3 && Math.abs(bath.x + bath.w - bed3.x) < 0.5 && Math.abs(hall3.x + hall3.w - bed3.x) < 0.5, 'Bath 2 and the short hall stand beside Bedroom 3')
     const yardDoor = flat.find((e) => e.kind === 'door' && e.exterior && e.room === 'dining')
-    assert.ok(yardDoor, 'the dining room opens to the yard')
-    assert.ok(!a.warnings.some((w) => w.id === 'rear-door' || w.id === 'circulation'), a.warnings.map((w) => w.id).join(','))
+    const dining = flat.find((r) => r.id === 'dining')
+    assert.ok(yardDoor && yardDoor.axis === 'h' && Math.abs(yardDoor.y + yardDoor.d / 2 - dining.y) < 0.4 && yardDoor.pair, 'the dining room opens to the back yard through a pair on its rear wall')
+    assert.ok(!a.warnings.some((w) => w.id === 'rear-door' || w.id === 'circulation' || w.id === 'hall-long'), a.warnings.map((w) => w.id).join(','))
     assert.ok(flat.find((r) => r.id === 'mud') && flat.find((r) => r.id === 'laundry'))
   }
 })
