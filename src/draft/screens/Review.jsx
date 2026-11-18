@@ -121,6 +121,7 @@ export default function Review({ user }) {
             <Stat k="Style" v={style.name} />
             <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
+            {open.program?.asked && <Stat k="Asked for" v={`${programLine(open.program.asked)} · ${sf(open.program.asked.sqft)} → drafted ${sf(floorArea(open.rooms || [], open.program?.stories || 1))} to fit the lot`} />}
             <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
           </div>
           {open.lot?.spec?.kind === 'plat' && (

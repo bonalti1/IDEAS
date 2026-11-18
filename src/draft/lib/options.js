@@ -38,7 +38,7 @@ function candidates(topic, rooms, kit) {
       const front = facing === 's'
       out.push({ id: front ? 'garage-side' : 'garage-front', label: front ? `${cars}-car, side-load` : `${cars}-car, front-load`, ops: [{ op: 'garage', cars, load: front ? 'side' : 'front' }] })
       // the third car in a tandem bay: two bays wide, two cars deep
-      if (!tandem) out.push({ id: 'garage-tandem', label: '3-car, third bay tandem', ops: [{ op: 'garage', cars: 3, tandem: true }] })
+      if (!tandem) out.push({ id: 'garage-tandem', label: '3-car (tandem: one bay two cars deep)', ops: [{ op: 'garage', cars: 3, tandem: true }] })
       if (cars < 3) out.push({ id: `garage-${cars + 1}`, label: `${cars + 1}-car garage`, ops: [{ op: 'garage', cars: cars + 1 }] })
       if (cars > 1) out.push({ id: `garage-${cars - 1}`, label: `${cars - 1}-car garage`, ops: [{ op: 'garage', cars: cars - 1 }] })
       out.push({ id: 'garage-none', label: 'No garage', ops: [{ op: 'remove', room: garage.id }] })

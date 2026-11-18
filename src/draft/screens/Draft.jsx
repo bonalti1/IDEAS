@@ -18,7 +18,9 @@ function suggestionsFor(rooms, kit) {
   else out.push('Remove the rear porch')
   const garage = list.find((r) => r.kind === 'garage')
   if (garage) {
-    const cars = Math.max(1, Math.round(garage.w / (kit.rooms.garage?.perCar || 11)))
+    // the same count the options use: a tandem garage already holds three
+    const tandem = !!garage.tandem || /tandem/i.test(garage.name || '')
+    const cars = tandem ? 3 : Math.max(1, Math.round(Math.max(garage.w, garage.d) / (kit.rooms.garage?.perCar || 11)))
     if (cars < 3) out.push(`Make the garage ${cars + 1} cars`)
   } else out.push('Add a 2-car garage')
   if (list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind)).length < 5) out.push('Add a bedroom')
