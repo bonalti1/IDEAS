@@ -1,0 +1,164 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups quoted in the round-7 brief (edges, area, legal, ids) with stand-in coordinates and attributes; the parcel, flood and zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-18",
+ "slug": "kerria-1201-mcallen",
+ "address": "1201 Kerria Ave, McAllen, TX 78501",
+ "county": "Hidalgo County",
+ "cityId": "mcallen",
+ "point": {
+  "lon": -98.22110223199999,
+  "lat": 26.209242924
+ },
+ "census": {
+  "matchedAddress": "1201 KERRIA AVE, MCALLEN, TX, 78501",
+  "coordinates": {
+   "x": -98.22107779,
+   "y": 26.20903147
+  },
+  "addressComponents": {
+   "fromAddress": "1201",
+   "toAddress": "1201",
+   "preDirection": "",
+   "streetName": "KERRIA",
+   "suffixType": "AVE",
+   "suffixDirection": "",
+   "city": "MCALLEN",
+   "state": "TX",
+   "zip": "78501"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Hidalgo County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": [
+    {
+     "NAME": "McAllen city"
+    }
+   ]
+  }
+ },
+ "addressPoints": [
+  {
+   "fulladdr": "1201 KERRIA AVE",
+   "municipality": "MCALLEN",
+   "parcel_id": "255056"
+  },
+  {
+   "fulladdr": "1205 KERRIA AVE",
+   "municipality": "MCALLEN",
+   "parcel_id": "255057"
+  }
+ ],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "255056",
+    "geo_id": "P2500-00-004-0007-00",
+    "legal_desc": "PALMS LOT 7 BLK 4",
+    "situs": "1201 KERRIA AVE, MCALLEN TX",
+    "owner_name": "REDACTED",
+    "owner_addr": "REDACTED"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -98.2212,
+       26.2091
+      ],
+      [
+       -98.22095558,
+       26.2091
+      ],
+      [
+       -98.22095558,
+       26.20945731
+      ],
+      [
+       -98.2212,
+       26.20945731
+      ],
+      [
+       -98.2212,
+       26.2091
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "255057",
+    "geo_id": "P2500-00-004-0008-00",
+    "legal_desc": "PALMS LOT 8 BLK 4",
+    "situs": "1205 KERRIA AVE, MCALLEN TX",
+    "owner_name": "REDACTED",
+    "owner_addr": "REDACTED"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -98.22095252,
+       26.2091
+      ],
+      [
+       -98.22070811,
+       26.2091
+      ],
+      [
+       -98.22070811,
+       26.20945731
+      ],
+      [
+       -98.22095252,
+       26.20945731
+      ],
+      [
+       -98.22095252,
+       26.2091
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [
+   {
+    "DFIRM_ID": "48215C",
+    "STUDY_TYP": "NP",
+    "EFF_DATE": 1552953600000
+   }
+  ],
+  "3": [],
+  "21": [],
+  "28": [
+   {
+    "FLD_ZONE": "X",
+    "ZONE_SUBTY": "AREA OF MINIMAL FLOOD HAZARD",
+    "SFHA_TF": "F",
+    "STATIC_BFE": -9999,
+    "DFIRM_ID": "48215C",
+    "FLD_AR_ID": "48215C_1"
+   }
+  ],
+  "34": []
+ },
+ "zoning": {
+  "cityId": "mcallen",
+  "features": [
+   {
+    "ZONE": "R-1"
+   }
+  ]
+ }
+}

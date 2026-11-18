@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api, API } from '../lib/api.js'
 import { Button } from '../ui.jsx'
 import { RULE_FIELDS } from '../lib/cities.js'
+import { ALL_FIELDS, FIELD_LABELS, statusWords, formatValue } from '../lib/jurisdictions.js'
 
 const fmtAgo = (iso) => {
   if (!iso) return 'never'
@@ -48,63 +49,178 @@ function Manifold({ h, offline }) {
 
 const RULE_LABELS = { front: 'Front', side: 'Side', rear: 'Rear', streetSide: 'Street side', maxCoverage: 'Max coverage', maxHeightFt: 'Max height ft', minLotSf: 'Min lot sf' }
 
-/** City setbacks and limits, editable row by row. */
+/** The sourced rules table (round 7): every jurisdiction, every field with its value, source, status and date; editable. */
 function CityRules() {
-  const [table, setTable] = useState(null)
-  const [edit, setEdit] = useState({}) // id → patch
+  const [table, setTable] = useState(null) // flat rows (cities.js) for the grid
+  const [full, setFull] = useState(null) // sourced rows (jurisdictions.js) for the details
+  const [edit, setEdit] = useState({}) // id → patch { field: value | { value, source, status }, source, verified }
   const [saved, setSaved] = useState('')
+  const [openRow, setOpenRow] = useState(null)
+  const load = () => Promise.all([api.cities(), api.jurisdictions()]).then(([t, j]) => { setTable(t); setFull(j) }).catch(() => { setTable({}); setFull({}) })
   useEffect(() => {
-    api.cities().then(setTable).catch(() => setTable({}))
+    load()
   }, [])
   const save = async (id) => {
-    const t = await api.setCity(id, edit[id] || {})
-    setTable((x) => ({ ...x, [id]: t }))
+    await api.setJurisdiction(id, edit[id] || {})
+    await load()
     setEdit((e) => ({ ...e, [id]: undefined }))
     setSaved(id)
     setTimeout(() => setSaved(''), 1500)
   }
-  if (!table) return null
+  if (!table || !full) return null
+  const rows = Object.values(table)
+  const chip = (u) => (u?.status === 'verified' ? 'good' : u?.status === 'summary' ? 'warn' : 'bad')
   return (
-    <div className="card">
-      <h3>City rules</h3>
-      <p className="muted small">Setbacks in feet, coverage as a fraction. The Lot step reads this table. Rows start as office defaults; tick Verified once checked against the ordinance.</p>
+    <div className="card rules-edit" data-testid="rules-table">
+      <h3>Rules table: cities and counties</h3>
+      <p className="muted small">
+        Setbacks and the garage door distance in feet, coverage as a fraction. Every number carries where it came from and when it was checked; a number not read from the ordinance is a summary the office confirms, an unknown one falls back to the county default and is flagged on the client's lot. Edit a cell and name the source; tick Verified when you read it in the code. Re-check is due 180 days after the date.
+      </p>
       <div className="tblwrap">
         <table className="tbl rules">
           <thead>
             <tr>
-              <th>City</th>
+              <th>Jurisdiction</th>
               {RULE_FIELDS.map((f) => (
-                <th key={f}>{RULE_LABELS[f]}</th>
+                <th key={f}>{RULE_LABELS[f] || FIELD_LABELS[f] || f}</th>
               ))}
-              <th>Verified</th>
+              <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {Object.values(table).map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <b>{c.name}</b>
-                  <div className="muted small">{c.zoning}</div>
-                </td>
-                {RULE_FIELDS.map((f) => (
-                  <td key={f}>
-                    <input className="cell" type="number" step={f === 'maxCoverage' ? 0.05 : 1} value={edit[c.id]?.[f] ?? c[f]} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), [f]: e.target.value } }))} />
+            {rows.map((c) => {
+              const row = full[c.id] || {}
+              const unknown = RULE_FIELDS.filter((f) => !row[f] || row[f].status === 'unknown').length
+              const verified = RULE_FIELDS.filter((f) => row[f]?.status === 'verified').length
+              return (
+                <tr key={c.id} data-testid={`rules-row-${c.id}`}>
+                  <td>
+                    <b>{c.name}</b>
+                    <div className="muted small">{c.zoning}{row.flags?.length ? ` · ${row.flags.join('; ')}` : ''}</div>
+                    <button className="linkish small" onClick={() => setOpenRow(openRow === c.id ? null : c.id)}>
+                      {openRow === c.id ? 'Hide sources' : 'Sources and every field'}
+                    </button>
                   </td>
-                ))}
+                  {RULE_FIELDS.map((f) => (
+                    <td key={f} title={row[f] ? `${row[f].source || 'no source'}${row[f].checkedAt ? ` · ${row[f].checkedAt}` : ''} · ${statusWords({ status: row[f].status, stale: false })}` : 'unknown'}>
+                      <input className={'cell ' + chip(row[f])} type="number" step={f === 'maxCoverage' ? 0.05 : 1} value={edit[c.id]?.[f] ?? (typeof c[f] === 'number' ? c[f] : '')} placeholder={typeof row[f]?.value === 'object' ? 'rule' : 'unknown'} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), [f]: e.target.value } }))} />
+                    </td>
+                  ))}
+                  <td>
+                    <span className={'pill ' + (unknown ? 'bad' : verified === RULE_FIELDS.length ? 'good' : 'warn')}>{unknown ? `${unknown} unknown` : verified === RULE_FIELDS.length ? 'all from the code' : `${RULE_FIELDS.length - verified} summaries`}</span>
+                  </td>
+                  <td>
+                    <Button small ghost disabled={!edit[c.id]} onClick={() => save(c.id)}>
+                      {saved === c.id ? 'Saved' : 'Save'}
+                    </Button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {openRow && full[openRow] && (
+        <details open className="sources-detail">
+          <summary>{full[openRow].name}: every field, its source and status</summary>
+          <div className="field-row muted small">
+            <span>Field</span>
+            <span>Value</span>
+            <span>Source · checked</span>
+            <span>Status</span>
+          </div>
+          {ALL_FIELDS.map((k) => {
+            const u = full[openRow][k]
+            return (
+              <div className="field-row" key={k}>
+                <span>{FIELD_LABELS[k] || k}</span>
+                <span>{k === 'wind' ? (u?.value?.mph ? `${u.value.mph} mph` : 'set by the engineer of record') : k === 'permitChecklist' && Array.isArray(u?.value) ? u.value.join('; ') : formatValue(k, u?.value, u)}</span>
+                <span className="muted">
+                  {u?.source || 'no source'}
+                  {u?.checkedAt ? ` · ${u.checkedAt}` : ''}
+                  {u?.by ? ` · ${u.by}` : ''}
+                </span>
+                <span className={'pill ' + chip(u)}>{u ? statusWords({ status: u.status, stale: false }) : 'unknown'}</span>
+              </div>
+            )
+          })}
+          <div className="row2" style={{ marginTop: 8 }}>
+            <label className="field" style={{ flex: 1 }}>
+              <span>Source for the numbers you edited (the ordinance section, with the date)</span>
+              <input className="cell src" placeholder="e.g. McAllen Code §138-xxx, read 2026-11-18" value={edit[openRow]?.source || ''} onChange={(e) => setEdit((x) => ({ ...x, [openRow]: { ...(x[openRow] || {}), source: e.target.value } }))} />
+            </label>
+            <label className="field">
+              <span>Read in the code</span>
+              <input type="checkbox" checked={!!edit[openRow]?.verified} onChange={(e) => setEdit((x) => ({ ...x, [openRow]: { ...(x[openRow] || {}), verified: e.target.checked } }))} /> Verified
+            </label>
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+/** The parcel, flood and zoning sources (round 7, item 11): last check, latency, errors, the dormant paid fallbacks. */
+function Sources() {
+  const [h, setH] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const load = () => api.sources().then(setH).catch((e) => setErr(e.message))
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 30000)
+    return () => clearInterval(t)
+  }, [])
+  const check = async () => {
+    setBusy(true)
+    try {
+      await api.sourcesCheck()
+      await load()
+    } catch (e) {
+      setErr(e.message)
+    }
+    setBusy(false)
+  }
+  if (!h) return err ? <div className="card sources"><h3>Sources</h3><p className="fine bad">{err}</p></div> : null
+  return (
+    <div className="card sources" data-testid="sources">
+      <h3>Sources: parcels, flood, zoning</h3>
+      <p className="muted small">
+        {h.lookups} parcel lookup{h.lookups === 1 ? '' : 's'} since the server started{h.failures ? `, ${h.failures} failed (${h.failureRate}%)` : ''}. Regrid {h.regrid.enabled ? `on: ${h.regrid.used} of ${h.regrid.cap} this month` : 'dormant (no token; turns on if the free sources fail over 5% of lookups or the daily check fails 3 days running)'}. ASCE wind API {h.asce.enabled ? `on: ${h.asce.used} of ${h.asce.cap}` : 'dormant (drafter lookup per city)'}.{h.fixtures ? ' Answering from recorded fixtures.' : ''}
+      </p>
+      <div className="tblwrap">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>County</th>
+              <th>Last answer</th>
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody>
+            {h.sources.map((s) => (
+              <tr key={s.id}>
                 <td>
-                  <input type="checkbox" checked={edit[c.id]?.verified ?? !!c.verified} onChange={(e) => setEdit((x) => ({ ...x, [c.id]: { ...(x[c.id] || {}), verified: e.target.checked } }))} />
+                  {s.name}
+                  <div className="muted small">{s.url || s.kind} · checked {s.checkedAt}</div>
                 </td>
-                <td>
-                  <Button small ghost disabled={!edit[c.id]} onClick={() => save(c.id)}>
-                    {saved === c.id ? 'Saved' : 'Save'}
-                  </Button>
-                </td>
+                <td>{s.county}</td>
+                <td className={s.last ? (s.last.ok ? 'ok' : 'bad') : 'dormant'}>{s.last ? `${s.last.ok ? 'ok' : s.last.error} · ${s.last.ms} ms · ${s.last.at.slice(11, 19)}Z` : 'not used yet'}</td>
+                <td className={s.disabled ? 'bad' : s.dormant ? 'dormant' : s.circuitOpen ? 'bad' : 'ok'}>{s.disabled ? `disabled: ${s.disabled}` : s.dormant ? `dormant: ${s.dormant}` : s.circuitOpen ? 'skipped 10 min after 3 failures' : 'live'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="fine">
+        Daily check: {h.daily ? `${h.daily.ok ? 'passed' : 'FAILED'} at ${h.daily.at.slice(0, 16)}Z${h.daily.failedDays ? `, ${h.daily.failedDays} day(s) running` : ''}: ${h.daily.results.map((r) => `${r.address.split(',')[0]} ${r.ok ? 'ok' : r.error || r.match || 'missing ' + (r.missing || []).join('/')}`).join('; ')}` : 'not run yet'}.{' '}
+        <Button small ghost disabled={busy} onClick={check} data-testid="sources-check">
+          {busy ? 'Checking…' : 'Check now'}
+        </Button>
+      </p>
+      <p className="fine">Zoning layers: {h.zoning.map((z) => z.cityId).join(', ')}; Mission, San Benito and Rio Grande City publish none (the drafter reads the map). {err && <span className="bad">{err}</span>}</p>
     </div>
   )
 }
@@ -394,6 +510,7 @@ export default function Admin() {
 
       <CityRules />
       <Pricing />
+      <Sources />
 
       <div className="card">
         <h3>Client requests</h3>

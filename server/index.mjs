@@ -16,6 +16,10 @@ import { makeInterpreter } from './interpreter.mjs'
 import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
+import { makeParcels } from './parcels.mjs'
+import { makeZoning } from './zoning.mjs'
+import { makeWind } from './wind.mjs'
+import { fixtureMode, fixtureFetch } from './fixtures.mjs'
 import { makeBilling } from './billing.mjs'
 import { regexOps } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
@@ -42,7 +46,12 @@ const alerts = makeAlerts({ store, event })
 const backup = makeBackup({ store, files, event })
 const interpreter = makeInterpreter()
 const users = makeUsers({ store, dataDir: DATA })
-const lots = makeLots({ store, files, interpreter, event })
+// parcel, flood and zoning services answer from recorded fixtures with DRAFTHOUSE_FIXTURES=1 (CI, screenshots); never the internet
+const fetchImpl = fixtureMode() ? fixtureFetch() : globalThis.fetch
+const lots = makeLots({ store, files, interpreter, event, fetchImpl })
+const parcels = makeParcels({ store, event, fetchImpl, geocode: (a) => lots.geocode(a) })
+const zoning = makeZoning({ store, fetchImpl })
+const wind = makeWind({ store, fetchImpl })
 const projects = makeProjects({ store, interpreter, event, logInterpret, lots })
 const billing = makeBilling({ store, event })
 
@@ -63,6 +72,8 @@ async function health() {
     { id: 'accounts', name: 'Client accounts', ...users.describe(), at: now() },
     { id: 'billing', name: 'Payments', ...billing.describe(), at: now() },
     { id: 'alerts', name: 'Alert email', ...alerts.describe(), at: now() },
+    { id: 'parcels', name: 'Parcel sources', ...parcels.describe(), at: now() },
+    { id: 'wind', name: 'Design wind speed', ...wind.describe(), at: now() },
     { id: 'backup', name: 'Nightly backup', ...bk, at: now() },
   ]
   workers.forEach((w) => (w.checks || []).forEach((c) => checks.push({ ...c, id: `${w.id}:${c.id}`, worker: w.name })))
@@ -143,6 +154,15 @@ route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
   json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
 })
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req)).version), req))
+// round 7, item 8: a lot zoned for something other than a house blocks Send; the client asks the office to call
+route('POST', '/api/projects/:id/call-me', 'user', async (req, res, p, ctx) => {
+  const prj = await projects.load(ctx.user, p.id)
+  const body = await readJson(req)
+  const note = String(body?.note || '').slice(0, 300)
+  await event('request', `${prj.client}: asked the office to call about the lot${note ? ` (${note})` : ''}`, { projectId: prj.id, request: 'call-me' })
+  if (alerts.configured) await alerts.email(`Draft House: ${prj.client} asked for a call`, `${prj.client} (${ctx.user.email}) asked the office to call about ${prj.address || 'their lot'}.\n${note}\nProject ${prj.id}.`)
+  json(res, 200, { ok: true, message: 'The office will call you.' }, req)
+})
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req), saveDesign), req))
 
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
@@ -167,8 +187,43 @@ route('GET', '/api/lot/geocode', 'app', async (req, res) => {
 })
 route('GET', '/api/lot/flood', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
+  const lat = url.searchParams.get('lat')
+  const lon = url.searchParams.get('lon')
+  if (lat != null && lon != null) return json(res, 200, await lots.floodAt({ lat: +lat, lon: +lon, address: url.searchParams.get('address') || null }), req)
   json(res, 200, await lots.flood(url.searchParams.get('address')), req)
 })
+// ── parcels, zoning, the sourced rules table, the sources health page (round 7) ──
+// Owner names and mailing addresses are drafter-only: everyone else gets the parcel without them.
+const parcelView = (rec, ctx) => {
+  if (!rec || users.isDrafter(ctx.user)) return rec
+  const { owner, mailing, attributes, ...keep } = rec
+  return { ...keep, candidates: rec.candidates?.map(({ owner: o, mailing: m, ...c }) => c) }
+}
+route('GET', '/api/lot/parcel', 'app', async (req, res, p, ctx) => {
+  const url = new URL(req.url, 'http://x')
+  const address = url.searchParams.get('address')
+  const lat = url.searchParams.get('lat')
+  const lon = url.searchParams.get('lon')
+  if (address && address.length > 200) return json(res, 400, { error: 'the address is too long (200 characters at most)' }, req)
+  json(res, 200, parcelView(await parcels.lookup({ address, lat: lat != null ? +lat : undefined, lon: lon != null ? +lon : undefined, force: url.searchParams.get('force') === '1' && users.isDrafter(ctx.user) }), ctx), req)
+})
+route('GET', '/api/lot/parcel/:county/:propId', 'app', async (req, res, p, ctx) => json(res, 200, parcelView(await parcels.byId({ county: decodeURIComponent(p.county), propId: safe(p.propId) }), ctx), req))
+route('GET', '/api/lot/zoning', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  json(res, 200, await zoning.lookup({ cityId: safe(url.searchParams.get('city') || ''), lat: url.searchParams.get('lat'), lon: url.searchParams.get('lon') }), req)
+})
+route('GET', '/api/lot/wind', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  const table = await lots.jurisdictions()
+  json(res, 200, await wind.lookup({ lat: url.searchParams.get('lat'), lon: url.searchParams.get('lon'), row: table[safe(url.searchParams.get('city') || '')] || null }), req)
+})
+route('GET', '/api/jurisdictions', 'app', async (req, res) => json(res, 200, await lots.jurisdictions(), req))
+route('PUT', '/api/admin/jurisdictions/:id', 'drafter', async (req, res, p, ctx) => {
+  await lots.setCity(safe(p.id), await readJson(req), ctx.user)
+  json(res, 200, (await lots.jurisdictions())[safe(p.id)], req)
+})
+route('GET', '/api/admin/sources', 'drafter', async (req, res) => json(res, 200, { ...(await parcels.health()), zoning: Object.entries(zoning.layers).map(([cityId, L]) => ({ cityId, url: L.url, field: L.field })), fixtures: fixtureMode() }, req))
+route('POST', '/api/admin/sources/check', 'drafter', async (req, res) => json(res, 200, await parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }), req))
 
 // ── billing: pricing, Stripe Checkout, the webhook, receipts ───────────────
 route('GET', '/api/billing', 'user', async (req, res, p, ctx) => json(res, 200, { credits: ctx.user.credits || 0, pricing: await billing.pricing(), mode: billing.mode, history: await billing.history(ctx.user) }, req))
@@ -387,6 +442,8 @@ const server = http.createServer(async (req, res) => {
       const wantsUser = r.need === 'user' || r.need === 'drafter'
       if (!auth.allows(wantsUser ? 'app' : r.need, role)) return json(res, role ? 403 : 401, { error: role ? `this key may not ${req.method} ${url.pathname}` : 'API key required (x-api-key)' }, req)
       const ctx = { role: role === 'open' ? 'app' : role, user: null }
+      // an app route still learns who is signed in when a token is sent (drafter-only fields on shared routes, round 7)
+      if (!wantsUser && req.headers.authorization) ctx.user = await users.fromRequest(req).catch(() => null)
       if (wantsUser) {
         ctx.user = await users.fromRequest(req)
         if (!ctx.user) return json(res, 401, { error: 'sign in first', signIn: true }, req)
@@ -413,6 +470,13 @@ async function main() {
     console.log(`accounts: ${users.describe().detail}`)
     console.log(interpreter.configured ? `interpreter: key from ${interpreter.keyVar} (${interpreter.keyLength} chars), model ${interpreter.model}` : 'interpreter: no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY, clients get the basic rules')
     console.log(`alerts: ${alerts.describe().detail}`)
+    console.log(`parcels: ${parcels.describe().detail}${fixtureMode() ? ' (answering from fixtures)' : ''}`)
+    // the daily parcel-source check (round 7): PARCEL_DAILY_CHECK=1 on Render; off on laptops and in tests
+    if (process.env.PARCEL_DAILY_CHECK === '1') {
+      const run = () => parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }).catch((e) => console.error('parcel daily check:', e.message))
+      setTimeout(run, 5 * 60000).unref()
+      setInterval(run, 24 * 3600000).unref()
+    }
     interpreter.probe()
     alerts.start()
     backup.start()

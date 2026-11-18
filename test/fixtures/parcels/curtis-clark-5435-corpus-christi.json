@@ -1,0 +1,173 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups quoted in the round-7 brief (edges, area, legal, ids) with stand-in coordinates and attributes; the parcel, flood and zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-18",
+ "slug": "curtis-clark-5435-corpus-christi",
+ "address": "5435 Curtis Clark Dr, Corpus Christi, TX 78412",
+ "county": "Nueces County",
+ "cityId": "corpuschristi",
+ "point": {
+  "lon": -97.36503260333333,
+  "lat": 27.710999870000002
+ },
+ "census": {
+  "matchedAddress": "5435 CURTIS CLARK DR, CORPUS CHRISTI, TX, 78412",
+  "coordinates": {
+   "x": -97.36500092,
+   "y": 27.71073421
+  },
+  "addressComponents": {
+   "fromAddress": "5435",
+   "toAddress": "5435",
+   "preDirection": "",
+   "streetName": "CURTIS CLARK",
+   "suffixType": "DR",
+   "suffixDirection": "",
+   "city": "CORPUS CHRISTI",
+   "state": "TX",
+   "zip": "78412"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Nueces County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": [
+    {
+     "NAME": "Corpus Christi city"
+    }
+   ]
+  }
+ },
+ "addressPoints": [],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "155608",
+    "geo_id": "2905-0005-0085",
+    "legal_desc": "GARDENDALE 2 SE/2 OF LT 8 BK 5",
+    "situs_num": "5435",
+    "situs_street_prefx": null,
+    "situs_street": "CURTIS CLARK",
+    "situs_street_sufix": "DR",
+    "situs_city": "CORPUS CHRISTI",
+    "legal_acreage": 0.2176,
+    "file_as_name": "REDACTED",
+    "CITY_LIMITS": "CORPUS CHRISTI"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -97.3651,
+       27.7108
+      ],
+      [
+       -97.36489874,
+       27.7108
+      ],
+      [
+       -97.36489874,
+       27.71119974
+      ],
+      [
+       -97.36509814,
+       27.71119974
+      ],
+      [
+       -97.3651,
+       27.71119974
+      ],
+      [
+       -97.3651,
+       27.7108
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "155620",
+    "geo_id": "2905-0005-0100",
+    "legal_desc": "GARDENDALE 2 LT 10 BK 5",
+    "situs_num": "5402",
+    "situs_street_prefx": null,
+    "situs_street": "BURTON",
+    "situs_street_sufix": "LN",
+    "situs_city": "CORPUS CHRISTI",
+    "legal_acreage": 0.2175,
+    "file_as_name": "REDACTED",
+    "CITY_LIMITS": "CORPUS CHRISTI"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -97.3651,
+       27.71120158
+      ],
+      [
+       -97.36489874,
+       27.71120158
+      ],
+      [
+       -97.36489874,
+       27.71160041
+      ],
+      [
+       -97.3651,
+       27.71160041
+      ],
+      [
+       -97.3651,
+       27.71120158
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [
+   {
+    "DFIRM_ID": "48355C",
+    "STUDY_TYP": "NP",
+    "EFF_DATE": 1551398400000
+   }
+  ],
+  "3": [],
+  "21": [
+   {
+    "FLD_ZONE": "AE",
+    "SFHA_TF": "T",
+    "STATUS": "Preliminary"
+   }
+  ],
+  "28": [
+   {
+    "FLD_ZONE": "X",
+    "ZONE_SUBTY": "0.2 PCT ANNUAL CHANCE FLOOD HAZARD",
+    "SFHA_TF": "F",
+    "STATIC_BFE": -9999,
+    "DFIRM_ID": "48355C",
+    "FLD_AR_ID": "48355C_7"
+   }
+  ],
+  "34": []
+ },
+ "zoning": {
+  "cityId": "corpuschristi",
+  "features": [
+   {
+    "TAG2023": "RS-6"
+   }
+  ]
+ }
+}

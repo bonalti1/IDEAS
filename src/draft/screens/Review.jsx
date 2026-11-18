@@ -7,6 +7,7 @@ import { api } from '../lib/api.js'
 import { STYLES } from '../lib/styles.js'
 import { floorArea, programOf, programLine } from '../lib/layout.js'
 import { STATUS } from '../lib/status.js'
+import RulesPanel from '../RulesPanel.jsx'
 
 const ago = (iso) => {
   if (!iso) return ''
@@ -59,6 +60,15 @@ export default function Review({ user }) {
     setNote('')
   }
   const [lotNote, setLotNote] = useState('')
+  const [owner, setOwner] = useState(null) // the owner of record, drafter-only, fetched on demand
+  const lookupOwner = async () => {
+    try {
+      const p = await api.parcelById(open.lot.spec.county, open.lot.spec.propId)
+      setOwner({ owner: p.owner, mailing: p.mailing })
+    } catch (e) {
+      setOwner({ owner: `lookup failed: ${e.message}` })
+    }
+  }
   const [planView, setPlanView] = useState(true)
   const confirmLot = async (confirmed) => {
     if (!open || busy) return
@@ -124,12 +134,14 @@ export default function Review({ user }) {
             {open.program?.asked && <Stat k="Asked for" v={`${programLine(open.program.asked)} · ${sf(open.program.asked.sqft)} → drafted ${sf(floorArea(open.rooms || [], open.program?.stories || 1))} to fit the lot`} />}
             <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
           </div>
-          {open.lot?.spec?.kind === 'plat' && (
-            <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')}>
-              <h3>Lot from the plat {open.lot.spec.confirmed ? `· confirmed by ${open.lot.spec.confirmedBy}` : '· needs your confirmation'}</h3>
+          {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && (
+            <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')} data-testid="lot-card">
+              <h3>
+                {open.lot.spec.kind === 'parcel' ? 'Lot from the county parcel map' : 'Lot from the plat'} {open.lot.spec.confirmed ? `· confirmed by ${open.lot.spec.confirmedBy}` : '· needs your confirmation'}
+              </h3>
               <p className="small">
-                {open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
-                {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf. Read with {Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.
+                {open.lot.spec.kind === 'parcel' ? `${open.lot.spec.legal || `Parcel ${open.lot.spec.propId}`}${open.lot.spec.geoId ? ` (geo id ${open.lot.spec.geoId})` : ''}, ${open.lot.spec.source?.name || 'county appraisal district'}${open.lot.spec.parcelFetchedAt ? `, fetched ${String(open.lot.spec.parcelFetchedAt).slice(0, 10)}` : ''}, matched by ${open.lot.spec.matchedBy || 'address'}. ` : open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
+                {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind === 'plat' ? ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.` : ' The parcel map is advisory: check it against the recorded plat or the survey.'}
               </p>
               <ol className="list small">
                 {open.lot.spec.calls?.map((c, i) => (
@@ -165,6 +177,7 @@ export default function Review({ user }) {
               )}
             </div>
           )}
+          {open.lot?.rules && <RulesPanel lot={open.lot} mode="drafter" open title="Rules used for this lot" onLookupOwner={open.lot.spec?.kind === 'parcel' && open.lot.spec.county && open.lot.spec.propId ? lookupOwner : null} owner={owner} />}
           {open.audit && (
             <div className={'card thin audit' + (open.audit.ok ? ' pass' : ' fail')}>
               <h3>
@@ -315,7 +328,7 @@ export default function Review({ user }) {
       {inbox?.lots?.length > 0 && (
         <div className="card">
           <h3>Lots to confirm ({inbox.lots.length})</h3>
-          <p className="muted small">Read from a plat by the office. Open one, compare the calls with the PDF, confirm or send it back.</p>
+          <p className="muted small">Read from a plat by the office, or taken from the county parcel map. Open one, compare the calls with the plat or the survey, confirm or send it back.</p>
           <div className="inbox-list">
             {inbox.lots.map((p) => (
               <Row key={p.id} p={p} onOpen={show} />

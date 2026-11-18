@@ -439,6 +439,24 @@ function sunPosition(lot, dist = 700) {
   return [wx * dist, dy * dist, wz * dist]
 }
 
+/**
+ * The Canvas camera prop only applies when the scene mounts; when the lot changes under it (typed lot → the county
+ * parcel on the Lot step, round 7) the controls remount on the new centre while the camera stays over the old one,
+ * and a straight-down view turns into an oblique, rolled one. This re-aims the camera whenever the lot centre moves.
+ */
+function CameraFollow({ cam, centreKey }) {
+  const { camera, controls } = useThree()
+  useEffect(() => {
+    camera.up.set(0, 1, 0)
+    camera.position.set(cam.position[0], cam.position[1], cam.position[2])
+    if (controls && controls.target) {
+      controls.target.set(cam.target[0], cam.target[1], cam.target[2])
+      controls.update()
+    } else camera.lookAt(cam.target[0], cam.target[1], cam.target[2])
+  }, [centreKey])
+  return null
+}
+
 export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false }) {
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
   const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
@@ -474,6 +492,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       {showHouse && hasPlan && rooms.filter((e) => e.kind === 'fixture').map((e) => <Fixture key={e.id} e={e} centre={centre} lot={L} />)}
       {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} lot={L} />)}
       <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={15} maxDistance={1200} enableRotate={view !== 'top'} screenSpacePanning />
+      <CameraFollow cam={cam} centreKey={L.centre.join(',')} />
     </Canvas>
   )
 }
