@@ -1,6 +1,7 @@
 // Takeoff and schedules from the room list, using the kit's standard openings.
 // This reproduces what the cover sheet and sheet 200 carry by hand today.
-import { floorArea, outline, isConditioned } from './layout.js'
+import { floorArea, outline, isConditioned, kitFor, lotOf } from './layout.js'
+import { drivewaySlabs, walkSlabs, frameOf } from './site.js'
 
 const sfOf = (o) => (o.w * o.h) / 144
 
@@ -54,7 +55,30 @@ export function doorSchedule(rooms, kit) {
   return Object.entries(counts).map(([key, count]) => ({ key, ...kit.doors[key], count }))
 }
 
-export function takeoff(rooms, program, kit) {
+/** The driveway and the front walk in square feet, from the slabs the site plan draws: { driveway, walk, total }. */
+export function flatwork(rooms, kit, lot) {
+  const L = lotOf(lot)
+  const K = kit?.rooms ? kit : kitFor(kit)
+  const centre = K.plan ? [K.plan.footprint.w / 2, K.plan.footprint.d / 2] : [0, 0]
+  // plan coordinates for every room (placed rooms carry `local`)
+  const flat = rooms.filter((r) => r.kind !== 'roof').map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
+  const frame = frameOf(flat, centre)
+  const sf = (slabs) => slabs.reduce((a, s) => a + s.w * s.d, 0)
+  let drive = []
+  let walk = []
+  try {
+    drive = drivewaySlabs(frame.rooms, frame.doors, L)
+    walk = walkSlabs(frame.rooms, frame.doors, L, drive)
+  } catch (e) {
+    drive = []
+    walk = []
+  }
+  const driveway = Math.round(sf(drive))
+  const walkSf = Math.round(sf(walk))
+  return { driveway, walk: walkSf, total: driveway + walkSf }
+}
+
+export function takeoff(rooms, program, kit, lot = null) {
   const o = outline(rooms)
   const windows = windowSchedule(rooms, kit)
   const doors = doorSchedule(rooms, kit)
@@ -81,8 +105,9 @@ export function takeoff(rooms, program, kit) {
   const rear = porch('rearPorch')
   const garage = porch('garage')
 
+  const flat = flatwork(rooms, kit, lot)
   return {
-    areas: { living, frontPorch: front, rearPorch: rear, garage, total: living + front + rear + garage },
+    areas: { living, frontPorch: front, rearPorch: rear, garage, total: living + front + rear + garage, driveway: flat.driveway, walk: flat.walk, flatwork: flat.total },
     envelope: { ...o, avgPlate },
     sidingSf,
     stoneSf,

@@ -78,7 +78,7 @@ export function buildDesign({ rooms, program, style, lot, client, history = [] }
     revit: kit.revit || null,
     sheets: kit.sheets,
     titleBlock: kit.titleBlock,
-    takeoff: takeoff(rooms, program, kit),
+    takeoff: takeoff(rooms, program, kit, lot),
     livingSf: Math.round(floorArea(rooms, program.stories)),
     changes: history.filter((m) => m.who === 'you').map((m) => m.text),
   }

@@ -32,7 +32,7 @@ test('the same plan costs more in Cameron County, and the garage and porches are
   assert.ok(hidalgo.areas.porches > 200, 'porch area from the plan')
   assert.equal(hidalgo.parts.garage[0], hidalgo.areas.garage * RATES.garagePerSf[0])
   assert.equal(hidalgo.parts.porches[1], hidalgo.areas.porches * RATES.porchPerSf[1])
-  assert.equal(hidalgo.low, hidalgo.parts.living[0] + hidalgo.parts.garage[0] + hidalgo.parts.porches[0])
+  assert.equal(hidalgo.low, hidalgo.parts.living[0] + hidalgo.parts.garage[0] + hidalgo.parts.porches[0] + hidalgo.parts.flatwork[0]) // round 6: the driveway and walk are priced too
   assert.match(range(hidalgo), /^\$\d+k–\$\d+k$/)
 })
 
