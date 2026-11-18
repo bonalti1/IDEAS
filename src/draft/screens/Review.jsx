@@ -83,6 +83,17 @@ export default function Review({ user }) {
     setEstimate(null)
     api.estimate(id).then(setEstimate).catch(() => setEstimate({ error: true }))
   }
+  // the office switches an upgrade adder on or off (the style's own are on by default); the client never sees these
+  const toggleUpgrade = async (id) => {
+    if (!open || !estimate || estimate.error) return
+    const on = (estimate.upgradeChoices || []).filter((u) => u.on).map((u) => u.id)
+    const next = on.includes(id) ? on.filter((x) => x !== id) : [...on, id]
+    try {
+      setEstimate(await api.estimate(open.id, next))
+    } catch {
+      /* keep the last estimate */
+    }
+  }
   // the office adds changes to the plan: a one-click 5, or a custom 1–50 with a note; logged with who, before and after
   const addChanges = async (n, note = '') => {
     if (!open || busy) return
@@ -240,11 +251,22 @@ export default function Review({ user }) {
                   <ul className="list small">
                     {estimate.lines.map((l, i) => (
                       <li key={i}>
-                        {l.label}: {l.amount || l.text}
+                        {l.label}: {l.text}
                       </li>
                     ))}
                   </ul>
                 )}
+                {(estimate.upgradeChoices || []).length > 0 && (
+                  <p className="small upgrades">
+                    Upgrade adders ($/sf of living, STB's What's Included):{' '}
+                    {estimate.upgradeChoices.map((u) => (
+                      <label key={u.id} className="check">
+                        <input type="checkbox" checked={u.on} onChange={() => toggleUpgrade(u.id)} /> {u.label} ${u.perSf[0]}{u.perSf[1] !== u.perSf[0] ? `–${u.perSf[1]}` : ''}
+                      </label>
+                    ))}
+                  </p>
+                )}
+                {!estimate.serviceArea && <p className="fine">{estimate.county}: outside our usual service area; the office confirms the rate.</p>}
                 <p className="fine">{estimate.note}{estimate.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}</p>
                 <Button small ghost onClick={meetingPrep}>
                   Meeting prep (PDF, internal)

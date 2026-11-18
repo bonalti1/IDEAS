@@ -6,6 +6,7 @@
 // The frame is design.json's: x along the front, z toward the street (down the page).
 
 import { drivewaySlabs, walkSlabs, lotCoverage } from './site.js'
+import { estimateLines } from './pricing.js'
 
 const IN = 12
 const fmt = (ft) => {
@@ -672,8 +673,8 @@ function summaryPage(design, price, audit, trust, titleBlock = {}, { internal = 
   const checks = (audit?.groups || []).map((g) => `<li class="${g.ok ? 'ok' : 'bad'}">${g.ok ? '✓' : '✗'} ${esc(g.name)}</li>`).join('')
   const next = (trust?.next || []).map((n) => `<li><b>${esc(n.when)}</b> ${esc(n.what)}</li>`).join('')
   const money = internal && price
-  const parts = money ? ['living', 'garage', 'porches', 'flatwork'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x === 'flatwork' ? 'driveway and walk' : x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`) : []
-  const extra = money ? (price.lines || []).map((l) => esc(`${l.label} ${l.amount || l.text || ''}`.trim())) : []
+  const parts = money ? ['living', 'garage', 'porches'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`) : []
+  const extra = money ? estimateLines(price).map((l) => esc(`${l.label}: ${l.text}`)) : []
   const priceLine = money ? `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${esc(price.county || 'county not set')}. ${parts.map(esc).join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${esc(price.note)}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}` : ''
   const costBlock = money
     ? `<h2>${price.confirmed ? 'Price range (office)' : 'Estimate (office)'}</h2>\n  <p class="price">${price.needsCounty ? 'county not set' : `${k(price.low)}–${k(price.high)}`}</p>\n  <p class="fine">${priceLine}</p>`
@@ -701,7 +702,7 @@ function summaryPage(design, price, audit, trust, titleBlock = {}, { internal = 
 <div class="page">
   ${internal ? '<p class="internal">Meeting prep · internal: not for the client</p>' : ''}
   <h1>${esc(design.client || 'Your house')}</h1>
-  <p class="sub">${esc(lotTitle(design))} · ${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
+  <p class="sub">${esc(lotTitle(design))} · ${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car${ab.tandem ? ' tandem' : ''} garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
   <div class="plan">${plan.svg}</div>
   ${costBlock}
   <h2>Checked before you saw it</h2>

@@ -60,7 +60,7 @@ export const api = {
   grantAllowance: (id, add, note = '') => call(`/api/review/${id}/allowance`, { method: 'POST', body: JSON.stringify({ add, note }) }, 20000),
   allowanceDefault: () => call('/api/admin/allowance'),
   setAllowanceDefault: (n) => call('/api/admin/allowance', { method: 'PUT', body: JSON.stringify({ default: n }) }),
-  estimate: (id) => call(`/api/review/${id}/estimate`, {}, 20000), // drafters and admins only: the office estimate
+  estimate: (id, upgrades = null) => call(`/api/review/${id}/estimate${upgrades ? `?upgrades=${encodeURIComponent(upgrades.length ? upgrades.join(',') : 'none')}` : ''}`, {}, 20000), // drafters and admins only: the office estimate; upgrades: the adders to price
   users: () => call('/api/admin/users'),
   // drafter review
   inbox: () => call('/api/review'),

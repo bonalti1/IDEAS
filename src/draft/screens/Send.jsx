@@ -282,7 +282,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
           <div className="card stats">
             <Stat k="Lot" v={lot?.address} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Program" v={programLine(programOf(rooms, program))} />
+            <Stat k="Program" v={programLine(programOf(rooms, program), ' · ', { tandemShort: true })} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             {program.asked && <Stat k="Asked for" v={`${programLine(program.asked)} · ${sf(program.asked.sqft)} → drafted ${sf(t.areas.living)} to fit the lot`} />}
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />

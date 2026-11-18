@@ -8,6 +8,7 @@ import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 
 const MIN_CONFIDENCE = 0.5
+const MAX_PARTS = 3 // parts applied from one message; one change is used however many applied (round 8, item 29)
 // the office said it has no interpreter: do not wait on it again for a while
 let offlineUntil = 0
 
@@ -290,6 +291,18 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
   }
   const v = validateOps(diff.ops, rooms, kit)
   if (!v.ok) return { applied: false, rooms, reply: v.errors[0], source, ops: diff.ops, reasons: v.errors }
+  // at most three parts a message (round 8, item 29): the rest is named and asked for next
+  if (depth === 0) {
+    const all = partsOf(diff, rooms, kit)
+    if (all.length > MAX_PARTS) {
+      const keep = all.slice(0, MAX_PARTS)
+      const later = all.slice(MAX_PARTS)
+      const trimmed = { ...diff, ops: keep.flatMap((p) => p.ops), parts: Array.isArray(diff.parts) && diff.parts.length > 1 ? diff.parts.filter((p) => p.ops?.length).slice(0, MAX_PARTS) : diff.parts }
+      const out = decideCore(trimmed, rooms, program, style, kit, source, lot, { ...opts, depth: 1, capped: later })
+      const tail = ` I did the first ${MAX_PARTS}; send "${later.map((p) => p.text).join('", "')}" next.`
+      return { ...out, reply: String(out.reply || '').replace(/\s+$/, '') + tail, deferred: later.map((p) => p.text) }
+    }
+  }
   // a new draft of the house as it stands, with a program change or at a size (what a fix button sends
   // when the plan cannot take the change in place)
   const redraftOp = diff.ops.find((o) => o.op === 'redraft')
@@ -358,7 +371,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
   // a request in parts, applied one part at a time: what passes goes through, what does not is named
   const inParts = (whole) => {
     const parts = partsOf(diff, rooms, kit)
-    if (parts.length < 2 || depth >= 2) return null
+    if (parts.length < 2 || depth >= 2 + (opts.capped ? 1 : 0)) return null
     let running = rooms
     const kept = []
     const dropped = []

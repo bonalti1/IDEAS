@@ -48,7 +48,12 @@ test('the worker reads the same plan (worker/revit/build_model.py places per des
 })
 
 test('the trust content names its placeholders, and the summary page carries the plan, the checks and the cost sentence, never a price (round 8)', () => {
-  assert.ok(TRUST.drafter.placeholder === true && TRUST.drafter.photo === null, 'the drafter name and photo are placeholders until Rolando supplies them')
+  assert.ok(TRUST.drafter.placeholder === true && TRUST.drafter.name === 'Leroy Flores' && TRUST.drafter.photo === '/team/leroy-flores.webp', 'Leroy Flores is built in behind the placeholder until Rolando OKs showing him (round 8, item 28)')
+  assert.equal(TRUST.builtHomes.url, 'https://south-texasbuilders.com/our-homes/')
+  assert.deepEqual(TRUST.next.map((n) => n.when), ['Today', 'Within 1 business day', 'Within 10 business days (about 2 weeks)', 'Then'])
+  assert.match(TRUST.next[1].what, /contacts you/)
+  assert.match(TRUST.next[3].what, /the plan and the cost.*permit/)
+  assert.ok(TRUST.next.every((n) => !/\$|\d+k/.test(n.what)), 'no numbers of money in what happens next')
   assert.ok(TRUST.next.length >= 3 && TRUST.next.every((n) => n.when && n.what))
   assert.match(TRUST.checked, /IRC/)
   const program = { ...DEFAULT_PROGRAM }

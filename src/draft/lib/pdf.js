@@ -3,6 +3,7 @@
 // the same SVG the plan tab shows, placed at true scale with jsPDF and svg2pdf. No pop-up, no print
 // dialog: the file downloads. The libraries load on first use so the app's bundle stays small.
 import { planSVG, sitePlanSVG, sheetFor, siteScaleFor, lotTitle, cropSVG } from './plan-svg.js'
+import { estimateLines } from './pricing.js'
 
 let libs
 async function load() {
@@ -189,7 +190,7 @@ async function summaryDoc(design, price, audit, trust, info = {}, { internal = f
   doc.setFont(font, 'normal')
   doc.setFontSize(10)
   doc.setTextColor(85, 85, 85)
-  doc.text(`${lotTitle(design)} · ${design.style?.name || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`, M, y, { maxWidth: W })
+  doc.text(`${lotTitle(design)} · ${design.style?.name || ''} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car${ab.tandem ? ' tandem' : ''} garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${date}`, M, y, { maxWidth: W })
   y += 0.25
   const plan = planSVG(design)
   const ph = Math.min(4.2, (W * plan.height) / plan.width)
@@ -213,8 +214,8 @@ async function summaryDoc(design, price, audit, trust, info = {}, { internal = f
     doc.setFont(font, 'normal')
     doc.setFontSize(8.5)
     doc.setTextColor(85, 85, 85)
-    const parts = ['living', 'garage', 'porches', 'flatwork'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x === 'flatwork' ? 'driveway and walk' : x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`)
-    const extra = (price.lines || []).map((l) => `${l.label} ${l.amount || l.text || ''}`.trim())
+    const parts = ['living', 'garage', 'porches'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`)
+    const extra = estimateLines(price).map((l) => `${l.label}: ${l.text}`)
     const line = `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${price.county || 'county not set'}. ${parts.join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${price.note}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}`
     const lines = doc.splitTextToSize(line, W)
     doc.text(lines, M, y)

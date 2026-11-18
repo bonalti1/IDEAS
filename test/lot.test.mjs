@@ -114,8 +114,10 @@ test('envelopeOf insets each edge by its own setback', () => {
   ])
 })
 
-test('city table: defaults for the seven jurisdictions, office overrides win, lot overrides win over those', () => {
-  assert.deepEqual(CITY_IDS, ['mission', 'mcallen', 'edinburg', 'pharr', 'palmview', 'weslaco', 'hidalgo'])
+test('city table: defaults for the eight jurisdictions, office overrides win, lot overrides win over those', () => {
+  assert.deepEqual(CITY_IDS, ['mission', 'mcallen', 'edinburg', 'pharr', 'palmview', 'weslaco', 'harlingen', 'hidalgo'])
+  assert.equal(rulesFor('harlingen').garageFt, 20, 'Harlingen: a front-facing garage door 20 ft from the street (round 8, item 30d)')
+  assert.equal(rulesFor('mcallen').garageFt, 18)
   const t = cityTable({ mcallen: { front: 20, verified: true } })
   assert.equal(t.mcallen.front, 20)
   assert.equal(t.mcallen.verified, true)

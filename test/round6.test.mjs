@@ -47,9 +47,12 @@ test('the driveway and the front walk are in the takeoff and priced as flatwork,
   assert.equal(t.areas.flatwork, f.total)
   const e = estimate({ rooms, program: DEFAULT_PROGRAM, style, lot })
   assert.equal(e.areas.flatwork, f.total)
-  assert.ok(e.parts.flatwork[0] === f.total * RATES.flatworkPerSf[0] && e.parts.flatwork[1] === f.total * RATES.flatworkPerSf[1])
+  // round 8 (item 25): only the flatwork beyond STB's included driveway allowance is priced
+  assert.equal(e.flatwork.total, f.total)
+  assert.equal(e.flatwork.beyond, Math.max(0, f.total - RATES.drivewayAllowanceSf[2]))
+  assert.ok(e.parts.flatwork[0] === e.flatwork.beyond * RATES.flatworkPerSf[0] && e.parts.flatwork[1] === e.flatwork.beyond * RATES.flatworkPerSf[1])
   assert.ok(e.low >= e.parts.living[0] + e.parts.garage[0] + e.parts.porches[0] + e.parts.flatwork[0] - 1, 'the low end carries the flatwork')
-  assert.match(rateLine(e), /driveway and walk \$\d+–\d+\/sf/)
+  assert.match(rateLine(e), /driveway and walk beyond the allowance \$\d+–\d+\/sf/)
   assert.equal(RATES.confirmed, false, 'every rate stays a placeholder until Rolando confirms them')
   // no garage: the walk alone
   const noG = { ...DEFAULT_PROGRAM, garage: 0 }

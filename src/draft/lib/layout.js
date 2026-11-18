@@ -170,7 +170,9 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     // a garage the standard plan could only take by trimming the house (or not at all): the garage-forward
     // variant puts it at the front corner and keeps the house its size
     const hasGarage = (d) => d.rooms.some((r) => isRoom(r) && r.kind === 'garage')
-    if (program.garage > 0 && kit.plans.frontgarage && narrowEnough(kit.plans.frontgarage) && !noEnvelope && inRange(kit.plans.frontgarage.sqft) && (!hasGarage(standard) || standard.fitScale < 0.97)) {
+    // a lot whose deed restrictions forbid a street-facing garage never gets the garage-forward variant (round 8, item 30a)
+    const noStreetGarage = !!lotOf(lot).spec?.noStreetGarage
+    if (program.garage > 0 && !noStreetGarage && kit.plans.frontgarage && narrowEnough(kit.plans.frontgarage) && !noEnvelope && inRange(kit.plans.frontgarage.sqft) && (!hasGarage(standard) || standard.fitScale < 0.97)) {
       const alt = fromPlan(program, kit, lot, 'frontgarage')
       if (fitsEnvelope(alt.rooms, kit, lot) && hasGarage(alt) && (!hasGarage(standard) || alt.fitScale > standard.fitScale + 0.01)) return alt
     }
@@ -1031,8 +1033,10 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
   // a door, or a window of a room that needs its daylight, blocks the spot; a bath's or closet's window goes with the pick
   const blockedBy = (room) => covered(room).some((e) => e.kind === 'door' || habitable.includes(solid.find((r) => r.id === e.room)?.kind))
   let pick = null
-  // the way asked for: front-load, or side-load (the courtyard way counts as side-load)
-  const wanted = prefer === 'front' ? candidates.filter((c) => c.kind === 'front') : prefer === 'side' ? candidates.filter((c) => c.kind !== 'front') : candidates
+  // the way asked for: front-load, or side-load (the courtyard way counts as side-load); a deed restriction
+  // against a street-facing garage (lot.spec.noStreetGarage, round 8 item 30a) rules front-load out
+  const noStreet = !!L.spec?.noStreetGarage
+  const wanted = (prefer === 'front' && !noStreet ? candidates.filter((c) => c.kind === 'front') : prefer === 'side' || noStreet ? candidates.filter((c) => c.kind !== 'front') : candidates)
   const runsInto = (room) => solid.some((r) => r.id !== room.id && Math.min(Math.min(r.x + r.w, room.x + room.w) - Math.max(r.x, room.x), Math.min(r.y + r.d, room.y + room.d) - Math.max(r.y, room.y)) > 0.6)
   for (const c of wanted) {
     if (blockedBy(c.room) || runsInto(c.room)) continue
@@ -1279,8 +1283,90 @@ export function slideToFront(rooms, kit, stories = 1, lot = DEFAULT_LOT) {
 }
 
 /** Rooms with plan coordinates (x, y from the rear-left corner) → placed on the lot. */
+/**
+ * Two things a drafter does before the plan leaves the desk (round 8, items 32 and 34), run on every plan on its
+ * way to the lot: a bath door whose leaf would sweep the clear space in front of the toilet or the shower becomes
+ * a pocket door, and a bath whose fixtures sit more than 80 ft of plan distance from the water heater (100 ft of
+ * pipe at the 1.25 routing factor, IRC P2905.3) gets a tankless heater of its own on a free wall.
+ */
+export function drafterPasses(rooms) {
+  const rooms2 = rooms.map((r) => ({ ...r }))
+  const isBath = (r) => isRoom(r) && ['bath', 'mbath', 'jackjill', 'halfbath'].includes(r.kind)
+  const baths = rooms2.filter(isBath)
+  const fixtures = rooms2.filter((e) => e.kind === 'fixture')
+  const inRect = (z, x, y) => x >= z.x - 0.02 && x <= z.x + z.w + 0.02 && y >= z.y - 0.02 && y <= z.y + z.d + 0.02
+  // the clear zones in front of the toilets and showers of a bath
+  const zonesOf = (bath) =>
+    fixtures
+      .filter((f) => f.room === bath.id && (f.fixture === 'toilet' || f.fixture === 'shower'))
+      .map((f) => {
+        const deep = (f.fixture === 'toilet' ? 21 : 24) / 12
+        const face = f.fixture === 'toilet' ? f.face || (f.d > f.w ? 'e' : 's') : [['e', bath.x + bath.w - (f.x + f.w)], ['w', f.x - bath.x], ['s', bath.y + bath.d - (f.y + f.d)], ['n', f.y - bath.y]].sort((a, b) => b[1] - a[1])[0][0]
+        return face === 'e' ? { x: f.x + f.w, y: f.y, w: deep, d: f.d } : face === 'w' ? { x: f.x - deep, y: f.y, w: deep, d: f.d } : face === 'n' ? { x: f.x, y: f.y - deep, w: f.w, d: deep } : { x: f.x, y: f.y + f.d, w: f.w, d: deep }
+      })
+  rooms2.forEach((d) => {
+    if (d.kind !== 'door' || d.pocket || d.cased || d.barn || d.size === 'overhead' || d.size === 'overheadSingle') return
+    const span = d.span || Math.max(d.w, d.d)
+    const swing = d.swing === -1 ? -1 : 1
+    const wall = d.axis === 'h' ? d.y + d.d / 2 : d.x + d.w / 2
+    const lo = d.axis === 'h' ? d.x : d.y
+    const hinge = d.hinge === 'end' ? lo + span : lo
+    const dir = d.hinge === 'end' ? -1 : 1
+    // the bath the leaf swings into, if any
+    const side = d.axis === 'h' ? [d.x + d.w / 2, wall + swing * 0.7] : [wall + swing * 0.7, d.y + d.d / 2]
+    const bath = baths.find((b) => inRect(b, side[0], side[1]))
+    if (!bath) return
+    const zones = zonesOf(bath)
+    if (!zones.length) return
+    const r = span / (d.pair ? 2 : 1)
+    let hit = false
+    for (let a = 0; a <= 1.0001 && !hit; a += 1 / 10) for (let k = 0.2; k <= 1.0001 && !hit; k += 0.2) {
+      const u = r * k * Math.cos((Math.PI / 2) * a) * dir
+      const v = r * k * Math.sin((Math.PI / 2) * a) * swing
+      const pt = d.axis === 'h' ? [hinge + u, wall + v] : [wall + v, hinge + u]
+      if (zones.some((z) => inRect(z, pt[0], pt[1]))) hit = true
+    }
+    if (hit) {
+      d.pocket = true
+      d.name = 'Pocket door'
+    }
+  })
+  // hot water: a tankless unit in a bath that is too far from the heater
+  const heaters = fixtures.filter((f) => f.fixture === 'wh')
+  const laundry = rooms2.find((r) => isRoom(r) && r.kind === 'laundry')
+  const sources = heaters.length ? heaters.map((f) => [f.x + f.w / 2, f.y + f.d / 2]) : laundry ? [[laundry.x + laundry.w / 2, laundry.y + laundry.d / 2]] : []
+  if (sources.length) {
+    const far = (x, y) => Math.min(...sources.map(([sx, sy]) => Math.hypot(x - sx, y - sy))) > 80 / 1.0
+    for (const bath of baths) {
+      const hot = fixtures.filter((f) => f.room === bath.id && ['shower', 'tub', 'vanity', 'sink'].includes(f.fixture))
+      if (!hot.some((f) => far(f.x + f.w / 2, f.y + f.d / 2))) continue
+      // a free spot against a wall: the corner farthest from the bath's doors, clear of every fixture
+      const doors = rooms2.filter((e) => e.kind === 'door' && inRect({ x: bath.x - 0.4, y: bath.y - 0.4, w: bath.w + 0.8, d: bath.d + 0.8 }, e.x + e.w / 2, e.y + e.d / 2))
+      const unit = { w: 1.5, d: 0.8 }
+      const corners = [
+        { x: bath.x + 0.1, y: bath.y + 0.1 },
+        { x: bath.x + bath.w - unit.w - 0.1, y: bath.y + 0.1 },
+        { x: bath.x + 0.1, y: bath.y + bath.d - unit.d - 0.1 },
+        { x: bath.x + bath.w - unit.w - 0.1, y: bath.y + bath.d - unit.d - 0.1 },
+      ]
+      const overlaps = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > -0.3 && Math.min(a.y + a.d, b.y + b.d) - Math.max(a.y, b.y) > -0.3
+      const spot = corners
+        .map((c) => ({ ...c, ...unit }))
+        .filter((c) => !fixtures.some((f) => f.room === bath.id && overlaps(c, f)) && !doors.some((e) => overlaps(c, { x: e.x - 2.6, y: e.y - 2.6, w: e.w + 5.2, d: e.d + 5.2 })))
+        .sort((a, b) => Math.min(...doors.map((e) => Math.hypot(b.x - e.x, b.y - e.y))) - Math.min(...doors.map((e) => Math.hypot(a.x - e.x, a.y - e.y))))[0]
+      if (!spot) continue
+      const unitEl = { id: `fx-${bath.id}-wh2`, kind: 'fixture', fixture: 'wh', element: true, open: true, name: 'Tankless water heater', room: bath.id, x: spot.x, y: spot.y, w: unit.w, d: unit.d, h: 2.5, tankless: true }
+      rooms2.push(unitEl)
+      fixtures.push(unitEl)
+      sources.push([spot.x + unit.w / 2, spot.y + unit.d / 2])
+    }
+  }
+  return rooms2
+}
+
 export function placeLocal(rooms, stories, kit, centre, lot = DEFAULT_LOT) {
   const L = lotOf(lot)
+  rooms = drafterPasses(rooms)
   return rooms.map((r) => {
     const lx = r.x + r.w / 2 - centre[0]
     const lz = r.y + r.d / 2 - centre[1] // y grows toward the street, which is +z (south) on this lot
@@ -1345,10 +1431,15 @@ export function programOf(rooms, program = {}) {
   const garage = list.find((r) => r.kind === 'garage')
   const cars = garage ? +(garage.name.match(/^(\d+)-Car/) || [])[1] || Math.max(1, Math.round(Math.max(garage.w, garage.d) / 11)) : 0
   const tandem = !!garage && (!!garage.tandem || /tandem/i.test(garage.name || ''))
+  // a room counts as a bedroom with 70 sf, an egress window and a closet (IRC R304/R310; round 8, item 34); the
+  // rest of the sleeping rooms are flex rooms in the summary
+  const sleeping = list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind))
+  const flex = sleeping.filter((r) => !isBedroom(r, rooms)).length
   return {
     ...program,
     tandem,
-    beds: count('bed', 'master', 'suite2'),
+    beds: sleeping.length - flex,
+    flex,
     baths: count('bath', 'mbath', 'jackjill'),
     halfBath: count('halfbath') > 0,
     halfBaths: count('halfbath'),
@@ -1362,11 +1453,33 @@ export function programOf(rooms, program = {}) {
     asked: program.asked || null, // the program as first asked for, when a fit offer replaced it (round 6)
   }
 }
-/** "4 bed · 3.5 bath · 2-car · 1 story" */
-export function programLine(p, sep = ' · ') {
+/**
+ * Does a sleeping room count as a bedroom? 70 sf or more, a window of its own, and a closet that opens from it
+ * (or from a bath that opens from it). Rooms in plan or placed (local) coordinates; adjacency stands in for doors.
+ */
+export function isBedroom(r, rooms) {
+  if (r.w * r.d < 70 - 0.01) return false
+  const list = rooms.filter(isRoom)
+  const hasWindow = rooms.some((e) => e.kind === 'window' && e.room === r.id && !e.dormer)
+  if (!hasWindow) return false
+  const px = (q) => (q.x !== undefined ? q.x : q.local ? q.local[0] - q.w / 2 : 0)
+  const py = (q) => (q.y !== undefined ? q.y : q.local ? q.local[1] - q.d / 2 : 0)
+  const touches = (a, b) => {
+    const ox = Math.min(px(a) + a.w, px(b) + b.w) - Math.max(px(a), px(b))
+    const oy = Math.min(py(a) + a.d, py(b) + b.d) - Math.max(py(a), py(b))
+    return (ox >= 1.5 && oy > -0.8) || (oy >= 1.5 && ox > -0.8)
+  }
+  const closets = list.filter((c) => c.kind === 'wic' || c.kind === 'mwic')
+  if (closets.some((c) => touches(r, c))) return true
+  const baths = list.filter((b) => ['bath', 'mbath', 'jackjill'].includes(b.kind) && touches(r, b))
+  return closets.some((c) => baths.some((b) => touches(b, c)))
+}
+/** "4 bed · 3.5 bath · 2-car · 1 story"; with { tandemShort } a tandem garage reads "3-car tandem" (the Send summary, the office estimate) */
+export function programLine(p, sep = ' · ', { tandemShort = false } = {}) {
   const baths = `${p.baths}${p.halfBaths > 1 ? `.${p.halfBaths}` : p.halfBath ? '.5' : ''}`
-  // a tandem third bay is said so the client knows the third car parks behind another
-  return [`${p.beds} bed`, `${baths} bath`, p.garage ? `${p.garage}-car${p.tandem ? ' (tandem: one bay two cars deep)' : ''}` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
+  // a tandem third bay is said so the client knows the third car parks behind another; a sleeping room that is
+  // not a bedroom by the rule (70 sf, egress, closet) is a flex room
+  return [`${p.beds} bed${p.flex ? ` + ${p.flex} flex room${p.flex === 1 ? '' : 's'}` : ''}`, `${baths} bath`, p.garage ? `${p.garage}-car${p.tandem ? (tandemShort ? ' tandem' : ' (tandem: one bay two cars deep)') : ''}` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
 }
 
 /** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */

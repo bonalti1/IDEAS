@@ -283,6 +283,12 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 <input value={spec.sideStreet || ''} onChange={(e) => set('sideStreet', e.target.value)} />
               </label>
             )}
+            <label className="confirm deed">
+              <input id="lot-no-street-garage" type="checkbox" checked={!!spec.noStreetGarage} onChange={(e) => set('noStreetGarage', e.target.checked)} />
+              <span>
+                Deed restrictions: the garage may not face the street. <small className="fine">Some subdivisions require rear or side entry; the drafter checks the recorded restrictions.</small>
+              </span>
+            </label>
           </>
         )}
 

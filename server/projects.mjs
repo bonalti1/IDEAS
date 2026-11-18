@@ -9,7 +9,7 @@ import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply } from '..
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
-import { RATES, estimate, range, rateLine } from '../src/draft/lib/pricing.js'
+import { RATES, estimate, range, rateLine, estimateLines } from '../src/draft/lib/pricing.js'
 import { takeoff } from '../src/draft/lib/takeoff.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 
@@ -191,13 +191,13 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
      * The office estimate for a plan (round 8, M2): the range, the rate line, the parts and the takeoff.
      * Drafters and admins only; a homeowner never receives it (the route answers 403).
      */
-    async estimateFor(p) {
+    async estimateFor(p, { upgrades = null } = {}) {
       const full = await withRooms(p)
       const style = styleOf(p)
       const kit = kitFor(style)
       const lot = await lots.lotOfProject(p)
-      const est = estimate({ rooms: full.rooms, program: full.program || {}, style, lot })
-      return { ...est, range: range(est), rateLine: rateLine(est), takeoff: takeoff(full.rooms, full.program || {}, kit, lot), internal: 'Internal: not for the client', rooms: full.rooms, program: full.program, style: p.style, lot: p.lot, client: p.client, address: p.address, createdAt: p.createdAt }
+      const est = estimate({ rooms: full.rooms, program: full.program || {}, style, lot, upgrades })
+      return { ...est, range: range(est), rateLine: rateLine(est), lines: estimateLines(est), notes: est.lines, upgradeChoices: Object.keys(RATES.upgrades).map((id) => ({ id, label: RATES.upgradeNames[id] || id, perSf: Array.isArray(RATES.upgrades[id]) ? RATES.upgrades[id] : [RATES.upgrades[id], RATES.upgrades[id]], on: est.upgrades.some((u) => u.id === id) })), takeoff: takeoff(full.rooms, full.program || {}, kit, lot), internal: 'Internal: not for the client', rooms: full.rooms, program: full.program, style: p.style, lot: p.lot, client: p.client, address: p.address, createdAt: p.createdAt }
     },
     /** The office adds changes to a plan (round 8, M7): 1–50 at a time, logged with who, before and after. */
     async grantAllowance(p, drafter, { add, note }) {
