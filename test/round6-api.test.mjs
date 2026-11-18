@@ -101,3 +101,39 @@ test('a project keeps what the client first asked for beside the program it was 
   const list = await j(await ana.get('/api/projects'))
   assert.equal((list.body.projects || list.body).find((p) => p.id === made.body.id).program.asked.sqft, 2800)
 })
+
+test('a fix the plan cannot take in place is a new draft through the office: "add a garage" on the narrow 3/2 is refused with a re-draft fix, the fix applies, the garage is there, one credit', async (t) => {
+  const { generateRooms: gen, DEFAULT_PROGRAM, isRoom } = await import('../src/draft/lib/layout.js')
+  const { base } = await startServer(t)
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  const lot = buildLot({ kind: 'manual', width: 50, depth: 120, city: 'pharr', setbacks: {} })
+  const p32 = { ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }
+  const rooms = gen(p32, style, lot)
+  const made = await j(await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program: p32, rooms, client: 'Ana' }))
+  assert.equal(made.status, 201, JSON.stringify(made.body))
+  const credits = made.body.credits
+  // an edit first, so the re-draft has something to carry over (the first of these the narrow plan takes)
+  let edit = null
+  for (const text of ['make the pantry smaller', 'make bedroom 2 bigger', 'make the living room 1 foot deeper', 'make the primary closet bigger']) {
+    const r0 = await j(await ana.post(`/api/projects/${made.body.id}/change`, { text }))
+    if (r0.body.applied) {
+      edit = text
+      break
+    }
+  }
+  assert.ok(edit, 'one room-level edit applied on the narrow 3/2')
+  const r = await j(await ana.post(`/api/projects/${made.body.id}/change`, { text: 'add a garage' }))
+  assert.equal(r.status, 200)
+  assert.equal(r.body.applied, false)
+  assert.match(r.body.reply, /no room for a garage/i)
+  assert.equal(r.body.credits, credits - 1, 'a refusal is not charged')
+  const redo = r.body.fixes.find((f) => /Re-draft the house with a 2-car garage/.test(f.label))
+  assert.ok(redo, JSON.stringify(r.body.fixes))
+  const done = await j(await ana.post(`/api/projects/${made.body.id}/change`, { text: redo.label, ops: redo.ops }))
+  assert.equal(done.body.applied, true, done.body.reply)
+  assert.ok(done.body.rooms.some((x) => isRoom(x) && x.kind === 'garage'), 'the new draft has the garage')
+  assert.ok(done.body.reply.includes(`still stand: "${edit}"`) || done.body.reply.includes(`Could not keep: "${edit}"`), `the earlier edit is accounted for: ${done.body.reply}`)
+  assert.equal(done.body.credits, credits - 2, 'one credit for the new draft')
+  const detail = await j(await ana.get(`/api/projects/${made.body.id}`))
+  assert.equal(detail.body.versions[detail.body.versions.length - 1].kind, 'change')
+})
