@@ -72,15 +72,15 @@ test('a lot spec the office cannot build is refused at the door: 400 with a plai
   assert.ok(ch.status < 500, JSON.stringify(ch.body))
 })
 
-test('a fault on our side answers 500 with a generic line, logs the detail, and the server stays up', async (t) => {
+test('a 5xx the code meant for the client keeps its words (round 8), is logged, and the server stays up (before round 6 any 5xx crashed it)', async (t) => {
   const { base, log, alive } = await startServer(t)
   const ana = await who(base, 'ana@example.com', 'Ana Garza')
-  // the checkout without Stripe is a 503 the client sees plainly; before round 6 any 5xx crashed the server
+  // the checkout without Stripe is a 503 with a plain line of its own
   const r = await j(await ana.post('/api/billing/checkout', { pack: 'pack5' }))
-  assert.ok(r.status >= 500, JSON.stringify(r))
-  assert.equal(r.body.error, 'Something went wrong on our side; the office has the detail. Try again in a moment.')
+  assert.equal(r.status, 503, JSON.stringify(r))
+  assert.equal(r.body.error, 'payments are not set up yet; ask the office for credits')
   assert.ok(alive(), 'the server did not crash')
-  assert.match(log(), /\[api\] POST \/api\/billing\/checkout → 5\d\d/, 'the detail is in the log')
+  assert.match(log(), /\[api\] POST \/api\/billing\/checkout → 503/, 'the detail is in the log')
   const h = await fetch(base + '/api/health')
   assert.equal(h.status, 200)
 })
@@ -136,4 +136,53 @@ test('a fix the plan cannot take in place is a new draft through the office: "ad
   assert.equal(done.body.credits, credits - 2, 'one credit for the new draft')
   const detail = await j(await ana.get(`/api/projects/${made.body.id}`))
   assert.equal(detail.body.versions[detail.body.versions.length - 1].kind, 'change')
+})
+
+// ── round 8 ──────────────────────────────────────────────────────────────────
+test('round 8: the stored program follows the drawn plan after a 5-step chat (Review and Send read the same numbers), and "undo" rolls back at no credit', async (t) => {
+  const { generateRooms: gen, DEFAULT_PROGRAM, programOf, floorArea } = await import('../src/draft/lib/layout.js')
+  const { base } = await startServer(t)
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const program = { ...DEFAULT_PROGRAM, sqft: 2800 }
+  const rooms = gen(program, style, lot)
+  const made = await j(await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program, rooms, client: 'Ana' }))
+  assert.equal(made.status, 201, JSON.stringify(made.body))
+  const id = made.body.id
+  const steps = ['make the house 2,400 sf', 'add a bedroom', 'add a bedroom', 'make the garage 3 cars', 'make the kitchen 2 feet wider']
+  let applied = 0
+  for (const text of steps) {
+    const r = await j(await ana.post(`/api/projects/${id}/change`, { text }))
+    if (r.body.applied) applied++
+  }
+  assert.ok(applied >= 4, `${applied} of 5 applied`)
+  const detail = await j(await ana.get(`/api/projects/${id}`))
+  const drawn = programOf(detail.body.rooms, detail.body.program)
+  const stored = detail.body.program
+  assert.equal(stored.beds, drawn.beds, 'beds follow the plan')
+  assert.equal(stored.garage, drawn.garage, 'the garage follows the plan')
+  assert.equal(stored.sqft, Math.round(floorArea(detail.body.rooms, 1) / 50) * 50, 'the living area follows the plan, to 50 sf')
+  assert.equal(stored.asked.sqft, 2800, 'the first ask is kept')
+  assert.equal(stored.asked.beds, 4)
+  const review = await j(await (await who(base, 'maria@drafthouse.test', 'Maria')).get(`/api/review/${id}`))
+  assert.equal(review.body.program.beds, drawn.beds)
+  // "undo": back one version, the credit returned, nothing charged
+  const before = detail.body
+  const undo = await j(await ana.post(`/api/projects/${id}/change`, { text: 'undo' }))
+  assert.equal(undo.status, 200, JSON.stringify(undo.body))
+  assert.equal(undo.body.applied, true)
+  assert.equal(undo.body.undo, true)
+  assert.match(undo.body.reply, /^Back to version \d+\./)
+  assert.equal(undo.body.credits, before.credits + 1, 'the credit for the undone change came back')
+  const after = await j(await ana.get(`/api/projects/${id}`))
+  assert.equal(after.body.versions[after.body.versions.length - 1].kind, 'rollback')
+  assert.equal(after.body.program.beds, programOf(after.body.rooms, after.body.program).beds, 'the program follows the restored plan')
+  const back = await j(await ana.post(`/api/projects/${id}/change`, { text: 'go back' }))
+  assert.equal(back.body.applied, true)
+  // a fix tap answers with what was done (on the reference lot, where the standard plan takes a 3-car in place)
+  const fresh = await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse' }, program, rooms: gen(program, style), client: 'Ana' }))
+  const tap = await j(await ana.post(`/api/projects/${fresh.body.id}/change`, { text: 'Make it a 3-car garage?', ops: [{ op: 'garage', cars: 3 }] }))
+  assert.equal(tap.body.applied, true, tap.body.reply)
+  assert.doesNotMatch(tap.body.reply, /\?/)
+  assert.match(tap.body.reply, /3-car garage/)
 })

@@ -2,9 +2,9 @@
 // A change runs here, not in the browser: Claude (or the basic rules when it is unavailable),
 // then the plan rules, and a credit is taken only when the change is applied.
 import crypto from 'node:crypto'
-import { decide, unsupported, editsOf } from '../src/draft/lib/interpret.js'
+import { decide, dropUnsupported, editsOf } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
-import { kitFor, programOf } from '../src/draft/lib/layout.js'
+import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
 import { RATES } from '../src/draft/lib/pricing.js'
@@ -149,6 +149,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       return this.detail(p)
     },
 
+    /** The program as the drawn plan has it: counts from the rooms, the living area to 50 sf, the first ask kept in `asked`. */
+    followPlan(program, rooms) {
+      const got = programOf(rooms, program || {})
+      const stories = program?.stories || 1
+      const { asked: _a, livingSf: _l, halfBaths: _h, ...counts } = got
+      const first = program?.asked || (program ? { ...program, asked: undefined } : null)
+      return { ...program, ...counts, stories, sqft: Math.round(floorArea(rooms, stories) / 50) * 50, asked: first }
+    },
+
     // one plain-language request → Claude or the basic rules → plan rules → charged only if applied.
     // With `ops` (a fix the client clicked), the ops are taken as given and only the rules run.
     async change(p, text, fixOps = null) {
@@ -166,27 +175,37 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       let diff
       let source = 'claude'
       let meta = {}
-      const no = unsupported(request, style)
-      if (no) {
+      // "undo", "go back": the previous version, at no credit (the credit for the change comes back)
+      if (/^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i.test(request)) {
+        if (p.version <= 1) return { applied: false, reply: 'There is nothing to undo yet.', source: 'fallback', reasons: ['nothing to undo'], fixes: [], credits: owner.credits, version: p.version }
+        const back = await this.rollback(p, p.version - 1)
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply: back.reply, ops: [] })
+        return { applied: true, undo: true, reply: `Back to version ${p.version - 1}.${back.refunded ? ` ${back.refunded} credit${back.refunded === 1 ? '' : 's'} returned.` : ' No credit used.'}`, source: 'fallback', rooms: back.rooms, credits: back.credits, version: back.version, project: back, ops: [] }
+      }
+      // what this style cannot take is set aside clause by clause: the rest goes through, the dropped part is named
+      const split = dropUnsupported(request, style)
+      if (!split.text) {
+        const no = split.dropped.map((d) => d.why).join(' ')
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'unsupported', reply: no, ops: [] })
         return { applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], credits: owner.credits, version: p.version }
       }
+      const asked = split.text
       if (Array.isArray(fixOps) && fixOps.length) {
-        diff = { ops: fixOps.slice(0, 8), reply: request, confidence: 1 }
+        diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
       } else
       try {
-        diff = await interpreter.ask({ request, program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
+        diff = await interpreter.ask({ request: asked, program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
         meta = { usage: diff.usage, cost: diff.cost, ms: diff.ms, model: diff.model }
         logInterpret({ request, client: p.email, projectId: p.id, rooms: rooms.length, diff: { ops: diff.ops, reply: diff.reply, confidence: diff.confidence }, verdict: diff.confidence < 0.5 || !diff.ops.length ? 'unsure' : 'diff', ...meta })
       } catch (e) {
         if (!e.unconfigured) logInterpret({ request, client: p.email, projectId: p.id, verdict: e.timeout ? 'timeout' : e.refusal ? 'refusal' : 'error', error: String(e.message).slice(0, 200), ms: e.ms, cost: e.cost, usage: e.usage, model: interpreter.model })
-        diff = regexOps(request, rooms, kit, lot)
+        diff = regexOps(asked, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
       // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
       const edits = editsOf(await store.versions.list(p.id))
-      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits })
+      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits, unsupported: split.dropped })
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], credits: owner.credits, version: p.version }
       const charged = await store.users.charge(p.userId, now())
@@ -194,6 +213,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const n = p.version + 1
       const t = now()
       await store.versions.add({ projectId: p.id, n, at: t, kind: 'change', text: request, credit: 1, rooms: result.rooms, reply: result.reply, source, ops: result.ops, did: result.did })
+      p.program = this.followPlan(p.program, result.rooms) // the stored program follows the drawn plan (round 8)
       p.version = n
       p.creditsUsed = (p.creditsUsed || 0) + 1
       p.updatedAt = t
@@ -223,6 +243,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       p.updatedAt = t
       if (refund) await store.users.addCredits(p.userId, refund, t)
       await store.versions.add({ projectId: p.id, n: p.version, at: t, kind: 'rollback', text: `Back to version ${k}`, rollbackOf: k, credit: 0, rooms: want.rooms })
+      p.program = this.followPlan(p.program, want.rooms)
       await store.projects.put(p)
       await event('project', `${p.client}: back to version ${k}${refund ? `, ${refund} credit${refund === 1 ? '' : 's'} returned` : ''}`, { projectId: p.id })
       return { ...(await this.detail(p)), refunded: refund }

@@ -33,6 +33,8 @@ function suggestionsFor(rooms, kit) {
 /** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
 const standingEdits = (history) => history.flatMap((m, i) => (m.who === 'you' && !m.undone && history[i + 1]?.applied && history[i + 1].ops?.length ? [{ text: m.text, ops: history[i + 1].ops }] : []))
 
+const UNDO_RE = /^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i
+
 /** A phone-width screen: no 3D tags, they pile up. */
 function useNarrow() {
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches)
@@ -108,6 +110,16 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       setBusy(false)
       return
     }
+    // "undo", "go back": the last change comes off, the credit comes back; no model, no charge
+    if (!fix && UNDO_RE.test(q)) {
+      setHistory((h) => [...h, { who: 'you', text: q }])
+      if (!canUndo) {
+        setHistory((h) => [...h, { who: 'house', text: 'There is nothing to undo yet.', applied: false, source: 'fallback' }])
+        return
+      }
+      undoLast()
+      return
+    }
     setBusy(true)
     setHistory((h) => [...h, { who: 'you', text: q }])
     const before = { area, estimate, rooms, credits }
@@ -121,7 +133,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       } else {
         const opts = { lot, history: standingEdits(history) }
         if (fix) {
-          opts.interpreter = async () => ({ ops: fix.ops, reply: q, confidence: 1 })
+          opts.interpreter = async () => ({ ops: fix.ops, reply: '', confidence: 1 }) // the answer says what was done, not the button's question
           opts.report = false
         }
         res = await interpretRequest(q, rooms, program, style, opts)
