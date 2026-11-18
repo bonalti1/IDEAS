@@ -125,6 +125,8 @@ export const COMPACT_PLAN = {
     { k: 'table', room: 'dining', x: 31, y: 3.5, w: 3.5, d: 5.5 },
     { k: 'shelves', room: 'pantry', x: 17.3, y: 27.75, w: 2.9, d: 1.25 },
     { k: 'bench', room: 'mud', x: 20.5, y: 26.6, w: 1.2, d: 2.4 },
+    // the entry zone (round 8, item 19): a bench-and-hook wall inside the front door, no foyer
+    { k: 'bench', room: 'living', x: 15.5, y: 47.5, w: 1.5, d: 3.5 },
     { k: 'washer', room: 'laundry', x: 27.8, y: 26.5, w: 2.25, d: 2.5 },
     { k: 'dryer', room: 'laundry', x: 30.05, y: 26.5, w: 2.25, d: 2.5 },
     { k: 'wh', room: 'laundry', x: 33, y: 27, w: 2, d: 2 },

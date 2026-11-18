@@ -154,9 +154,13 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         {checking && !checked ? (
           <p className="muted fit-note">Checking the lot…</p>
         ) : check.ok ? (
-          <p className="fine">{trimmed ? `Fits once trimmed about ${trimmed}% to stay inside the setbacks on this lot.` : 'Passes the setback, size and coverage rules on this lot.'}</p>
+          <p className="fine">
+            {trimmed ? `Fits once trimmed about ${trimmed}% to stay inside the setbacks on this lot.` : 'Passes the setback, size and coverage rules on this lot.'}
+            {checking && <span className="muted fit-note"> Checking the lot…</span>}
+          </p>
         ) : (
           <p className="fine bad">
+            {checking && <span className="muted fit-note">Checking the lot… </span>}
             Does not fit this lot: {check.reasons[0]}
             {check.maxSqft ? (
               <>
@@ -176,6 +180,8 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
               </>
             ) : check.need ? (
               ` This style's smallest plan is about ${check.need.houseWidth} by ${check.need.houseDepth} ft; the buildable area here is ${check.need.lotWidth} by ${check.need.lotDepth} ft. It needs a wider lot, or another style once more kits are ready.`
+            ) : lot?.spec?.noStreetGarage && program.garage > 0 ? (
+              ' With the deed restriction (no garage facing the street) the garage has to load from the side or a side street, and that needs a wider lot. Try fewer cars, or no garage.'
             ) : (
               ' Try fewer rooms or a smaller garage.'
             )}

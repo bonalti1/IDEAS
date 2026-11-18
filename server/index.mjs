@@ -245,7 +245,11 @@ route('GET', '/api/admin/allowance', 'drafter', async (req, res) => json(res, 20
 route('PUT', '/api/admin/allowance', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.setAllowanceDefault((await readJson(req, { default: 'number' })).default, ctx.user), req))
 route('POST', '/api/review/:id/allowance', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.grantAllowance(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { add: 'number', note: 'string?' })), req))
 // the office estimate (round 8, M2): drafters and admins only; a homeowner gets 403 from the role check
-route('GET', '/api/review/:id/estimate', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.estimateFor(await projects.load(ctx.user, p.id, { drafter: true })), req))
+route('GET', '/api/review/:id/estimate', 'drafter', async (req, res, p, ctx) => {
+  const url = new URL(req.url, 'http://x')
+  const u = url.searchParams.get('upgrades') // "brick,plate10"; "none" switches every adder off; absent: the style's own
+  json(res, 200, await projects.estimateFor(await projects.load(ctx.user, p.id, { drafter: true }), { upgrades: u === null ? null : u === 'none' ? [] : u.split(',').map((x) => x.trim()).filter(Boolean) }), req)
+})
 
 // ── drafter review ─────────────────────────────────────────────────────────
 route('GET', '/api/review', 'drafter', async (req, res) => json(res, 200, await projects.inbox(), req))
@@ -410,6 +414,15 @@ route('GET', '/api/interpret/log', 'drafter', async (req, res) => {
 })
 
 // ── health & admin ─────────────────────────────────────────────────────────
+// test-only (DRAFTHOUSE_TEST_ROUTES=1): an unexpected error and an error that hides its words, to prove the 500 path
+if (/^(1|true)$/i.test(process.env.DRAFTHOUSE_TEST_ROUTES || '')) {
+  route('GET', '/api/_test/boom', 'public', async (req) => {
+    const mode = new URL(req.url, 'http://x').searchParams.get('mode')
+    if (mode === 'hidden') throw Object.assign(new Error('a detail the client must not see'), { status: 500, expose: false })
+    if (mode === 'own') throw Object.assign(new Error('the plat reader is resting'), { status: 503 })
+    throw new TypeError('boom: cannot read properties of undefined')
+  })
+}
 route('GET', '/api/health', 'public', async (req, res, p, ctx) => {
   const h = await health()
   // without a key (the hosting health probe, anyone on the internet) only the verdict is shown
@@ -450,13 +463,15 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
-    const status = e.status || (e.message === 'body too large' ? 413 : 500)
-    // an error with no status of its own is the office's fault: the detail goes to the log, the client gets a
-    // plain line. A 503 the code meant for the client ("payments are not set up yet") keeps its words
-    const unexpected = !e.status && status >= 500
-    if (status >= 500) console.error(`[api] ${req.method} ${req.url} → ${status}:`, e?.stack || e)
-    const error = unexpected ? 'Something went wrong on our side; the office has the detail. Try again in a moment.' : String(e.message || e)
-    json(res, status, { error, ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
+    // an error with a status of its own and expose not false returns its own words (a 503 the code meant for the
+    // client, a 409, a 400). Anything else is the office's fault: 500, a plain line with a request id, and the
+    // detail and stack in the log under the same id (round 8, item 3)
+    const own = !!e.status && e.expose !== false
+    const status = own ? e.status : e.message === 'body too large' ? 413 : 500
+    const requestId = own && status < 500 ? null : crypto.randomBytes(4).toString('hex')
+    if (status >= 500) console.error(`[api] ${req.method} ${req.url} → ${status} (request ${requestId}):`, e?.stack || e)
+    const error = own ? String(e.message || e) : status === 413 ? 'body too large' : `Something went wrong on our side; the office has been told. Reference ${requestId}.`
+    json(res, status, { error, ...(requestId ? { requestId } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })
 

@@ -439,3 +439,65 @@ test('screens: Lot, rooms, Draft, options and Send as a homeowner at 1440 and 39
   assert.ok(!/Buy changes|Credits on your account|billing=success/.test(js), 'no Billing screen chunk in dist')
   assert.ok(!fs.readdirSync('dist/assets').some((f) => /^Billing-/.test(f)), 'no Billing chunk file')
 })
+
+// ── round 8, item 1: the rooms step on a slow phone ─────────────────────────────────────────────
+test('rooms step at 390 px with 6x CPU throttling: ten fast taps on bedrooms never block the main thread over 200 ms, and the meter says "Checking the lot…" then the result', { timeout: 400000 }, async (t) => {
+  const { chromium } = await import('playwright-core')
+  const app = await preview(t)
+  await startServer(t, { PORT: String(API_PORT), DRAFTHOUSE_APP_ORIGIN: app })
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' })
+  t.after(() => browser.close())
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const page = await ctx.newPage()
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto(app, { waitUntil: 'domcontentloaded' })
+  await page.locator('#signin-name').fill('Ana Garza')
+  await page.locator('#signin-email').fill(`ana-slow-${Date.now().toString(36)}@example.com`)
+  await page.getByRole('button', { name: /Continue|Email me/ }).click()
+  await page.locator('#start-address').waitFor({ timeout: 20000 })
+  await page.locator('#start-address').fill('1300 W Nolana Ave, McAllen, TX 78504')
+  await page.getByRole('button', { name: 'Find my lot' }).click()
+  await page.locator('#lot-city').waitFor({ timeout: 20000 })
+  await page.locator('#lot-city').selectOption('mcallen')
+  const confirm = page.locator('#lot-confirm')
+  if (await confirm.count()) await confirm.check()
+  await page.getByRole('button', { name: /pick a style/ }).click()
+  await page.getByRole('button', { name: /Modern Farmhouse/ }).click()
+  await page.getByRole('button', { name: /Next, rooms/ }).click()
+  await page.getByRole('button', { name: 'More Bedrooms' }).waitFor({ timeout: 20000 })
+  await page.waitForTimeout(1500)
+  // a slow phone: 6x CPU throttling through the devtools protocol, and a long-task observer in the page
+  const cdp = await ctx.newCDPSession(page)
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 })
+  await page.evaluate(() => {
+    window.__long = []
+    window.__checking = 0
+    new PerformanceObserver((list) => list.getEntries().forEach((e) => window.__long.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: false })
+    const watch = () => {
+      if (/Checking the lot…/.test(document.body.innerText)) window.__checking++
+      requestAnimationFrame(watch)
+    }
+    requestAnimationFrame(watch)
+  })
+  const more = page.getByRole('button', { name: 'More Bedrooms' })
+  const fewer = page.getByRole('button', { name: 'Fewer Bedrooms' })
+  for (let i = 0; i < 10; i++) {
+    await (i % 2 === 0 ? more : fewer).click({ force: true, noWaitAfter: true })
+    await page.waitForTimeout(60)
+  }
+  // the meter settles on a verdict
+  await page.locator('.fit-note, .fine').filter({ hasText: /Passes the setback|Does not fit|Fits once trimmed|Checking the lot/ }).first().waitFor({ timeout: 60000 })
+  await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 90000 })
+  await page.waitForTimeout(500)
+  const { long, checking } = await page.evaluate(() => ({ long: window.__long, checking: window.__checking }))
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
+  const worst = Math.max(0, ...long)
+  console.log(`  rooms step at 390 px, 6x CPU: ${long.length} long task${long.length === 1 ? '' : 's'}, worst ${worst} ms; "Checking the lot…" seen on ${checking} frame${checking === 1 ? '' : 's'}`)
+  assert.ok(worst <= 200, `the main thread was blocked for ${worst} ms (${long.join(', ')})`)
+  assert.ok(checking > 0, 'the meter said "Checking the lot…" while the worker ran')
+  const text = await page.evaluate(() => document.body.innerText)
+  assert.match(text, /Passes the setback|Does not fit this lot|Fits once trimmed/, 'then the result')
+  assert.deepEqual(errors, [])
+  await ctx.close()
+})
