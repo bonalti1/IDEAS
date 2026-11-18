@@ -52,5 +52,15 @@ services:
         sync: false
       - key: BACKUP_HOUR_UTC      # 08:00 UTC is 2 am in Texas
         value: "8"
+      - key: PARCEL_DAILY_CHECK      # round 7: the three test addresses against the county parcel layers once a day; emails on failure
+        value: "1"
+      - key: REGRID_API_TOKEN        # round 7: dormant paid parcel fallback; leave EMPTY until the office turns it on (decisions C1). Never commit a token.
+        sync: false
+      - key: REGRID_MONTHLY_CAP
+        value: "1500"
+      - key: ASCE_HAZARD_API_KEY     # round 7: dormant; the wind speed is a drafter lookup per city until this is set. Never commit a key.
+        sync: false
+      - key: CAD_POSTGIS             # round 7, item 12: "1" only once the monthly CAD import is agreed and loaded
+        value: "0"
       - key: INTERPRET_MODEL
         value: claude-opus-5-5
