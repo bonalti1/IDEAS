@@ -396,7 +396,11 @@ const server = http.createServer(async (req, res) => {
     }
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
-    json(res, e.status || (e.message === 'body too large' ? 413 : 500), { error: String(e.message || e), ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
+    const status = e.status || (e.message === 'body too large' ? 413 : 500)
+    // a 500 is the office's fault: the detail goes to the log, the client gets a plain line
+    if (status >= 500) console.error(`[api] ${req.method} ${req.url} → ${status}:`, e?.stack || e)
+    const error = status >= 500 ? 'Something went wrong on our side; the office has the detail. Try again in a moment.' : String(e.message || e)
+    json(res, status, { error, ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })
 
