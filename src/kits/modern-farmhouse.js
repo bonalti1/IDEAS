@@ -6,6 +6,7 @@
 
 import { NARROW_PLAN } from './farmhouse-narrow.js'
 import { COMPACT_PLAN } from './farmhouse-compact.js'
+import { frontGarageVariant } from './farmhouse-front-garage.js'
 
 export const KIT = {
   id: 'farmhouse',
@@ -259,7 +260,7 @@ export const KIT = {
       { id: 'd-rear', room: 'living', axis: 'h', x: 38, y: 12.25, w: 6, swing: 1, pair: true, size: 'exteriorPair', exterior: true },
       // the mud room opens off the kitchen through a pocket door (no leaf to meet the back door's);
       // the gallery is a cased opening off the dining room; the pantry opens off the gallery's end
-      { id: 'd-pantry', room: 'pantry', axis: 'h', x: 59, y: 19.75, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
+      { id: 'd-pantry', room: 'pantry', axis: 'h', x: 59, y: 19.75, w: 2.5, pocket: true, size: 'interior' },
       { id: 'd-kit-mud', room: 'mud', axis: 'v', x: 57, y: 13.75, w: 2.5, pocket: true, size: 'interior' },
       { id: 'd-gallery', room: 'mhall', axis: 'v', x: 57, y: 29.25, w: 3, cased: true },
       { id: 'd-hall-liv-n', room: 'living', axis: 'v', x: 19.75, y: 14.75, w: 2.5, cased: true },
@@ -420,6 +421,10 @@ export const KIT = {
 }
 
 // Heights (ft) and labels for fixtures, shared by the viewers and the IFC export.
+// the garage-forward variant for 70 to 100 ft lots (src/kits/farmhouse-front-garage.js): the standard plan with the
+// garage at the front-right corner; the drafter picks it when the standard plan's garage does not fit beside the house
+KIT.plans.frontgarage = frontGarageVariant(KIT.plan)
+
 export const FIXTURE_H = { bed: 2, sofa: 2.3, coffee: 1.5, table: 2.5, desk: 2.5, tv: 2.2, counter: 3, island: 3, sink: 3.1, range: 3, fridge: 6, washer: 3, dryer: 3, wh: 5, toilet: 1.4, shower: 0.3, vanity: 2.8, linen: 6, shelves: 6, bench: 1.5 }
 export const FIXTURE_NAME = { bed: 'Bed', sofa: 'Sofa', coffee: 'Coffee table', table: 'Dining table', desk: 'Desk', tv: 'Media wall', counter: 'Counter', island: 'Island', sink: 'Sink', range: 'Range', fridge: 'Refrigerator', washer: 'Washer', dryer: 'Dryer', wh: 'Water heater', toilet: 'Water closet', shower: 'Shower', vanity: 'Vanity', linen: 'Linen cabinet', shelves: 'Shelving', bench: 'Bench' }
 // Window sill heights from the schedule heads (ft): A 7'-0" head, 60" tall, etc.

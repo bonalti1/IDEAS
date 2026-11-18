@@ -55,6 +55,7 @@ export function convertedKit() {
   fs.mkdirSync(out, { recursive: true })
   fs.copyFileSync('src/kits/modern-farmhouse.js', path.join(out, 'modern-farmhouse.js'))
   fs.copyFileSync('src/kits/farmhouse-narrow.js', path.join(out, 'farmhouse-narrow.js'))
+  fs.copyFileSync('src/kits/farmhouse-front-garage.js', path.join(out, 'farmhouse-front-garage.js'))
   const r = spawnSync(py, ['-I', 'scripts/kit-from-ifc.py', ifcPath, '--id', 'garzaifc', '--name', 'Garza (IFC)', '--out', out, '--quiet'], { encoding: 'utf8' })
   if (r.status !== 0) throw new Error(r.stderr)
   // the module is plain data around one JSON literal: read it here so the matrix can be declared synchronously

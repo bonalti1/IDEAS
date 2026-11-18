@@ -78,7 +78,7 @@ for (const [lotName, lot] of Object.entries(LOTS)) {
   }
 }
 
-test('the narrow plan: 3/2 at 1,800 sf and 4/2 at 2,200 sf pass the audit on a 50 ft lot, within 3% of the size asked', () => {
+test('the narrow plan: 3/2 at 1,800 sf and 4/2 at 2,200 sf pass the audit on a 50 ft lot, within 3% of the size drafted (the 3/2 at the plan\'s smallest, about 1,900 sf, said so)', () => {
   const lot = LOTS['narrow 50 x 120']
   for (const program of [{ ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 2, sqft: 1800 }, { ...DEFAULT_PROGRAM, beds: 4, baths: 2, halfBath: false, office: false, garage: 2, sqft: 2200 }]) {
     const f = fitsLot(program, style, lot)
@@ -90,7 +90,9 @@ test('the narrow plan: 3/2 at 1,800 sf and 4/2 at 2,200 sf pass the audit on a 5
     const a = auditPlan(rooms, drafted, kit, lot)
     assert.deepEqual(a.errors.map((e) => e.message), [])
     assert.ok(Math.abs(a.measures.livingSf - asked) / asked <= 0.03, `${a.measures.livingSf} sf for ${asked} (asked ${program.sqft})`)
-    assert.ok(asked <= program.sqft * 1.03, `the plan's smallest size ${asked} is within 3% of ${program.sqft}`)
+    // round 6 moved the dining room and the kitchen to the rear and gave Bedroom 3 a hall and the hall bath: the
+    // plan's smallest 3/2 is about 1,900 sf (the rooms step says so and offers it)
+    assert.ok(asked <= program.sqft * 1.06, `the plan's smallest size ${asked} is within 6% of ${program.sqft}`)
     assert.equal(rooms.find((r) => r.kind === 'roof')?.plan, 'narrow')
   }
 })
@@ -132,5 +134,32 @@ test('every door and window is a catalog size, and the rooms are still rooms', (
       rooms.filter((e) => e.kind === 'window' && !e.dormer).forEach((w) => assert.ok([36, 72, 42, 24, 84].includes(Math.round(w.span * 12)), `${w.id} ${Math.round(w.span * 12)}"`))
       assert.ok(rooms.filter(isRoom).length >= 10)
     }
+  }
+})
+
+// round 6: on the 100 ft McAllen lot and the 110 ft corner lot the standard plan's garage no longer costs the house
+// its size: the garage-forward variant drafts the program as asked, within 3%, with a short driveway
+test('the McAllen and corner lots draft the 4/3.5 2-car at 2,800 sf and the McAllen 5/4 3-car (side by side) at 3,500 sf within 3%, garage forward, driveway under 45 ft', () => {
+  const cases = [
+    ['McAllen 100 x 150', PROGRAMS['4/3.5 office 2-car 2,800 sf']],
+    ['McAllen 100 x 150', PROGRAMS['5/4 3-car 3,500 sf']],
+    ['corner 110 x 140', PROGRAMS['4/3.5 office 2-car 2,800 sf']],
+  ]
+  for (const [lotName, program] of cases) {
+    const lot = LOTS[lotName]
+    const f = fitsLot(program, style, lot)
+    assert.ok(f.ok, `${lotName}: the program as asked fits (${f.reasons.join(' | ')})`)
+    const rooms = generateRooms(program, style, lot)
+    const a = auditPlan(rooms, program, kit, lot)
+    assert.deepEqual(a.errors.map((e) => e.message), [], lotName)
+    assert.ok(a.measures.livingSf >= 0.97 * program.sqft && a.measures.livingSf <= 1.03 * program.sqft, `${lotName}: ${a.measures.livingSf} sf for ${program.sqft}`)
+    const garage = rooms.find((r) => isRoom(r) && r.kind === 'garage')
+    assert.ok(garage && !garage.tandem && Math.max(garage.w, garage.d) >= (program.garage >= 3 ? 32 : 22), `${lotName}: a ${program.garage}-car garage side by side (${garage && `${garage.w} x ${garage.d}`})`)
+    assert.ok(rooms.some((r) => isRoom(r) && r.kind === 'office') === !!program.office, `${lotName}: the office kept`)
+    assert.ok(a.measures.driveway && !a.measures.driveway.problem && a.measures.driveway.lengthFt <= 45, `${lotName}: driveway ${JSON.stringify(a.measures.driveway)}`)
+    assert.equal(rooms.find((r) => r.kind === 'roof')?.plan, 'frontgarage', `${lotName}: the garage-forward plan`)
+    // the garage's face stands at or ahead of the porch line
+    const porch = rooms.find((r) => isRoom(r) && r.kind === 'frontPorch')
+    if (porch) assert.ok(garage.local[1] + garage.d / 2 >= porch.local[1] + porch.d / 2 - 0.1, `${lotName}: the garage face is at or ahead of the porch line`)
   }
 })
