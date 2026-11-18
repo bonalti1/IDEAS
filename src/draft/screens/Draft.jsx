@@ -4,7 +4,7 @@ import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, money, sf } from '../ui.jsx'
 import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
 import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
-import { optionTopic, optionsFor, TOPIC_NAMES } from '../lib/options.js'
+import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/options.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 
@@ -101,7 +101,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       setBusy(true)
       setHistory((h) => [...h, { who: 'you', text: q }])
       await new Promise((r) => setTimeout(r, 30))
-      const { options } = optionsFor(topic, rooms, program, style, lot, { history: standingEdits(history) })
+      // built one candidate a turn, so the spinner paints between them instead of the page freezing
+      const { options } = await optionsForAsync(topic, rooms, program, style, lot, { history: standingEdits(history) })
       const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
       setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; the others cost nothing.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
       setBusy(false)

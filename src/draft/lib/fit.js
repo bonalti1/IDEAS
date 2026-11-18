@@ -74,13 +74,16 @@ export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
     const inRange = (plan) => !plan.sqft || !program.sqft || (program.sqft >= plan.sqft[0] && program.sqft <= plan.sqft[1])
     const gap = (plan) => (!plan.sqft || !program.sqft ? 0 : program.sqft < plan.sqft[0] ? plan.sqft[0] - program.sqft : program.sqft > plan.sqft[1] ? program.sqft - plan.sqft[1] : 0)
     const plansByFit = Object.values(kit.plans || {}).sort((a, b) => inRange(b) - inRange(a) || gap(a) - gap(b))
+    // a narrow lot wants the narrow plan first; a wide one keeps the rooms asked for and gives up the garage before the plan
+    const narrowLot = envelopeSize(lot)[0] < 60
     const otherPlans = plansByFit.map((plan) => {
       const within = inRange(plan) ? programWithin(plan, program) : { ...programWithin(plan, program), sqft: Math.min(Math.max(program.sqft, plan.sqft[0]), plan.sqft[1]) }
       const same = JSON.stringify(within) === JSON.stringify(program)
-      return same ? null : { label: `as ${within.beds} bed, ${within.baths}${within.halfBath ? '.5' : ''} bath${within.garage ? `, ${within.garage}-car` : ', no garage'}${within.office ? '' : program.office ? ', no office' : ''} (what the ${plan.id} plan holds)`, program: within, plan: plan.id }
+      // the plan holds the very program asked for, only smaller: on a narrow lot that is the offer (the 4/2 at
+      // 2,350 sf on the 50 ft lot comes back as the narrow plan's 4/2 at 2,200); elsewhere the fit search names the size
+      if (same && !narrowLot) return null
+      return { label: same ? `smaller, as the ${plan.id} plan draws it` : `as ${within.beds} bed, ${within.baths}${within.halfBath ? '.5' : ''} bath${within.garage ? `, ${within.garage}-car` : ', no garage'}${within.office ? '' : program.office ? ', no office' : ''} (what the ${plan.id} plan holds)`, program: within, plan: plan.id }
     })
-    // a narrow lot wants the narrow plan first; a wide one keeps the rooms asked for and gives up the garage before the plan
-    const narrowLot = envelopeSize(lot)[0] < 60
     const tries = [
       // one bay less first: it keeps every room the client asked for
       program.garage > 1 && { label: `with a ${program.garage - 1}-car garage`, program: { ...program, garage: program.garage - 1 } },

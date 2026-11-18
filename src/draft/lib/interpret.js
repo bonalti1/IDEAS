@@ -343,7 +343,10 @@ export function decide(diff, rooms, program, style, kit, source, lot, opts = {})
     if (scaleOp && caused.length) return rescale(caused.some((r) => /setback|cover|lot/i.test(r)) ? 'would run past the setbacks' : `would not pass (${caused[0].replace(/\.$/, '')})`)
     const parts = inParts()
     if (parts) return parts
-    const fixes = suggestFixes(diff.ops, caused.length ? caused : preexisting, rooms, next.rooms, program, style, kit, L, caused.length > 0)
+    let fixes = suggestFixes(diff.ops, caused.length ? caused : preexisting, rooms, next.rooms, program, style, kit, L, caused.length > 0)
+    // a garage that breaks the rules where it was asked (the garage-forward plan cannot swap its garage in place):
+    // one bay less, a tandem bay, or a new draft with that garage come first
+    if (caused.length && diff.ops.some((o) => o.op === 'garage' || (o.op === 'add' && o.kind === 'garage'))) fixes = [...garageFallbacks(diff.ops, rooms, program, style, kit, L, edits, depth), ...fixes].filter((f, i, all) => all.findIndex((g) => g.label === f.label) === i).slice(0, 3)
     const reply = caused.length
       ? `I can't do that one. ${caused.join(' ')}${preexisting.length ? ` The plan also has a problem from before: ${preexisting.join(' ')}` : ''}`
       : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting.join(' ')}`

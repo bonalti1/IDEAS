@@ -42,6 +42,9 @@ function candidates(topic, rooms, kit) {
       if (cars < 3) out.push({ id: `garage-${cars + 1}`, label: `${cars + 1}-car garage`, ops: [{ op: 'garage', cars: cars + 1 }] })
       if (cars > 1) out.push({ id: `garage-${cars - 1}`, label: `${cars - 1}-car garage`, ops: [{ op: 'garage', cars: cars - 1 }] })
       out.push({ id: 'garage-none', label: 'No garage', ops: [{ op: 'remove', room: garage.id }] })
+      // a plan whose garage cannot change in place (the garage-forward plan) is drawn again with the other count
+      if (cars < 3) out.push({ id: `garage-redraft-${cars + 1}`, label: `${cars + 1}-car garage (new draft)`, ops: [{ op: 'redraft', program: { garage: cars + 1 } }] })
+      if (cars > 1) out.push({ id: `garage-redraft-${cars - 1}`, label: `${cars - 1}-car garage (new draft)`, ops: [{ op: 'redraft', program: { garage: cars - 1 } }] })
       return out
     }
     for (const n of [2, 1, 3]) out.push({ id: `garage-${n}`, label: `${n}-car garage`, ops: [{ op: 'add', kind: 'garage', w: perCar * n }] })

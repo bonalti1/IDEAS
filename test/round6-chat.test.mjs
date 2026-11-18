@@ -144,6 +144,25 @@ test('a garage that will not go where asked: plain words, and the next best thin
   }
 })
 
+test('on the garage-forward plan (McAllen) "make the garage 3 cars" applies, or is refused with a fix that applies and draws the 3-car; the garage options offer more than "no garage"', async () => {
+  const mcallen = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'E Nolana Ave', setbacks: {} })
+  const rooms = generateRooms(DEFAULT_PROGRAM, style, mcallen)
+  assert.equal(planIdOf(rooms), 'frontgarage')
+  const r = await ask('make the garage 3 cars', rooms, DEFAULT_PROGRAM, mcallen)
+  let out = r.applied ? r.rooms : null
+  if (!r.applied) {
+    const fix = r.fixes.find((f) => /3-car|Re-draft/.test(f.label))
+    assert.ok(fix, `a 3-car fix is offered: ${r.reply} [${r.fixes.map((f) => f.label).join(' | ')}]`)
+    const d = decide({ ops: fix.ops, reply: fix.label, confidence: 1 }, rooms, DEFAULT_PROGRAM, style, kit, 'fix', mcallen)
+    assert.ok(d.applied, d.reply)
+    out = d.rooms
+  }
+  assert.equal(programOf(out, DEFAULT_PROGRAM).garage, 3)
+  assert.deepEqual(errors(out, DEFAULT_PROGRAM, mcallen), [])
+  const { options } = optionsFor('garage', rooms, DEFAULT_PROGRAM, style, mcallen)
+  assert.ok(options.some((o) => /3-car/.test(o.label)), options.map((o) => o.label).join(' | '))
+})
+
 test('the Garza sample: at least 9 of the 10 requests apply and pass the audit', async () => {
   const program = { ...kit.reference.program }
   const table = []

@@ -124,8 +124,18 @@ async function flow(viewport, tag) {
   note(`${tag}: first draft "${header}"`)
   await page.getByRole('button', { name: 'Site', exact: true }).click()
   await shot('01-site-plan', { wait: 1400 })
-  const r2 = await ask(page, 'make the garage 3 cars')
+  let r2 = await ask(page, 'make the garage 3 cars')
   note(`${tag}: "make the garage 3 cars" → ${r2.held ? 'REFUSED' : 'applied'}: ${r2.text.slice(0, 110)}`)
+  if (r2.held) {
+    // round 6: a refusal comes with the next best thing; the client taps it
+    const fix = page.locator('.fixes button').first()
+    if (await fix.count()) {
+      const label = (await fix.textContent()).trim()
+      await fix.click()
+      r2 = await lastReply(page)
+      note(`${tag}: one tap on "${label}" → ${r2.held ? 'REFUSED' : 'applied'}: ${r2.text.slice(0, 140)}`)
+    } else note(`${tag}: NO FIX OFFERED`)
+  }
   if (phone) {
     // the chat: the user's bubble and the price note each in a row of its own
     await page.locator('.chat .log').scrollIntoViewIfNeeded()
