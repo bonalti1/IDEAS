@@ -89,7 +89,43 @@ const readBody = (req) =>
     req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
-const readJson = async (req) => JSON.parse((await readBody(req)).toString('utf8') || '{}')
+const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const bad = (status, message) => Object.assign(new Error(message), { status })
+/**
+ * The request body as a JSON object, or a 400 the client can read: "the request body is not JSON" on a
+ * parse error, "a JSON object is required" for null, a list, a number or a string. With `shape`
+ * ({ field: 'string' | 'number' | 'boolean' | 'array' | 'object' | 'string?' …, a trailing ? for optional })
+ * each named field is checked too, so a handler never dereferences a body it did not get.
+ */
+const readJson = async (req, shape = null) => {
+  const raw = (await readBody(req)).toString('utf8')
+  let body
+  try {
+    body = raw.trim() ? JSON.parse(raw) : {}
+  } catch {
+    throw bad(400, 'the request body is not JSON')
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw bad(400, 'a JSON object is required')
+  if (shape) need(body, shape)
+  return body
+}
+const TYPE = { string: (v) => typeof v === 'string', number: (v) => typeof v === 'number' && Number.isFinite(v), boolean: (v) => typeof v === 'boolean', array: (v) => Array.isArray(v), object: (v) => !!v && typeof v === 'object' && !Array.isArray(v) }
+/** Checks a body's fields against a shape (see readJson); throws a 400 that names the first field that is wrong. */
+function need(body, shape) {
+  for (const [field, spec] of Object.entries(shape)) {
+    const optional = spec.endsWith('?')
+    const type = spec.replace(/\?$/, '')
+    const v = body[field]
+    if (v === undefined || v === null) {
+      if (optional) continue
+      throw bad(400, `${field} is required`)
+    }
+    if (!TYPE[type](v)) throw bad(400, `${field} must be ${type === 'array' ? 'a list' : type === 'object' ? 'an object' : `a ${type}`}`)
+    if (type === 'array' && field === 'rooms' && v.some((r) => !r || typeof r !== 'object')) throw bad(400, 'rooms must be a list of rooms')
+    if (type === 'object' && Object.keys(v).some((k) => BAD_KEYS.has(k))) throw bad(400, `${field} has a key that is not allowed`)
+  }
+  if (Object.keys(body).some((k) => BAD_KEYS.has(k))) throw bad(400, 'a key in the body is not allowed')
+}
 const safe = (s) => String(s).replace(/[^A-Za-z0-9._-]/g, '_')
 const typeOf = (name) => (name.endsWith('.pdf') ? 'application/pdf' : name.endsWith('.json') ? 'application/json' : name.endsWith('.ifc') ? 'application/x-step' : name.endsWith('.rvt') ? 'application/vnd.autodesk.revit' : 'application/octet-stream')
 const sendFile = async (req, res, design, name) => {
@@ -128,27 +164,27 @@ async function queueJob(designId, extra = {}) {
 route('POST', '/api/auth/dev-login', 'app', async (req, res) => {
   if (!users.devMode) return json(res, 404, { error: 'local sign-in is off; sign in through Supabase' }, req)
   try {
-    json(res, 200, await users.devLogin(await readJson(req)), req)
+    json(res, 200, await users.devLogin(await readJson(req, { email: 'string', name: 'string?' })), req)
   } catch (e) {
     json(res, 400, { error: e.message }, req)
   }
 })
 route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: ctx.user, credits: ctx.user.credits || 0, freeCredits: users.freeCredits, auth: users.devMode ? 'local' : 'supabase' }, req))
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, (await store.projects.listForUser(ctx.user.id)).map(projects.ownerView), req))
-route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req)), req))
+route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req, { rooms: 'array', style: 'object', program: 'object', lot: 'object?', client: 'string?' })), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
-route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req)), req))
+route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req, { rooms: 'array?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?' })), req))
 route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { text: 'string', ops: 'array?' })
   json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
 })
-route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req)).version), req))
-route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req), saveDesign), req))
+route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req, { version: 'number' })).version), req))
+route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object', ifc: 'string?' }), saveDesign), req))
 
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
-route('PUT', '/api/admin/cities/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await lots.setCity(p.id, await readJson(req), ctx.user), req))
-route('POST', '/api/lot/plat', 'app', async (req, res) => json(res, 200, await lots.readPlat(await readJson(req)), req))
+route('PUT', '/api/admin/cities/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await lots.setCity(p.id, await readJson(req, {}), ctx.user), req))
+route('POST', '/api/lot/plat', 'app', async (req, res) => json(res, 200, await lots.readPlat(await readJson(req, { name: 'string?', data: 'string' })), req))
 route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
   const rec = await lots.plat(safe(p.id))
   const ext = rec?.ext || 'pdf'
@@ -173,7 +209,7 @@ route('GET', '/api/lot/flood', 'app', async (req, res) => {
 // ── billing: pricing, Stripe Checkout, the webhook, receipts ───────────────
 route('GET', '/api/billing', 'user', async (req, res, p, ctx) => json(res, 200, { credits: ctx.user.credits || 0, pricing: await billing.pricing(), mode: billing.mode, history: await billing.history(ctx.user) }, req))
 route('POST', '/api/billing/checkout', 'user', async (req, res, p, ctx) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { pack: 'string' })
   json(res, 200, await billing.checkout(ctx.user, body.pack, req.headers.origin || ''), req)
 })
 route('GET', '/api/billing/session/:id', 'user', async (req, res, p, ctx) => json(res, 200, await billing.session(ctx.user, p.id), req))
@@ -184,27 +220,27 @@ route('POST', '/api/billing/webhook', 'public', async (req, res) => {
 })
 route('PUT', '/api/admin/pricing', 'drafter', async (req, res, p, ctx) => {
   if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes prices' }, req)
-  json(res, 200, await billing.setPricing(await readJson(req), ctx.user), req)
+  json(res, 200, await billing.setPricing(await readJson(req, {}), ctx.user), req)
 })
 route('GET', '/api/admin/pricing', 'drafter', async (req, res) => json(res, 200, await billing.pricing(), req))
 route('GET', '/api/admin/payments', 'drafter', async (req, res) => json(res, 200, await store.payments.list(100), req))
 route('POST', '/api/admin/users/:id/credits', 'drafter', async (req, res, p, ctx) => {
   if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin grants credits' }, req)
-  const body = await readJson(req)
+  const body = await readJson(req, { credits: 'number', note: 'string?' })
   json(res, 200, await billing.grant(ctx.user, p.id, body.credits, body.note), req)
 })
 
 // ── drafter review ─────────────────────────────────────────────────────────
 route('GET', '/api/review', 'drafter', async (req, res) => json(res, 200, await projects.inbox(), req))
 route('GET', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: true }), { drafter: true }), req))
-route('POST', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.review(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req), queueJob), req))
-route('POST', '/api/review/:id/lot', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmLot(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req)), req))
+route('POST', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.review(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { decision: 'string', note: 'string?' }), queueJob), req))
+route('POST', '/api/review/:id/lot', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmLot(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { confirmed: 'boolean?', lot: 'object?', note: 'string?' })), req))
 route('GET', '/api/admin/users', 'drafter', async (req, res) => json(res, 200, await store.users.list(), req))
 route('POST', '/api/admin/users/:id/role', 'drafter', async (req, res, p, ctx) => {
   if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes roles' }, req)
   const u = await store.users.get(p.id)
   if (!u) return json(res, 404, { error: 'not found' }, req)
-  const { role } = await readJson(req)
+  const { role } = await readJson(req, { role: 'string' })
   if (!['client', 'drafter', 'admin'].includes(role)) return json(res, 400, { error: 'role must be client, drafter or admin' }, req)
   u.role = role
   await store.users.put(u)
@@ -215,7 +251,7 @@ route('POST', '/api/admin/users/:id/role', 'drafter', async (req, res, p, ctx) =
 // ── designs & jobs ─────────────────────────────────────────────────────────
 // direct design intake without an account (tests, scripts, the app when the client skipped sign-in): queued at once
 route('POST', '/api/designs', 'app', async (req, res) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { design: 'object', ifc: 'string?', client: 'string?' })
   if (!body.design || body.design.contract !== 1) return json(res, 400, { error: 'design with contract 1 required' }, req)
   const d = await saveDesign({ ...body.design, client: body.design.client || body.client }, body.ifc)
   const job = await queueJob(d.id)
@@ -229,7 +265,7 @@ route('GET', '/api/jobs/:id', 'any', async (req, res, p) => {
   j ? json(res, 200, j, req) : json(res, 404, { error: 'not found' }, req)
 })
 route('POST', '/api/jobs/claim', 'worker', async (req, res) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { worker: 'string?' })
   const job = await store.jobs.claim(body.worker || 'worker', now())
   if (!job) return json(res, 204, {}, req)
   await event('job', `${job.client}: ${job.worker} started building`, { jobId: job.id })
@@ -238,7 +274,7 @@ route('POST', '/api/jobs/claim', 'worker', async (req, res) => {
 route('POST', '/api/jobs/:id/progress', 'worker', async (req, res, p) => {
   const job = await store.jobs.get(p.id)
   if (!job) return json(res, 404, { error: 'not found' }, req)
-  const body = await readJson(req)
+  const body = await readJson(req, { step: 'string?', message: 'string?', pct: 'number?' })
   job.steps.push({ at: now(), step: body.step, message: body.message, pct: body.pct })
   job.updatedAt = now()
   await store.jobs.put(job)
@@ -247,7 +283,7 @@ route('POST', '/api/jobs/:id/progress', 'worker', async (req, res, p) => {
 route('POST', '/api/jobs/:id/complete', 'worker', async (req, res, p) => {
   const job = await store.jobs.get(p.id)
   if (!job) return json(res, 404, { error: 'not found' }, req)
-  const body = await readJson(req)
+  const body = await readJson(req, { outputs: 'array?', warnings: 'array?', fallbacks: 'array?', log: 'string?' })
   job.status = 'done'
   job.finishedAt = now()
   job.updatedAt = now()
@@ -264,7 +300,7 @@ route('POST', '/api/jobs/:id/complete', 'worker', async (req, res, p) => {
 route('POST', '/api/jobs/:id/fail', 'worker', async (req, res, p) => {
   const job = await store.jobs.get(p.id)
   if (!job) return json(res, 404, { error: 'not found' }, req)
-  const body = await readJson(req)
+  const body = await readJson(req, { error: 'string?', log: 'string?' })
   job.status = job.attempts < 2 ? 'queued' : 'failed'
   job.error = body.error || 'unknown error'
   job.log = (body.log || '').slice(-20000)
@@ -298,7 +334,7 @@ route('GET', '/files/:design/:name', 'any', (req, res, p) => sendFile(req, res, 
 
 // ── workers ────────────────────────────────────────────────────────────────
 route('POST', '/api/workers/heartbeat', 'worker', async (req, res) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { id: 'string', name: 'string?', checks: 'array?' })
   if (!body.id) return json(res, 400, { error: 'id required' }, req)
   let w = await store.workers.get(body.id)
   if (!w) {
@@ -312,7 +348,7 @@ route('POST', '/api/workers/heartbeat', 'worker', async (req, res) => {
 })
 route('GET', '/api/workers', 'drafter', async (req, res) => json(res, 200, (await health()).workers, req))
 route('POST', '/api/workers/:id/commands', 'drafter', async (req, res, p) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { command: 'string' })
   await store.commands.add({ id: id('cmd'), worker: p.id, command: body.command, at: now(), taken: null })
   await event('worker', `${p.id}: command "${body.command}" queued`, { worker: p.id })
   json(res, 200, { ok: true }, req)
@@ -320,8 +356,7 @@ route('POST', '/api/workers/:id/commands', 'drafter', async (req, res, p) => {
 
 // ── change interpreter for the no-account path (the app decides and keeps credits locally) ──
 route('POST', '/api/interpret', 'app', async (req, res) => {
-  const body = await readJson(req)
-  if (!body.text || !Array.isArray(body.rooms)) return json(res, 400, { error: 'text and rooms required' }, req)
+  const body = await readJson(req, { text: 'string', rooms: 'array', program: 'object?', kit: 'object?', lot: 'object?', client: 'string?' })
   const input = { request: String(body.text).slice(0, 500), program: body.program, kit: body.kit, rooms: body.rooms }
   try {
     const out = await interpreter.ask(input)
@@ -346,7 +381,7 @@ route('POST', '/api/interpret', 'app', async (req, res) => {
   }
 })
 route('POST', '/api/interpret/verdict', 'app', async (req, res) => {
-  const body = await readJson(req)
+  const body = await readJson(req, { text: 'string?', source: 'string?', reasons: 'array?', ops: 'array?', reply: 'string?', client: 'string?' })
   await logInterpret({ request: String(body.text || '').slice(0, 500), client: body.client || null, source: body.source, verdict: body.applied ? 'applied' : 'rejected', reasons: body.reasons || [], reply: body.reply, ops: body.ops })
   json(res, 200, { ok: true }, req)
 })
@@ -397,9 +432,11 @@ const server = http.createServer(async (req, res) => {
     json(res, 404, { error: 'no route', path: url.pathname }, req)
   } catch (e) {
     const status = e.status || (e.message === 'body too large' ? 413 : 500)
-    // a 500 is the office's fault: the detail goes to the log, the client gets a plain line
+    // an error with no status of its own is the office's fault: the detail goes to the log, the client gets a
+    // plain line. A 503 the code meant for the client ("payments are not set up yet") keeps its words
+    const unexpected = !e.status && status >= 500
     if (status >= 500) console.error(`[api] ${req.method} ${req.url} → ${status}:`, e?.stack || e)
-    const error = status >= 500 ? 'Something went wrong on our side; the office has the detail. Try again in a moment.' : String(e.message || e)
+    const error = unexpected ? 'Something went wrong on our side; the office has the detail. Try again in a moment.' : String(e.message || e)
     json(res, status, { error, ...(e.credits !== undefined ? { credits: e.credits } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })

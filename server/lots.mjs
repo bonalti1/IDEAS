@@ -129,10 +129,16 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
     async geocode(address) {
       const a = String(address || '').trim()
       if (a.length < 6) throw fail(400, 'address required')
+      if (a.length > 200) throw fail(400, 'the address is too long (200 characters at most)')
       const key = 'geo:' + a.toLowerCase().replace(/\s+/g, ' ')
       const cached = await store.meta.get(key)
       if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return cached
-      const geo = await fetch(`https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(a)}&benchmark=Public_AR_Current&vintage=Current_Current&layers=Counties,Incorporated%20Places&format=json`, { signal: AbortSignal.timeout(12000) })
+      let geo
+      try {
+        geo = await fetch(`https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(a)}&benchmark=Public_AR_Current&vintage=Current_Current&layers=Counties,Incorporated%20Places&format=json`, { signal: AbortSignal.timeout(12000) })
+      } catch (e) {
+        throw fail(502, "the address service didn't answer; try again in a moment or type the lot in")
+      }
       if (!geo.ok) throw fail(502, `geocoder answered ${geo.status}`)
       const match = (await geo.json()).result?.addressMatches?.[0]
       const table = await this.table()
