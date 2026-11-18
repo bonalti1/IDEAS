@@ -28,13 +28,17 @@ services:
         sync: false
       - key: DRAFTHOUSE_ADMINS       # comma-separated admin emails
         sync: false
-      - key: FREE_CREDITS_PER_ACCOUNT
+      - key: CHANGES_PER_PROJECT     # free changes a new plan starts with; the office dashboard overrides it
         value: "10"
-      - key: STRIPE_SECRET_KEY       # sk_test_... until the launch check, then sk_live_...
+      # Payments are off (round 8: no money in the client app; the office grants changes). These stay optional
+      # and unused until BILLING_ENABLED is set to "1"; the office removes their values, never this file.
+      # - key: BILLING_ENABLED
+      #   value: "1"
+      - key: STRIPE_SECRET_KEY       # optional, unused while BILLING_ENABLED is off
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET   # whsec_... from the webhook endpoint /api/billing/webhook
+      - key: STRIPE_WEBHOOK_SECRET   # optional, unused while BILLING_ENABLED is off
         sync: false
-      - key: APP_URL                 # the Netlify site, for Stripe's return
+      - key: APP_URL                 # optional, unused while BILLING_ENABLED is off (Stripe's return page)
         sync: false
       - key: DRAFTHOUSE_CLAUDE_KEY
         sync: false

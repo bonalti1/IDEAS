@@ -3,13 +3,14 @@
 // dashboard; the table saved there wins over this file. Every row starts unverified: confirm
 // each against the city's current zoning ordinance (R-1 or equivalent) before relying on it.
 export const CITY_DEFAULTS = {
-  mission: { name: 'Mission, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  mcallen: { name: 'McAllen, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  edinburg: { name: 'Edinburg, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  pharr: { name: 'Pharr, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  palmview: { name: 'Palmview, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, streetSide: 20, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  weslaco: { name: 'Weslaco, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  hidalgo: { name: 'Hidalgo County (unincorporated)', county: 'Hidalgo County', zoning: 'County subdivision rules', front: 25, side: 5, rear: 10, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  mission: { name: 'Mission, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  mcallen: { name: 'McAllen, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  edinburg: { name: 'Edinburg, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  pharr: { name: 'Pharr, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  palmview: { name: 'Palmview, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 20, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  weslaco: { name: 'Weslaco, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 20, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
+  harlingen: { name: 'Harlingen, TX', county: 'Cameron County', zoning: 'R-1 Single Family', front: 20, side: 5, rear: 10, garageFt: 20, garageSideEntryExempt: true, streetSide: 10, maxCoverage: 0.6, maxHeightFt: 35, minLotSf: 6000, verified: false }, // §111-118: a front-facing garage door 20 ft from the street, side-entry exempt
+  hidalgo: { name: 'Hidalgo County (unincorporated)', county: 'Hidalgo County', zoning: 'County subdivision rules', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
 }
 export const CITY_IDS = Object.keys(CITY_DEFAULTS)
 /** The counties we price in (src/draft/lib/pricing.js has the rates); the first four are the Rio Grande Valley. */
@@ -26,7 +27,12 @@ export function geoMessage(geo, table = CITY_DEFAULTS) {
   if (COUNTIES.includes(county)) return `We don't have rules for this address yet. ${county} is outside the Rio Grande Valley; we price it, and a drafter checks the setbacks before anything is drawn.`
   return `We don't have rules for this address yet. ${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'It'} is outside the Rio Grande Valley, where we build. You can still draft to see a plan; pick a county below for a price.`
 }
-export const RULE_FIELDS = ['front', 'side', 'rear', 'streetSide', 'maxCoverage', 'maxHeightFt', 'minLotSf']
+export const RULE_FIELDS = ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf']
+// the garage door's distance from the street line it faces (front or side street): 18 ft in McAllen, Mission, Pharr,
+// Palmview and Hidalgo County; 20 in Weslaco (side-street garage, UDO §2.3.4) and Harlingen (§111-118, unless
+// side-entry). Round 8, item 30(d); the round 7 jurisdiction table carries the sources.
+export const GARAGE_FT_DEFAULT = 18
+export const garageFt = (rules) => (rules && Number.isFinite(+rules.garageFt) && +rules.garageFt > 0 ? +rules.garageFt : GARAGE_FT_DEFAULT)
 
 /** The city table with the office's edits applied. */
 export function cityTable(overrides = {}) {
@@ -39,7 +45,8 @@ export function cityTable(overrides = {}) {
 export function rulesFor(cityId, overrides = {}, table = cityTable()) {
   const base = table[cityId] || table.hidalgo
   const r = { ...base }
-  for (const k of ['front', 'side', 'rear', 'streetSide']) if (overrides[k] !== undefined && overrides[k] !== null && overrides[k] !== '') r[k] = +overrides[k]
+  for (const k of ['front', 'side', 'rear', 'streetSide', 'garageFt']) if (overrides[k] !== undefined && overrides[k] !== null && overrides[k] !== '') r[k] = +overrides[k]
+  if (!r.garageFt) r.garageFt = 18
   return r
 }
 

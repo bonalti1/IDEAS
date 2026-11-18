@@ -72,15 +72,15 @@ test('a lot spec the office cannot build is refused at the door: 400 with a plai
   assert.ok(ch.status < 500, JSON.stringify(ch.body))
 })
 
-test('a fault on our side answers 500 with a generic line, logs the detail, and the server stays up', async (t) => {
+test('a 5xx the code meant for the client keeps its words (round 8), is logged, and the server stays up (before round 6 any 5xx crashed it)', async (t) => {
   const { base, log, alive } = await startServer(t)
   const ana = await who(base, 'ana@example.com', 'Ana Garza')
-  // the checkout without Stripe is a 503 the client sees plainly; before round 6 any 5xx crashed the server
-  const r = await j(await ana.post('/api/billing/checkout', { pack: 'pack5' }))
-  assert.ok(r.status >= 500, JSON.stringify(r))
-  assert.equal(r.body.error, 'Something went wrong on our side; the office has the detail. Try again in a moment.')
+  // the plat reader without a model is a 503 with a plain line of its own (billing is gone from the client, round 8)
+  const r = await j(await ana.post('/api/lot/plat', { name: 'plat.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQK' }))
+  assert.equal(r.status, 503, JSON.stringify(r))
+  assert.match(r.body.error, /plat|interpreter|not set up|key/i)
   assert.ok(alive(), 'the server did not crash')
-  assert.match(log(), /\[api\] POST \/api\/billing\/checkout → 5\d\d/, 'the detail is in the log')
+  assert.match(log(), /\[api\] POST \/api\/lot\/plat → 503/, 'the detail is in the log')
   const h = await fetch(base + '/api/health')
   assert.equal(h.status, 200)
 })
@@ -111,7 +111,7 @@ test('a fix the plan cannot take in place is a new draft through the office: "ad
   const rooms = gen(p32, style, lot)
   const made = await j(await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program: p32, rooms, client: 'Ana' }))
   assert.equal(made.status, 201, JSON.stringify(made.body))
-  const credits = made.body.credits
+  const credits = made.body.changesLeft
   // an edit first, so the re-draft has something to carry over (the first of these the narrow plan takes)
   let edit = null
   for (const text of ['make the pantry smaller', 'make bedroom 2 bigger', 'make the living room 1 foot deeper', 'make the primary closet bigger']) {
@@ -126,14 +126,82 @@ test('a fix the plan cannot take in place is a new draft through the office: "ad
   assert.equal(r.status, 200)
   assert.equal(r.body.applied, false)
   assert.match(r.body.reply, /no room for a garage/i)
-  assert.equal(r.body.credits, credits - 1, 'a refusal is not charged')
+  assert.equal(r.body.changesLeft, credits - 1, 'a refusal is not charged')
   const redo = r.body.fixes.find((f) => /Re-draft the house with a 2-car garage/.test(f.label))
   assert.ok(redo, JSON.stringify(r.body.fixes))
   const done = await j(await ana.post(`/api/projects/${made.body.id}/change`, { text: redo.label, ops: redo.ops }))
   assert.equal(done.body.applied, true, done.body.reply)
   assert.ok(done.body.rooms.some((x) => isRoom(x) && x.kind === 'garage'), 'the new draft has the garage')
   assert.ok(done.body.reply.includes(`still stand: "${edit}"`) || done.body.reply.includes(`Could not keep: "${edit}"`), `the earlier edit is accounted for: ${done.body.reply}`)
-  assert.equal(done.body.credits, credits - 2, 'one credit for the new draft')
+  assert.equal(done.body.changesLeft, credits - 2, 'one change for the new draft')
   const detail = await j(await ana.get(`/api/projects/${made.body.id}`))
   assert.equal(detail.body.versions[detail.body.versions.length - 1].kind, 'change')
+})
+
+// ── round 8 ──────────────────────────────────────────────────────────────────
+test('round 8: the stored program follows the drawn plan after a 5-step chat (Review and Send read the same numbers), and "undo" rolls back at no credit', async (t) => {
+  const { generateRooms: gen, DEFAULT_PROGRAM, programOf, floorArea } = await import('../src/draft/lib/layout.js')
+  const { base } = await startServer(t)
+  const ana = await who(base, 'ana@example.com', 'Ana Garza')
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const program = { ...DEFAULT_PROGRAM, sqft: 2800 }
+  const rooms = gen(program, style, lot)
+  const made = await j(await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program, rooms, client: 'Ana' }))
+  assert.equal(made.status, 201, JSON.stringify(made.body))
+  const id = made.body.id
+  const steps = ['make the house 2,400 sf', 'add a bedroom', 'add a bedroom', 'make the garage 3 cars', 'make the kitchen 2 feet wider']
+  let applied = 0
+  for (const text of steps) {
+    const r = await j(await ana.post(`/api/projects/${id}/change`, { text }))
+    if (r.body.applied) applied++
+  }
+  assert.ok(applied >= 4, `${applied} of 5 applied`)
+  const detail = await j(await ana.get(`/api/projects/${id}`))
+  const drawn = programOf(detail.body.rooms, detail.body.program)
+  const stored = detail.body.program
+  assert.equal(stored.beds, drawn.beds, 'beds follow the plan')
+  assert.equal(stored.garage, drawn.garage, 'the garage follows the plan')
+  assert.equal(stored.sqft, Math.round(floorArea(detail.body.rooms, 1) / 50) * 50, 'the living area follows the plan, to 50 sf')
+  assert.equal(stored.asked.sqft, 2800, 'the first ask is kept')
+  assert.equal(stored.asked.beds, 4)
+  const review = await j(await (await who(base, 'maria@drafthouse.test', 'Maria')).get(`/api/review/${id}`))
+  assert.equal(review.body.program.beds, drawn.beds)
+  // "undo": back one version, the credit returned, nothing charged
+  const before = detail.body
+  const undo = await j(await ana.post(`/api/projects/${id}/change`, { text: 'undo' }))
+  assert.equal(undo.status, 200, JSON.stringify(undo.body))
+  assert.equal(undo.body.applied, true)
+  assert.equal(undo.body.undo, true)
+  assert.match(undo.body.reply, /^Back to version \d+\./)
+  assert.equal(undo.body.changesLeft, before.changesLeft + 1, 'the change that was undone came back to the plan')
+  const after = await j(await ana.get(`/api/projects/${id}`))
+  assert.equal(after.body.versions[after.body.versions.length - 1].kind, 'rollback')
+  assert.equal(after.body.program.beds, programOf(after.body.rooms, after.body.program).beds, 'the program follows the restored plan')
+  const back = await j(await ana.post(`/api/projects/${id}/change`, { text: 'go back' }))
+  assert.equal(back.body.applied, true)
+  // a fix tap answers with what was done (on the reference lot, where the standard plan takes a 3-car in place)
+  const fresh = await j(await ana.post('/api/projects', { lot: { address: 'Lot 514, Villa-Rama East' }, style: { id: 'farmhouse' }, program, rooms: gen(program, style), client: 'Ana' }))
+  const tap = await j(await ana.post(`/api/projects/${fresh.body.id}/change`, { text: 'Make it a 3-car garage?', ops: [{ op: 'garage', cars: 3 }] }))
+  assert.equal(tap.body.applied, true, tap.body.reply)
+  assert.doesNotMatch(tap.body.reply, /\?/)
+  assert.match(tap.body.reply, /3-car garage/)
+})
+
+test('round 8, item 3: an unexpected error answers 500 with a plain line and a request id, the log carries the same id and the stack; an error that hides its words (expose: false) does the same; an error with its own status keeps its words', async (t) => {
+  const { base, log, alive } = await startServer(t, { DRAFTHOUSE_TEST_ROUTES: '1' })
+  const boom = await j(await fetch(base + '/api/_test/boom'))
+  assert.equal(boom.status, 500)
+  assert.match(boom.body.error, /^Something went wrong on our side; the office has been told\. Reference [0-9a-f]{8}\.$/)
+  assert.match(boom.body.requestId, /^[0-9a-f]{8}$/)
+  assert.ok(!/cannot read properties/.test(boom.body.error), 'no detail reaches the client')
+  assert.match(log(), new RegExp(`\\[api\\] GET /api/_test/boom → 500 \\(request ${boom.body.requestId}\\)`), 'the log names the id')
+  assert.match(log(), /boom: cannot read properties of undefined/, 'the detail is in the log')
+  const hidden = await j(await fetch(base + '/api/_test/boom?mode=hidden'))
+  assert.equal(hidden.status, 500)
+  assert.ok(!/must not see/.test(hidden.body.error))
+  assert.match(hidden.body.requestId, /^[0-9a-f]{8}$/)
+  const own = await j(await fetch(base + '/api/_test/boom?mode=own'))
+  assert.equal(own.status, 503)
+  assert.equal(own.body.error, 'the plat reader is resting')
+  assert.ok(alive(), 'the server stays up')
 })

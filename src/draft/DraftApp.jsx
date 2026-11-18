@@ -11,7 +11,6 @@ import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
 import Admin from './screens/Admin.jsx'
 import Review from './screens/Review.jsx'
-import Billing from './screens/Billing.jsx'
 import SignIn from './screens/SignIn.jsx'
 import { DEFAULT_PROGRAM, starterDraft } from './lib/layout.js'
 import { STYLES } from './lib/styles.js'
@@ -53,7 +52,8 @@ class StepBoundary extends React.Component {
     )
   }
 }
-const CREDITS = 10
+// free changes on a plan drafted on this device without an account: the same default the office uses (round 8, M7)
+const CHANGES_PER_PLAN = 10
 const isDrafter = (u) => u && (u.role === 'drafter' || u.role === 'admin')
 
 /** Office screens need a drafter. */
@@ -80,7 +80,7 @@ function OfficeGate({ user, onUser, children }) {
   return children
 }
 
-export default function DraftApp({ admin = false, review = false, billing = false, lot514 = false }) {
+export default function DraftApp({ admin = false, review = false, lot514 = false }) {
   const [user, setUser] = useState(undefined) // undefined: still checking
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState(null) // the saved project, when signed in and the office is reachable
@@ -90,17 +90,15 @@ export default function DraftApp({ admin = false, review = false, billing = fals
   const [style, setStyle] = useState(null)
   const [program, setProgram] = useState(DEFAULT_PROGRAM)
   const [rooms, setRooms] = useState([])
-  const [credits, setCredits] = useState(CREDITS)
+  const [changesLeft, setChangesLeft] = useState(CHANGES_PER_PLAN) // free changes left on the open plan
   const [history, setHistory] = useState([])
   const [returnSeen, setReturnSeen] = useState(false) // the client read the drafter's note and went back to the draft
 
   const loadUser = async () => {
     const u = await currentUser()
     setUser(u)
-    if (u) {
-      setCredits(u.credits ?? CREDITS)
-      api.projects().then(setProjects).catch(() => setProjects([]))
-    } else setProjects([])
+    if (u) api.projects().then(setProjects).catch(() => setProjects([]))
+    else setProjects([])
   }
   useEffect(() => {
     loadUser()
@@ -116,7 +114,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
     setStyle(null)
     setProgram(DEFAULT_PROGRAM)
     setRooms([])
-    setCredits(user?.credits ?? CREDITS)
+    setChangesLeft(CHANGES_PER_PLAN)
     setHistory([])
     setReturnSeen(false)
     if (user) api.projects().then(setProjects).catch(() => {})
@@ -149,7 +147,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
         const body = { lot, style: { id: style.id, name: style.name }, program, rooms: next, client: intake?.client || user.name }
         const p = project && EDITABLE.includes(project.status) ? await api.updateProject(project.id, { ...body, note: 'Rooms changed' }) : await api.createProject(body)
         setProject(p)
-        setCredits(p.credits)
+        setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
         setHistory([...historyFrom(p.versions), ...intro])
       } catch {
         setProject(null) // office unreachable: keep drafting in this tab
@@ -168,7 +166,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
       setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
       setProgram(p.program || DEFAULT_PROGRAM)
       setRooms(p.rooms)
-      setCredits(p.credits)
+      setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
       setHistory(p.status === 'returned' && p.review?.note ? [...historyFrom(p.versions), noteMessage(p)] : historyFrom(p.versions))
       setReturnSeen(p.status === 'returned')
       go(EDITABLE.includes(p.status) ? 4 : 5)
@@ -177,7 +175,7 @@ export default function DraftApp({ admin = false, review = false, billing = fals
     }
   }
 
-  const office = admin || review || billing || lot514
+  const office = admin || review || lot514
   // the Lot 514 site plan review is a real project: drafters and admins only
   if (lot514 && isDrafter(user)) return <App />
   return (
@@ -203,9 +201,11 @@ export default function DraftApp({ admin = false, review = false, billing = fals
         <nav className="dh-links">
           {user && (
             <span className="dh-user">
-              <a className={'dh-credits' + (billing ? ' on' : '')} href="#/billing" title="Changes left on your account">
-                {credits} change{credits === 1 ? '' : 's'}
-              </a>
+              {!office && (step === 4 || step === 5) && (
+                <span className="dh-credits" title="Free changes left on this plan. The office adds more.">
+                  {changesLeft} change{changesLeft === 1 ? '' : 's'} left on this plan
+                </span>
+              )}
               {user.email}
               <button className="linkish" onClick={logout}>
                 Sign out
@@ -246,14 +246,6 @@ export default function DraftApp({ admin = false, review = false, billing = fals
             <App />
           </OfficeGate>
         )}
-        {billing &&
-          (user === undefined ? null : user ? (
-            <Billing user={user} onCredits={(c) => { setCredits(c); setUser((u) => (u ? { ...u, credits: c } : u)) }} />
-          ) : (
-            <div className="screen padded narrow center">
-              <SignIn title="Sign in to see your billing" askName={false} onSignedIn={(u) => { setUser(u); setCredits(u.credits ?? CREDITS) }} />
-            </div>
-          ))}
         {!office && step === 0 && (
           <Start
             user={user}
@@ -289,8 +281,8 @@ export default function DraftApp({ admin = false, review = false, billing = fals
             program={program}
             rooms={rooms}
             setRooms={setRooms}
-            credits={credits}
-            setCredits={setCredits}
+            changesLeft={changesLeft}
+            setChangesLeft={setChangesLeft}
             history={history}
             setHistory={setHistory}
             project={project}

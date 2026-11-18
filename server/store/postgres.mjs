@@ -231,14 +231,14 @@ export function postgresStore(url) {
     },
     projects: {
       async add(p) {
-        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8)', [p.id, p.userId, p.status, p.creditsUsed || 0, p.version, p.createdAt, p.updatedAt, p])
+        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8)', [p.id, p.userId, p.status, p.changesUsed ?? p.creditsUsed ?? 0, p.version, p.createdAt, p.updatedAt, p])
         return p
       },
       async get(id) {
         return (await q('select doc from projects where id = $1', [id])).rows[0]?.doc || null
       },
       async put(p) {
-        const r = await q('update projects set status = $2, credits_used = $3, version = $4, updated_at = $5, doc = $6 where id = $1', [p.id, p.status, p.creditsUsed || 0, p.version, p.updatedAt, p])
+        const r = await q('update projects set status = $2, credits_used = $3, version = $4, updated_at = $5, doc = $6 where id = $1', [p.id, p.status, p.changesUsed ?? p.creditsUsed ?? 0, p.version, p.updatedAt, p])
         if (!r.rowCount) throw new Error('project not found: ' + p.id)
         return p
       },
@@ -259,14 +259,14 @@ export function postgresStore(url) {
     },
     versions: {
       async add(v) {
-        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7)', [v.projectId, v.n, v.at, v.kind, v.credit || 0, !!v.refunded, v])
+        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7)', [v.projectId, v.n, v.at, v.kind, v.used ?? v.credit ?? 0, !!v.refunded, v])
         return v
       },
       async get(projectId, n) {
         return (await q('select doc from versions where project_id = $1 and n = $2', [projectId, n])).rows[0]?.doc || null
       },
       async put(v) {
-        await q('update versions set credit = $3, refunded = $4, doc = $5 where project_id = $1 and n = $2', [v.projectId, v.n, v.credit || 0, !!v.refunded, v])
+        await q('update versions set credit = $3, refunded = $4, doc = $5 where project_id = $1 and n = $2', [v.projectId, v.n, v.used ?? v.credit ?? 0, !!v.refunded, v])
       },
       async list(projectId) {
         return (await q("select doc - 'rooms' as doc from versions where project_id = $1 order by n", [projectId])).rows.map((r) => r.doc)
@@ -340,11 +340,11 @@ export function postgresStore(url) {
         n++
       }
       for (const p of dump.projects || []) {
-        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8) on conflict (id) do update set status = excluded.status, credits_used = excluded.credits_used, version = excluded.version, updated_at = excluded.updated_at, doc = excluded.doc', [p.id, p.userId, p.status, p.creditsUsed || 0, p.version, p.createdAt, p.updatedAt, p])
+        await q('insert into projects (id, user_id, status, credits, credits_used, version, created_at, updated_at, doc) values ($1, $2, $3, 0, $4, $5, $6, $7, $8) on conflict (id) do update set status = excluded.status, credits_used = excluded.credits_used, version = excluded.version, updated_at = excluded.updated_at, doc = excluded.doc', [p.id, p.userId, p.status, p.changesUsed ?? p.creditsUsed ?? 0, p.version, p.createdAt, p.updatedAt, p])
         n++
       }
       for (const v of dump.versions || []) {
-        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7) on conflict (project_id, n) do update set credit = excluded.credit, refunded = excluded.refunded, doc = excluded.doc', [v.projectId, v.n, v.at, v.kind, v.credit || 0, !!v.refunded, v])
+        await q('insert into versions (project_id, n, at, kind, credit, refunded, doc) values ($1, $2, $3, $4, $5, $6, $7) on conflict (project_id, n) do update set credit = excluded.credit, refunded = excluded.refunded, doc = excluded.doc', [v.projectId, v.n, v.at, v.kind, v.used ?? v.credit ?? 0, !!v.refunded, v])
         n++
       }
       for (const r of dump.reviews || []) {

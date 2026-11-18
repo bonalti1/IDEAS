@@ -109,100 +109,78 @@ function CityRules() {
   )
 }
 
-const money = (amount, currency = 'usd') => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format((amount || 0) / 100)
-
-/** Packs and prices (admins), and a way to add credits to an account by hand. */
-function Pricing() {
-  const [pricing, setPricing] = useState(null)
-  const [packs, setPacks] = useState(null)
-  const [users, setUsers] = useState([])
-  const [grant, setGrant] = useState({ userId: '', credits: 5, note: '' })
+/** The free changes a new plan starts with (office setting), and every open plan's count with a one-click grant. */
+function Allowance() {
+  const [def, setDef] = useState(null)
+  const [draft, setDraft] = useState('')
+  const [plans, setPlans] = useState([])
   const [msg, setMsg] = useState('')
-  const [payments, setPayments] = useState([])
-  useEffect(() => {
-    api.pricing().then((p) => { setPricing(p); setPacks(p.packs.map((x) => ({ ...x, dollars: (x.amount / 100).toFixed(2) }))) }).catch(() => {})
-    api.users().then(setUsers).catch(() => {})
-    api.payments().then(setPayments).catch(() => {})
-  }, [])
-  if (!pricing) return null
-  const setPack = (i, k, v) => setPacks((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)))
+  const load = () => {
+    api.allowanceDefault().then((r) => { setDef(r.default); setDraft(String(r.default)) }).catch(() => {})
+    api.inbox().then((i) => setPlans(i.plans || [])).catch(() => {})
+  }
+  useEffect(load, [])
+  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const save = async () => {
     try {
-      const p = await api.setPricing({ currency: pricing.currency, packs: packs.map((x) => ({ id: x.id, name: x.name, blurb: x.blurb, credits: +x.credits, amount: Math.round(+x.dollars * 100) })) })
-      setPricing(p)
-      setMsg('Prices saved')
+      const r = await api.setAllowanceDefault(+draft)
+      setDef(r.default)
+      flash(`New plans start with ${r.default} free changes. Plans already open keep theirs.`)
     } catch (e) {
-      setMsg(e.message)
+      flash(e.message)
     }
-    setTimeout(() => setMsg(''), 2500)
   }
-  const give = async () => {
+  const grant = async (p, n) => {
     try {
-      const u = await api.grantCredits(grant.userId, +grant.credits, grant.note)
-      setMsg(`${u.email} now has ${u.credits} credits`)
-      api.payments().then(setPayments).catch(() => {})
+      const r = await api.grantAllowance(p.id, n)
+      flash(`${p.client}: ${r.changesUsed || 0} of ${r.changesAllowed} used`)
+      load()
     } catch (e) {
-      setMsg(e.message)
+      flash(e.message)
     }
-    setTimeout(() => setMsg(''), 3000)
   }
+  if (def === null) return null
   return (
     <div className="card">
-      <h3>Pricing and credits</h3>
-      <p className="muted small">What a client pays through Stripe Checkout, in dollars. Each applied change uses one credit from the account.{pricing.placeholder ? ' These are placeholders until an admin saves real prices.' : ''}</p>
-      <div className="tblwrap">
-        <table className="tbl rules">
+      <h3>Free changes</h3>
+      <p className="muted small">Plan changes are free to the client. Each plan starts with this many; the office adds more from here or from the review inbox. The client app never shows a price.</p>
+      <div className="row grant">
+        <span>New plans start with</span>
+        <input type="number" min={1} max={50} value={draft} onChange={(e) => setDraft(e.target.value)} style={{ width: 70 }} aria-label="Default free changes" />
+        <Button small onClick={save} disabled={!(Number.isInteger(+draft) && +draft >= 1 && +draft <= 50) || +draft === def}>
+          Save
+        </Button>
+        {msg && <span className="fine">{msg}</span>}
+      </div>
+      {plans.length > 0 && (
+        <table className="jobs" style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th>Id</th>
-              <th>Name</th>
-              <th>Blurb</th>
-              <th>Credits</th>
-              <th>Price $</th>
+              <th>Client</th>
+              <th>Lot</th>
+              <th>Status</th>
+              <th>Changes</th>
+              <th>Asked</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {packs.map((p, i) => (
-              <tr key={i}>
-                <td><input className="cell" value={p.id} onChange={(e) => setPack(i, 'id', e.target.value)} /></td>
-                <td><input className="cell wide" value={p.name} onChange={(e) => setPack(i, 'name', e.target.value)} /></td>
-                <td><input className="cell wide" value={p.blurb || ''} onChange={(e) => setPack(i, 'blurb', e.target.value)} /></td>
-                <td><input className="cell" type="number" value={p.credits} onChange={(e) => setPack(i, 'credits', e.target.value)} /></td>
-                <td><input className="cell" type="number" step="1" value={p.dollars} onChange={(e) => setPack(i, 'dollars', e.target.value)} /></td>
+            {plans.map((p) => (
+              <tr key={p.id}>
+                <td>{p.client}</td>
+                <td className="muted small">{p.address || '—'}</td>
+                <td>{p.status}</td>
+                <td>Changes: {p.changesUsed || 0} of {p.changesAllowed} used</td>
+                <td className={p.wantsMoreChanges ? 'bad' : ''}>{p.wantsMoreChanges ? 'Wants more changes' : p.meetingRequest?.kind === 'meeting' ? 'Meeting requested' : ''}</td>
+                <td>
+                  <Button small ghost onClick={() => grant(p, 5)}>
+                    Grant 5 more
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="row" style={{ marginTop: 10 }}>
-        <Button small ghost onClick={() => setPacks((ps) => [...ps, { id: 'pack' + (ps.length + 1), name: '', blurb: '', credits: 5, dollars: '49.00' }])}>
-          Add a pack
-        </Button>
-        <Button small onClick={save}>
-          Save prices (admin)
-        </Button>
-      </div>
-      <h3 style={{ marginTop: 18 }}>Add credits to an account</h3>
-      <div className="row grant">
-        <select value={grant.userId} onChange={(e) => setGrant({ ...grant, userId: e.target.value })}>
-          <option value="">Pick an account</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.email} ({u.credits ?? 0})
-            </option>
-          ))}
-        </select>
-        <input type="number" value={grant.credits} onChange={(e) => setGrant({ ...grant, credits: e.target.value })} style={{ width: 70 }} />
-        <input placeholder="Note (paid by check, comp…)" value={grant.note} onChange={(e) => setGrant({ ...grant, note: e.target.value })} />
-        <Button small ghost disabled={!grant.userId} onClick={give}>
-          Add
-        </Button>
-      </div>
-      {msg && <p className="fine">{msg}</p>}
-      {payments.length > 0 && (
-        <p className="fine">
-          Last payments: {payments.slice(0, 5).map((p) => `${p.email || p.userId} ${p.credits > 0 ? '+' : ''}${p.credits}${p.amount ? ` ${money(p.amount, p.currency)}` : ''}`).join(' · ')}
-        </p>
       )}
     </div>
   )
@@ -393,7 +371,7 @@ export default function Admin() {
       </div>
 
       <CityRules />
-      <Pricing />
+      <Allowance />
 
       <div className="card">
         <h3>Client requests</h3>

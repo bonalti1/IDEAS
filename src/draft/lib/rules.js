@@ -102,14 +102,8 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: wi
     })
   }
 
-  // 5. wet rooms near plumbing
-  const wet = solid.filter((r) => R.wet?.includes(r.kind) && r.x !== undefined)
-  wet.forEach((r) => {
-    const others = wet.filter((o) => o !== r)
-    if (!others.length) return
-    const d = Math.min(...others.map((o) => gap(r, o)))
-    if (d > (R.wetDistanceFt || 20)) reasons.push(`${label(r)} would be ${Math.round(d)}' from the nearest plumbing; keep baths, kitchen and laundry within ${R.wetDistanceFt || 20}'.`)
-  })
+  // 5. wet rooms near plumbing: since round 8 (item 32) a cost warning in the audit ('plumbing-spread'), not a
+  // refusal here; the code limit (hot water within 100 ft of the heater, IRC P2905.3) is the audit's error
 
   // 6. lot fit
   const cond = roomsOnly.filter(isConditioned).reduce((s, r) => s + r.w * r.d, 0)

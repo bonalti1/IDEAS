@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Stat, Mark, money, sf } from '../ui.jsx'
+import { Button, Stat, Mark, sf } from '../ui.jsx'
 import { kitFor, programOf, programLine } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
-import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { downloadIFC, toIFC } from '../lib/ifc.js'
 import { buildDesign } from '../lib/contract.js'
 import { planSheetHTML, summaryHTML } from '../lib/plan-svg.js'
@@ -32,7 +31,6 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const rules = checkRules(rooms, program, style, lot)
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
-  const price = priceOf({ rooms, program, style, lot })
 
   // a saved project: follow its status while the drafters and the office computer work on it
   const tracked = project && (['in_review', 'approved', 'built'].includes(project.status) || (project.status === 'returned' && !returnSeen))
@@ -100,13 +98,36 @@ export default function Send({ lot, style, program, rooms, history, project, set
     setPdfBusy('summary')
     setPdfNote('')
     try {
-      const doc = await summaryPDF(design, price, audit, TRUST, kit.titleBlock)
+      const doc = await summaryPDF(design, audit, TRUST, kit.titleBlock)
       doc.save(pdfName(design, 'summary'))
     } catch (e) {
-      printFallback(summaryHTML(design, price, audit, TRUST, kit.titleBlock))
+      printFallback(summaryHTML(design, audit, TRUST, kit.titleBlock))
     }
     setPdfBusy('')
   }
+  // "Ask the office to set up my meeting": cost is covered there (round 8, M4); the office is emailed
+  const [asked, setAsked] = useState(project?.meetingRequest ? { message: `Meeting requested. The office will reach out within 1 business day. You can also call ${TRUST.phone}.` } : null)
+  const askMeeting = async () => {
+    if (!project) return setAsked({ message: `Sign in with your email and save your house first, then this button sends your request. You can also call ${TRUST.phone}.` })
+    try {
+      const r = await api.meetingRequest(project.id, { kind: 'meeting' })
+      setAsked(r)
+      setProject((p) => ({ ...p, meetingRequest: { at: r.at, kind: 'meeting' } }))
+    } catch (e) {
+      setAsked({ message: `The office did not get that just now. Try again in a moment, or call ${TRUST.phone}.` })
+    }
+  }
+  const costCard = (
+    <div className="card cost">
+      <h3>What it costs</h3>
+      <p>{TRUST.costLine}</p>
+      {asked ? <p className="fine ok">{asked.message}</p> : (
+        <Button small ghost onClick={askMeeting}>
+          Ask the office to set up my meeting
+        </Button>
+      )}
+    </div>
+  )
   const downloadPlan = async (sheet) => {
     const design = buildDesign({ rooms, program, style, lot, client: project?.client })
     setPdfBusy(sheet)
@@ -139,6 +160,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={openSummary}>
           Download your summary (PDF)
         </Button>
+        {costCard}
         <TrustBlock />
         {project.status === 'returned' && (
           <div className="card note">
@@ -174,7 +196,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <div className="card stats">
           <Stat k="What happens next" v={project.status === 'built' ? 'Your drafter finishes the sheets' : 'Structure, roof, details, and code check'} />
           <Stat k="You will get" v={`${kit.sheets.length} sheets: ${kit.sheets.map((s) => s.title).filter((v, i, a) => a.indexOf(v) === i).join(', ').toLowerCase()}`} />
-          <Stat k="Changes after this" v="Through your drafter, at drafting rates" />
+          <Stat k="Changes after this" v="Through your drafter" />
         </div>
         <Button ghost onClick={onRestart}>
           Start another house
@@ -192,6 +214,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={openSummary}>
           Download your summary (PDF)
         </Button>
+        {costCard}
         <TrustBlock />
         {job && (
           <div className="card job">
@@ -223,7 +246,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <div className="card stats">
           <Stat k="What happens next" v="Structure, roof, details, and code check" />
           <Stat k="You will get" v={`${kit.sheets.length} sheets: ${kit.sheets.map((s) => s.title).filter((v, i, a) => a.indexOf(v) === i).join(', ').toLowerCase()}`} />
-          <Stat k="Changes after this" v="Through your drafter, at drafting rates" />
+          <Stat k="Changes after this" v="Through your drafter" />
         </div>
         <Button ghost onClick={onRestart}>
           Start another house
@@ -259,19 +282,13 @@ export default function Send({ lot, style, program, rooms, history, project, set
           <div className="card stats">
             <Stat k="Lot" v={lot?.address} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Program" v={programLine(programOf(rooms, program))} />
+            <Stat k="Program" v={programLine(programOf(rooms, program), ' · ', { tandemShort: true })} />
             <Stat k="Living area" v={sf(t.areas.living)} />
             {program.asked && <Stat k="Asked for" v={`${programLine(program.asked)} · ${sf(program.asked.sqft)} → drafted ${sf(t.areas.living)} to fit the lot`} />}
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
             {t.areas.flatwork > 0 && <Stat k="Driveway and walk" v={sf(t.areas.flatwork)} />}
-            <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
-            <p className="fine">
-              {rateLine(price)} · {price.county}. Living {money(price.parts.living[0])}–{money(price.parts.living[1])}
-              {price.areas.garage ? `, garage ${money(price.parts.garage[0])}–${money(price.parts.garage[1])}` : ''}
-              {price.areas.porches ? `, porches ${money(price.parts.porches[0])}–${money(price.parts.porches[1])}` : ''}
-              {price.areas.flatwork ? `, driveway and walk ${money(price.parts.flatwork[0])}–${money(price.parts.flatwork[1])}` : ''}. {price.note}
-            </p>
           </div>
+          {costCard}
           <div className="card">
             <h3>Your changes</h3>
             {changes.length === 0 ? (

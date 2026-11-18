@@ -1,4 +1,4 @@
-// Accounts, saved projects, credits, rollback, review. Runs on the JSON store in local sign-in mode,
+// Accounts, saved projects, the change allowance on each plan, rollback, review. Runs on the JSON store in local sign-in mode,
 // and on Postgres too when TEST_DATABASE_URL is set.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -62,29 +62,33 @@ async function suite(base) {
   assert.equal(created.status, 201)
   const prj = created.body
   assert.equal(prj.status, 'drafting')
-  assert.equal(prj.credits, 10)
+  assert.equal(prj.changesLeft, 10)
+  assert.equal(prj.changesAllowed, 10)
+  assert.equal(prj.changesUsed, 0)
+  assert.equal(prj.credits, undefined, 'no account balance in the owner view (round 8)')
   assert.equal(prj.version, 1)
   assert.equal(nRooms(prj.rooms), nRooms(rooms))
 
-  // an applied change costs one credit and makes version 2; a rejected one costs nothing
+  // an applied change uses one of the plan's changes and makes version 2; a rejected one uses nothing
   const c1 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
   assert.equal(c1.status, 200)
   assert.equal(c1.body.applied, true, c1.body.reply)
   assert.equal(c1.body.source, 'fallback', 'no Claude key in tests: basic rules')
-  assert.equal(c1.body.credits, 9)
+  assert.equal(c1.body.changesLeft, 9)
   assert.equal(c1.body.version, 2)
   const kitchen = (rs) => rs.find((r) => r.id === 'kitchen')
   assert.ok(kitchen(c1.body.rooms).w > kitchen(rooms).w)
   const c2 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'remove the kitchen' }))
   assert.equal(c2.body.applied, false)
-  assert.equal(c2.body.credits, 9, 'a rejected change is free')
+  assert.equal(c2.body.changesLeft, 9, 'a rejected change is free')
   const c3 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))
   assert.equal(c3.body.applied, true, c3.body.reply)
-  assert.equal(c3.body.credits, 8)
+  assert.equal(c3.body.changesLeft, 8)
 
-  // the project reloads with its versions and current rooms; credits survive a reload because they live here
+  // the project reloads with its versions and current rooms; the allowance lives on the plan and survives a reload
   const d1 = await j(await ana.get(`/api/projects/${prj.id}`))
-  assert.equal(d1.body.credits, 8)
+  assert.equal(d1.body.changesLeft, 8)
+  assert.equal(d1.body.changesUsed, 2)
   assert.equal(d1.body.version, 3)
   assert.deepEqual(d1.body.versions.map((v) => v.kind), ['initial', 'change', 'change'])
   assert.equal(d1.body.versions[1].text, 'make the kitchen bigger')
@@ -92,10 +96,10 @@ async function suite(base) {
   assert.equal(nRooms(d1.body.rooms), nRooms(rooms) + 1, 'office added')
   assert.equal((await j(await ana.get('/api/projects'))).body.length, 1)
 
-  // rollback to version 1 returns both credits and keeps every version
+  // rollback to version 1 returns both changes to the plan and keeps every version
   const rb = await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 1 }))
   assert.equal(rb.status, 200)
-  assert.equal(rb.body.credits, 10)
+  assert.equal(rb.body.changesLeft, 10)
   assert.equal(rb.body.refunded, 2)
   assert.equal(rb.body.version, 4)
   assert.equal(kitchen(rb.body.rooms).w, kitchen(rooms).w)
@@ -105,7 +109,7 @@ async function suite(base) {
   assert.equal(d2.body.versions[1].refunded, true)
   // rolling forward to version 3 is free and does not refund twice
   const rf = await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 3 }))
-  assert.equal(rf.body.credits, 10)
+  assert.equal(rf.body.changesLeft, 10)
   assert.equal(nRooms(rf.body.rooms), nRooms(rooms) + 1)
   assert.equal((await j(await ana.post(`/api/projects/${prj.id}/rollback`, { version: 99 }))).status, 404)
 
@@ -114,7 +118,7 @@ async function suite(base) {
   assert.equal(up.status, 200)
   assert.equal(up.body.client, 'Ana G.')
   assert.equal(up.body.version, 6)
-  assert.equal(up.body.credits, 10)
+  assert.equal(up.body.changesLeft, 10)
 
   // permissions: another client cannot see, change or send it; drafters can see it
   assert.equal((await ben.get(`/api/projects/${prj.id}`)).status, 404)
@@ -150,7 +154,7 @@ async function suite(base) {
   assert.equal(d3.body.reviews.length, 1)
   const c4 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
   assert.equal(c4.body.applied, true, c4.body.reply)
-  assert.equal(c4.body.credits, 9)
+  assert.equal(c4.body.changesLeft, 9)
 
   // sent again, approved: the Revit job is queued, built when the worker finishes
   await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana Garza' } })
@@ -193,26 +197,36 @@ async function suite(base) {
   assert.ok(log.body.recent.some((r) => r.projectId === prj.id && r.verdict === 'applied'))
 }
 
-test('accounts, projects, credits, rollback and review on the JSON store', async (t) => {
+test('accounts, projects, the change allowance, rollback and review on the JSON store', async (t) => {
   const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')) })
   await suite(base)
 })
 
-test('credits run out: the change is refused with 402 and nothing is saved', async (t) => {
-  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), CREDITS_PER_PROJECT: '1' })
+test('out of changes (round 8, M8): the change is not applied, nothing is used, the answer offers to tell the office, and no money is mentioned', async (t) => {
+  const { base } = await startServer(t, { DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), CHANGES_PER_PROJECT: '1' })
   const ana = await who(base, 'ana@example.com')
   const prj = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style) }))).body
-  assert.equal(prj.credits, 1)
+  assert.equal(prj.changesLeft, 1)
   const c1 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' }))
-  assert.equal(c1.body.credits, 0)
+  assert.equal(c1.body.changesLeft, 0)
   const c2 = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))
-  assert.equal(c2.status, 402)
-  assert.equal(c2.body.credits, 0)
+  assert.equal(c2.status, 200)
+  assert.equal(c2.body.applied, false)
+  assert.equal(c2.body.outOfChanges, true)
+  assert.equal(c2.body.askOffice, 'more-changes')
+  assert.equal(c2.body.reply, "You've used the free changes on this plan. The office will add more for you. Want me to let them know?")
+  assert.doesNotMatch(JSON.stringify(c2.body), /\$|\b(buy|pay|purchase|credit|price)\b/i)
+  assert.equal(c2.body.changesLeft, 0)
   const d = await j(await ana.get(`/api/projects/${prj.id}`))
   assert.equal(d.body.version, 2)
   assert.equal(nRooms(d.body.rooms), nRooms(prj.rooms), 'the office was not added')
-  // undo gives the credit back and the next change works again
-  await ana.post(`/api/projects/${prj.id}/rollback`, { version: 1 })
+  // a cost question and "undo" still work at 0 left; undo gives the change back and the next change works again
+  const cost = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'how much will this cost?' }))
+  assert.equal(cost.body.askOffice, 'meeting')
+  assert.equal(cost.body.changesLeft, 0)
+  const undo = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'undo' }))
+  assert.equal(undo.body.applied, true)
+  assert.equal(undo.body.changesLeft, 1)
   assert.equal((await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'add an office' }))).body.applied, true)
 })
 
@@ -273,11 +287,11 @@ test('a fix the client clicked applies its ops without the interpreter and costs
   assert.ok(no.body.reasons.length >= 1)
   assert.ok(no.body.fixes.length >= 1, 'a fix is offered')
   assert.ok(no.body.fixes[0].label.endsWith('?'))
-  assert.equal(no.body.credits, 10, 'a refusal costs nothing')
+  assert.equal(no.body.changesLeft, 10, 'a refusal costs nothing')
   const yes = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: no.body.fixes[0].label, ops: no.body.fixes[0].ops }))
   assert.equal(yes.body.applied, true, yes.body.reply)
   assert.equal(yes.body.source, 'fix')
-  assert.equal(yes.body.credits, 9)
+  assert.equal(yes.body.changesLeft, 9)
 })
 
 test('/api/interpret answers 200 with the basic rules when the office has no Claude key', async (t) => {
@@ -364,7 +378,7 @@ test('with no Claude key the office answers a change in under a second (the rege
   const two = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: 'make it two story' }))
   assert.equal(two.body.applied, false)
   assert.match(two.body.reply, /one story for now/)
-  assert.equal(two.body.credits, c.body.credits, 'no credit for an unsupported request')
+  assert.equal(two.body.changesLeft, c.body.changesLeft, 'no change used for an unsupported request')
   console.log(`  fallback change on the office API with no key: ${ms} ms`)
 })
 

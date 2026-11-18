@@ -46,12 +46,12 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           </figure>
         </div>
       )}
-      {!canStart && <p className="fine credits-line">The first draft and 10 changes are free. More changes from $49 for 5, or talk to your drafter.</p>}
+      {!canStart && <p className="fine credits-line">Your first draft and 10 changes come with every plan. Need more? The office adds them.</p>}
 
       {!canStart && user !== undefined && (
         <SignIn
           title="Start with your email"
-          lede="Your house, every change and your credits are saved to it, on any device."
+          lede="Your house and every change are saved to it, on any device."
           onSignedIn={onSignedIn}
           onSkip={
             onSkip &&

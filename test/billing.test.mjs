@@ -1,5 +1,6 @@
-// Credits on the account, pricing, the Stripe webhook adding credits (signed like Stripe signs it,
-// verified offline by the Stripe library), receipts in the history, grants by an admin.
+// Stripe billing is dormant (round 8, P0b): the client app never talks about money and plan changes come
+// from an office-granted allowance. These tests cover the dormant code and run only with BILLING_ENABLED=1
+// (the server is started with it too). Without the flag the only test here proves the routes are absent.
 // A real Checkout Session in Stripe test mode runs only with STRIPE_SECRET_KEY set (LIVE=1).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,6 +13,7 @@ import { generateRooms } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
 
+const BILLING = /^(1|true|yes)$/i.test(process.env.BILLING_ENABLED || '')
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const program = { ...KIT.reference.program }
 const WHSEC = 'whsec_test_secret_for_the_suite'
@@ -20,7 +22,7 @@ const stripe = new Stripe('sk_test_unused', { apiVersion: '2025-09-30.clover' })
 async function startServer(t, env = {}) {
   const port = 9100 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: WHSEC, DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', FREE_CREDITS_PER_ACCOUNT: '2', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: WHSEC, DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', BILLING_ENABLED: BILLING ? '1' : '', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
   t.after(() => proc.kill())
   for (let i = 0; i < 60; i++) {
     try {
@@ -46,37 +48,38 @@ function signedEvent(base, session) {
   return fetch(base + '/api/billing/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': header }, body: payload })
 }
 
-test('credits live on the account: a house uses them, rollback returns them, a paid checkout adds them', async (t) => {
+test('with BILLING_ENABLED unset there is no billing: every billing and pricing route is 404, and no homeowner payload carries a pack, amount, currency or checkout', { skip: BILLING ? 'BILLING_ENABLED=1: billing is on in this run' : false }, async (t) => {
   const base = await startServer(t)
   const ana = await who(base, 'ana@example.com')
-  assert.equal(ana.user.credits, 2, 'free credits on first sign-in')
+  assert.equal((await ana.get('/api/billing')).status, 404)
+  assert.equal((await ana.post('/api/billing/checkout', { pack: 'pack5' })).status, 404)
+  assert.equal((await ana.get('/api/billing/session/x')).status, 404)
+  assert.equal((await fetch(base + '/api/billing/webhook', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 404)
+  const rolando = await who(base, 'rolando@drafthouse.test')
+  assert.equal((await rolando.get('/api/admin/pricing')).status, 404)
+  assert.equal((await rolando.put('/api/admin/pricing', { packs: [] })).status, 404)
+  assert.equal((await rolando.get('/api/admin/payments')).status, 404)
+  assert.equal((await rolando.post('/api/admin/users/u1/credits', { credits: 5 })).status, 404)
   const me = await (await ana.get('/api/me')).json()
-  assert.equal(me.credits, 2)
   const rooms = generateRooms(program, style)
   const a = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms }))).body
-  const b = (await j(await ana.post('/api/projects', { style: { id: 'farmhouse' }, program, rooms }))).body
-  assert.equal(a.credits, 2, 'the project shows the account balance')
-  const c1 = (await j(await ana.post(`/api/projects/${a.id}/change`, { text: 'make the kitchen bigger' }))).body
-  assert.equal(c1.applied, true, c1.reply)
-  assert.equal(c1.credits, 1)
-  const c2 = (await j(await ana.post(`/api/projects/${b.id}/change`, { text: 'add an office' }))).body
-  assert.equal(c2.applied, true, c2.reply)
-  assert.equal(c2.credits, 0, 'both houses draw from one balance')
-  const c3 = await ana.post(`/api/projects/${a.id}/change`, { text: 'remove the rear porch' })
-  assert.equal(c3.status, 402)
-  assert.match((await c3.json()).error, /billing page/)
-  const da = (await j(await ana.get(`/api/projects/${a.id}`))).body
-  assert.equal(da.creditsUsed, 1)
-  assert.equal(da.credits, 0)
-  // rollback on house b returns its credit to the account
-  const rb = (await j(await ana.post(`/api/projects/${b.id}/rollback`, { version: 1 }))).body
-  assert.equal(rb.credits, 1)
-  assert.equal(rb.creditsUsed, 0)
-  assert.equal((await (await ana.get('/api/me')).json()).credits, 1)
+  const list = (await j(await ana.get('/api/projects'))).body
+  for (const [name, body] of [['me', me], ['project', a], ['list', list]]) {
+    const keys = []
+    JSON.stringify(body, (k, v) => (keys.push(k), v))
+    assert.ok(!keys.some((k) => /^(pricing|pack|packs|amount|currency|checkout|credits|freeCredits)$/.test(k)), `${name} carries ${keys.filter((k) => /^(pricing|pack|packs|amount|currency|checkout|credits|freeCredits)$/.test(k)).join(', ')}`)
+  }
+  const h = await (await fetch(base + '/api/health', { headers: { 'x-api-key': '' } })).json()
+  assert.ok(!(h.checks || []).some((c) => c.id === 'billing'), 'no Payments row in the health list')
+})
 
-  // the billing page: balance, packs, empty history, no Stripe → checkout refused
+test('BILLING_ENABLED=1 (dormant code): the webhook adds credits to the account record once, signed only, and the session lookup finds the receipt', { skip: BILLING ? false : 'set BILLING_ENABLED=1 to run the dormant billing code' }, async (t) => {
+  const base = await startServer(t)
+  const ana = await who(base, 'ana@example.com')
+  const rolando = await who(base, 'rolando@drafthouse.test')
+  const balance = async () => (await (await rolando.get('/api/admin/users')).json()).find((u) => u.id === ana.user.id)?.credits || 0
+  // the billing page: packs, empty history, no Stripe → checkout refused
   const bill = (await j(await ana.get('/api/billing'))).body
-  assert.equal(bill.credits, 1)
   assert.equal(bill.mode, 'off')
   assert.ok(bill.pricing.packs.length >= 2)
   assert.equal(bill.pricing.placeholder, true)
@@ -90,11 +93,11 @@ test('credits live on the account: a house uses them, rollback returns them, a p
   assert.equal(w1.status, 200, JSON.stringify(w1.body))
   assert.equal(w1.body.credited, true)
   assert.equal(w1.body.credits, 5)
-  assert.equal((await (await ana.get('/api/me')).json()).credits, 6)
+  assert.equal(await balance(), 5)
   // Stripe retries: the same session never credits twice
   const w2 = await j(await signedEvent(base, session))
   assert.equal(w2.body.duplicate, true)
-  assert.equal((await (await ana.get('/api/me')).json()).credits, 6)
+  assert.equal(await balance(), 5)
   // the history shows the purchase; the session lookup after the redirect finds it
   const bill2 = (await j(await ana.get('/api/billing'))).body
   assert.equal(bill2.history.length, 1)
@@ -103,25 +106,21 @@ test('credits live on the account: a house uses them, rollback returns them, a p
   const s = (await j(await ana.get('/api/billing/session/cs_test_abc123'))).body
   assert.equal(s.credited, true)
   assert.equal(s.pay.credits, 5)
-  // and the house can change again
-  const c4 = (await j(await ana.post(`/api/projects/${a.id}/change`, { text: 'remove the rear porch' }))).body
-  assert.equal(c4.applied, true, c4.reply)
-  assert.equal(c4.credits, 5)
 
   // a tampered or unsigned event is refused and adds nothing
   const bad = await fetch(base + '/api/billing/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=nope' }, body: JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_evil', payment_status: 'paid', metadata: { userId: ana.user.id, credits: '999' } } } }) })
   assert.equal(bad.status, 400)
-  assert.equal((await (await ana.get('/api/me')).json()).credits, 5)
+  assert.equal(await balance(), 5)
   // an unpaid session is ignored
   const unpaid = await j(await signedEvent(base, { ...session, id: 'cs_test_unpaid', payment_status: 'unpaid' }))
   assert.match(unpaid.body.ignored, /payment_status/)
-  assert.equal((await (await ana.get('/api/me')).json()).credits, 5)
+  assert.equal(await balance(), 5)
   // another client's session id is not theirs to look at
   const ben = await who(base, 'ben@example.com')
   assert.equal((await ben.get('/api/billing/session/cs_test_abc123')).status, 404)
 })
 
-test('pricing is set by an admin, and an admin can grant credits', async (t) => {
+test('BILLING_ENABLED=1 (dormant code): pricing is set by an admin, and an admin can grant credits to the account record', { skip: BILLING ? false : 'set BILLING_ENABLED=1 to run the dormant billing code' }, async (t) => {
   const base = await startServer(t, { DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test' })
   const ana = await who(base, 'ana@example.com')
   const maria = await who(base, 'maria@drafthouse.test')
@@ -136,9 +135,9 @@ test('pricing is set by an admin, and an admin can grant credits', async (t) => 
   // grants
   assert.equal((await maria.post(`/api/admin/users/${ana.user.id}/credits`, { credits: 5 })).status, 403)
   const g = (await j(await rolando.post(`/api/admin/users/${ana.user.id}/credits`, { credits: 5, note: 'phone order, paid by check' }))).body
-  assert.equal(g.credits, 7)
+  assert.equal(g.credits, 5)
   const bill = (await j(await ana.get('/api/billing'))).body
-  assert.equal(bill.credits, 7)
+  assert.equal(bill.credits, 5)
   assert.equal(bill.history[0].status, 'granted')
   assert.match(bill.history[0].note, /phone order/)
   assert.equal((await rolando.post(`/api/admin/users/${ana.user.id}/credits`, { credits: 9999 })).status, 400)
@@ -146,7 +145,7 @@ test('pricing is set by an admin, and an admin can grant credits', async (t) => 
   assert.equal(all.length, 1)
 })
 
-test('live: a Checkout Session is created in Stripe test mode', { skip: !(process.env.LIVE && process.env.STRIPE_SECRET_KEY) && 'set LIVE=1 and STRIPE_SECRET_KEY (sk_test_...)' }, async (t) => {
+test('live: a Checkout Session is created in Stripe test mode', { skip: !(BILLING && process.env.LIVE && process.env.STRIPE_SECRET_KEY) && 'set BILLING_ENABLED=1, LIVE=1 and STRIPE_SECRET_KEY (sk_test_...)' }, async (t) => {
   const base = await startServer(t, { STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY, APP_URL: 'https://example.com' })
   const ana = await who(base, 'ana@example.com')
   const r = await j(await ana.post('/api/billing/checkout', { pack: 'pack5' }))

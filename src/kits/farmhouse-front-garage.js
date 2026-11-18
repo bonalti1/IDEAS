@@ -101,6 +101,7 @@ export function frontGarageVariant(plan) {
     facing: plan.facing,
     // the plan is the standard plan's size range; it holds what the standard plan holds
     sqft: [1750, 9000],
+    minWidth: 66, // 79 ft at 85%: the fit does not try this plan on a lot tighter than that
     // its wing grows like the standard plan's (the front slot, the rear corner across the hall, then the rear)
     wing: true,
     companions: { ...(plan.companions || {}) },

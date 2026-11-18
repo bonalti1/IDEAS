@@ -44,7 +44,7 @@ test('add a bedroom, add a half bath, make the garage 3 cars: the counts follow 
   assert.ok(svg.includes('5 bed, 3.2 bath, 3-car') || svg.includes('5 bed, 3'), svg.match(/FLOOR PLAN[^<]*/)?.[0])
   const sheet = planSheetHTML(design, kit.titleBlock)
   assert.ok(sheet.includes('5 bed, 3') && sheet.includes('3-car'))
-  const summary = summaryHTML(design, estimate({ rooms, program, style, lot: DEFAULT_LOT }), auditSummary(rooms, program, kit, DEFAULT_LOT), TRUST, kit.titleBlock)
+  const summary = summaryHTML(design, auditSummary(rooms, program, kit, DEFAULT_LOT), TRUST, kit.titleBlock)
   assert.ok(summary.includes('5 bed, 3') && summary.includes('3-car garage'))
 })
 

@@ -51,21 +51,27 @@ export function normalizeOps(ops, rooms) {
 }
 
 /** Shape check only. Rules come later. */
+const BANNED = new Set(['__proto__', 'constructor', 'prototype'])
+const unsafe = (o) => Object.keys(o).some((k) => BANNED.has(k)) || ['op', 'kind', 'room', 'target', 'id', 'near', 'name', 'side', 'load'].some((k) => typeof o[k] === 'string' && BANNED.has(o[k])) || (o.program && typeof o.program === 'object' && Object.keys(o.program).some((k) => BANNED.has(k)))
+/** The ops are checked before anything is drawn; each error is a sentence the client can read. */
 export function validateOps(ops, rooms, kit) {
   const errors = []
-  if (!Array.isArray(ops)) return { ok: false, errors: ['ops must be a list'] }
+  if (!Array.isArray(ops)) return { ok: false, errors: ['That change did not come through as a list of steps.'] }
   const ids = new Set(rooms.filter(isRoom).map((r) => r.id))
-  ops.forEach((o, i) => {
-    const at = `op ${i + 1}`
-    if (!o || !OPS.includes(o.op)) return errors.push(`${at}: unknown op "${o?.op}"`)
-    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
-    if (o.op === 'scale' && !(o.sqft >= 600 && o.sqft <= 10000)) errors.push(`${at}: scale needs sqft`)
-    if (o.op === 'swap' && !ids.has(o.target)) errors.push(`${at}: no room "${o.target}" to swap with`)
-    if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push(`${at}: resize needs w and d`)
-    if (o.op === 'garage' && !(o.cars >= 1 && o.cars <= 4)) errors.push(`${at}: garage needs cars (1 to 4)`)
-    if (o.op === 'add' && !kit.rooms[o.kind]) errors.push(`${at}: kind "${o.kind}" is not in the ${kit.name} kit`)
-    if (o.op === 'move' && !(Number.isFinite(o.dx) && Number.isFinite(o.dy))) errors.push(`${at}: move needs dx and dy`)
-    if (o.op === 'moveBeside' && !ids.has(o.target)) errors.push(`${at}: no room "${o.target}" to move next to`)
+  const roomWord = (id) => `"${String(id ?? '')}"`
+  ops.forEach((o) => {
+    if (!o || typeof o !== 'object') return errors.push('That change did not come through whole.')
+    if (unsafe(o)) return errors.push('That change is not valid.')
+    if (!OPS.includes(o.op)) return errors.push(`I do not know how to "${String(o.op ?? '')}" a room.`)
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
+    if (o.op === 'scale' && !(typeof o.sqft === 'number' && o.sqft >= 600 && o.sqft <= 10000)) errors.push('Give a size between 600 and 10,000 sf.')
+    if (o.op === 'swap' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to swap with.`)
+    if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push('A resize needs a width and a depth in feet.')
+    if (o.op === 'garage' && !(Number.isInteger(o.cars) && o.cars >= 1 && o.cars <= 4)) errors.push('A garage can hold 1 to 4 cars.')
+    if (o.op === 'add' && !(typeof o.kind === 'string' && Object.hasOwn(kit.rooms, o.kind))) errors.push(`The ${kit.name} kit has no "${String(o.kind ?? '')}" room.`)
+    if (o.op === 'move' && !(Number.isFinite(o.dx) && Number.isFinite(o.dy))) errors.push('A move needs a distance east or west and toward the street or the back.')
+    if (o.op === 'moveBeside' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to move next to.`)
+    if (o.op === 'redraft' && o.program && typeof o.program !== 'object') errors.push('A new draft needs a program.')
   })
   return { ok: errors.length === 0, errors }
 }
@@ -670,7 +676,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
         placed.forEach((r) => flat.push(r))
       }
       const made = flat.find((r) => isRoom(r) && r.kind === 'garage')
-      did.push(`${cars}-car garage${made.tandem ? ' (tandem)' : ''}${o.load ? `, ${o.load}-load` : ''}, ${q(made.w)}' wide`)
+      did.push(`${flat.some((r) => isRoom(r) && r.kind === 'garage' && r !== made) ? 'Garage is now' : 'Added a'} ${cars}-car garage${made.tandem ? ' (tandem: one bay two cars deep)' : ''}${o.load ? `, ${o.load}-load` : ''}, ${q(made.w)}' wide`)
     } else if (o.op === 'scale') {
       // the whole house to a living area, within this plan's range; the service rooms keep their size on the way down
       const lim = kit.limits?.sqft || [1400, 6000]
@@ -839,22 +845,81 @@ export function spotBeside(rooms, kit, room, target, lot = DEFAULT_LOT) {
   return { dx: q(spot.x - r.x), dy: q(spot.y - r.y) }
 }
 
-const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
+const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+
+/** The clauses of a request: split on ; and on commas between clauses (never inside "2,500"), and on and / then / also / plus. A swap stays whole. */
+export function splitClauses(text) {
+  const t = String(text || '')
+  if (/\b(swap|switch|exchange|trade)\b/i.test(t)) return [t.trim()].filter(Boolean)
+  return t
+    .split(/\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i)
+    .map((c) => c.trim())
+    .filter((c) => c.length >= 2)
+}
+
+// ── cost questions (round 8, M3): never a number, always the meeting ──────────────────────────
+// English and Spanish; "how much bigger", "cuánto más", "how much room" are about size, not money
+export const COST_RE = /\$|\b(how much(?!\s+(bigger|larger|smaller|wider|deeper|longer|more|less|room|space|closer|further|farther))|costs?|costing|price[sd]?|pricing|precios?|cu[aá]ntos?(?!\s+(m[aá]s|menos|mide|miden|espacio|pies|cuartos|rec[aá]maras|ba[ñn]os))|cuesta[n]?|costar[aá]n?|budget|presupuesto|afford|per square foot|per sq\.? ?ft|per sf|\/sf|estimates?|estimado|quote|cotizaci[oó]n|payments?|pagos?|pagar|financing|financiamiento|mortgage|hipoteca|down payment|enganche)\b/i
+const SPANISH_RE = /\b(precios?|cu[aá]ntos?|cuesta|costar|presupuesto|estimado|cotizaci[oó]n|pagos?|pagar|financiamiento|hipoteca|enganche)\b/i
+export const COST_REPLY = "Great question. Cost is something we go over with you in person at your meeting with the South Texas Builders office, so it's based on your exact plan, lot and selections. Want me to ask the office to set up that meeting?"
+export const COST_REPLY_ES = 'Buena pregunta. El costo lo revisamos con usted en persona en su reunión con la oficina de South Texas Builders, porque depende de su plano exacto, su lote y sus selecciones. ¿Quiere que le pida a la oficina que programe esa reunión?'
+/** True when a request asks about money in any form. */
+export const isCostQuestion = (text) => COST_RE.test(String(text || ''))
+/** The cost answer, in the language the question was asked in. No number ever appears in it. */
+export const costReply = (q) => (typeof q === 'object' ? q?.spanish : SPANISH_RE.test(String(q || ''))) ? COST_REPLY_ES : COST_REPLY
+/**
+ * A request with its cost clauses set aside: { text: what is left to interpret, cost: whether money was
+ * asked about, spanish: whether that part was in Spanish }. "Make it 2,400 sf, how much is that?" keeps the
+ * size and flags the cost; "how much does it cost?" leaves text '' so nothing is interpreted or used.
+ */
+export function splitCost(text) {
+  const t = String(text || '').trim()
+  if (!isCostQuestion(t)) return { text: t, cost: false, spanish: false }
+  // a sentence end is a clause break here ("add an office. what is the payment on this?"); decimals have no space after the dot
+  const clauses = splitClauses(t.replace(/([.?!])\s+(?=\S)/g, '$1;').replace(/\?(?!;)/g, '?;').replace(/,\s*(?=¿)/g, '; '))
+  const kept = clauses.filter((c) => !isCostQuestion(c))
+  const asked = clauses.filter((c) => isCostQuestion(c))
+  return { text: kept.join('; ').replace(/;\s*$/, ''), cost: true, spanish: asked.some((c) => SPANISH_RE.test(c)) }
+}
+
+/** The room a parsed clause is about, by name, for the next clause's "it". */
+function subjectOf(diff, rooms, kit) {
+  const o = diff?.ops?.[0]
+  if (!o) return null
+  if (o.room) return rooms.find((r) => r.id === o.room)?.name || null
+  if (o.op === 'add' && o.kind) return kit.rooms[o.kind]?.name || null
+  if (o.op === 'garage') return 'garage'
+  if (o.op === 'scale') return 'house'
+  return null
+}
 
 export function regexOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } = {}) {
   const whole = regexOne(text, rooms, kit, lot)
   if (!split) return whole
   // "make the house 3,000 sf and add a bedroom": two requests in one line, each read on its own; a swap
-  // ("the office and the dining room") is one request and stays whole
-  if (/\b(swap|switch|exchange|trade)\b/.test(text.toLowerCase())) return whole
-  const clauses = text.split(/\s*(?:;|,|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i).map((c) => c.trim()).filter((c) => c.length >= 4)
+  // ("the office and the dining room") is one request and stays whole. A clause that is not understood is
+  // named in the answer, not dropped; "make it smaller" after "make the kitchen bigger" is about the kitchen
+  const clauses = splitClauses(text)
   if (clauses.length < 2) return whole
-  const parts = clauses.map((c) => ({ text: c, ...regexOne(c, rooms, kit, lot) })).filter((p) => p.ops?.length && (p.confidence ?? 1) >= 0.5)
-  if (parts.length < 2) return whole
-  return { ops: parts.flatMap((p) => p.ops), reply: parts.map((p) => p.reply.replace(/\.$/, '')).join('. ') + '.', confidence: Math.min(...parts.map((p) => p.confidence ?? 1)), parts: parts.map((p) => ({ text: p.text, ops: p.ops })) }
+  const parts = []
+  const unread = []
+  let subject = null
+  for (const c of clauses) {
+    let one = regexOne(c, rooms, kit, lot)
+    if (!one.ops?.length && subject && /\b(it|that|that one|the same|same)\b/i.test(c)) one = regexOne(c.replace(/\b(it|that one|that|the same|same)\b/i, `the ${subject}`), rooms, kit, lot)
+    if (one.ops?.length && (one.confidence ?? 1) >= 0.5) {
+      parts.push({ text: c, ...one })
+      subject = subjectOf(one, rooms, kit) || subject
+    } else unread.push({ text: c, why: one.reply || '' })
+  }
+  if (!parts.length) return whole
+  if (parts.length === 1 && !unread.length) return whole
+  return { ops: parts.flatMap((p) => p.ops), reply: parts.map((p) => p.reply.replace(/\.$/, '')).join('. ') + '.', confidence: Math.min(...parts.map((p) => p.confidence ?? 1)), parts: parts.map((p) => ({ text: p.text, ops: p.ops })), unread }
 }
 
 function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
+  // money is never read as a change: the answer points to the meeting with the office (M3)
+  if (isCostQuestion(text)) return { ops: [], reply: costReply(text), confidence: 1 }
   const t = text.toLowerCase()
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
@@ -874,18 +939,33 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   const hit = hits[0] ? [hits[0].k, hits[0].re] : null
   const kind = hit?.[0]
   const rest = hit ? t.replace(hit[1], ' ') : t // so "half bath next to the laundry" finds the laundry, not the bath
-  // a room called by name ("bedroom 2", "bath 1") is the one meant
+  // a room called by name ("bedroom 2", "bath 1") is the one meant: whole words, so "bedroom 1" is not "bedroom 12"
+  const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const wordAt = (name) => {
+    const m = new RegExp(`(?<![a-z0-9])${esc(name.toLowerCase())}(?![a-z0-9])`).exec(t)
+    return m ? m.index : -1
+  }
   const named = roomsOnly
-    .filter((r) => r.name && t.includes(r.name.toLowerCase()))
-    .map((r) => ({ r, at: t.indexOf(r.name.toLowerCase()) }))
+    .map((r) => ({ r, at: r.name ? wordAt(r.name) : -1 }))
+    .filter((n) => n.at >= 0)
     .filter((n) => !hit || n.at <= hits[0].at + 1)
     .sort((a, b) => a.at - b.at || b.r.name.length - a.r.name.length)[0]?.r
+  // a room called by a number it does not have ("bedroom 7" on a 5-bedroom plan) is not some other room
+  const numbered = t.match(/\b(bedroom|bed|bathroom|bath)\s*#?\s*(\d+)\b/)
+  if (numbered && !named) {
+    const base = /bed/.test(numbered[1]) ? 'Bedroom' : 'Bath'
+    const have = roomsOnly.map((r) => r.name).filter((n) => n && new RegExp(`^${base} \\d+$`).test(n)).map((n) => +n.split(' ')[1]).sort((a, b) => a - b)
+    const list = have.length ? (have.length === 1 ? `${base} ${have[0]}` : `${base}s ${have[0]}–${have[have.length - 1]}`) : `no ${base.toLowerCase()} by number`
+    return { ops: [], reply: `There is no ${base} ${numbered[2]}; this plan has ${list}.`, confidence: 0.6 }
+  }
   const targets = named ? [named] : roomsOnly.filter((r) => r.kind === kind)
   const feet = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')/)
   const by = feet ? +feet[1] : null
 
   // "make the house 3,000 sf", "I want about 2,400 square feet": the whole plan scales
   const sqftSaid = t.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/)
+  // a size below zero ("make the house -2,000 sf") is not a size
+  if (sqftSaid && /(?:^|[\s(])(?:-|−|–|minus\s*)\s*\d/.test(t.slice(0, sqftSaid.index + 1) + t.slice(sqftSaid.index, sqftSaid.index + sqftSaid[0].length))) return { ops: [], reply: 'A size below zero? Say the living area you want, like "make the house 2,400 sf".', confidence: 0.3 }
   if (sqftSaid && (!kind || /\b(house|home|plan|whole|total|overall|living area)\b/.test(t))) {
     let n = +sqftSaid[1].replace(/,/g, '')
     if (/\d\s*k\b/.test(sqftSaid[0])) n *= 1000
@@ -944,10 +1024,21 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
     return { ops: [{ op: 'moveBeside', room: r.id, target: target.id }], reply: `Moving the ${r.name.toLowerCase()} next to the ${target.name.toLowerCase()}.`, confidence: 0.7 }
   }
   if (add) {
-    if (!kit.rooms[kind]) return { ops: [], reply: `The ${kit.name} kit does not have that room yet.`, confidence: 0.4 }
+    if (!Object.hasOwn(kit.rooms, kind)) return { ops: [], reply: `The ${kit.name} kit does not have that room yet.`, confidence: 0.4 }
     const nearKind = (hits.find((h) => h.k !== kind && h.k !== 'porch') || {}).k
     const near = nearKind ? roomsOnly.find((r) => r.kind === nearKind)?.id : null
-    return { ops: [{ op: 'add', kind, ...(near ? { near } : {}) }], reply: `Adding ${/^[aeiou]/i.test(kit.rooms[kind].name) ? 'an' : 'a'} ${kit.rooms[kind].name.toLowerCase()}${near ? ' next to the ' + roomsOnly.find((r) => r.id === near).name.toLowerCase() : ''}.`, confidence: 0.7 }
+    // "add 10 bedrooms": as many as the plan holds, said plainly, not a list of setback errors
+    const countSaid = t.match(/\b(\d+|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+)?(?:bed|bath|office|room)/)
+    const count = countSaid ? WORDS[countSaid[1]] || +countSaid[1] || 1 : 1
+    const bedKinds = kit.rules?.bedrooms || ['bed', 'master', 'suite2']
+    const cap = kind === 'bed' ? (kit.limits?.beds?.[1] ?? 6) : kind === 'bath' ? (kit.limits?.baths?.[1] ?? 5) : 3
+    const have = kind === 'bed' ? roomsOnly.filter((r) => bedKinds.includes(r.kind)).length : kind === 'bath' ? roomsOnly.filter((r) => ['bath', 'mbath', 'jackjill'].includes(r.kind)).length : roomsOnly.filter((r) => r.kind === kind).length
+    if (count > 1 && have + count > cap) {
+      const room = kit.rooms[kind].name.toLowerCase()
+      return { ops: [], reply: `This plan holds up to ${cap} ${room}s${kind === 'bed' || kind === 'bath' ? ' on this lot' : ''}; it has ${have}. Ask for ${Math.max(0, cap - have)} more at most.`, confidence: 0.6 }
+    }
+    const ops = Array.from({ length: Math.max(1, Math.min(count, 4)) }, () => ({ op: 'add', kind, ...(near ? { near } : {}) }))
+    return { ops, reply: `Adding ${count > 1 ? `${count} ${kit.rooms[kind].name.toLowerCase()}s` : `${/^[aeiou]/i.test(kit.rooms[kind].name) ? 'an' : 'a'} ${kit.rooms[kind].name.toLowerCase()}`}${near ? ' next to the ' + roomsOnly.find((r) => r.id === near).name.toLowerCase() : ''}.`, confidence: 0.7 }
   }
   if (!targets.length) return { ops: [], reply: `There is no ${kit.rooms[kind]?.name.toLowerCase() || kind} in this plan.`, confidence: 0.6 }
   const last = targets[targets.length - 1]

@@ -1,7 +1,8 @@
 // "Show me options": two or three valid ways to change the garage, the porches or the bedroom wing,
-// side by side, each with what it does to the area and the price. Every option is applied to a copy
+// side by side, each with what it does to the area. Every option is applied to a copy
 // of the plan and run through the rules and the architect's audit before it is offered; picking one
-// is one ordinary change (one credit), the others cost nothing. Pure: the screen renders the result.
+// is one ordinary change, the others use nothing. The office alone gets a cost delta ({ office: true });
+// the client builder never calls estimate (round 8, P0b). Pure: the screen renders the result.
 import { kitFor, floorArea, isRoom, lotOf, garageFacing } from './layout.js'
 import { decide } from './interpret.js'
 import { auditPlan } from './audit.js'
@@ -74,7 +75,8 @@ function candidates(topic, rooms, kit) {
   out.push({ id: 'wing-bath', label: 'One more full bath, across the hall', ops: [{ op: 'add', kind: 'bath', side: 'east' }] })
   if (beds < 6) out.push({ id: 'wing-both', label: 'A bedroom and a bath', ops: [{ op: 'add', kind: 'bed' }, { op: 'add', kind: 'bath' }] })
   // a long hall: the same rooms drawn again with the bedrooms stacked on both sides of it
-  if (list.some((r) => r.kind === 'hall' && Math.max(r.w, r.d) > 30)) out.push({ id: 'wing-split', label: 'Split the bedrooms across the hall (shorter hall)', ops: [{ op: 'redraft', program: { wingSplit: true } }] })
+  // (below six bedrooms the primary already sits on the other side of the hall from the others, so the split draws the same house: hidden)
+  if (beds >= 6 && list.some((r) => r.kind === 'hall' && Math.max(r.w, r.d) > 30)) out.push({ id: 'wing-split', label: 'Split the bedrooms across the hall (shorter hall)', ops: [{ op: 'redraft', program: { wingSplit: true } }] })
   const smallest = list.filter((r) => r.kind === 'bed').sort((a, b) => a.w * a.d - b.w * b.d)[0]
   if (smallest) out.push({ id: 'wing-bigger', label: `${smallest.name} 2 ft deeper`, ops: [{ op: 'resize', room: smallest.id, w: smallest.w, d: smallest.d + 2 }] })
   return out
@@ -82,9 +84,9 @@ function candidates(topic, rooms, kit) {
 
 /**
  * The options for a topic on this plan: at most three that apply and pass the rules and the audit,
- * each with its rooms, its area and price change, and the ops that make it (so picking one is the
- * same change a fix button sends).
- * @returns {{ topic, options: { id, label, ops, rooms, sf, cost, did }[] }}
+ * each with its rooms, its area change, and the ops that make it (so picking one is the same change a
+ * fix button sends). With { office: true } each option also carries its cost change; never for a homeowner.
+ * @returns {{ topic, options: { id, label, ops, rooms, sf, cost?, did }[] }}
  */
 /**
  * The same options, built one candidate a turn of the event loop so the screen paints its spinner
@@ -96,28 +98,28 @@ export async function optionsForAsync(topic, rooms, program, style, lot, opts = 
   return optionsFor(topic, rooms, program, style, lot, { ...opts, tick })
 }
 
-export function optionsFor(topic, rooms, program, style, lot, { history = [], tick = null } = {}) {
+export function optionsFor(topic, rooms, program, style, lot, { history = [], tick = null, office = false } = {}) {
   const kit = kitFor(style)
   const L = lotOf(lot)
-  const before = { sf: floorArea(rooms, program.stories || 1), cost: estimate({ rooms, program, style, lot }).mid }
+  const before = { sf: floorArea(rooms, program.stories || 1), cost: office ? estimate({ rooms, program, style, lot }).mid : null }
   const options = []
   const list = candidates(topic, rooms, kit)
   if (tick) return (async () => {
     for (const c of list) {
       if (options.length >= 4) break
       await tick()
-      tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history })
+      tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office })
     }
     return { topic, options }
   })()
   for (const c of list) {
     if (options.length >= 4) break
-    tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history })
+    tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office })
   }
   return { topic, options }
 }
 
-function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history }) {
+function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office }) {
   {
     // a resize right after an add names the room the add made: give the add that id first
     const ops = c.ops.map((o) => ({ ...o }))
@@ -138,8 +140,8 @@ function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, 
     // a variant that draws the same house as one already offered is not another option
     if (options.some((o) => sameShape(o.rooms, res.rooms))) return
     const sf = floorArea(res.rooms, program.stories || 1)
-    const cost = estimate({ rooms: res.rooms, program, style, lot }).mid
-    options.push({ id: c.id, label: c.label, ops, rooms: res.rooms, sf: Math.round(sf - before.sf), cost: Math.round(cost - before.cost), did: res.did || [], warnings: audit.warnings.length, svg: thumbnail(res.rooms, program, style, lot) })
+    const money = office ? { cost: Math.round(estimate({ rooms: res.rooms, program, style, lot }).mid - before.cost) } : {}
+    options.push({ id: c.id, label: c.label, ops, rooms: res.rooms, sf: Math.round(sf - before.sf), ...money, did: res.did || [], warnings: audit.warnings.length, svg: thumbnail(res.rooms, program, style, lot) })
   }
 }
 

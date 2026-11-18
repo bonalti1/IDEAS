@@ -237,7 +237,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         </label>
         {!table[spec.city] && (
           <label className="field">
-            <span>County, for the price</span>
+            <span>County</span>
             <select id="lot-county" value={spec.county || ''} onChange={(e) => set('county', e.target.value)}>
               <option value="">Pick the county</option>
               {COUNTIES.map((c) => (
@@ -246,7 +246,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 </option>
               ))}
             </select>
-            <small className="fine">We price by county. Without one the rooms step shows no price.</small>
+            <small className="fine">We use the county to look up the building rules.</small>
           </label>
         )}
 
@@ -283,6 +283,12 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 <input value={spec.sideStreet || ''} onChange={(e) => set('sideStreet', e.target.value)} />
               </label>
             )}
+            <label className="confirm deed">
+              <input id="lot-no-street-garage" type="checkbox" checked={!!spec.noStreetGarage} onChange={(e) => set('noStreetGarage', e.target.checked)} />
+              <span>
+                Deed restrictions: the garage may not face the street. <small className="fine">Some subdivisions require rear or side entry; the drafter checks the recorded restrictions.</small>
+              </span>
+            </label>
           </>
         )}
 

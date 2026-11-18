@@ -18,7 +18,11 @@ const GARAGE_DOOR_ROOMS = ['mud', 'laundry', 'hall', 'foyer']
 const SERVICE = ['pantry', 'laundry', 'mud', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
 const SERVICE_HALL = ['mud', 'laundry']
 export const EGRESS = { sf: 5.7, heightIn: 24, widthIn: 20, sillIn: 44 }
-export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35, swingRoomSf: 25, sideYardFt: 10 }
+export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35, swingRoomSf: 25, sideYardFt: 10, garageSnoutWarnFt: 12, garageSnoutGoalFt: 10, hotWaterFt: 100, hotWaterRouting: 1.25, wetSpreadFt: 40 }
+// NKBA bath planning guidelines (kb.nkba.org, 2022): the warning line above the IRC errors (round 8, item 34)
+export const NKBA = { toiletFrontIn: 30, toiletSideIn: 18, showerFrontIn: 30, showerFt: 3 }
+// a room counts as a bedroom with 70 sf, an egress window and a closet (IRC R304, R310; round 8, item 34)
+export const BEDROOM_MIN_SF = 70
 const PUBLIC = ['living', 'kitchen', 'dining', 'foyer', 'office']
 const THROUGH_SERVICE = ['mud', 'laundry', 'garage']
 
@@ -182,8 +186,10 @@ export function auditPlan(rooms, program, kit, lot) {
     else if (f.home && !f.onEdge) say('window-wall', 'error', f.home, `${f.home.name}'s window ${w.mark || ''} is not on one of its walls.`)
   })
   const glazedDoor = (r) => links.some(({ d, a, b }) => d.exterior && /pair|french|glass/i.test(d.size || '') && ((a === r && !b) || (b === r && !a)))
+  // a room open to a lit room borrows its light (IRC R303.2: adjoining rooms with the opening between them)
+  const litThroughOpening = (r) => R.some((o) => o !== r && (openPairs.has(r.id + '|' + o.id) || openPairs.has(o.id + '|' + r.id) || openPairs.has(r.kind + '|' + o.kind) || openPairs.has(o.kind + '|' + r.kind)) && sharedEdge(r, o) >= 6 && (exteriorWindows(o).length || glazedDoor(o)))
   R.filter((r) => habitable.includes(r.kind)).forEach((r) => {
-    if (!exteriorWindows(r).length && !glazedDoor(r)) say('window', 'error', r, `${r.name} has no window on an outside wall.`)
+    if (!exteriorWindows(r).length && !glazedDoor(r) && !litThroughOpening(r)) say('window', 'error', r, `${r.name} has no window on an outside wall${r.kind === 'kitchen' || r.kind === 'dining' || r.kind === 'living' ? ', and is not open to a room that has one' : ''}.`)
   })
 
   // d) bedroom egress: IRC R310 net clear opening
@@ -242,6 +248,23 @@ export function auditPlan(rooms, program, kit, lot) {
           ['n', [cx, f.y - CLEAR.showerFrontIn / 12], f.y - r.y],
         ].sort((p, q) => q[2] - p[2])
         if (!free(r, sides[0][1], f)) say('shower-front', 'error', r, `${r.name}: less than ${CLEAR.showerFrontIn}" in front of the shower.`)
+        // NKBA: 30" in front, 36" x 36" inside
+        else if (!free(r, [sides[0][1][0] + (sides[0][0] === 'e' ? (NKBA.showerFrontIn - CLEAR.showerFrontIn) / 12 : sides[0][0] === 'w' ? -(NKBA.showerFrontIn - CLEAR.showerFrontIn) / 12 : 0), sides[0][1][1] + (sides[0][0] === 's' ? (NKBA.showerFrontIn - CLEAR.showerFrontIn) / 12 : sides[0][0] === 'n' ? -(NKBA.showerFrontIn - CLEAR.showerFrontIn) / 12 : 0)], f)) say('nkba-shower-front', 'warn', r, `${r.name}: under ${NKBA.showerFrontIn}" in front of the shower (NKBA recommends ${NKBA.showerFrontIn}"; the code minimum is ${CLEAR.showerFrontIn}").`)
+        if (Math.min(f.w, f.d) < NKBA.showerFt - 0.01) say('nkba-shower-size', 'warn', r, `${r.name}: the shower is ${f.w.toFixed(1)}' x ${f.d.toFixed(1)}'; NKBA recommends 36" x 36" (STB's standard is 3' x 6').`)
+      }
+      if (f.fixture === 'toilet') {
+        // NKBA: 30" in front, 18" to each side
+        const face = f.face || (f.d > f.w ? 'e' : 's')
+        const [cx2, cy2] = centre(f)
+        const nFront = face === 'e' ? [f.x + f.w + NKBA.toiletFrontIn / 12, cy2] : face === 'w' ? [f.x - NKBA.toiletFrontIn / 12, cy2] : face === 'n' ? [cx2, f.y - NKBA.toiletFrontIn / 12] : [cx2, f.y + f.d + NKBA.toiletFrontIn / 12]
+        const codeFront = face === 'e' ? [f.x + f.w + CLEAR.toiletFrontIn / 12, cy2] : face === 'w' ? [f.x - CLEAR.toiletFrontIn / 12, cy2] : face === 'n' ? [cx2, f.y - CLEAR.toiletFrontIn / 12] : [cx2, f.y + f.d + CLEAR.toiletFrontIn / 12]
+        if (free(r, codeFront, f) && !free(r, nFront, f)) say('nkba-toilet-front', 'warn', r, `${r.name}: under ${NKBA.toiletFrontIn}" in front of the toilet (NKBA recommends ${NKBA.toiletFrontIn}"; the code minimum is ${CLEAR.toiletFrontIn}").`)
+        const sideways = face === 'e' || face === 'w'
+        const need18 = NKBA.toiletSideIn / 12
+        const need15 = CLEAR.toiletSideIn / 12
+        const s18 = sideways ? [[cx2, cy2 - need18], [cx2, cy2 + need18]] : [[cx2 - need18, cy2], [cx2 + need18, cy2]]
+        const s15 = sideways ? [[cx2, cy2 - need15], [cx2, cy2 + need15]] : [[cx2 - need15, cy2], [cx2 + need15, cy2]]
+        if (s15.every((p) => free(r, p, f)) && !s18.every((p) => free(r, p, f))) say('nkba-toilet-side', 'warn', r, `${r.name}: the toilet centreline is under ${NKBA.toiletSideIn}" from a wall or fixture (NKBA recommends ${NKBA.toiletSideIn}"; the code minimum is ${CLEAR.toiletSideIn}").`)
       }
     })
   })
@@ -279,6 +302,22 @@ export function auditPlan(rooms, program, kit, lot) {
     if (!['hall', 'foyer'].includes(p.room.kind) && p.room.w * p.room.d < CLEAR.swingRoomSf - 0.01 && !said.has('small|' + p.d.id)) {
       said.add('small|' + p.d.id)
       say('swing-small', 'error', p.room, `${p.room.name} is ${Math.round(p.room.w * p.room.d)} sf; the ${doorLabel(p.d)} swings into it. A door into a room under ${CLEAR.swingRoomSf} sf is a pocket door or swings out.`)
+    }
+    // a bath door may not swing into the toilet's or shower's clear space: pocket it or swing it out (item 34)
+    if (BATHS.includes(p.room.kind)) {
+      fixtures.filter((f) => f.room === p.room.id && (f.fixture === 'toilet' || f.fixture === 'shower')).forEach((f) => {
+        const [fx, fy] = centre(f)
+        const deep = (f.fixture === 'toilet' ? CLEAR.toiletFrontIn : CLEAR.showerFrontIn) / 12
+        const face = f.fixture === 'toilet' ? f.face || (f.d > f.w ? 'e' : 's') : [['e', p.room.x + p.room.w - (f.x + f.w)], ['w', f.x - p.room.x], ['s', p.room.y + p.room.d - (f.y + f.d)], ['n', f.y - p.room.y]].sort((a, b) => b[1] - a[1])[0][0]
+        const zone = face === 'e' ? { x: f.x + f.w, y: f.y, w: deep, d: f.d } : face === 'w' ? { x: f.x - deep, y: f.y, w: deep, d: f.d } : face === 'n' ? { x: f.x, y: f.y - deep, w: f.w, d: deep } : { x: f.x, y: f.y + f.d, w: f.w, d: deep }
+        const pts = []
+        for (let x = zone.x + 0.1; x <= zone.x + zone.w - 0.05; x += 0.4) for (let y = zone.y + 0.1; y <= zone.y + zone.d - 0.05; y += 0.4) pts.push([x, y])
+        const key = 'clear|' + p.d.id + '|' + f.id
+        if (pts.some(p.has) && !said.has(key)) {
+          said.add(key)
+          say('swing-clear', 'error', p.room, `${p.room.name}: the ${doorLabel(p.d)} swings into the clear space in front of the ${f.fixture === 'toilet' ? 'toilet' : 'shower'}; use a pocket door or swing it out.`)
+        }
+      })
     }
     fixtures.filter((f) => f.room === p.room.id && f.fixture !== 'shelves').forEach((f) => {
       const pts = []
@@ -358,6 +397,17 @@ export function auditPlan(rooms, program, kit, lot) {
     windows.forEach((w) => {
       if (w.room !== g.id && inside({ x: g.x - 0.3, y: g.y - 0.3, w: g.w + 0.6, d: g.d + 0.6 }, centre(w), 0)) say('garage-covers', 'error', g, `${g.name} covers ${byId[w.room]?.name || 'a'} window.`)
     })
+    // a snout house (item 30c): a street-facing garage more than 12 ft in front of the porch's front edge is a
+    // quality warning; the target is 10 ft or less (an assumption; Portland allows 6)
+    const facing = overhead.length ? (overhead[0].axis === 'h' ? (Math.abs(centre(overhead[0])[1] - (g.y + g.d)) < Math.abs(centre(overhead[0])[1] - g.y) ? 's' : 'n') : 'side') : null
+    if (facing === 's') {
+      const porchFront = Math.max(-Infinity, ...porches.filter((p) => p.kind === 'frontPorch').map((p) => p.y + p.d))
+      const houseFront = Math.max(...R.filter((r) => r.kind !== 'garage').map((r) => r.y + r.d))
+      const edge = Number.isFinite(porchFront) ? porchFront : houseFront
+      const projection = Math.round((g.y + g.d - edge) * 10) / 10
+      measures.garageProjectionFt = projection
+      if (projection > CLEAR.garageSnoutWarnFt + 0.01) say('garage-snout', 'warn', g, `${g.name} sticks out ${projection.toFixed(1)} ft past the front porch (a "snout house"); aim for ${CLEAR.garageSnoutGoalFt} ft or less by sliding the living block forward or the garage back.`)
+    }
   })
 
   // the primary suite: bath from the bedroom, closet from the bedroom or the bath
@@ -600,6 +650,39 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   })
 
+  // m2) a bedroom without a closet: the IRC does not ask for one, buyers and appraisers do (item 33)
+  const closetOf = (bed) => R.find((c) => CLOSETS.includes(c.kind) && (connected(bed, c) || R.some((b) => BATHS.includes(b.kind) && connected(bed, b) && connected(b, c))))
+  R.filter((r) => BEDROOMS.includes(r.kind)).forEach((r) => {
+    if (!closetOf(r)) say('bedroom-closet', 'warn', r, `${r.name} has no closet; most buyers and appraisers expect a closet in every bedroom.`)
+  })
+
+  // p) plumbing (item 32): hot water within 100 ft of the heater is the code (IRC P2905.3, plan distance x 1.25);
+  // wet rooms more than 40 ft apart is a cost warning
+  {
+    // every heater counts (a tankless unit in a far bath is the usual fix); the laundry stands in when none is drawn
+    const whs = fixtures.filter((f) => f.fixture === 'wh')
+    const laundry = R.find((r) => r.kind === 'laundry') || R.find((r) => r.kind === 'garage')
+    const heaters = whs.length ? whs.map(centre) : laundry ? [centre(laundry)] : []
+    const hot = ['shower', 'tub', 'vanity', 'sink', 'washer']
+    let longest = 0
+    if (heaters.length) {
+      fixtures.filter((f) => hot.includes(f.fixture)).forEach((f) => {
+        const [fx, fy] = centre(f)
+        const developed = Math.min(...heaters.map(([hx, hy]) => Math.hypot(fx - hx, fy - hy))) * CLEAR.hotWaterRouting // plan distance x the routing factor
+        longest = Math.max(longest, developed)
+        if (developed > CLEAR.hotWaterFt + 0.01) say('hot-water-length', 'error', byId[f.room], `${byId[f.room]?.name || 'A room'}: the ${(f.name || f.fixture).toLowerCase()} is about ${Math.round(developed)} ft of pipe from the water heater; hot water lines are limited to ${CLEAR.hotWaterFt} ft (IRC P2905.3). Move the heater or the fixture.`)
+      })
+    }
+    measures.hotWaterFt = Math.round(longest)
+    const wet = R.filter((r) => r.plumbing || ['kitchen', 'laundry', ...BATHS].includes(r.kind))
+    wet.forEach((r) => {
+      const others = wet.filter((o) => o !== r)
+      if (!others.length) return
+      const d = Math.min(...others.map((o) => Math.max(0, Math.max(o.x - (r.x + r.w), r.x - (o.x + o.w)), Math.max(o.y - (r.y + r.d), r.y - (o.y + o.d)))))
+      if (d > CLEAR.wetSpreadFt) say('plumbing-spread', 'warn', r, `${r.name} is ${Math.round(d)} ft from the nearest other plumbing; spread-out plumbing costs more (keep baths, kitchen and laundry within ${CLEAR.wetSpreadFt} ft).`)
+    })
+  }
+
   // n) no voids, no jogs: every enclosed space is a room, and the outside wall does not step less than 2 ft
   {
     const pad = 0.3 // half a wall: rooms drawn edge to edge, or a hair apart, close up
@@ -705,7 +788,8 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   }
 
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] ?? Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, deadEndFt: deadEnds[r.id] ?? null }))
+  // a hall whose whole length is open to a public room has no enclosed run: it is listed at its drawn length, never 0
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] || Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, enclosed: !!hallRun[r.id], deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')
@@ -734,10 +818,11 @@ export const CHECK_GROUPS = [
   { id: 'windows', name: 'Windows on outside walls; egress in every bedroom', ids: ['window', 'window-blocked', 'window-wall', 'egress'] },
   { id: 'halls', name: 'Halls 42" clear, none over 35 ft or running past its last door, under 12% of the living area', ids: ['hall', 'dead-end', 'circulation', 'hall-long'] },
   { id: 'overlap', name: 'No room over another or on a porch; no enclosed void, no jog under 2 ft', ids: ['overlap', 'porch', 'void', 'jog'] },
-  { id: 'fixtures', name: 'Toilet and shower clearances', ids: ['toilet-front', 'toilet-side', 'shower-front'] },
-  { id: 'garage', name: 'Garage attached, fire-rated house door, overhead doors for every bay, a driveway on the lot to the street', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers', 'garage-bays', 'garage-name'] },
+  { id: 'fixtures', name: 'Toilet and shower clearances (IRC), NKBA room around them, no bath door into their clear space', ids: ['toilet-front', 'toilet-side', 'shower-front', 'swing-clear', 'nkba-toilet-front', 'nkba-toilet-side', 'nkba-shower-front', 'nkba-shower-size'] },
+  { id: 'garage', name: 'Garage attached, fire-rated house door, overhead doors for every bay, a driveway on the lot to the street, not a snout house', ids: ['garage-detached', 'garage-door', 'garage-door-room', 'garage-door-rating', 'garage-overhead', 'garage-street', 'garage-covers', 'garage-bays', 'garage-name', 'garage-snout'] },
+  { id: 'plumbing', name: 'Hot water within 100 ft of the heater (IRC P2905.3); wet rooms within 40 ft of each other', ids: ['hot-water-length', 'plumbing-spread'] },
   { id: 'suite', name: 'Primary bath and closet from the bedroom; the suite entered away from the service hall and the kitchen', ids: ['suite-bath', 'suite-closet', 'suite-entry', 'suite-kitchen'] },
-  { id: 'closets', name: 'Reach-in closets 24" clear, walk-ins 5\' x 5\'', ids: ['closet', 'walk-in'] },
+  { id: 'closets', name: 'Reach-in closets 24" clear, walk-ins 5\' x 5\'; a closet in every bedroom', ids: ['closet', 'walk-in', 'bedroom-closet'] },
   { id: 'front', name: 'Service rooms off the street front', ids: ['service-front'] },
   { id: 'kitchen', name: 'Kitchen work triangle 15 to 22 ft (26 at most), aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },

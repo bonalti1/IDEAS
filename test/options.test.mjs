@@ -29,7 +29,7 @@ for (const [name, program] of [['the default draft', DEFAULT_PROGRAM], ['the Gar
       assert.ok(options.length >= 2 && options.length <= 4, `${options.length} options: ${options.map((o) => o.label).join(', ')}`)
       for (const o of options) {
         assert.deepEqual(auditPlan(o.rooms, program, kit, DEFAULT_LOT).errors.map((e) => e.message), [], o.label)
-        assert.ok(o.ops.length >= 1 && typeof o.sf === 'number' && typeof o.cost === 'number' && o.svg.startsWith('<svg'), o.label)
+        assert.ok(o.ops.length >= 1 && typeof o.sf === 'number' && o.cost === undefined && o.svg.startsWith('<svg'), `${o.label}: an option carries its area change and no cost for a homeowner`)
         assert.ok(o.rooms.filter(isRoom).length >= 10)
         // picking it is one ordinary change with these ops, and lands on the same plan
         const picked = await interpretRequest(o.label, rooms, program, style, { lot: DEFAULT_LOT, interpreter: async () => ({ ops: o.ops, reply: o.label, confidence: 1 }), report: false })
