@@ -66,42 +66,53 @@ test('the default draft, the Garza sample and a 3/2: no swing meets another or a
   }
 })
 
-test('a hall over 35 ft is warned: the 5-bed wing has one, the 3/2 does not', () => {
-  const five = draft(P({ beds: 5, baths: 4, halfBath: false, garage: 2, sqft: 3500 }))
-  assert.ok(five.audit.warnings.some((w) => w.id === 'hall-long'))
-  assert.ok(five.audit.measures.halls.some((h) => h.lengthFt > CLEAR.hallLongFt))
+test('a hall over 35 ft is warned: a 6-bed wing has one; the default, the 5-bed and the 3/2 do not (round 6: the wing grows at the front and across the hall first)', () => {
+  const six = draft(P({ beds: 6, baths: 4, halfBath: false, garage: 2, sqft: 3800 }))
+  assert.ok(six.audit.warnings.some((w) => w.id === 'hall-long'))
+  assert.ok(six.audit.measures.halls.some((h) => h.lengthFt > CLEAR.hallLongFt))
+  for (const [name, program] of [['default', P({})], ['5/4', P({ beds: 5, baths: 4, halfBath: false, garage: 3, sqft: 3500 })]]) {
+    const d = draft(program)
+    assert.ok(!d.audit.warnings.some((w) => w.id === 'hall-long'), `${name}: ${d.audit.measures.halls.map((h) => `${h.name} ${h.lengthFt}`).join(',')}`)
+    assert.ok(d.audit.measures.circulation.pct <= 12, `${name}: circulation ${d.audit.measures.circulation.pct}%`)
+  }
   const small = draft(three2)
   assert.ok(!small.audit.warnings.some((w) => w.id === 'hall-long'), small.audit.measures.halls.map((h) => `${h.name} ${h.lengthFt}`).join(','))
 })
 
-test('the 5-bed wing puts the second bath across the hall from the bedrooms, and the hall is shorter for it', () => {
+test('the 5-bed wing: Bedroom 3 takes the front of the wing, Bedroom 4 and its bath sit across the hall at the rear corner, and the hall stays under 35 ft', () => {
   const five = P({ beds: 5, baths: 4, halfBath: false, garage: 2, sqft: 3500 })
   const { audit: a, flat } = draft(five)
   assert.deepEqual(a.errors.map((e) => e.message), [])
   const hall = flat.find((r) => r.id === 'hall')
-  const east = flat.filter((r) => isRoom(r) && ['bed', 'bath'].includes(r.kind) && r.x >= hall.x + hall.w - 0.3)
-  assert.ok(east.length >= 1, 'a room across the hall')
+  const beds = flat.filter((r) => isRoom(r) && r.kind === 'bed')
+  assert.equal(beds.length, 4, 'four secondary bedrooms')
+  const east = flat.filter((r) => isRoom(r) && ['bed', 'bath', 'wic'].includes(r.kind) && r.x >= hall.x + hall.w - 0.3 && r.y < hall.y + 5)
+  assert.ok(east.some((r) => r.kind === 'bed') && east.some((r) => r.kind === 'bath'), 'a bedroom and a bath across the hall at the rear corner')
+  const front = beds.find((r) => r.y + r.d > hall.y + hall.d - 0.5)
+  assert.ok(front, 'a bedroom at the front of the wing, where the mini primary would be')
   const hallFt = a.measures.halls.find((h) => h.name === 'Hallway').lengthFt
-  assert.ok(hallFt < 60, `the hallway is ${hallFt} ft (it was 61.8 with every room on one side)`)
-  // a wing of two extra bedrooms and one extra bath in kit feet: both sides used, the hall grew less than three slots
-  const rooms = kit.plan.rooms.map((r) => ({ ...r, open: false }))
+  assert.ok(hallFt <= CLEAR.hallLongFt, `the hallway is ${hallFt} ft (it was 61.8 with every room on one side, 55.8 in round 5)`)
+  // a wing of two extra bedrooms and one extra bath in kit feet: the first bedroom and the bath across the hall, the hall grew by a door's worth, not by rooms
+  const rooms = kit.plan.rooms.map((r) => ({ ...r, open: !!kit.rooms[r.kind]?.open }))
   const grew = extendWing(rooms, kit, { beds: 2, baths: 1 })
   assert.ok(grew.east, 'rooms east of the hall')
-  assert.ok(grew.shift < 12.75 * 2 + 6, `the hall grew ${grew.shift} ft`)
+  assert.ok(grew.shift < 12.75 + 6, `the hall grew ${grew.shift} ft`)
 })
 
-test('the narrow plan: the hall bath sits by Bedrooms 3 and 4, the dining room has a door to the yard, the laundry and a drop zone sit off a short cross hall', () => {
+test('the narrow plan: the hall bath sits beside Bedroom 3 off its short hall, the dining room opens to the rear porch through its back wall, the laundry and a drop zone sit off a short cross hall', () => {
   const lot = LOTS['narrow 50 x 120']
-  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2350 })]) {
+  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2200 })]) {
     const { audit: a, flat } = draft(program, lot)
     assert.equal(flat.find((r) => r.kind === 'roof')?.plan, 'narrow')
     assert.deepEqual(a.errors.map((e) => e.message), [])
     const bath = flat.find((r) => r.id === 'bath2')
     const bed3 = flat.find((r) => r.id === 'bed3')
-    assert.ok(bath && bed3 && Math.abs(bath.y - (bed3.y + bed3.d)) < 0.5, 'Bath 2 is right behind Bedroom 3')
+    const hall3 = flat.find((r) => r.id === 'hall3')
+    assert.ok(bath && bed3 && hall3 && Math.abs(bath.x + bath.w - bed3.x) < 0.5 && Math.abs(hall3.x + hall3.w - bed3.x) < 0.5, 'Bath 2 and the short hall stand beside Bedroom 3')
     const yardDoor = flat.find((e) => e.kind === 'door' && e.exterior && e.room === 'dining')
-    assert.ok(yardDoor, 'the dining room opens to the yard')
-    assert.ok(!a.warnings.some((w) => w.id === 'rear-door' || w.id === 'circulation'), a.warnings.map((w) => w.id).join(','))
+    const dining = flat.find((r) => r.id === 'dining')
+    assert.ok(yardDoor && yardDoor.axis === 'h' && Math.abs(yardDoor.y + yardDoor.d / 2 - dining.y) < 0.4 && yardDoor.pair, 'the dining room opens to the back yard through a pair on its rear wall')
+    assert.ok(!a.warnings.some((w) => w.id === 'rear-door' || w.id === 'circulation' || w.id === 'hall-long'), a.warnings.map((w) => w.id).join(','))
     assert.ok(flat.find((r) => r.id === 'mud') && flat.find((r) => r.id === 'laundry'))
   }
 })

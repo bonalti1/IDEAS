@@ -156,6 +156,13 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     // of the others; then any plan that holds the program and fits the lot; the standard plan when none does
     const standard = fromPlan(program, kit, lot, 'standard')
     const standardFits = noEnvelope || fitsEnvelope(standard.rooms, kit, lot)
+    // a garage the standard plan could only take by trimming the house (or not at all): the garage-forward
+    // variant puts it at the front corner and keeps the house its size
+    const hasGarage = (d) => d.rooms.some((r) => isRoom(r) && r.kind === 'garage')
+    if (program.garage > 0 && kit.plans.frontgarage && !noEnvelope && inRange(kit.plans.frontgarage.sqft) && (!hasGarage(standard) || standard.fitScale < 0.97)) {
+      const alt = fromPlan(program, kit, lot, 'frontgarage')
+      if (fitsEnvelope(alt.rooms, kit, lot) && hasGarage(alt) && (!hasGarage(standard) || alt.fitScale > standard.fitScale + 0.01)) return alt
+    }
     if (standardFits && inRange(kit.planSqft)) return standard
     for (const id of Object.keys(kit.plans)) {
       if (!planHolds(kit.plans[id], program) || !inRange(kit.plans[id].sqft)) continue
@@ -183,7 +190,17 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   }
   if (!program.office) drop('office')
   if (!program.garage) drop('garage')
-  if (!program.suite2) { drop('suite2'); dropped.push(...rooms.filter((r) => r.id === 'wic2')); rooms = rooms.filter((r) => r.id !== 'wic2') }
+  // the mini primary's spot at the front of the wing: when the program has no mini primary but more
+  // bedrooms than the wing draws, the first extra bedroom takes it (with its closet and Bath 1), and the
+  // hall stays its drawn length; otherwise the room, its closet and its gable go
+  const wantBeds = program.beds - 1
+  const drawnBeds = rooms.filter((r) => r.kind === 'bed').length
+  const s2 = rooms.find((r) => r.id === 'suite2')
+  const frontSlot = !program.suite2 && s2 && wantBeds > drawnBeds
+  if (frontSlot) {
+    s2.kind = 'bed'
+    s2.name = `Bedroom ${drawnBeds + 1}`
+  } else if (!program.suite2) { drop('suite2'); dropped.push(...rooms.filter((r) => r.id === 'wic2')); rooms = rooms.filter((r) => r.id !== 'wic2') }
   if (!program.halfBath) drop('halfbath')
   if (!program.frontPorch) drop('frontPorch')
   if (!program.rearPorch) drop('rearPorch')
@@ -238,7 +255,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   // Doors, windows, fixtures ride along as elements (not rooms). Those whose
   // room was dropped are dropped too.
   const ids = new Set(rooms.map((r) => r.id))
-  const keep = (e) => !e.room || ids.has(e.room) || e.room === 'dormer'
+  const keep = (e) => (!e.room || ids.has(e.room) || e.room === 'dormer') && !(e.unless && ids.has(e.unless))
   ;(T.doors || []).filter(keep).forEach((d, i) => {
     const w = d.axis === 'h' ? d.w : 0.6
     const dd = d.axis === 'h' ? 0.6 : d.w
@@ -271,10 +288,11 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   }
 
   // the wing: extra bedrooms and baths slot in at the rear of the bedroom wing, the hall lengthens
-  const wing = T.id && T.id !== 'standard' ? { shift: 0, east: null } : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths })
+  // with `wingSplit` the extra bedrooms stack on both sides of the hall (two rooms a band) so the hall stays short
+  const wing = T.id && T.id !== 'standard' && !T.wing ? { shift: 0, east: null } : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths, prefer: program.wingSplit ? 'split' : null })
   const wingShift = wing.shift
-  // Bath 1 served the mini primary; without it, the bath opens from Bedroom 1 (never the outside)
-  if (!program.suite2) {
+  // Bath 1 served the mini primary; without it (and no bedroom in its spot), the bath opens from Bedroom 1 (never the outside)
+  if (!program.suite2 && !frontSlot) {
     const bath1 = rooms.find((r) => r.id === 'bath1')
     const bed1 = rooms.find((r) => r.id === 'bed1')
     const door = rooms.find((e) => e.id === 'd-bath1')
@@ -309,7 +327,13 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
       return m.id === 'bedwing' && wingShift ? { ...mass, y0: mass.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...mass, x1: drawnGarage.x + drawnGarage.w } : mass
     })
     // the rooms across the hall from the wing, behind the porch: a gable tied into the bed wing's
-    if (wing.east) masses.push({ id: 'eastwing', kind: 'gable', x0: wing.east.x0, x1: wing.east.x1, y0: wing.east.y0, y1: wing.east.y1, ridge: 'ew', plate: 9, pitch: 10, ends: ['e'] })
+    if (wing.east) {
+      masses.push({ id: 'eastwing', kind: 'gable', x0: wing.east.x0, x1: wing.east.x1, y0: wing.east.y0, y1: wing.east.y1, ridge: 'ew', plate: 9, pitch: 10, ends: ['e'] })
+      // the rear porch's roof follows the porch, now shorter
+      const porchRoom = rooms.find((r) => isRoom(r) && r.kind === 'rearPorch')
+      const pm = masses.find((m) => m.id === 'rearPorch')
+      if (porchRoom && pm) { pm.x0 = porchRoom.x; pm.x1 = porchRoom.x + porchRoom.w }
+    }
     // an awning over the west window of a room the wing grew by (the drawn rooms carry their own)
     const drawnIds = new Set(T.rooms.map((r) => r.id))
     const west = Math.min(...rooms.filter((r) => isRoom(r) && !r.open).map((r) => r.x))
@@ -331,8 +355,42 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   const kReq = program.sqft >= base ? search((k) => areaAt(k) >= program.sqft, 1, 1.6) : search((k) => areaAt(k) >= program.sqft, 0.5, 1)
   const kRoom = roomFloor(rooms, kit, cx, cy, T.id || null)
   const kMin = Math.max(kRoom, fixtureFloor(rooms, kit, program, lot, kRoom, cx, cy, T.id || null))
-  const k = Math.max(kReq, kMin)
+  let k = Math.max(kReq, kMin)
+  let capped = null // the area the lot's width caps this plan at, when it is short of the ask
   const minSqft = Math.round(areaAt(kMin) / 50) * 50
+  // a house that grows past the lot's width grows deeper instead: the width scale stops where the envelope
+  // does, and the depth scale makes up the area (rooms up to 40% deeper than drawn)
+  if (k > 1 + 1e-9 && lotOf(lot).envelope) {
+    const [envW] = envelopeSize(lotOf(lot))
+    const widthAt = (kx, ky) => {
+      const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
+      scalePlan(copy, [kx, ky], cx, cy, kit, T.id || null)
+      const solid = copy.filter((r) => !r.open)
+      return Math.max(...solid.map((r) => r.x + r.w)) - Math.min(...solid.map((r) => r.x))
+    }
+    // a foot and a half of slack: the fit shifts the house by whole feet
+    const room = envW - 1.5
+    if (widthAt(k, k) > room && widthAt(1, 1) <= room) {
+      let lo = 1
+      let hi = k
+      while (hi - lo > 0.0025) {
+        const mid = (lo + hi) / 2
+        if (widthAt(mid, mid) <= room) lo = mid
+        else hi = mid
+      }
+      const kx = Math.floor(lo * 200) / 200
+      const areaXY = (ky) => {
+        const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
+        scalePlan(copy, [kx, ky], cx, cy, kit, T.id || null)
+        return copy.filter(isConditioned).reduce((a, r) => a + r.w * r.d, 0) * program.stories
+      }
+      const kyMax = Math.min(1.6, kx * 1.4)
+      const ky = areaXY(kyMax) >= program.sqft ? search((v) => areaXY(v) >= program.sqft, kx, kyMax) : kyMax
+      k = [kx, ky]
+      // deeper rooms can only do so much: short of the area asked, the draft says the width capped it
+      if (areaXY(ky) < program.sqft * 0.97) capped = Math.round(areaXY(ky) / 50) * 50
+    }
+  }
   scalePlan(rooms, k, cx, cy, kit, T.id || null)
   widenHalls(rooms, kit)
   settleIslands(rooms)
@@ -342,15 +400,19 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   if (roofEl) placed.push(roofEl)
   // the house sits where it fits on this lot before the garage goes on, so it is placed against the real
   // position; the fit may trim the house, but never under the kit's minimum room sizes
-  const floor = { minScale: Math.max(0.85, kMin / k) }
+  const kW = Array.isArray(k) ? k[0] : k // the width scale: what a trim measures against
+  const floor = { minScale: Math.max(0.85, kMin / kW) }
   const first = fitToLot(placed, kit, program.stories, lot, floor)
   placed = first.rooms
-  if (program.garage > 0 && !placed.some((r) => isRoom(r) && r.kind === 'garage')) placed = attachGarage(placed, kit, program.garage, lot, program.stories, { minScale: Math.max(0.85, kMin / (k * first.scale)) })
-  const fit = fitToLot(placed, kit, program.stories, lot, { minScale: Math.max(0.85, kMin / (k * first.scale)) })
+  if (program.garage > 0 && !placed.some((r) => isRoom(r) && r.kind === 'garage')) placed = attachGarage(placed, kit, program.garage, lot, program.stories, { minScale: Math.max(0.85, kMin / (kW * first.scale)) })
+  const fit = fitToLot(placed, kit, program.stories, lot, { minScale: Math.max(0.85, kMin / (kW * first.scale)) })
   // the fit may have shrunk the rooms around their fixtures: aisles and the work triangle settle again
   settleIslands(fit.rooms)
   settleKitchen(fit.rooms)
-  return { rooms: fit.rooms, planScale: k, minSqft, clamped: kReq < kMin - 1e-9, fitScale: first.scale * fit.scale, fitShift: [first.shift[0] + fit.shift[0], first.shift[1] + fit.shift[1]] }
+  // on a lot deeper than the house (not the reference lot, where the house sits where the drafter put it) the house
+  // moves up to the front setback line, a few feet behind it, so the driveway is short and the back yard deep
+  const slid = slideToFront(fit.rooms, kit, program.stories, lot)
+  return { rooms: slid.rooms, planScale: Array.isArray(k) ? k[0] : k, planScaleY: Array.isArray(k) ? k[1] : null, minSqft, capped, clamped: kReq < kMin - 1e-9, fitScale: first.scale * fit.scale, fitShift: [first.shift[0] + fit.shift[0], first.shift[1] + fit.shift[1] + slid.shift] }
 }
 
 /** The smallest k in [lo, hi] (to 0.01) for which `ok(k)` holds; ok is monotone (false below, true above). */
@@ -406,8 +468,10 @@ function bandMap(rooms, axis, k, c, keepSize = KEEP_SIZE) {
  * a fixture keeps its distance from the nearest wall. The roof masses follow the rooms. In place. */
 export function scalePlan(rooms, k, cx, cy, kit, planId = planIdOf(rooms)) {
   const keepSize = (planId && kit?.plans?.[planId]?.keepSize) || KEEP_SIZE
-  const fx = bandMap(rooms, 'x', k, cx, keepSize)
-  const fy = bandMap(rooms, 'y', k, cy, keepSize)
+  // one scale, or [kx, ky] when a lot's width caps the growth and the rooms grow deeper instead
+  const [kx, ky] = Array.isArray(k) ? k : [k, k]
+  const fx = bandMap(rooms, 'x', kx, cx, keepSize)
+  const fy = bandMap(rooms, 'y', ky, cy, keepSize)
   const anchors = rooms.filter((e) => e.element && !e.dormer && e.room).map((e) => {
     const host = rooms.find((r) => r.id === e.room)
     if (!host) return null
@@ -540,7 +604,8 @@ function fixtureFloor(rooms, kit, program, lot, from, cx, cy, planId = planIdOf(
 /** A door element centred at (x, y) on a wall along `axis`, at the kit's catalog size. */
 export function doorEl(kit, id, room, axis, x, y, size, opts = {}) {
   const spec = kit.doors[size] || kit.doors.interior
-  const span = opts.pair && !spec.pair ? (spec.w * 2) / 12 : spec.w / 12
+  // a pair is two leaves: the catalog width is one leaf's, whether the pair is the spec's or asked for
+  const span = opts.pair || spec.pair ? (spec.w * 2) / 12 : spec.w / 12
   const w = axis === 'h' ? span : 0.6
   const d = axis === 'h' ? 0.6 : span
   return { id, kind: 'door', element: true, open: true, name: opts.cased ? 'Opening' : 'Door', room, axis, x: x - w / 2, y: y - d / 2, w, d, span, size, h: spec.h ? spec.h / 12 : 6.67, swing: opts.swing ?? 1, hinge: opts.hinge || 'start', pair: !!opts.pair || !!spec.pair, cased: !!opts.cased, pocket: !!opts.pocket, barn: !!opts.barn, exterior: !!opts.exterior || !!spec.overhead, fireRated: !!spec.fireRated, selfClosing: !!spec.selfClosing }
@@ -574,76 +639,164 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
   const bed2 = rooms.find((r) => r.id === 'bed2')
   if (!hall || !bed2) return { shift: 0, east: null }
   // the rooms at the rear of the wing: everything in the wing's columns at or above Bedroom 2's bottom edge
-  const rearBlock = (top) => rooms.filter((r) => isRoom(r) && !r.open && r !== hall && r.y + r.d <= top + 0.3 && r.x < hall.x + hall.w + 0.5 && r.x + r.w > bed2.x - 0.5)
+  const rearBlock = (top) => rooms.filter((r) => isRoom(r) && !r.open && r !== hall && r.y + r.d <= top + 0.3 && r.x < hall.x + hall.w - 0.5 && r.x + r.w > bed2.x - 0.5)
   const elementsOf = (ids) => rooms.filter((e) => e.element && e.kind !== 'roof' && ids.has(e.room))
   const bedX = bed2.x
   const bedW = bed2.w
   const wallX = hall.x // the hall's west edge: where bedroom doors sit
   const eastX = hall.x + hall.w // the hall's east edge
-  // the east column is free behind the rear porch (or the living room) line
-  const porchLine = Math.min(...rooms.filter((r) => isRoom(r) && r.x < eastX + 0.5 && r.x + r.w > eastX + 0.5 && r.y + r.d > hall.y - 0.3).map((r) => r.y))
-  let eastTop = Number.isFinite(porchLine) ? porchLine : hall.y
+  const closetD = 2.5 // 26" clear: a reach-in you can hang a coat in
   let east = null
   let total = 0
   let bedNo = rooms.filter((r) => r.kind === 'bed').length
   let bathNo = rooms.filter((r) => r.kind === 'bath').length
-  const slots = [...Array(beds).fill('bed'), ...Array(baths).fill('bath')]
   const fx = (id, k, x, y, w, d, extra = {}) => rooms.push({ id: `fx-${id}-${k}`, kind: 'fixture', fixture: k, element: true, open: true, name: FIXTURE_NAME[k], room: id, x, y, w, d, h: FIXTURE_H[k], ...extra })
-  slots.forEach((kind) => {
-    const D = kind === 'bed' ? 12.75 : 6.0
-    const closetD = 2.5 // 26" clear: a reach-in you can hang a coat in
-    // east: the band from eastTop - D to eastTop, when the hall needs to grow by less than half a slot for it
-    const growEast = Math.max(0, hall.y - (eastTop - D))
-    // across the hall when that costs less than half a slot, or when asked for (then a whole slot is fine)
-    if (prefer !== 'west' && (growEast < D / 2 || (prefer === 'east' && growEast <= D + 0.01))) {
-      const bandY = eastTop - D
-      if (growEast > 0) {
-        hall.y -= growEast
-        hall.d += growEast
-        total += growEast
-      }
-      const x0 = eastX
-      if (kind === 'bed') {
-        bedNo += 1
-        const id = `bed-${bedNo}`
-        // the closet against the porch line, the room behind it; the door mid-wall on the hall, the bed by the far wall
-        const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: x0, y: bandY, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
-        const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: x0, y: bandY + D - closetD, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
-        rooms.push(room, closet)
-        rooms.push(doorEl(kit, `d-${id}`, id, 'v', x0, room.y + room.d / 2, 'interiorWide', { swing: 1, hinge: 'start' }))
-        rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'h', x0 + 3.5, closet.y, 'closet', { swing: -1, hinge: 'start', pair: true }))
-        rooms.push(windowEl(kit, `win-${id}`, id, 'v', x0 + bedW, room.y + room.d / 2, 'A', true))
-        rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: x0 + bedW - 7.2, y: room.y + 1, w: 7, d: 6.5, h: FIXTURE_H.bed, head: 'e' })
-      } else {
-        bathNo += 1
-        const id = `bath-${bathNo}`
-        const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: x0, y: bandY, w: bedW, d: D, zone: 'private', open: false, plumbing: true }
-        rooms.push(room)
-        // the door at the front end of the hall wall, hinged on the front jamb; fixtures along the rear wall from the far end
-        rooms.push(doorEl(kit, `d-${id}`, id, 'v', x0, room.y + room.d - 1.5, 'bath', { swing: 1, hinge: 'end' }))
-        rooms.push(windowEl(kit, `win-${id}`, id, 'v', x0 + bedW, room.y + room.d / 2, 'C'))
-        fx(id, 'shower', x0 + bedW - 3.3, bandY + 0.3, 3, 5.4)
-        fx(id, 'toilet', x0 + bedW - 6.25, bandY + 0.3, 2.3, 1.5, { face: 's' })
-        fx(id, 'vanity', x0 + 2.75, bandY + 0.3, 3, 2, { face: 's' })
-      }
-      east = east ? { x0, x1: x0 + bedW, y0: Math.min(east.y0, bandY), y1: Math.max(east.y1, eastTop) } : { x0, x1: x0 + bedW, y0: bandY, y1: eastTop }
-      eastTop = bandY
-      return
-    }
-    // west: everything at the rear of the wing moves back by D, the hall grows by D; the band Bedroom 2 vacates takes the new room
+  // the rear of the wing moves back by `by` and the hall grows by it; with `fill` the vacated band is left
+  // for a new room, else Bedroom 2 keeps its bottom wall and grows into it
+  const growRear = (by, fill) => {
     const top = bed2.y + bed2.d
     const block = rearBlock(top)
     const ids = new Set(block.map((r) => r.id))
-    block.forEach((r) => (r.y -= D))
-    elementsOf(ids).forEach((e) => shiftEl(e, 0, -D))
-    const bandY = top - D // the vacated band: y from bandY to top
-    hall.y -= D
-    hall.d += D
-    total += D
+    block.forEach((r) => (r.y -= by))
+    elementsOf(ids).forEach((e) => shiftEl(e, 0, -by))
+    hall.y -= by
+    hall.d += by
+    total += by
+    if (!fill) {
+      // Bedroom 2 grows back to its old bottom wall; its door and bed keep their place in the room (shiftEl moved them)
+      bed2.d += by
+    }
+    return top - by
+  }
+  // the east slot: across the hall, in the rear porch's footprint against the living room's back wall
+  const living = rooms.find((r) => isRoom(r) && !r.open && r.kind === 'living' && Math.abs(r.x - eastX) < 0.5)
+  const porch = rooms.find((r) => isRoom(r) && r.kind === 'rearPorch' && Math.abs(r.x - eastX) < 0.5 && living && r.y + r.d <= living.y + 0.3)
+  const eastFree = () => !!living && !east && !rooms.some((r) => isRoom(r) && !r.open && r.x >= eastX - 0.3 && r.x < eastX + bedW && r.y + r.d > living.y - 12.75 && r.y < living.y - 0.3)
+  const D = 12.75
+  let eastBed = null
+  let eastBath = null
+  let westFree = null // a band the hall opened for an east room, left for the next west room (split wing)
+  const wantBath = baths > 0
+  // a split wing pays off only when a second bedroom can stack behind the first across the hall and the rest fills the band it opens
+  const splitWorks = prefer === 'split' && beds >= 2 && (beds >= 3 || baths >= 2)
+  const slots = [...Array(beds).fill('bed'), ...Array(baths).fill('bath')]
+  slots.forEach((kind, i) => {
+    const SD = kind === 'bed' ? D : 6.0
+    if (kind === 'bath' && eastBath && !eastBath.counted) {
+      eastBath.counted = true
+      return
+    }
+    // a split wing: the next bedroom stacks behind the one across the hall, and the band the hall opens for
+    // its door is left for the rooms after it on the west side (two rooms a band). Only when what is left to
+    // place fills that band: two baths, or a bedroom
+    const left = slots.slice(i + 1)
+    const fills = left.filter((k) => k === 'bed').length > 0 || left.filter((k) => k === 'bath').length * 6 >= D - 1
+    const behindFree = () => splitWorks && fills && east && eastBed && !eastBath && !rooms.some((r) => isRoom(r) && !r.open && r.x + r.w > eastX - 0.3 && r.x < eastX + bedW && r.y + r.d > east.y0 - D - 0.3 && r.y < east.y0 - 0.3)
+    if (kind === 'bed' && behindFree()) {
+      const x0 = eastX
+      const bandY = east.y0 - D
+      const doorY = east.y0 - 0.5 - 1.335
+      const need = Math.max(0, hall.y - (doorY - 1.335 - 0.3))
+      if (need > 0) {
+        const vacated = growRear(need, true)
+        westFree = { y: vacated, d: need }
+      }
+      bedNo += 1
+      const id = `bed-${bedNo}`
+      const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: x0, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
+      const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: x0, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
+      rooms.push(room, closet)
+      rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'h', x0 + bedW / 2, closet.y + closet.d, 'closet', { swing: 1, hinge: 'start', pair: true }))
+      rooms.push(windowEl(kit, `win-${id}`, id, 'v', x0 + bedW, room.y + room.d / 2, 'A'))
+      rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: x0 + 3.25, y: room.y + room.d - 6.7, w: 7, d: 6.5, h: FIXTURE_H.bed, head: 's' })
+      rooms.push(doorEl(kit, `d-${id}`, id, 'v', x0, doorY, 'interiorWide', { swing: 1, hinge: 'end' }))
+      east = { ...east, y0: bandY }
+      eastBed = room
+      return
+    }
+    // a bedroom across the hall, when the corner is free: the room runs the band's full depth with its window
+    // on the rear wall; its door sits at the front end of the hall wall, so the hall grows only the foot or two
+    // that door needs. With a bath to place as well, the bath and the closet stand in a column east of the room
+    // (the closet at the rear, the bath entered from the bedroom); else the closet lies along the rear wall and
+    // the window looks east onto the porch
+    if (kind === 'bed' && prefer !== 'west' && eastFree()) {
+      const x0 = eastX
+      const bandY = living.y - D // the band: bandY .. living.y
+      const doorY = living.y - 0.5 - 1.335
+      const need = Math.max(0, hall.y - (doorY - 1.335 - 0.3))
+      if (need > 0) growRear(need, false)
+      bedNo += 1
+      const id = `bed-${bedNo}`
+      const withBath = wantBath && !eastBath && !splitWorks // a split wing stacks a bedroom behind this one, so it keeps its east wall for the window
+      let room
+      let right = x0 + bedW
+      if (withBath) {
+        const BW = 5.5
+        room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: x0, y: bandY, w: bedW, d: D, zone: 'private', open: false, plumbing: false }
+        const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: x0 + bedW, y: bandY, w: BW, d: closetD, zone: 'private', open: false, plumbing: false }
+        bathNo += 1
+        const bid = `bath-${bathNo}`
+        const bath = { id: bid, kind: 'bath', name: `Bath ${bathNo}`, x: x0 + bedW, y: bandY + closetD, w: BW, d: D - closetD, zone: 'private', open: false, plumbing: true }
+        rooms.push(room, closet, bath)
+        rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'v', closet.x, closet.y + closet.d / 2, 'closet', { swing: -1, hinge: 'start' }))
+        // the bath's door from the bedroom, hinged on the rear jamb so the leaf clears the shower across the room
+        rooms.push(doorEl(kit, `d-${bid}`, bid, 'v', bath.x, bath.y + 2.4 + 1.165, 'bath', { swing: 1, hinge: 'end' }))
+        rooms.push(windowEl(kit, `win-${bid}`, bid, 'v', bath.x + BW, bath.y + 4.2, 'C'))
+        // the toilet at the rear end, the vanity on the far wall, the shower along the front wall, each with its clear front
+        fx(bid, 'toilet', bath.x + 0.5, bath.y + 0.3, 2.3, 1.5, { face: 's' })
+        fx(bid, 'vanity', bath.x + BW - 2, bath.y + 2.6, 2, 2.5, { face: 'w' })
+        fx(bid, 'shower', bath.x + 0.05, bath.y + bath.d - 3, BW - 0.1, 3)
+        right = x0 + bedW + BW
+        eastBath = bath
+        // the window on the rear wall beside the bed, which stands with its head to the rear
+        rooms.push(windowEl(kit, `win-${id}`, id, 'h', x0 + bedW - 2.25, bandY, 'A'))
+        rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: x0 + 0.75, y: bandY + 0.2, w: 7, d: 6.5, h: FIXTURE_H.bed, head: 'n' })
+      } else {
+        const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: x0, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
+        room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: x0, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
+        rooms.push(room, closet)
+        rooms.push(doorEl(kit, `d-closet-${bedNo}`, closet.id, 'h', x0 + bedW / 2, closet.y + closet.d, 'closet', { swing: 1, hinge: 'start', pair: true }))
+        // the window east onto the porch; the bed against the living room's wall, clear of both doors' approaches
+        rooms.push(windowEl(kit, `win-${id}`, id, 'v', x0 + bedW, room.y + 2, 'A'))
+        rooms.push({ id: `fx-${id}`, kind: 'fixture', fixture: 'bed', element: true, open: true, name: FIXTURE_NAME.bed, room: id, x: x0 + 3.25, y: living.y - 6.7, w: 7, d: 6.5, h: FIXTURE_H.bed, head: 's' })
+      }
+      rooms.push(doorEl(kit, `d-${id}`, id, 'v', x0, doorY, 'interiorWide', { swing: 1, hinge: 'end' }))
+      // the porch gives the rooms their corner
+      if (porch) {
+        porch.w = porch.x + porch.w - right
+        porch.x = right
+      }
+      east = { x0, x1: right, y0: bandY, y1: living.y }
+      eastBed = room
+      // the living room's back door moves clear of the new rooms: a pair when the wall left takes one, else a single
+      const back = rooms.find((e) => e.kind === 'door' && e.room === 'living' && e.exterior && e.axis === 'h' && Math.abs(e.y + e.d / 2 - living.y) < 0.4)
+      if (back && back.x < right + 0.5) {
+        const free = living.x + living.w - right
+        const pair = free >= 6 + 1
+        Object.assign(back, doorEl(kit, back.id, 'living', 'h', right + free / 2, living.y, pair ? 'exteriorPair' : 'exteriorSingle', { swing: 1, hinge: 'start', pair, exterior: true }))
+      }
+      return
+    }
+    if (kind === 'bath' && eastBath && !eastBath.counted) {
+      // the bath beside the bedroom across the hall was placed with it
+      eastBath.counted = true
+      return
+    }
+    // west: everything at the rear of the wing moves back by a room, the hall grows by it; the band Bedroom 2 vacates takes
+    // the new room (in a split wing, the band the hall already opened for the room across from it)
+    let bandY
+    let depth = SD
+    if (westFree && westFree.d >= SD - 0.01) {
+      // a bath takes the front of the free band; the last one that fits takes what is left, so no sliver is walled off
+      if (kind === 'bath' && westFree.d - SD < 6) depth = westFree.d
+      bandY = westFree.y + westFree.d - depth
+      westFree = { y: westFree.y, d: westFree.d - depth }
+      if (westFree.d < 0.01) westFree = null
+    } else bandY = growRear(SD, true) // the vacated band: y from bandY to bandY + SD
     if (kind === 'bed') {
       bedNo += 1
       const id = `bed-${bedNo}`
-      const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: bedX, y: bandY + closetD, w: bedW, d: D - closetD, zone: 'private', open: false, plumbing: false }
+      const room = { id, kind: 'bed', name: `Bedroom ${bedNo}`, x: bedX, y: bandY + closetD, w: bedW, d: SD - closetD, zone: 'private', open: false, plumbing: false }
       const closet = { id: `closet-${bedNo}`, kind: 'wic', name: 'Closet', x: bedX, y: bandY, w: bedW, d: closetD, zone: 'private', open: false, plumbing: false }
       rooms.push(room, closet)
       rooms.push(doorEl(kit, `d-${id}`, id, 'v', wallX, room.y + room.d / 2, 'interiorWide', { swing: -1, hinge: 'start' }))
@@ -654,7 +807,7 @@ export function extendWing(rooms, kit, { beds = 0, baths = 0, prefer = null }) {
     } else {
       bathNo += 1
       const id = `bath-${bathNo}`
-      const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: bedX, y: bandY, w: bedW, d: D, zone: 'private', open: false, plumbing: true }
+      const room = { id, kind: 'bath', name: `Bath ${bathNo}`, x: bedX, y: bandY, w: bedW, d: depth, zone: 'private', open: false, plumbing: true }
       rooms.push(room)
       // the door at the front end of the hall wall, hinged on the front jamb: its swing clears the vanity on the rear wall
       rooms.push(doorEl(kit, `d-${id}`, id, 'v', wallX, room.y + room.d - 1.5, 'bath', { swing: -1, hinge: 'end' }))
@@ -988,9 +1141,11 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
     const hz = rs.flatMap((r) => [r.y, r.y + r.d])
     return [Math.max(...hx) - Math.min(...hx), Math.max(...hz) - Math.min(...hz)]
   }
-  // rings of whole-foot shifts, nearest first, at each scale step
+  // rings of whole-foot shifts, nearest first, at each scale step; quarter-foot (within 20 ft) on a lot with under 2 ft to spare
+  const step = envW - boxAt(1)[0] < 2 ? 0.25 : 1
+  const reach = step < 1 ? Math.min(maxShift, 20) : maxShift
   const rings = []
-  for (let ring = 0; ring <= maxShift; ring++) for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) rings.push([dx, dy])
+  for (let ring = 0; ring <= reach / step; ring++) for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) rings.push([dx * step, dy * step])
   let found = null
   for (let s = 1; s >= minScale - 1e-9 && !found; s = Math.round((s - 0.03) * 100) / 100) {
     const [houseW, houseD] = boxAt(s)
@@ -1023,6 +1178,45 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
   const placed = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
   if (roof) placed.push(roof)
   return { rooms: placed, shift: [dx, dy], scale: s }
+}
+
+/** How far behind the front setback line the house sits on a lot with room to spare, feet. */
+export const FRONT_YARD_FT = 6
+
+/**
+ * On a lot deeper than the house, the placed house slides toward the street until its front (porch and
+ * garage included) is FRONT_YARD_FT behind the front setback line, as long as every room stays inside the
+ * envelope. The reference lot is left alone: the Garza house sits where the drafter put it.
+ * @returns {{ rooms, shift }} shift in feet toward the street
+ */
+export function slideToFront(rooms, kit, stories = 1, lot = DEFAULT_LOT) {
+  const L = lotOf(lot)
+  if (!L.envelope || L.envelope.length < 3 || L.spec?.kind === 'reference' || L === DEFAULT_LOT) return { rooms, shift: 0 }
+  const env = L.envelope.map((p) => localOf(L, p))
+  const envFront = Math.max(...env.map((p) => p[1]))
+  const placed = rooms.filter((r) => isRoom(r) && r.local)
+  if (!placed.length) return { rooms, shift: 0 }
+  const houseFront = Math.max(...placed.map((r) => r.local[1] + r.d / 2))
+  const dz = Math.floor(envFront - houseFront - FRONT_YARD_FT)
+  if (dz < 1) return { rooms, shift: 0 }
+  const solid = placed.filter((r) => !r.open)
+  const inside = solid.every((r) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => insidePoly(env, [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + dz + sy * (r.d / 2 - 0.05)])))
+  if (!inside) return { rooms, shift: 0 }
+  const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
+  const flat = rooms.map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
+  const roof = flat.find((r) => r.kind === 'roof')
+  if (roof) {
+    roof.offset = [roof.offset?.[0] || 0, (roof.offset?.[1] || 0) + dz]
+    roof.faces = roofSurfaces(roof.masses, roof.scale || 1, roof.centre || centre, roof.offset)
+    roof.dormers = dormerWalls(roof.masses, roof.scale || 1, roof.centre || centre, roof.offset)
+  }
+  flat.forEach((r) => {
+    if (r.dormer || r.kind === 'roof') return
+    r.y += dz
+  })
+  const out = placeLocal(flat.filter((r) => r.kind !== 'roof'), stories, kit, centre, L)
+  if (roof) out.push(roof)
+  return { rooms: out, shift: dz }
 }
 
 /** Rooms with plan coordinates (x, y from the rear-left corner) → placed on the lot. */
@@ -1091,8 +1285,10 @@ export function programOf(rooms, program = {}) {
   const count = (...kinds) => list.filter((r) => kinds.includes(r.kind)).length
   const garage = list.find((r) => r.kind === 'garage')
   const cars = garage ? +(garage.name.match(/^(\d+)-Car/) || [])[1] || Math.max(1, Math.round(Math.max(garage.w, garage.d) / 11)) : 0
+  const tandem = !!garage && (!!garage.tandem || /tandem/i.test(garage.name || ''))
   return {
     ...program,
+    tandem,
     beds: count('bed', 'master', 'suite2'),
     baths: count('bath', 'mbath', 'jackjill'),
     halfBath: count('halfbath') > 0,
@@ -1104,13 +1300,14 @@ export function programOf(rooms, program = {}) {
     rearPorch: count('rearPorch') > 0,
     stories: program.stories || 1,
     livingSf: Math.round(floorArea(rooms, program.stories || 1)),
-    asked: program.sqft || null,
+    asked: program.asked || null, // the program as first asked for, when a fit offer replaced it (round 6)
   }
 }
 /** "4 bed · 3.5 bath · 2-car · 1 story" */
 export function programLine(p, sep = ' · ') {
   const baths = `${p.baths}${p.halfBaths > 1 ? `.${p.halfBaths}` : p.halfBath ? '.5' : ''}`
-  return [`${p.beds} bed`, `${baths} bath`, p.garage ? `${p.garage}-car` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
+  // a tandem third bay is said so the client knows the third car parks behind another
+  return [`${p.beds} bed`, `${baths} bath`, p.garage ? `${p.garage}-car${p.tandem ? ' (tandem: one bay two cars deep)' : ''}` : null, `${p.stories === 2 ? 'two story' : p.stories ? `${p.stories} story` : ''}`].filter(Boolean).join(sep)
 }
 
 /** Exterior outline from the room blocks: perimeter, front width, depth, in feet. */

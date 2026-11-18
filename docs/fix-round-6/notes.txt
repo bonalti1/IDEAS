@@ -1,0 +1,42 @@
+desktop: first draft "Modern Farmhouse · 4 bed · 3.5 bath · 2-car · 1 story"
+desktop: "make the garage 3 cars" → REFUSED: I can't do that one. 3-Car Garage (tandem) would cross the setback at 6 ft from side. Laundry's window faces i
+desktop: one tap on "Re-draft the house with a 3-car garage" → applied: Drew a new draft with a 3-car garage on the garage-forward plan: 2,854 sf of living area.+25 sf · +$13,738 · 1 credit used
+desktop: typed "show me options for the garage" → 2 options: No garage | 2-car garage (new draft) · 2 options for the garage that pass the checks on this lot. Pick one: that is one
+desktop: tap on a thumbnail → opened full size
+desktop: "show me options for the bedrooms" → 6 options: One more bedroom, in line | One more bedroom, across the hall | One more full bath, across the hall | A bedroom and a bath
+desktop: typed "make the house 3,000 sf" → applied: Re-drafted the house at 3,013 sf: stretching the rooms as they were would not pass (Kitchen aisle by the island is 41"; aisles need 42").+159 sf · +$18,765 · 1 
+desktop: typed "swap the office and the dining room" → applied: We swapped the office and the dining room, so each one now sits where the other used to be.+7 sf · +$543 · 1 c
+ARCH D: plan-24x36.pdf 95,018 bytes, 3 pages
+ARCH D: fonts Helvetica, Helvetica-Bold, Helvetica-Oblique, Helvetica-BoldOblique, Courier, Courier-Bold, Courier-Oblique, Courier-BoldOblique, Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic, ZapfDingbats, Symbol, LiberationSans, LiberationSans · Liberation Sans embedded: yes · serif fallback: Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic
+ARCH D: label words found on page 1: KITCHEN, PRIMARY, BATH, BEDROOM, GARAGE
+tabloid: plan-11x17.pdf 95,002 bytes, 3 pages
+tabloid: fonts Helvetica, Helvetica-Bold, Helvetica-Oblique, Helvetica-BoldOblique, Courier, Courier-Bold, Courier-Oblique, Courier-BoldOblique, Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic, ZapfDingbats, Symbol, LiberationSans, LiberationSans · Liberation Sans embedded: yes · serif fallback: Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic
+tabloid: label words found on page 1: KITCHEN, PRIMARY, BATH, BEDROOM
+summary: fonts Helvetica, Helvetica-Bold, Helvetica-Oblique, Helvetica-BoldOblique, Courier, Courier-Bold, Courier-Oblique, Courier-BoldOblique, Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic, ZapfDingbats, Symbol, LiberationSans, LiberationSans · Liberation Sans embedded: yes · serif fallback: Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic
+summary: label words found on page 1: KITCHEN, PRIMARY, BATH, BEDROOM, GARAGE
+phone390: first draft "Modern Farmhouse · 4 bed · 3.5 bath · 2-car · 1 story"
+phone390: "make the garage 3 cars" → REFUSED: I can't do that one. 3-Car Garage (tandem) would cross the setback at 6 ft from side. Laundry's window faces i
+phone390: one tap on "Re-draft the house with a 3-car garage" → applied: Drew a new draft with a 3-car garage on the garage-forward plan: 2,854 sf of living area.+25 sf · +$13,738 · 1 credit used
+phone390: price note y 489–564, chat log y 574–694 → separate rows; user bubble y 580–619 whole, inside the log
+phone390: Plan/Site/3D bar y 483–523 vs the drawing y 135–483 → its own row
+phone390: typed "show me options for the garage" → 2 options: No garage | 2-car garage (new draft) · 2 options for the garage that pass the checks on this lot. Pick one: that is one
+phone390: tap on a thumbnail → opened full size
+phone390: "show me options for the bedrooms" → 6 options: One more bedroom, in line | One more bedroom, across the hall | One more full bath, across the hall | A bedroom and a bath
+phone390: typed "make the house 3,000 sf" → applied: Re-drafted the house at 3,013 sf: stretching the rooms as they were would not pass (Kitchen aisle by the island is 41"; aisles need 42").+159 sf · +$18,765 · 1 
+phone390: typed "swap the office and the dining room" → applied: We swapped the office and the dining room, so each now sits where the other used to be.+7 sf · +$543 · 1 credi
+phone430: first draft "Modern Farmhouse · 4 bed · 3.5 bath · 2-car · 1 story"
+phone430: "make the garage 3 cars" → REFUSED: I can't do that one. 3-Car Garage (tandem) would cross the setback at 6 ft from side. Laundry's window faces i
+phone430: one tap on "Re-draft the house with a 3-car garage" → applied: Drew a new draft with a 3-car garage on the garage-forward plan: 2,854 sf of living area.+25 sf · +$13,738 · 1 credit used
+phone430: price note y 596–652, chat log y 662–782 → separate rows; user bubble y 668–708 whole, inside the log
+phone430: Plan/Site/3D bar y 496–536 vs the drawing y 107–496 → its own row
+phone430: typed "show me options for the garage" → 2 options: No garage | 2-car garage (new draft) · 2 options for the garage that pass the checks on this lot. Pick one: that is one
+phone430: tap on a thumbnail → opened full size
+phone430: "show me options for the bedrooms" → 6 options: One more bedroom, in line | One more bedroom, across the hall | One more full bath, across the hall | A bedroom and a bath
+phone430: typed "make the house 3,000 sf" → applied: Re-drafted the house at 3,013 sf: stretching the rooms as they were would not pass (Kitchen aisle by the island is 41"; aisles need 42").+159 sf · +$18,765 · 1 
+phone430: typed "swap the office and the dining room" → applied: I swapped the office and the dining room, so each now sits where the other used to be.+7 sf · +$543 · 1 credit
+desktop: narrow lot first draft "Modern Farmhouse · 4 bed · 2 bath · 2-car · 1 story"
+phone390: narrow lot first draft "Modern Farmhouse · 4 bed · 2 bath · 2-car · 1 story"
+phone430: narrow lot first draft "Modern Farmhouse · 4 bed · 2 bath · 2-car · 1 story"
+desktop: review · Plan audit · passed · 1 warning · 1 ⚠ row
+phone390: review · Plan audit · passed · 1 warning · 1 ⚠ row
+phone430: review · Plan audit · passed · 1 warning · 1 ⚠ row

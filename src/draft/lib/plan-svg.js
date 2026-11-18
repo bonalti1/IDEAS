@@ -564,13 +564,14 @@ export function siteScaleFor(site, S) {
   return scales.find(([sc]) => w * sc <= S.availW && h * sc <= S.availH) || scales[scales.length - 1]
 }
 /**
- * The sheet a plan fits at its scale: ARCH D at 1/4" (3/16", 1/8" when the house is long) unless asked for
+ * The sheet a plan fits at its scale: ARCH D at 1/4" (two sheets with a match line when the house is long) unless asked for
  * tabloid, which is always 1/8": a plan too deep or too wide for one tabloid sheet goes on two, split
  * across the overflowing axis with a match line (`split: 'rows'` top and bottom, `'cols'` left and right).
  */
 export function sheetFor(plan, sheetId = 'archD') {
   const S = SHEETS[sheetId] || SHEETS.archD
-  const scales = S.id === 'archD' ? [[0.25, '1/4" = 1\'-0"'], [0.1875, '3/16" = 1\'-0"'], [0.125, '1/8" = 1\'-0"']] : [[0.125, '1/8" = 1\'-0"']]
+  // one scale a builder reads per sheet: 1/4" on 24 x 36, 1/8" on tabloid; a plan that runs past one sheet goes on two
+  const scales = S.id === 'archD' ? [[0.25, '1/4" = 1\'-0"']] : [[0.125, '1/8" = 1\'-0"']]
   const w = plan.width / 12
   const h = plan.height / 12
   // the sheet's own scale, landscape; else turned portrait; else the next scale down, each a scale a builder reads
@@ -585,12 +586,9 @@ export function sheetFor(plan, sheetId = 'archD') {
   }
   const availW = S.pageW - 2 * S.margin
   const availH = S.pageH - 2 * S.margin - S.blockH
-  if (S.id === 'tabloid') {
-    const sc = 0.125
-    const split = h * sc > availH ? 'rows' : 'cols'
-    return { ...S, orientation: 'landscape', availW, availH, plan: [sc, '1/8" = 1\'-0"'], fits: true, split }
-  }
-  return { ...S, orientation: 'landscape', availW, availH, fits: false }
+  const [sc, label] = scales[0]
+  const split = h * sc > availH ? 'rows' : 'cols'
+  return { ...S, orientation: 'landscape', availW, availH, plan: [sc, label], fits: true, split }
 }
 
 /**

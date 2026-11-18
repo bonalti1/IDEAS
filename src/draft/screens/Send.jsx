@@ -24,7 +24,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('summary')
   const kit = kitFor(style)
-  const t = takeoff(rooms, program, kit)
+  const t = takeoff(rooms, program, kit, lot)
   // only changes that were applied and not undone: from the saved versions, or from the chat pairs
   const changes = project?.versions?.length
     ? project.versions.filter((v) => v.kind === 'change' && !v.refunded && v.n <= project.version).map((v) => ({ text: v.text }))
@@ -261,12 +261,15 @@ export default function Send({ lot, style, program, rooms, history, project, set
             <Stat k="Style" v={style.name} />
             <Stat k="Program" v={programLine(programOf(rooms, program))} />
             <Stat k="Living area" v={sf(t.areas.living)} />
+            {program.asked && <Stat k="Asked for" v={`${programLine(program.asked)} · ${sf(program.asked.sqft)} → drafted ${sf(t.areas.living)} to fit the lot`} />}
             <Stat k="Porches" v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
+            {t.areas.flatwork > 0 && <Stat k="Driveway and walk" v={sf(t.areas.flatwork)} />}
             <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
             <p className="fine">
               {rateLine(price)} · {price.county}. Living {money(price.parts.living[0])}–{money(price.parts.living[1])}
               {price.areas.garage ? `, garage ${money(price.parts.garage[0])}–${money(price.parts.garage[1])}` : ''}
-              {price.areas.porches ? `, porches ${money(price.parts.porches[0])}–${money(price.parts.porches[1])}` : ''}. {price.note}
+              {price.areas.porches ? `, porches ${money(price.parts.porches[0])}–${money(price.parts.porches[1])}` : ''}
+              {price.areas.flatwork ? `, driveway and walk ${money(price.parts.flatwork[0])}–${money(price.parts.flatwork[1])}` : ''}. {price.note}
             </p>
           </div>
           <div className="card">

@@ -62,10 +62,11 @@ test('extras added for the program are real rooms: the garage keeps its id, a ne
   const rooms = generateRooms(fH.ok ? DEFAULT_PROGRAM : { ...DEFAULT_PROGRAM, sqft: fH.maxSqft }, style, lotH)
   const garage = rooms.find((r) => r.id === 'garage')
   assert.ok(garage && garage.kind === 'garage' && garage.w === 22, 'two-car garage')
-  const bed3 = rooms.find((r) => r.id === 'bed-3')
+  // the fourth bedroom takes the mini primary's spot at the front of the wing (round 6), with its closet and Bath 1
+  const bed3 = rooms.find((r) => isRoom(r) && r.kind === 'bed' && r.name === 'Bedroom 3')
   assert.ok(bed3, 'the fourth bedroom')
-  assert.ok(rooms.some((e) => e.kind === 'window' && e.room === 'bed-3'), 'window')
-  assert.ok(rooms.some((e) => e.kind === 'door' && e.room === 'bed-3'), 'door')
+  assert.ok(rooms.some((e) => e.kind === 'window' && e.room === bed3.id), 'window')
+  assert.ok(rooms.some((e) => e.kind === 'door' && e.room === bed3.id), 'door')
   // nothing sits on a porch
   const porches = rooms.filter((r) => isRoom(r) && r.open)
   const solid = rooms.filter((r) => isRoom(r) && !r.open)

@@ -105,7 +105,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
               <>
                 {' '}
                 The largest this plan fits here is {sf(check.maxSqft)}.{' '}
-                <button className="linkish" onClick={() => set('sqft')(check.maxSqft)}>
+                <button className="linkish" onClick={() => onChange({ ...program, sqft: check.maxSqft, asked: program.asked || { ...program, asked: undefined } })}>
                   Use {sf(check.maxSqft)}
                 </button>
               </>
@@ -113,7 +113,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
               <>
                 {' '}
                 It fits {check.suggestion.label}.{' '}
-                <button className="linkish" onClick={() => onChange(check.suggestion.program)}>
+                <button className="linkish" onClick={() => onChange({ ...check.suggestion.program, asked: program.asked || { ...program, asked: undefined } })}>
                   Try that
                 </button>
               </>

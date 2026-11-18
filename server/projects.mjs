@@ -2,7 +2,7 @@
 // A change runs here, not in the browser: Claude (or the basic rules when it is unavailable),
 // then the plan rules, and a credit is taken only when the change is applied.
 import crypto from 'node:crypto'
-import { decide, unsupported } from '../src/draft/lib/interpret.js'
+import { decide, unsupported, editsOf } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor, programOf } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
@@ -61,9 +61,28 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
   return {
     ownerView,
+    /** A lot spec the office cannot build is refused at the door, not on the first change. */
+    async checkLot(lot) {
+      if (!lot?.spec || lot.spec.kind === 'reference') return
+      try {
+        const spec = lot.spec
+        // a typed lot needs a real width and depth (the builder would quietly fall back to a default otherwise)
+        if (spec.kind === 'manual' && !(Number(spec.width) >= 20 && Number(spec.depth) >= 20 && Number(spec.width) <= 5000 && Number(spec.depth) <= 5000)) throw new Error('width and depth')
+        // a plat needs its boundary calls, unless a drafter has already confirmed the lot by hand
+        if (spec.kind === 'plat' && !spec.confirmed && !(Array.isArray(spec.calls) && spec.calls.length >= 3) && !(Array.isArray(spec.corners) && spec.corners.length >= 3)) throw new Error('no boundary')
+        const built = await lots.lotOfProject({ lot })
+        // a lot that builds to no boundary or no buildable area is refused; one the office has not built
+        // (a stubbed lot service hands the spec back) has nothing to check here
+        const degenerate = (pts) => Array.isArray(pts) && pts.length < 3
+        if (!built || degenerate(built.boundary) || degenerate(built.envelope) || (built.envelopeSf !== undefined && !(built.envelopeSf > 0))) throw new Error('no buildable area')
+      } catch (e) {
+        throw fail(400, `the lot cannot be built from what was sent (${lot.spec.kind || 'no kind'}${lot.spec.width !== undefined || lot.spec.depth !== undefined ? `, ${lot.spec.width ?? '?'} x ${lot.spec.depth ?? '?'}` : ''}): give it a width and depth, or an address, or a plat with its boundary calls`)
+      }
+    },
     async create(user, body) {
       if (!Array.isArray(body.rooms) || !body.rooms.length) throw fail(400, 'rooms required')
       if (!body.style?.id) throw fail(400, 'style required')
+      await this.checkLot(body.lot)
       const t = now()
       const p = {
         id: id('prj'),
@@ -114,6 +133,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async update(p, body) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       if (body.lot) {
+        await this.checkLot(body.lot)
         p.lot = body.lot
         p.address = body.lot.address || p.address
       }
@@ -164,7 +184,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         diff = regexOps(request, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      const result = decide(diff, rooms, p.program, style, kit, source, lot)
+      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
+      const edits = editsOf(await store.versions.list(p.id))
+      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits })
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], credits: owner.credits, version: p.version }
       const charged = await store.users.charge(p.userId, now())
