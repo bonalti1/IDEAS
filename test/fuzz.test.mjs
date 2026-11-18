@@ -42,9 +42,9 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
     ['POST', '/api/projects/prj_nope/send', 'user'],
     ['PUT', '/api/admin/cities/mcallen', 'drafter'],
     ['POST', '/api/lot/plat', 'app'],
-    ['POST', '/api/billing/checkout', 'user'],
-    ['PUT', '/api/admin/pricing', 'admin'],
-    ['POST', '/api/admin/users/u1/credits', 'admin'],
+    ['POST', '/api/projects/prj_nope/meeting-request', 'user'],
+    ['POST', '/api/review/prj_nope/allowance', 'drafter'],
+    ['PUT', '/api/admin/allowance', 'drafter'],
     ['POST', '/api/review/prj_nope', 'drafter'],
     ['POST', '/api/review/prj_nope/lot', 'drafter'],
     ['POST', '/api/admin/users/u1/role', 'admin'],
@@ -84,12 +84,9 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
   const roomsNull = results.find((r) => r.route === '/api/interpret' && r.body === '{"rooms":[null],"text":"x"}')
   assert.equal(roomsNull.status, 400)
   assert.match(roomsNull.text, /rooms must be a list of rooms/)
-  // a 503 that was meant for the client keeps its words
-  const checkout = results.find((r) => r.route === '/api/billing/checkout' && r.body === '{"pack":null}')
-  assert.equal(checkout.status, 400, checkout.text)
-  const checkoutOk = await fetch(base + '/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json', ...heads.user }, body: JSON.stringify({ pack: 'pack5' }) })
-  assert.equal(checkoutOk.status, 503)
-  assert.match((await checkoutOk.json()).error, /payments are not set up yet; ask the office for credits/)
+  // a 503 that was meant for the client keeps its words (billing routes are gone while BILLING_ENABLED is off, round 8)
+  const checkout = await fetch(base + '/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json', ...heads.user }, body: JSON.stringify({ pack: 'pack5' }) })
+  assert.equal(checkout.status, 404)
   const plat = await fetch(base + '/api/lot/plat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') }) })
   assert.equal(plat.status, 503)
   assert.match((await plat.json()).error, /the plat reader needs the office Claude key/)

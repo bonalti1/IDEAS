@@ -857,6 +857,31 @@ export function splitClauses(text) {
     .filter((c) => c.length >= 2)
 }
 
+// ── cost questions (round 8, M3): never a number, always the meeting ──────────────────────────
+// English and Spanish; "how much bigger", "cuánto más", "how much room" are about size, not money
+export const COST_RE = /\$|\b(how much(?!\s+(bigger|larger|smaller|wider|deeper|longer|more|less|room|space|closer|further|farther))|costs?|costing|price[sd]?|pricing|precios?|cu[aá]ntos?(?!\s+(m[aá]s|menos|mide|miden|espacio|pies|cuartos|rec[aá]maras|ba[ñn]os))|cuesta[n]?|costar[aá]n?|budget|presupuesto|afford|per square foot|per sq\.? ?ft|per sf|\/sf|estimates?|estimado|quote|cotizaci[oó]n|payments?|pagos?|pagar|financing|financiamiento|mortgage|hipoteca|down payment|enganche)\b/i
+const SPANISH_RE = /\b(precios?|cu[aá]ntos?|cuesta|costar|presupuesto|estimado|cotizaci[oó]n|pagos?|pagar|financiamiento|hipoteca|enganche)\b/i
+export const COST_REPLY = "Great question. Cost is something we go over with you in person at your meeting with the South Texas Builders office, so it's based on your exact plan, lot and selections. Want me to ask the office to set up that meeting?"
+export const COST_REPLY_ES = 'Buena pregunta. El costo lo revisamos con usted en persona en su reunión con la oficina de South Texas Builders, porque depende de su plano exacto, su lote y sus selecciones. ¿Quiere que le pida a la oficina que programe esa reunión?'
+/** True when a request asks about money in any form. */
+export const isCostQuestion = (text) => COST_RE.test(String(text || ''))
+/** The cost answer, in the language the question was asked in. No number ever appears in it. */
+export const costReply = (q) => (typeof q === 'object' ? q?.spanish : SPANISH_RE.test(String(q || ''))) ? COST_REPLY_ES : COST_REPLY
+/**
+ * A request with its cost clauses set aside: { text: what is left to interpret, cost: whether money was
+ * asked about, spanish: whether that part was in Spanish }. "Make it 2,400 sf, how much is that?" keeps the
+ * size and flags the cost; "how much does it cost?" leaves text '' so nothing is interpreted or used.
+ */
+export function splitCost(text) {
+  const t = String(text || '').trim()
+  if (!isCostQuestion(t)) return { text: t, cost: false, spanish: false }
+  // a sentence end is a clause break here ("add an office. what is the payment on this?"); decimals have no space after the dot
+  const clauses = splitClauses(t.replace(/([.?!])\s+(?=\S)/g, '$1;').replace(/\?(?!;)/g, '?;').replace(/,\s*(?=¿)/g, '; '))
+  const kept = clauses.filter((c) => !isCostQuestion(c))
+  const asked = clauses.filter((c) => isCostQuestion(c))
+  return { text: kept.join('; ').replace(/;\s*$/, ''), cost: true, spanish: asked.some((c) => SPANISH_RE.test(c)) }
+}
+
 /** The room a parsed clause is about, by name, for the next clause's "it". */
 function subjectOf(diff, rooms, kit) {
   const o = diff?.ops?.[0]
@@ -893,6 +918,8 @@ export function regexOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } =
 }
 
 function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
+  // money is never read as a change: the answer points to the meeting with the office (M3)
+  if (isCostQuestion(text)) return { ops: [], reply: costReply(text), confidence: 1 }
   const t = text.toLowerCase()
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)

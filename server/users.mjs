@@ -24,7 +24,7 @@ export function makeUsers({ env = process.env, store, dataDir, log = console.log
       .filter(Boolean)
   )
   const admins = new Set((env.DRAFTHOUSE_ADMINS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean))
-  const FREE = +(env.FREE_CREDITS_PER_ACCOUNT ?? env.CREDITS_PER_PROJECT ?? 10) // credits a new account starts with; 0 once houses are paid
+  // no balance on the account (round 8): free changes live on each plan, granted by the office
 
   // local-mode signing secret, kept in DATA_DIR so tokens survive a restart
   let devSecret = ''
@@ -96,7 +96,7 @@ export function makeUsers({ env = process.env, store, dataDir, log = console.log
     const now = new Date().toISOString()
     let u = await store.users.get(id)
     if (!u) {
-      u = { id, email, role: roleFor(email), name: claims.name || claims.user_metadata?.name || '', credits: FREE, createdAt: now, lastSeen: now }
+      u = { id, email, role: roleFor(email), name: claims.name || claims.user_metadata?.name || '', createdAt: now, lastSeen: now }
       await store.users.put(u)
       return u
     }
@@ -111,7 +111,6 @@ export function makeUsers({ env = process.env, store, dataDir, log = console.log
 
   return {
     devMode,
-    freeCredits: FREE,
     isDrafter: (u) => !!u && (u.role === 'drafter' || u.role === 'admin'),
     // local sign-in: anyone with an email, no password; drafters by the DRAFTHOUSE_DRAFTERS list
     async devLogin({ email, name }) {

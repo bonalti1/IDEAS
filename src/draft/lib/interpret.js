@@ -3,7 +3,7 @@
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
 import { kitFor, lotOf, minSizeOf, maxSizeOf, planIdOf, isRoom, programOf, generateRooms, floorArea } from './layout.js'
-import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses } from './ops.js'
+import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 
@@ -37,10 +37,15 @@ export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
  */
 export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const kit = kitFor(style)
+  // a cost question never reaches the model and never uses a change: the answer points to the meeting with
+  // the office (round 8, M3); beside a change ("make it 2,400 sf, how much is that?") the change still runs
+  const costQ = splitCost(text)
+  if (costQ.cost && !costQ.text) return { applied: false, rooms, reply: costReply(costQ), source: 'fallback', ops: [], reasons: ['cost question'], askOffice: 'meeting' }
+  text = costQ.text
   // what this style cannot do yet, said plainly, before any model is asked: clause by clause, so "make the
   // kitchen bigger and add a pool" does the kitchen and names the pool
   const split = dropUnsupported(text, style)
-  if (!split.text) return { applied: false, rooms, reply: split.dropped.map((d) => d.why).join(' '), source: 'fallback', ops: [], unsupported: true }
+  if (!split.text) return { applied: false, rooms, reply: split.dropped.map((d) => d.why).join(' '), source: 'fallback', ops: [], unsupported: true, ...(costQ.cost ? { askOffice: 'meeting' } : {}) }
   text = split.text
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
@@ -53,6 +58,10 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
   const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [], unsupported: split.dropped })
+  if (costQ.cost) {
+    result.reply = `${String(result.reply || '').trim()} ${costReply(costQ)}`.trim()
+    result.askOffice = 'meeting'
+  }
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return result
 }

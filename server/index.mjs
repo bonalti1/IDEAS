@@ -43,8 +43,13 @@ const backup = makeBackup({ store, files, event })
 const interpreter = makeInterpreter()
 const users = makeUsers({ store, dataDir: DATA })
 const lots = makeLots({ store, files, interpreter, event })
-const projects = makeProjects({ store, interpreter, event, logInterpret, lots })
-const billing = makeBilling({ store, event })
+const projects = makeProjects({ store, interpreter, event, logInterpret, lots, alerts })
+// Payments are dormant (round 8, P0b): the client app never talks about money and plan changes are free,
+// granted by the office. BILLING_ENABLED=1 registers the Stripe routes again; off, they do not exist (404).
+const BILLING_ENABLED = /^(1|true|yes)$/i.test(String(process.env.BILLING_ENABLED || ''))
+const billing = BILLING_ENABLED ? makeBilling({ store, event }) : null
+// an account record as a homeowner may see it: no balance, no money
+const safeUser = (u) => (u ? (({ credits, ...keep }) => keep)(u) : u)
 
 // ── health ─────────────────────────────────────────────────────────────────
 async function health() {
@@ -61,7 +66,7 @@ async function health() {
     { id: 'worker', name: 'Revit worker', ok: workers.some((w) => w.online), detail: workers.length ? workers.map((w) => `${w.name}: ${w.online ? 'online' : 'offline'}`).join(', ') : 'none registered', at: now() },
     { id: 'auth', name: 'API keys', ...auth.describe(), at: now() },
     { id: 'accounts', name: 'Client accounts', ...users.describe(), at: now() },
-    { id: 'billing', name: 'Payments', ...billing.describe(), at: now() },
+    ...(billing ? [{ id: 'billing', name: 'Payments', ...billing.describe(), at: now() }] : []),
     { id: 'alerts', name: 'Alert email', ...alerts.describe(), at: now() },
     { id: 'backup', name: 'Nightly backup', ...bk, at: now() },
   ]
@@ -164,13 +169,14 @@ async function queueJob(designId, extra = {}) {
 route('POST', '/api/auth/dev-login', 'app', async (req, res) => {
   if (!users.devMode) return json(res, 404, { error: 'local sign-in is off; sign in through Supabase' }, req)
   try {
-    json(res, 200, await users.devLogin(await readJson(req, { email: 'string', name: 'string?' })), req)
+    const r = await users.devLogin(await readJson(req, { email: 'string', name: 'string?' }))
+    json(res, 200, { ...r, user: safeUser(r.user) }, req)
   } catch (e) {
     json(res, 400, { error: e.message }, req)
   }
 })
-route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: ctx.user, credits: ctx.user.credits || 0, freeCredits: users.freeCredits, auth: users.devMode ? 'local' : 'supabase' }, req))
-route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, (await store.projects.listForUser(ctx.user.id)).map(projects.ownerView), req))
+route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: safeUser(ctx.user), auth: users.devMode ? 'local' : 'supabase' }, req))
+route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await projects.list(ctx.user), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 201, await projects.create(ctx.user, await readJson(req, { rooms: 'array', style: 'object', program: 'object', lot: 'object?', client: 'string?' })), req))
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.update(await projects.load(ctx.user, p.id), await readJson(req, { rooms: 'array?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?' })), req))
@@ -180,6 +186,8 @@ route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
 })
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req, { version: 'number' })).version), req))
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object?', ifc: 'string?' }), saveDesign), req))
+// the homeowner asks the office for a meeting (cost is covered there), or for more changes (round 8, M4/M8)
+route('POST', '/api/projects/:id/meeting-request', 'user', async (req, res, p, ctx) => json(res, 200, await projects.requestMeeting(await projects.load(ctx.user, p.id), await readJson(req, { note: 'string?', kind: 'string?' })), req))
 
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
@@ -206,29 +214,38 @@ route('GET', '/api/lot/flood', 'app', async (req, res) => {
   json(res, 200, await lots.flood(url.searchParams.get('address')), req)
 })
 
-// ── billing: pricing, Stripe Checkout, the webhook, receipts ───────────────
-route('GET', '/api/billing', 'user', async (req, res, p, ctx) => json(res, 200, { credits: ctx.user.credits || 0, pricing: await billing.pricing(), mode: billing.mode, history: await billing.history(ctx.user) }, req))
-route('POST', '/api/billing/checkout', 'user', async (req, res, p, ctx) => {
-  const body = await readJson(req, { pack: 'string' })
-  json(res, 200, await billing.checkout(ctx.user, body.pack, req.headers.origin || ''), req)
-})
-route('GET', '/api/billing/session/:id', 'user', async (req, res, p, ctx) => json(res, 200, await billing.session(ctx.user, p.id), req))
-// Stripe posts here; the signature in the header is the authentication
-route('POST', '/api/billing/webhook', 'public', async (req, res) => {
-  const raw = await readBody(req)
-  json(res, 200, await billing.webhook(raw, req.headers['stripe-signature'] || ''), req)
-})
-route('PUT', '/api/admin/pricing', 'drafter', async (req, res, p, ctx) => {
-  if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes prices' }, req)
-  json(res, 200, await billing.setPricing(await readJson(req, {}), ctx.user), req)
-})
-route('GET', '/api/admin/pricing', 'drafter', async (req, res) => json(res, 200, await billing.pricing(), req))
-route('GET', '/api/admin/payments', 'drafter', async (req, res) => json(res, 200, await store.payments.list(100), req))
-route('POST', '/api/admin/users/:id/credits', 'drafter', async (req, res, p, ctx) => {
-  if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin grants credits' }, req)
-  const body = await readJson(req, { credits: 'number', note: 'string?' })
-  json(res, 200, await billing.grant(ctx.user, p.id, body.credits, body.note), req)
-})
+// ── billing: pricing, Stripe Checkout, the webhook, receipts (only with BILLING_ENABLED=1) ──
+if (billing) {
+  route('GET', '/api/billing', 'user', async (req, res, p, ctx) => json(res, 200, { credits: ctx.user.credits || 0, pricing: await billing.pricing(), mode: billing.mode, history: await billing.history(ctx.user) }, req))
+  route('POST', '/api/billing/checkout', 'user', async (req, res, p, ctx) => {
+    const body = await readJson(req, { pack: 'string' })
+    json(res, 200, await billing.checkout(ctx.user, body.pack, req.headers.origin || ''), req)
+  })
+  route('GET', '/api/billing/session/:id', 'user', async (req, res, p, ctx) => json(res, 200, await billing.session(ctx.user, p.id), req))
+  // Stripe posts here; the signature in the header is the authentication
+  route('POST', '/api/billing/webhook', 'public', async (req, res) => {
+    const raw = await readBody(req)
+    json(res, 200, await billing.webhook(raw, req.headers['stripe-signature'] || ''), req)
+  })
+  route('PUT', '/api/admin/pricing', 'drafter', async (req, res, p, ctx) => {
+    if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes prices' }, req)
+    json(res, 200, await billing.setPricing(await readJson(req, {}), ctx.user), req)
+  })
+  route('GET', '/api/admin/pricing', 'drafter', async (req, res) => json(res, 200, await billing.pricing(), req))
+  route('GET', '/api/admin/payments', 'drafter', async (req, res) => json(res, 200, await store.payments.list(100), req))
+  route('POST', '/api/admin/users/:id/credits', 'drafter', async (req, res, p, ctx) => {
+    if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin grants credits' }, req)
+    const body = await readJson(req, { credits: 'number', note: 'string?' })
+    json(res, 200, await billing.grant(ctx.user, p.id, body.credits, body.note), req)
+  })
+}
+
+// ── the change allowance: free changes per plan, granted by the office (round 8, M7) ──
+route('GET', '/api/admin/allowance', 'drafter', async (req, res) => json(res, 200, { default: await projects.allowanceDefault() }, req))
+route('PUT', '/api/admin/allowance', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.setAllowanceDefault((await readJson(req, { default: 'number' })).default, ctx.user), req))
+route('POST', '/api/review/:id/allowance', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.grantAllowance(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { add: 'number', note: 'string?' })), req))
+// the office estimate (round 8, M2): drafters and admins only; a homeowner gets 403 from the role check
+route('GET', '/api/review/:id/estimate', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.estimateFor(await projects.load(ctx.user, p.id, { drafter: true })), req))
 
 // ── drafter review ─────────────────────────────────────────────────────────
 route('GET', '/api/review', 'drafter', async (req, res) => json(res, 200, await projects.inbox(), req))
@@ -362,7 +379,9 @@ route('POST', '/api/interpret', 'app', async (req, res) => {
     const out = await interpreter.ask(input)
     logInterpret({ request: input.request, client: body.client || null, rooms: body.rooms.length, diff: { ops: out.ops, reply: out.reply, confidence: out.confidence }, verdict: out.confidence < 0.5 || !out.ops.length ? 'unsure' : 'diff', ms: out.ms, usage: out.usage, cost: out.cost, model: out.model })
     await event('interpret', `"${input.request.slice(0, 60)}" → ${out.ops.length} op${out.ops.length === 1 ? '' : 's'}, ${out.ms} ms, $${out.cost.toFixed(4)}`)
-    json(res, 200, out, req)
+    // the usage and its cost stay in the log and the activity (office-only); the app gets the diff
+    const { usage, cost, ...diff } = out
+    json(res, 200, diff, req)
   } catch (e) {
     if (!e.unconfigured) {
       logInterpret({ request: input.request, client: body.client || null, verdict: e.timeout ? 'timeout' : e.refusal ? 'refusal' : e.noDiff ? 'no-diff' : 'error', error: String(e.message).slice(0, 200), ms: e.ms, usage: e.usage, cost: e.cost, model: interpreter.model })

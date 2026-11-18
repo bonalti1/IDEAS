@@ -55,6 +55,7 @@ Rules:
 - A new room gets the kit's template size unless the client gives one. Put it near the room they mention with "near".
 - Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
 - If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.
+- Never state or estimate any price, cost, rate or total. If asked, say cost is covered at the meeting with the South Texas Builders office.
 - The reply is one or two friendly sentences in past tense describing what you did, as if talking to the buyer.`
 
 // the innermost network error code (ECONNREFUSED, ENOTFOUND, ...) behind the SDK's connection error

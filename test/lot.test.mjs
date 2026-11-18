@@ -216,7 +216,7 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
   assert.equal(ok.lot.spec.confirmedBy, 'maria@drafthouse.test')
   assert.equal(ok.lot.rules.front, 12)
   assert.equal(ok.versions[ok.versions.length - 1].kind, 'lot')
-  assert.equal(ok.credits, 10)
+  assert.equal(ok.changesLeft, 10)
   assert.equal((await (await maria.get('/api/review')).json()).lots.length, 0)
   const sent2 = await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana' } })
   assert.equal(sent2.status, 200)

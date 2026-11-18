@@ -75,12 +75,12 @@ test('a lot spec the office cannot build is refused at the door: 400 with a plai
 test('a 5xx the code meant for the client keeps its words (round 8), is logged, and the server stays up (before round 6 any 5xx crashed it)', async (t) => {
   const { base, log, alive } = await startServer(t)
   const ana = await who(base, 'ana@example.com', 'Ana Garza')
-  // the checkout without Stripe is a 503 with a plain line of its own
-  const r = await j(await ana.post('/api/billing/checkout', { pack: 'pack5' }))
+  // the plat reader without a model is a 503 with a plain line of its own (billing is gone from the client, round 8)
+  const r = await j(await ana.post('/api/lot/plat', { name: 'plat.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQK' }))
   assert.equal(r.status, 503, JSON.stringify(r))
-  assert.equal(r.body.error, 'payments are not set up yet; ask the office for credits')
+  assert.match(r.body.error, /plat|interpreter|not set up|key/i)
   assert.ok(alive(), 'the server did not crash')
-  assert.match(log(), /\[api\] POST \/api\/billing\/checkout → 503/, 'the detail is in the log')
+  assert.match(log(), /\[api\] POST \/api\/lot\/plat → 503/, 'the detail is in the log')
   const h = await fetch(base + '/api/health')
   assert.equal(h.status, 200)
 })
@@ -111,7 +111,7 @@ test('a fix the plan cannot take in place is a new draft through the office: "ad
   const rooms = gen(p32, style, lot)
   const made = await j(await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program: p32, rooms, client: 'Ana' }))
   assert.equal(made.status, 201, JSON.stringify(made.body))
-  const credits = made.body.credits
+  const credits = made.body.changesLeft
   // an edit first, so the re-draft has something to carry over (the first of these the narrow plan takes)
   let edit = null
   for (const text of ['make the pantry smaller', 'make bedroom 2 bigger', 'make the living room 1 foot deeper', 'make the primary closet bigger']) {
@@ -126,14 +126,14 @@ test('a fix the plan cannot take in place is a new draft through the office: "ad
   assert.equal(r.status, 200)
   assert.equal(r.body.applied, false)
   assert.match(r.body.reply, /no room for a garage/i)
-  assert.equal(r.body.credits, credits - 1, 'a refusal is not charged')
+  assert.equal(r.body.changesLeft, credits - 1, 'a refusal is not charged')
   const redo = r.body.fixes.find((f) => /Re-draft the house with a 2-car garage/.test(f.label))
   assert.ok(redo, JSON.stringify(r.body.fixes))
   const done = await j(await ana.post(`/api/projects/${made.body.id}/change`, { text: redo.label, ops: redo.ops }))
   assert.equal(done.body.applied, true, done.body.reply)
   assert.ok(done.body.rooms.some((x) => isRoom(x) && x.kind === 'garage'), 'the new draft has the garage')
   assert.ok(done.body.reply.includes(`still stand: "${edit}"`) || done.body.reply.includes(`Could not keep: "${edit}"`), `the earlier edit is accounted for: ${done.body.reply}`)
-  assert.equal(done.body.credits, credits - 2, 'one credit for the new draft')
+  assert.equal(done.body.changesLeft, credits - 2, 'one change for the new draft')
   const detail = await j(await ana.get(`/api/projects/${made.body.id}`))
   assert.equal(detail.body.versions[detail.body.versions.length - 1].kind, 'change')
 })
@@ -173,7 +173,7 @@ test('round 8: the stored program follows the drawn plan after a 5-step chat (Re
   assert.equal(undo.body.applied, true)
   assert.equal(undo.body.undo, true)
   assert.match(undo.body.reply, /^Back to version \d+\./)
-  assert.equal(undo.body.credits, before.credits + 1, 'the credit for the undone change came back')
+  assert.equal(undo.body.changesLeft, before.changesLeft + 1, 'the change that was undone came back to the plan')
   const after = await j(await ana.get(`/api/projects/${id}`))
   assert.equal(after.body.versions[after.body.versions.length - 1].kind, 'rollback')
   assert.equal(after.body.program.beds, programOf(after.body.rooms, after.body.program).beds, 'the program follows the restored plan')
