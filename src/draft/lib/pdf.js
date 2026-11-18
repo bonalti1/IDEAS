@@ -220,6 +220,49 @@ export async function summaryPDF(design, price, audit, trust, info = {}) {
     y += lines.length * 0.15 + 0.03
   })
   y += 0.12
+  // the rules this lot was drafted to (round 7, item 9): each with its source and status, the way the panel shows them
+  const used = design.lot?.rulesUsed || []
+  if (used.length) {
+    if (y > 8.6) {
+      doc.addPage()
+      y = M
+    }
+    h2('Rules used for this lot')
+    doc.setFontSize(8.5)
+    doc.setFont(font, 'normal')
+    doc.setTextColor(85, 85, 85)
+    const head = `${design.lot?.jurisdiction?.name || design.lot?.cityName || ''}${design.lot?.zoning?.district ? ` · zoned ${design.lot.zoning.district}` : ''}${design.lot?.flood?.zone ? ` · FEMA zone ${design.lot.flood.zone}` : design.lot?.flood?.status === 'no-digital-firm' ? ' · no digital FEMA map here' : ''}. A drafter confirms every line before anything is built.`
+    const hl = doc.splitTextToSize(head, W)
+    doc.text(hl, M, y)
+    y += hl.length * 0.14 + 0.06
+    const rows = used.filter((u) => ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf', 'district', 'irc', 'windstorm', 'wind'].includes(u.id))
+    rows.forEach((u) => {
+      if (y > 10.1) {
+        doc.addPage()
+        y = M
+      }
+      const status = u.status === 'verified' ? (u.stale ? 'city code, re-check due' : 'city code') : u.status === 'summary' ? 'summary, office confirms' : 'unknown, confirm with city'
+      doc.setFont(font, 'bold')
+      doc.setTextColor(26, 26, 26)
+      doc.text(String(u.label || u.id), M, y)
+      doc.setFont(font, 'normal')
+      doc.text(String(u.value ?? ''), M + 1.5, y, { maxWidth: 1.7 })
+      doc.setTextColor(85, 85, 85)
+      const src = doc.splitTextToSize(`${status}${u.source ? ` · ${u.source}` : ''}${u.checkedAt ? ` · ${u.checkedAt}` : ''}`, W - 3.4)
+      doc.text(src, M + 3.4, y)
+      y += Math.max(1, src.length) * 0.14 + 0.04
+    })
+    ;(design.lot?.ruleNotes || []).forEach((n) => {
+      const l = doc.splitTextToSize(n, W)
+      doc.text(l, M, y)
+      y += l.length * 0.14 + 0.02
+    })
+    y += 0.12
+  }
+  if (y > 9.4) {
+    doc.addPage()
+    y = M
+  }
   h2('What happens next')
   doc.setFontSize(10)
   ;(trust?.next || []).forEach((n, i) => {
