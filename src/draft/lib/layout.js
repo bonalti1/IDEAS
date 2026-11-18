@@ -148,10 +148,21 @@ export function fitsEnvelope(placed, kit, lot) {
  * else the first of the kit's other plans (the narrow one) that does; the standard plan when none
  * does, so the rooms step can say what would fit.
  */
+/** The width of the lot's setback envelope in the house frame (Infinity with no envelope). */
+export function envelopeWidth(lot) {
+  const L = lotOf(lot)
+  if (!L.envelope || L.envelope.length < 3) return Infinity
+  const xs = L.envelope.map((p) => localOf(L, p)[0])
+  return Math.max(...xs) - Math.min(...xs)
+}
+
 export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   if (!planId && kit.plans && Object.keys(kit.plans).length) {
     const noEnvelope = !lotOf(lot).envelope
     const inRange = (range) => !range || !program.sqft || (program.sqft >= range[0] && program.sqft <= range[1])
+    // a plan wider than the lot at its smallest is not drawn to find that out (round 8: the rooms step's speed)
+    const envW = envelopeWidth(lot)
+    const narrowEnough = (plan) => !plan?.minWidth || plan.minWidth <= envW + 0.01
     // first the plans drawn for this living area (the compact one for a small house), the standard plan ahead
     // of the others; then any plan that holds the program and fits the lot; the standard plan when none does
     const standard = fromPlan(program, kit, lot, 'standard')
@@ -159,19 +170,19 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     // a garage the standard plan could only take by trimming the house (or not at all): the garage-forward
     // variant puts it at the front corner and keeps the house its size
     const hasGarage = (d) => d.rooms.some((r) => isRoom(r) && r.kind === 'garage')
-    if (program.garage > 0 && kit.plans.frontgarage && !noEnvelope && inRange(kit.plans.frontgarage.sqft) && (!hasGarage(standard) || standard.fitScale < 0.97)) {
+    if (program.garage > 0 && kit.plans.frontgarage && narrowEnough(kit.plans.frontgarage) && !noEnvelope && inRange(kit.plans.frontgarage.sqft) && (!hasGarage(standard) || standard.fitScale < 0.97)) {
       const alt = fromPlan(program, kit, lot, 'frontgarage')
       if (fitsEnvelope(alt.rooms, kit, lot) && hasGarage(alt) && (!hasGarage(standard) || alt.fitScale > standard.fitScale + 0.01)) return alt
     }
     if (standardFits && inRange(kit.planSqft)) return standard
     for (const id of Object.keys(kit.plans)) {
-      if (!planHolds(kit.plans[id], program) || !inRange(kit.plans[id].sqft)) continue
+      if (!planHolds(kit.plans[id], program) || !inRange(kit.plans[id].sqft) || !narrowEnough(kit.plans[id])) continue
       const alt = fromPlan(program, kit, lot, id)
       if (noEnvelope || fitsEnvelope(alt.rooms, kit, lot)) return alt
     }
     if (standardFits) return standard
     for (const id of Object.keys(kit.plans)) {
-      if (!planHolds(kit.plans[id], program)) continue
+      if (!planHolds(kit.plans[id], program) || !narrowEnough(kit.plans[id])) continue
       const alt = fromPlan(program, kit, lot, id)
       if (fitsEnvelope(alt.rooms, kit, lot)) return alt
     }
@@ -280,7 +291,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   if (drawnGarage && program.garage > 0) {
     const g = kit.rooms.garage
     const drawnCars = +(drawnGarage.name.match(/^(\d+)-Car/) || [])[1] || 2
-    if (program.garage !== drawnCars) drawnGarage.w = Math.max(g.perCar * program.garage, program.garage >= 3 ? 32 : 0)
+    if (program.garage !== drawnCars) drawnGarage.w = program.garage >= 3 ? Math.max(32, g.perCar * program.garage - 1) : g.perCar * program.garage
     drawnGarage.name = `${program.garage}-Car Garage`
     const side = garageFacing(drawnGarage, rooms) || 's'
     for (let i = rooms.length - 1; i >= 0; i--) if (rooms[i].kind === 'door' && rooms[i].room === drawnGarage.id && /overhead/.test(rooms[i].size || '')) rooms.splice(i, 1)
@@ -369,9 +380,10 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
       return Math.max(...solid.map((r) => r.x + r.w)) - Math.min(...solid.map((r) => r.x))
     }
     // a foot and a half of slack: the fit shifts the house by whole feet
-    const room = envW - 1.5
-    if (widthAt(k, k) > room && widthAt(1, 1) <= room) {
-      let lo = 1
+    const room = envW - 0.5 // half a foot of slack: the fit places the house to the quarter foot
+    if (widthAt(k, k) > room && widthAt(Math.max(0.85, kMin), Math.max(0.85, kMin)) <= room) {
+      // the widest the plan goes on this lot, down to the room floor when the plan is wider than the lot at scale 1
+      let lo = Math.max(0.85, kMin)
       let hi = k
       while (hi - lo > 0.0025) {
         const mid = (lo + hi) / 2
@@ -384,7 +396,7 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
         scalePlan(copy, [kx, ky], cx, cy, kit, T.id || null)
         return copy.filter(isConditioned).reduce((a, r) => a + r.w * r.d, 0) * program.stories
       }
-      const kyMax = Math.min(1.6, kx * 1.4)
+      const kyMax = Math.min(1.6, kx * 1.5)
       const ky = areaXY(kyMax) >= program.sqft ? search((v) => areaXY(v) >= program.sqft, kx, kyMax) : kyMax
       k = [kx, ky]
       // deeper rooms can only do so much: short of the area asked, the draft says the width capped it
@@ -552,6 +564,11 @@ export function scalePlan(rooms, k, cx, cy, kit, planId = planIdOf(rooms)) {
 export function minSizeOf(kit, kind, planId = null) {
   return (planId && kit.plans?.[planId]?.minSize?.[kind]) || kit.rules?.minSize?.[kind] || null
 }
+/** The largest a room of this kind is drawn in the kit, [w, d] in feet (the kit's maxSize, else its maxRoomFt both ways). */
+export function maxSizeOf(kit, kind) {
+  const m = kit.rules?.maxRoomFt || 40
+  return kit.rules?.maxSize?.[kind] || [m, m]
+}
 /** Which of the kit's plans these rooms were drawn from (the roof element carries it). */
 export const planIdOf = (rooms) => rooms.find((r) => r.kind === 'roof')?.plan || null
 /** Do the rooms meet the kit's minimum sizes (the garage aside)? */
@@ -589,7 +606,9 @@ const FIXTURE_IDS = new Set(['toilet-front', 'toilet-side', 'shower-front', 'hal
 /** The smallest scale at which every bath keeps the clearances around its fixtures and every hall its width. */
 function fixtureFloor(rooms, kit, program, lot, from, cx, cy, planId = planIdOf(rooms)) {
   const ok = (k) => {
-    const copy = rooms.map((r) => ({ ...r }))
+    // the rooms and their elements alone: the audit needs no roof, and rebuilding the roof's surfaces at every
+    // step of the search was most of a draft's time (round 8)
+    const copy = rooms.filter((r) => r.kind !== 'roof').map((r) => ({ ...r }))
     scalePlan(copy, k, cx, cy, kit, planId)
     widenHalls(copy, kit)
     settleIslands(copy)
@@ -974,7 +993,9 @@ export function attachGarage(placed, kit, cars, lot, stories = 1, { minScale = 0
   // the candidates, in the order an STB designer would take them
   const candidates = []
   // a tandem garage parks the third car behind one of two bays: two bays wide, two cars deep
-  const widths = tandem && cars >= 3 ? [[g.perCar * 2, 2, true]] : cars >= 3 ? [[Math.max(g.perCar * cars, 32), cars, false], [g.perCar * 2, 2, true]] : [[Math.max(g.perCar * cars, cars >= 3 ? 32 : 0), cars, false]]
+  // a 3-car is 32 ft wide (10'-8" a bay, the mark is 31–32), a 4-car 43: a foot a bay less than the 2-car's 11
+  const wideW = Math.max(32, g.perCar * cars - 1)
+  const widths = tandem && cars >= 3 ? [[g.perCar * 2, 2, true]] : cars >= 3 ? [[wideW, cars, false], [g.perCar * 2, 2, true]] : [[g.perCar * cars, cars, false]]
   for (const [w, bays, tandem] of widths) {
     const d = tandem ? g.d * 2 : g.d
     const name = `${cars}-Car Garage${tandem ? ' (tandem)' : ''}`
@@ -1141,25 +1162,63 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
     const hz = rs.flatMap((r) => [r.y, r.y + r.d])
     return [Math.max(...hx) - Math.min(...hx), Math.max(...hz) - Math.min(...hz)]
   }
-  // rings of whole-foot shifts, nearest first, at each scale step; quarter-foot (within 20 ft) on a lot with under 2 ft to spare
-  const step = envW - boxAt(1)[0] < 2 ? 0.25 : 1
-  const reach = step < 1 ? Math.min(maxShift, 20) : maxShift
-  const rings = []
-  for (let ring = 0; ring <= reach / step; ring++) for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) rings.push([dx * step, dy * step])
+  // a rectangular envelope (every typed lot, most plats): the shift that puts the house inside is read off the
+  // boxes directly, the smallest one that does, to the inch. An irregular envelope falls back to rings of
+  // whole-foot shifts, nearest first (quarter-foot within 20 ft on a lot with under 2 ft to spare); the ring
+  // search cost 400–700 ms a draft on the 50 ft lot, which froze the rooms step (round 8)
+  const rect = env.length === 4 && new Set(ex.map((v) => v.toFixed(3))).size === 2 && new Set(ez.map((v) => v.toFixed(3))).size === 2
+  const nearestZeroIn = (lo, hi) => (lo > 0 ? lo : hi < 0 ? hi : 0)
   let found = null
-  for (let s = 1; s >= minScale - 1e-9 && !found; s = Math.round((s - 0.03) * 100) / 100) {
-    const [houseW, houseD] = boxAt(s)
-    if (houseW > envW + 0.01 || houseD > envD + 0.01 || !roomsMeetMinimums(roomsAt(s), kit, planIdOf(flat))) continue
-    const slackX = Math.ceil((envW - houseW) / 2) + 2
-    const slackZ = Math.ceil((envD - houseD) / 2) + 2
-    for (const [dx, dy] of rings) {
-      if (Math.abs(dx) > slackX + maxShift || Math.abs(dy) > slackZ + maxShift) continue
-      if (fits(s, dx, dy)) {
-        found = { s, dx, dy }
-        break
+  if (rect) {
+    const envX0 = Math.min(...ex)
+    const envX1 = Math.max(...ex)
+    const envZ0 = Math.min(...ez)
+    const envZ1 = Math.max(...ez)
+    for (let s = 1; s >= minScale - 1e-9 && !found; s = Math.round((s - 0.03) * 100) / 100) {
+      const rs = roomsAt(s)
+      if (!roomsMeetMinimums(rs, kit, planIdOf(flat))) continue
+      const hx0 = Math.min(...rs.map((r) => r.x)) - centre[0]
+      const hx1 = Math.max(...rs.map((r) => r.x + r.w)) - centre[0]
+      const hz0 = Math.min(...rs.map((r) => r.y)) - centre[1]
+      const hz1 = Math.max(...rs.map((r) => r.y + r.d)) - centre[1]
+      const dxLo = envX0 - hx0
+      const dxHi = envX1 - hx1
+      const dyLo = envZ0 - hz0
+      const dyHi = envZ1 - hz1
+      if (dxLo > dxHi + 1e-6 || dyLo > dyHi + 1e-6) continue
+      // the smallest shift, in quarter feet, still inside the range (whole feet when there is room for it)
+      const pick = (lo, hi) => {
+        const raw = nearestZeroIn(lo, hi)
+        const whole = raw > 0 ? Math.ceil(raw) : Math.floor(raw)
+        if (whole >= lo - 1e-6 && whole <= hi + 1e-6) return whole
+        const q = raw > 0 ? Math.ceil(raw * 4) / 4 : Math.floor(raw * 4) / 4
+        return q >= lo - 1e-6 && q <= hi + 1e-6 ? q : raw
+      }
+      const dx = pick(dxLo, dxHi)
+      const dy = pick(dyLo, dyHi)
+      if (Math.abs(dx) > maxShift + 1e-6 || Math.abs(dy) > maxShift + 1e-6) continue
+      if (fits(s, dx, dy)) found = { s, dx, dy }
+    }
+  } else {
+    const step = envW - boxAt(1)[0] < 2 ? 0.25 : 1
+    const reach = step < 1 ? Math.min(maxShift, 20) : maxShift
+    const rings = []
+    for (let ring = 0; ring <= reach / step; ring++) for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) if (Math.max(Math.abs(dx), Math.abs(dy)) === ring) rings.push([dx * step, dy * step])
+    for (let s = 1; s >= minScale - 1e-9 && !found; s = Math.round((s - 0.03) * 100) / 100) {
+      const [houseW, houseD] = boxAt(s)
+      if (houseW > envW + 0.01 || houseD > envD + 0.01 || !roomsMeetMinimums(roomsAt(s), kit, planIdOf(flat))) continue
+      const slackX = Math.ceil((envW - houseW) / 2) + 2
+      const slackZ = Math.ceil((envD - houseD) / 2) + 2
+      for (const [dx, dy] of rings) {
+        if (Math.abs(dx) > slackX + maxShift || Math.abs(dy) > slackZ + maxShift) continue
+        if (fits(s, dx, dy)) {
+          found = { s, dx, dy }
+          break
+        }
       }
     }
   }
+
   if (!found || (found.s === 1 && found.dx === 0 && found.dy === 0)) return { rooms, shift: [0, 0], scale: 1 }
   const { s, dx, dy } = found
   // doors, windows and fixtures keep their size through a trim and their place in their rooms; the roof follows

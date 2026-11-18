@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Stepper, Stat, money, sf } from '../ui.jsx'
 import { kitFor, lotOf, programLimits } from '../lib/layout.js'
 import { fitsLot } from '../lib/fit.js'
@@ -13,6 +13,64 @@ const EXTRAS = [
   ['rearPorch', 'Rear porch'],
 ]
 
+// one worker for the screen; a fit check that is still running when the next tap comes is simply ignored
+let worker = null
+let seq = 0
+const pending = new Map()
+function workerFor() {
+  if (worker !== null) return worker
+  try {
+    if (typeof Worker === 'undefined') throw new Error('no Worker')
+    worker = new Worker(new URL('../lib/fit.worker.js', import.meta.url), { type: 'module' })
+    worker.onmessage = (e) => {
+      const p = pending.get(e.data?.id)
+      if (!p) return
+      pending.delete(e.data.id)
+      e.data.error ? p.reject(new Error(e.data.error)) : p.resolve(e.data.check)
+    }
+    worker.onerror = () => {
+      // the worker could not load (an old browser, a blocked script): every waiting check falls back to the main thread
+      for (const p of pending.values()) p.reject(new Error('worker failed'))
+      pending.clear()
+      worker = false
+    }
+  } catch {
+    worker = false
+  }
+  return worker
+}
+const checkInWorker = (program, style, lot) =>
+  new Promise((resolve, reject) => {
+    const w = workerFor()
+    if (!w) return reject(new Error('no worker'))
+    const id = ++seq
+    pending.set(id, { resolve, reject })
+    w.postMessage({ id, program, styleId: style?.id, lot })
+  })
+
+/**
+ * The fit check for the rooms step, run in a worker so the screen keeps painting: { check, checking }.
+ * The last answer stays on screen while the next one is drawn; with no worker the check runs inline.
+ */
+function useFitCheck(program, style, L) {
+  const [state, setState] = useState({ check: null, checking: true })
+  const latest = useRef(0)
+  useEffect(() => {
+    const n = ++latest.current
+    let alive = true
+    setState((s) => ({ ...s, checking: true }))
+    checkInWorker(program, style, L)
+      .catch(() => fitsLot(program, style, L))
+      .then((check) => {
+        if (alive && latest.current === n) setState({ check, checking: false })
+      })
+    return () => {
+      alive = false
+    }
+  }, [program, style, L])
+  return state
+}
+
 export default function Program({ program, style, lot, onChange, onNext, onBack }) {
   const L = lotOf(lot)
   const kit = kitFor(style)
@@ -25,8 +83,10 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const toggle = (k) => () => onChange({ ...program, [k]: !program[k] })
   const ref = kit.reference
   const matchesRef = !!ref && ['beds', 'baths', 'halfBath', 'suite2', 'office', 'garage', 'stories', 'sqft', 'frontPorch', 'rearPorch'].every((k) => (program[k] ?? false) === (ref.program[k] ?? false))
-  // the real check: the first draft is drafted and run through the rules on this lot
-  const check = useMemo(() => fitsLot(program, style, L), [program, style, L])
+  // the real check: the first draft is drafted and run through the rules on this lot, in a worker (round 8: the
+  // narrow lot's check took seconds and froze every tap); until the first answer the meter says it is checking
+  const { check: checked, checking } = useFitCheck(program, style, L)
+  const check = checked || { ok: false, checking: true, reasons: [], draft: { minSqft: 0, clamped: false, fitScale: 1, rooms: [] }, maxSqft: null, suggestion: null, need: null }
   // the sample card shows what its draft comes out to, not the sheet's number
   const sample = useMemo(() => (ref ? fitsLot({ ...ref.program }, style, L) : null), [ref, style, L])
   const samplePrice = sample?.ok && sample.draft?.rooms?.length ? priceOf({ rooms: sample.draft.rooms, program: ref.program, style, lot }) : null
@@ -96,7 +156,9 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         <div className="meter" aria-label="Lot fit">
           <div className={'meter-fill' + (!check.ok ? ' over' : fit > 0.85 || trimmed ? ' tight' : '')} style={{ width: Math.min(100, fit * 100) + '%' }} />
         </div>
-        {check.ok ? (
+        {checking && !checked ? (
+          <p className="muted fit-note">Checking the lot…</p>
+        ) : check.ok ? (
           <p className="fine">{trimmed ? `Fits once trimmed about ${trimmed}% to stay inside the setbacks on this lot.` : 'Passes the setback, size and coverage rules on this lot.'}</p>
         ) : (
           <p className="fine bad">
@@ -135,7 +197,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         </Button>
         <Button
           primary
-          disabled={!check.ok}
+          disabled={!check.ok || checking}
           onClick={() => {
             // the plan does not go under its smallest size: that is what gets drafted, and the ask says so
             if (check.draft.clamped && program.sqft < minSqft) onChange({ ...program, sqft: minSqft })

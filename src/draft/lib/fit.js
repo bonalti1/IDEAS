@@ -1,6 +1,6 @@
 // Does a program fit a lot? The rooms step asks this before "Draft my house", so the first draft
 // a client sees always passes the rules. When it does not fit, the largest living area that does.
-import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf } from './layout.js'
+import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf, planHolds, envelopeWidth, fromPlan, fitsEnvelope } from './layout.js'
 import { checkRules } from './rules.js'
 import { DEFAULT_LOT } from './lot.js'
 
@@ -26,8 +26,36 @@ export function houseSize(rooms) {
 
 // a draft fits when it passes the rules at (nearly) the size asked: a trim under 95% is a smaller house
 const TRIM = 0.95
+const PROGRAM_KEYS = ['beds', 'baths', 'halfBath', 'suite2', 'office', 'garage', 'stories', 'sqft', 'frontPorch', 'rearPorch', 'wingSplit', 'tandem']
+/** One line for a program's drafting fields, in a fixed order (what a draft depends on). */
+export const programKey = (program) => PROGRAM_KEYS.map((k) => `${k}=${program?.[k] ?? ''}`).join('|')
+/** One line for a lot: its spec and boundary (what a draft depends on), not the object identity. */
+export const lotKey = (lot) => {
+  const L = lotOf(lot)
+  return JSON.stringify([L.spec || null, L.boundary || null, L.envelope || null, L.rules?.id || null, L.angle || 0])
+}
+// the drafts one fit check needs, drawn once each: the offers and the size searches ask for the same
+// program at the same size again and again (the narrow 5/4 drew 300 drafts for one answer)
+let memo = null
+const draftOnce = (program, style, lot) => {
+  if (!memo) return starterDraft(program, style, lot)
+  const k = programKey(program) + '|' + (style?.id || '')
+  let d = memo.get(k)
+  if (!d) {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
+    d = starterDraft(program, style, lot)
+    if (typeof process !== 'undefined' && process.env?.FIT_DEBUG) console.error(`[fit] draft ${Math.round(performance.now() - t0)} ms ${k}`)
+    memo.set(k, d)
+  }
+  return d
+}
+// fit answers by program and lot: the rooms step asks the same question on every tap
+const RESULTS = new Map()
+const RESULTS_MAX = 60
+export const clearFitCache = () => RESULTS.clear()
+
 const passes = (program, style, lot) => {
-  const draft = starterDraft(program, style, lot)
+  const draft = draftOnce(program, style, lot)
   const rules = checkRules(draft.rooms, program, style, lot)
   // a garage asked for that found no spot a car can reach is a miss, not a quiet 0-car draft
   if (program.garage > 0 && !draft.rooms.some((r) => isRoom(r) && r.kind === 'garage')) {
@@ -48,11 +76,40 @@ const passes = (program, style, lot) => {
  *   area with these rooms that passes on this lot, or null when none does.
  */
 export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
+  if (depth === 0) {
+    const key = programKey(program) + '|' + (style?.id || '') + '|' + lotKey(lot)
+    const hit = RESULTS.get(key)
+    if (hit) return hit
+    memo = new Map()
+    try {
+      const out = fitsLotNow(program, style, lot, { depth })
+      if (RESULTS.size >= RESULTS_MAX) RESULTS.delete(RESULTS.keys().next().value)
+      RESULTS.set(key, out)
+      return out
+    } finally {
+      memo = null
+    }
+  }
+  return fitsLotNow(program, style, lot, { depth })
+}
+
+/** Could any of the kit's plans that hold this program be as narrow as the lot? (The standard plan at 85% counts.) */
+function anyPlanFits(kit, program, lot) {
+  const envW = envelopeWidth(lot)
+  if (!Number.isFinite(envW)) return true
+  const standardMin = (kit.plan?.minWidth || (kit.plan?.footprint?.w || 72) * 0.85)
+  if (standardMin <= envW + 0.01) return true
+  return Object.values(kit.plans || {}).some((plan) => planHolds(plan, program) && (!plan.minWidth || plan.minWidth <= envW + 0.01))
+}
+
+function fitsLotNow(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
+  const kitNow = kitFor(style)
+  const hopeless = !anyPlanFits(kitNow, program, lot)
   const rules = passes(program, style, lot)
   const draft = rules.draft
   if (rules.ok === false && !rules.reasons.length) rules.reasons.push(`This plan has to be trimmed to ${Math.round(draft.fitScale * 100)}% to fit the lot.`)
   let maxSqft = null
-  if (!rules.ok) {
+  if (!rules.ok && !hopeless) {
     let lo = Math.max(draft.minSqft || 0, 800)
     let hi = program.sqft
     if (lo < hi && passes({ ...program, sqft: lo }, style, lot).ok) {
@@ -97,17 +154,51 @@ export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
     ].filter(Boolean)
     for (const t of tries) {
       let offered
+      if (!t.plan && !anyPlanFits(kit, t.program, lot)) continue
       if (t.plan) {
         // the offer drafts on the plan it names: above what the plan takes on this lot another plan is
-        // drawn instead, so the size steps down the plan's range until this plan comes out and passes
-        // (the 4/2 the narrow plan holds is offered at 2,200 sf on the 50 ft lot, not refused at 2,800)
-        const drawn = (p) => planIdOf(starterDraft(p, style, lot).rooms)
-        const [floor, top] = kit.plans[t.plan].sqft || [0, Infinity]
-        const good = (p) => drawn(p) === t.plan && passes(p, style, lot).ok
-        let p = { ...t.program, sqft: Math.min(t.program.sqft, top) }
-        for (let i = 0; i < 40 && !good(p) && p.sqft - 50 >= floor; i++) p = { ...p, sqft: p.sqft - 50 }
-        if (!good(p)) continue
-        offered = p
+        // drawn instead, so the size comes down the plan's range until this plan comes out and passes
+        // (the 4/2 the narrow plan holds is offered at 2,200 sf on the 50 ft lot, not refused at 2,800).
+        // A plan wider than the lot at its smallest is not tried; the size is found by bisection, a
+        // draft a step, not 50 sf at a time (that was 40 drafts a plan and a 20 s rooms step)
+        const plan = kit.plans[t.plan]
+        if (plan.footprint && plan.minWidth && plan.minWidth > envelopeSize(lot)[0] + 0.01) continue
+        const [floor, top] = plan.sqft || [0, Infinity]
+        // the search draws the named plan alone (a full draft tries the standard plan and the variant first); the
+        // size it lands on is then checked once the way the app will draw it
+        const onPlan = (p) => {
+          const d = fromPlan(p, kit, lot, t.plan)
+          if (d.capped || d.fitScale < TRIM - 1e-9 || !fitsEnvelope(d.rooms, kit, lot)) return false
+          if (p.garage > 0 && !d.rooms.some((r) => isRoom(r) && r.kind === 'garage')) return false
+          return checkRules(d.rooms, p, style, lot).ok
+        }
+        const good = (p) => {
+          const r = passes(p, style, lot)
+          return r.ok && planIdOf(r.draft.rooms) === t.plan
+        }
+        const at = (sqft) => ({ ...t.program, sqft })
+        let hi = Math.min(t.program.sqft, top)
+        let found = onPlan(at(hi)) ? hi : null
+        if (found === null && floor < hi) {
+          let lo = floor
+          if (!onPlan(at(lo))) continue
+          found = lo
+          for (let i = 0; i < 8 && hi - lo > 50; i++) {
+            const mid = Math.round((lo + hi) / 2 / 50) * 50
+            if (mid <= lo || mid >= hi) break
+            if (onPlan(at(mid))) {
+              lo = mid
+              found = mid
+            } else hi = mid
+          }
+        }
+        if (found === null) continue
+        // the app draws with starterDraft: the size must come out on this plan that way too (else step down once)
+        if (!good(at(found))) {
+          if (found - 50 >= floor && good(at(found - 50))) found -= 50
+          else continue
+        }
+        offered = at(found)
       } else {
         // one level only: an offer is checked at its size, it does not go looking for offers of its own
         const f = fitsLot(t.program, style, lot, { depth: depth + 1 })
@@ -122,7 +213,7 @@ export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
   let need = null
   if (!rules.ok && maxSqft == null && !suggestion) {
     const least = { ...program, garage: 0, office: false, suite2: false, beds: Math.min(program.beds, 3), baths: Math.min(program.baths, 2), sqft: draft.minSqft || program.sqft }
-    const [w, d] = houseSize(starterDraft(least, style, lot).rooms)
+    const [w, d] = houseSize(draftOnce(least, style, lot).rooms)
     const [ew, ed] = envelopeSize(lot)
     need = { houseWidth: Math.round(w), houseDepth: Math.round(d), lotWidth: Math.round(ew), lotDepth: Math.round(ed) }
   }

@@ -15,6 +15,7 @@ const awning = (id, cy) => ({ id: `awning-${id}`, kind: 'shed', x0: -2.5, x1: 0,
 export const COMPACT_PLAN = {
   id: 'compact',
   footprint: { w: 72, d: 53 },
+  minWidth: 36, // the narrowest the house goes at this plan's smallest size (the fit does not try it on a lot tighter than this)
   facing: 'street',
   // what this plan can hold, and the living area it is drawn for
   capacity: { beds: 3, baths: 2, halfBath: false, office: false, garage: 2, suite2: false },
