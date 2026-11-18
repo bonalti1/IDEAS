@@ -2,7 +2,8 @@
 // 1,450 sf (drawn), for 1,200 to 1,750 sf programs on any lot a 40 ft house fits. The primary suite
 // at the rear-west, two bedrooms and a hall bath off a 33 ft hall, the kitchen and dining at the
 // rear-east with a French door to the yard, the living room across the front, the pantry, mud room
-// and laundry between the kitchen and a front-load garage. No office, no second suite, no half
+// and laundry between the kitchen and a front-load garage (with no garage the mud room opens to the
+// yard through its back wall). No office, no second suite, no half
 // bath: the rooms step offers the standard plan for those. Plan feet: x from the left, y toward the
 // street. The footprint is the standard plan's so the three plans share one plan centre.
 //
@@ -76,10 +77,13 @@ export const COMPACT_PLAN = {
     { id: 'd-bed3', room: 'bed3', axis: 'v', x: 17, y: 5.5, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
     { id: 'd-closet3', room: 'closet3', axis: 'h', x: 20.5, y: 11, w: 4, swing: -1, hinge: 'start', pair: true, size: 'closet' },
     // kitchen side: the pantry, mud room and laundry off the kitchen's south wall; the garage into the mud room
-    { id: 'd-pantry', room: 'pantry', axis: 'h', x: 18.75, y: 24, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
-    { id: 'd-mud', room: 'mud', axis: 'h', x: 22.5, y: 24, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
+    // the pantry is under 25 sf: its door swings out into the kitchen
+    { id: 'd-pantry', room: 'pantry', axis: 'h', x: 18.75, y: 24, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },
+    { id: 'd-mud', room: 'mud', axis: 'h', x: 22.5, y: 24, w: 2.5, pocket: true, size: 'interior' },
     { id: 'd-laundry', room: 'laundry', axis: 'h', x: 31.5, y: 24, w: 2.5, swing: 1, hinge: 'end', size: 'interior' },
     { id: 'd-garage', room: 'garage', axis: 'h', x: 26, y: 29, w: 2.67, swing: -1, hinge: 'start', size: 'garage' },
+    // with no garage the mud room's back wall is outside: it keeps a door to the yard (a drop zone, not a closet)
+    { id: 'd-mud-ext', room: 'mud', axis: 'h', x: 24, y: 29, w: 3, swing: -1, hinge: 'start', size: 'exteriorSingle', exterior: true, unless: 'garage' },
     // public openings
     { id: 'd-kitchen', room: 'kitchen', axis: 'v', x: 17, y: 18.5, w: 4, cased: true },
     { id: 'd-living', room: 'living', axis: 'h', x: 15, y: 36, w: 3.5, cased: true },

@@ -255,7 +255,20 @@ class Reader:
             cx, cy = self.snap_to_edges(rooms, axis, cx, cy)
             room = self.room_at(rooms, cx, cy)
             room = self.named_room(rooms, d, room)
-            doors.append({'id': self.pset_text(d, 'Id') or 'd-' + slug(d.Name or (room['id'] if room else 'door')), 'room': room['id'] if room else None, 'axis': axis, 'x': cx, 'y': cy, 'w': width, 'swing': -1, 'hinge': 'end' if 'LEFT' in op else None, 'pair': pair, 'exterior': exterior, 'size': size, 'ifcType': (E.get_type(d).Name if E.get_type(d) else d.Name)})
+            # the swing side, hinge and a sliding leaf come from the DraftHouse_Opening set when the file carries it
+            # (our own export does); else the operation type says sliding, and the leaf swings toward -y / -x
+            swing_txt = self.pset_text(d, 'Swing')
+            swing = int(float(swing_txt)) if swing_txt not in (None, '') else -1
+            hinge_txt = self.pset_text(d, 'Hinge')
+            hinge = hinge_txt if hinge_txt in ('start', 'end') else ('end' if 'LEFT' in op else None)
+            pocket = self.pset_text(d, 'Pocket') == 'true' or 'SLIDING' in op
+            barn = self.pset_text(d, 'Barn') == 'true'
+            door = {'id': self.pset_text(d, 'Id') or 'd-' + slug(d.Name or (room['id'] if room else 'door')), 'room': room['id'] if room else None, 'axis': axis, 'x': cx, 'y': cy, 'w': width, 'swing': swing, 'hinge': hinge, 'pair': pair, 'exterior': exterior, 'size': size, 'ifcType': (E.get_type(d).Name if E.get_type(d) else d.Name)}
+            if pocket:
+                door['pocket'] = True
+            if barn:
+                door['barn'] = True
+            doors.append(door)
         # cased openings: voids in walls with nothing in them, wider than a window
         filled = set(r.RelatingOpeningElement.GlobalId for r in self.f.by_type('IfcRelFillsElement'))
         for op in self.f.by_type('IfcOpeningElement'):
@@ -494,6 +507,10 @@ def build_kit(raw, kit_id, name, source):
                 e['pair'] = True
             if d.get('exterior'):
                 e['exterior'] = True
+            if d.get('pocket'):
+                e['pocket'] = True
+            if d.get('barn'):
+                e['barn'] = True
         doors.append(e)
     windows = [{'mark': w['mark'], 'room': w['room'], 'axis': w['axis'], 'x': r2(w['x'] - x0), 'y': r2(w['y'] - y0), 'w': r2(w['w']), 'sill': r2(w['sill']), 'head': r2(w['head'])} for w in raw['windows'] if w.get('room')]
     fixtures = [dict({'k': f['k'], 'room': f['room'], 'x': r2(f['x'] - x0), 'y': r2(f['y'] - y0), 'w': r2(f['w']), 'd': r2(f['d'])}, **{k: f[k] for k in ('face', 'head') if f.get(k)}) for f in raw['fixtures'] if f.get('room')]

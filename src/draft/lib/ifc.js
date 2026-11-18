@@ -263,7 +263,8 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
         const name = [tag, e.size || 'door', e.pair && !spec.pair ? 'pair' : ''].filter(Boolean).join(' ')
         fill = add(`IFCDOOR(${g()},#${oh},'${esc(name)}','${esc(spec.material || '')}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.DOOR.,${op},$)`)
         pset('Pset_DoorCommon', [pBool('IsExternal', !!e.exterior), pText('FireRating', e.fireRated ? '20 min' : ''), pBool('SelfClosingDevice', !!e.selfClosing), pText('Reference', e.size || '')], [fill])
-        pset('DraftHouse_Opening', [pText('Id', e.id), pText('Room', e.room || '')], [fill])
+        // the swing, hinge and sliding flags ride along so a kit read back from this file keeps them (scripts/kit-from-ifc.py)
+        pset('DraftHouse_Opening', [pText('Id', e.id), pText('Room', e.room || ''), pText('Swing', String(e.swing ?? 1)), pText('Hinge', e.hinge || 'start'), pText('Pocket', e.pocket ? 'true' : 'false'), pText('Barn', e.barn ? 'true' : 'false')], [fill])
         ;(doorsBySize[`${e.size}${e.pair && !spec.pair ? ':pair' : ''}`] ||= []).push(fill)
       } else {
         const win = kit.windows[e.mark] || {}
@@ -404,7 +405,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
     ['Style', style.name],
     ['Kit', `${kit.name} (${kit.source.plan} rev ${kit.source.rev})`],
     // the program as drawn (the client's asks changed it): beds, baths, garage from the rooms
-    ['Program', (({ beds, baths, halfBath, garage, stories }) => `${beds} bed, ${baths}${halfBath ? '.5' : ''} bath, ${garage}-car, ${stories || 1} story`)(programOf(rooms, program))],
+    ['Program', (({ beds, baths, halfBath, garage, tandem, stories }) => `${beds} bed, ${baths}${halfBath ? '.5' : ''} bath, ${garage}-car${tandem ? ' (tandem: one bay two cars deep)' : ''}, ${stories || 1} story`)(programOf(rooms, program))],
     ['Roof', `${kit.roof.pitch}, ${kit.roof.rafters}, ${kit.roof.overhang} overhang`],
     ['Plates', `${kit.plates.default}' typ, ${kit.plates.public}' public, ${kit.plates.vaulted}' vault`],
     ['Exterior', `${kit.exterior.siding}; ${kit.exterior.accent}`],
