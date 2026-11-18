@@ -132,7 +132,7 @@ export async function planPDF(design, info = {}, opts = {}) {
     titleBlock(doc, S, info, design, what, k < 1 ? `${label} (reduced to fit)` : label, number, font)
   }
   if (S.split) {
-    // two sheets at 1/8", the plan split where it overflows, 2 ft of overlap and a match line on each
+    // two sheets at the sheet's scale (1/4" on 24 x 36, 1/8" on tabloid), the plan split where it overflows, 2 ft of overlap and a match line on each
     const lap = 24
     const rows = S.split === 'rows'
     const mid = rows ? plan.height / 2 : plan.width / 2
