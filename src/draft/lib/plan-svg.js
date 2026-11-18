@@ -656,15 +656,28 @@ export function planSheetHTML(design, titleBlock = {}, opts = {}) {
  * @param {object} audit   from audit.auditSummary() (groups with ok)
  * @param {object} trust   TRUST (team, drafter, next)
  */
-export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
+/** The client's printable summary: the plan, the checks, what happens next; no money (round 8, P0b). */
+export function summaryHTML(design, audit, trust, titleBlock = {}) {
+  return summaryPage(design, null, audit, trust, titleBlock, { internal: false })
+}
+/** The office's printable "Meeting prep" page: the summary with the estimate block, marked internal. */
+export function meetingPrepHTML(design, price, audit, trust, titleBlock = {}) {
+  return summaryPage(design, price, audit, trust, titleBlock, { internal: true })
+}
+function summaryPage(design, price, audit, trust, titleBlock = {}, { internal = false } = {}) {
   const plan = planSVG(design)
   const ab = design.asBuilt || design.program || {}
   const k = (n) => '$' + Math.round(n / 1000).toLocaleString() + 'k'
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const checks = (audit?.groups || []).map((g) => `<li class="${g.ok ? 'ok' : 'bad'}">${g.ok ? '✓' : '✗'} ${esc(g.name)}</li>`).join('')
   const next = (trust?.next || []).map((n) => `<li><b>${esc(n.when)}</b> ${esc(n.what)}</li>`).join('')
-  const garageRate = price && price.areas.garage ? `garage $${Math.round(price.parts.garage[0] / price.areas.garage)}–${Math.round(price.parts.garage[1] / price.areas.garage)}/sf · ` : ''
-  const priceLine = price ? `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${garageRate}${esc(price.county)}. ${esc(price.note)}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}` : ''
+  const money = internal && price
+  const parts = money ? ['living', 'garage', 'porches', 'flatwork'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x === 'flatwork' ? 'driveway and walk' : x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`) : []
+  const extra = money ? (price.lines || []).map((l) => esc(`${l.label} ${l.amount || l.text || ''}`.trim())) : []
+  const priceLine = money ? `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${esc(price.county || 'county not set')}. ${parts.map(esc).join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${esc(price.note)}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}` : ''
+  const costBlock = money
+    ? `<h2>${price.confirmed ? 'Price range (office)' : 'Estimate (office)'}</h2>\n  <p class="price">${price.needsCounty ? 'county not set' : `${k(price.low)}–${k(price.high)}`}</p>\n  <p class="fine">${priceLine}</p>`
+    : `<h2>What it costs</h2>\n  <p>${esc(String(trust?.costLine || 'We go over cost with you at your meeting with the South Texas Builders office.'))}</p>`
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Your house')} · summary</title>
 <style>
@@ -675,6 +688,7 @@ export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
   .sub { color: #555; font-size: 10pt; margin: 0 0 10px; }
   .plan svg { width: 100%; height: auto; border: 1px solid #ddd; }
   .price { font-size: 22pt; font-weight: 700; margin: 2px 0; }
+  .internal { color: #b3261e; font-size: 9pt; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px; font-weight: 700; }
   .fine { font-size: 8.5pt; color: #555; }
   ul.checks { list-style: none; padding: 0; margin: 0; columns: 2; font-size: 9.5pt; } ul.checks li { margin: 2px 0; } ul.checks li.ok { color: #2a7a3b; } ul.checks li.bad { color: #b3261e; }
   ol.next { padding-left: 18px; font-size: 10pt; } ol.next b { display: inline-block; min-width: 150px; }
@@ -685,17 +699,16 @@ export function summaryHTML(design, price, audit, trust, titleBlock = {}) {
 <body>
 <p class="print-hint">Print this page and choose "Save as PDF".</p>
 <div class="page">
+  ${internal ? '<p class="internal">Meeting prep · internal: not for the client</p>' : ''}
   <h1>${esc(design.client || 'Your house')}</h1>
   <p class="sub">${esc(lotTitle(design))} · ${esc(design.style?.name || '')} · ${ab.beds} bed, ${ab.baths}${ab.halfBath ? '.5' : ''} bath${ab.garage ? `, ${ab.garage}-car garage` : ''} · ${design.livingSf ? design.livingSf.toLocaleString() + ' sf' : ''} · ${esc(date)}</p>
   <div class="plan">${plan.svg}</div>
-  <h2>Price range</h2>
-  <p class="price">${price ? `${k(price.low)}–${k(price.high)}` : '—'}</p>
-  <p class="fine">${priceLine}</p>
+  ${costBlock}
   <h2>Checked before you saw it</h2>
   <ul class="checks">${checks}</ul>
   <h2>What happens next</h2>
   <ol class="next">${next}</ol>
-  <div class="foot"><span>${esc(titleBlock.firm || 'South Texas Builders')} · ${esc(titleBlock.phone || '')}</span><span>${esc(trust?.team || '')}</span><span>preliminary, not for construction</span></div>
+  <div class="foot"><span>${esc(titleBlock.firm || 'South Texas Builders')} · ${esc(titleBlock.phone || '')}</span><span>${esc(trust?.team || '')}</span><span>${internal ? 'internal: not for the client · ' : ''}preliminary, not for construction</span></div>
 </div>
 </body></html>`
 }

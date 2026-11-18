@@ -55,15 +55,13 @@ export const api = {
   geocode: (address) => call(`/api/lot/geocode?address=${encodeURIComponent(address)}`, {}, 20000),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
-  // billing
-  billing: () => call('/api/billing'),
-  checkout: (pack) => call('/api/billing/checkout', { method: 'POST', body: JSON.stringify({ pack }) }, 30000),
-  billingSession: (id) => call(`/api/billing/session/${id}`, {}, 20000),
-  pricing: () => call('/api/admin/pricing'),
-  setPricing: (body) => call('/api/admin/pricing', { method: 'PUT', body: JSON.stringify(body) }),
-  payments: () => call('/api/admin/payments'),
+  // the office: a meeting (cost is covered there) or more changes; the plan's allowance is granted by the office
+  meetingRequest: (id, body = {}) => call(`/api/projects/${id}/meeting-request`, { method: 'POST', body: JSON.stringify(body) }, 20000),
+  grantAllowance: (id, add, note = '') => call(`/api/review/${id}/allowance`, { method: 'POST', body: JSON.stringify({ add, note }) }, 20000),
+  allowanceDefault: () => call('/api/admin/allowance'),
+  setAllowanceDefault: (n) => call('/api/admin/allowance', { method: 'PUT', body: JSON.stringify({ default: n }) }),
+  estimate: (id) => call(`/api/review/${id}/estimate`, {}, 20000), // drafters and admins only: the office estimate
   users: () => call('/api/admin/users'),
-  grantCredits: (userId, credits, note) => call(`/api/admin/users/${userId}/credits`, { method: 'POST', body: JSON.stringify({ credits, note }) }),
   // drafter review
   inbox: () => call('/api/review'),
   reviewProject: (id) => call(`/api/review/${id}`),

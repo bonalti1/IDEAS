@@ -237,7 +237,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         </label>
         {!table[spec.city] && (
           <label className="field">
-            <span>County, for the price</span>
+            <span>County</span>
             <select id="lot-county" value={spec.county || ''} onChange={(e) => set('county', e.target.value)}>
               <option value="">Pick the county</option>
               {COUNTIES.map((c) => (
@@ -246,7 +246,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 </option>
               ))}
             </select>
-            <small className="fine">We price by county. Without one the rooms step shows no price.</small>
+            <small className="fine">We use the county to look up the building rules.</small>
           </label>
         )}
 

@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import PlanDrawing from '../PlanDrawing.jsx'
-import { Button, Stat, money, sf } from '../ui.jsx'
+import { Button, Stat, sf } from '../ui.jsx'
 import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
-import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/options.js'
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
+import { TRUST } from '../lib/trust.js'
+
+// what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
+const MEETING_THANKS = `Thanks! The office will reach out within 1 business day. You can also call ${TRUST.phone}.`
+const MORE_CHANGES_THANKS = `Done. The office has your request and usually adds more within 1 business day. You can also call ${TRUST.phone}.`
+const OUT_OF_CHANGES = "You've used the free changes on this plan. The office will add more for you. Want me to let them know?"
+const ASK_LABEL = { meeting: 'Ask the office to set up my meeting', 'more-changes': 'Ask the office for more changes' }
 
 /** Suggestions that fit the plan as it is right now. */
 function suggestionsFor(rooms, kit) {
@@ -49,14 +55,14 @@ function useNarrow() {
 
 const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + unit
 
-export default function Draft({ style, program, rooms, setRooms, credits, setCredits, history, setHistory, onNext, onBack, lot, project, setProject }) {
+export default function Draft({ style, program, rooms, setRooms, changesLeft, setChangesLeft, history, setHistory, onNext, onBack, lot, project, setProject }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
   const [big, setBig] = useState(null) // an option drawing opened full size
   const [sun, setSun] = useState(false)
   const [highlight, setHighlight] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [undo, setUndo] = useState([]) // snapshots before each applied change: { rooms, credits, text }
+  const [undo, setUndo] = useState([]) // snapshots before each applied change: { rooms, changesLeft, text }
   const [roof, setRoof] = useState(true)
   const [showVersions, setShowVersions] = useState(false)
   const controls = useRef()
@@ -84,20 +90,36 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
   }
 
   const area = floorArea(rooms, program.stories)
-  const price = priceOf({ rooms, program, style, lot })
-  const estimate = price.mid
   const suggestions = useMemo(() => suggestionsFor(rooms, kit), [rooms, kit])
+
+  // "Ask the office…": a meeting (cost is covered there) or more changes; the office is emailed and the answer carries the phone
+  const askOffice = async (kind) => {
+    if (busy) return
+    if (!project) {
+      setHistory((h) => [...h, { who: 'house', text: `Sign in with your email first so the office knows which house is yours. Then this button sends your request. You can also call ${TRUST.phone}.`, applied: false, source: 'undo' }])
+      return
+    }
+    setBusy(true)
+    try {
+      const r = await api.meetingRequest(project.id, { kind })
+      setProject((p) => ({ ...p, meetingRequest: { at: r.at, kind } }))
+      setHistory((h) => [...h, { who: 'house', text: r.message || (kind === 'more-changes' ? MORE_CHANGES_THANKS : MEETING_THANKS), applied: false, source: 'undo', asked: kind }])
+    } catch (e) {
+      setHistory((h) => [...h, { who: 'house', text: `The office did not get that just now. Try again in a moment, or call ${TRUST.phone}.`, applied: false, source: 'fallback' }])
+    }
+    setBusy(false)
+  }
 
   /**
    * One request to the office, or a fix the client clicked (ops already decided).
-   * The reply carries what changed in square feet, dollars and credits.
+   * The reply carries what changed in square feet and that one change was used. Never a dollar.
    */
   const narrow = useNarrow()
   const send = async (msg, fix = null) => {
     const q = (msg ?? text).trim()
-    if (!q || credits <= 0 || busy) return
+    if (!q || busy) return
     setText('')
-    // "show me options for the garage": two or three sound options side by side, no credit until one is picked
+    // "show me options for the garage": two or three sound options side by side, nothing used until one is picked
     const topic = !fix && optionTopic(q)
     if (topic) {
       setBusy(true)
@@ -106,11 +128,11 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       // built one candidate a turn, so the spinner paints between them instead of the page freezing
       const { options } = await optionsForAsync(topic, rooms, program, style, lot, { history: standingEdits(history) })
       const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
-      setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; the others cost nothing.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
+      setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; looking is free.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
       setBusy(false)
       return
     }
-    // "undo", "go back": the last change comes off, the credit comes back; no model, no charge
+    // "undo", "go back": the last change comes off and comes back to the plan; no model, nothing used
     if (!fix && UNDO_RE.test(q)) {
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!canUndo) {
@@ -122,14 +144,14 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     }
     setBusy(true)
     setHistory((h) => [...h, { who: 'you', text: q }])
-    const before = { area, estimate, rooms, credits }
+    const before = { area, rooms, changesLeft }
     let res
     try {
       if (project) {
-        // the office runs the change, checks the rules and takes the credit only when it applies
+        // the office runs the change, checks the rules and uses one of the plan's changes only when it applies
         const r = await api.change(project.id, q, fix?.ops)
         res = r
-        if (r.applied) setProject((p) => ({ ...p, credits: r.credits, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, credit: 1, at: new Date().toISOString() }] }))
+        if (r.applied) setProject((p) => ({ ...p, changesLeft: r.changesLeft, changesUsed: r.changesUsed, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, used: 1, at: new Date().toISOString() }] }))
       } else {
         const opts = { lot, history: standingEdits(history) }
         if (fix) {
@@ -137,22 +159,24 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           opts.report = false
         }
         res = await interpretRequest(q, rooms, program, style, opts)
+        // out of changes on this device: nothing applied, nothing used; cost questions and undo still work (M8)
+        if (res.applied && changesLeft <= 0) res = { applied: false, reply: OUT_OF_CHANGES, source: 'fallback', askOffice: 'more-changes', outOfChanges: true }
       }
     } catch (e) {
-      res = e.status === 402 ? { applied: false, reply: 'No changes left on your account. Add more on the billing page and your draft is right here when you come back.', source: 'claude', credits: 0 } : e.status === 409 ? { applied: false, reply: 'This design is with the drafters now, so it cannot change.', source: 'claude' } : { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
+      res = e.status === 409 ? { applied: false, reply: 'This design is with the drafters now, so it cannot change.', source: 'claude' } : { applied: false, reply: 'Something went wrong on our side. Try again in a moment.', source: 'fallback' }
     }
     setBusy(false)
     let meta = null
     if (res.applied) {
       const a2 = floorArea(res.rooms, program.stories)
-      meta = { sf: a2 - before.area, cost: priceOf({ rooms: res.rooms, program, style, lot }).mid - before.estimate, credit: 1 }
+      meta = { sf: a2 - before.area, used: 1 }
     }
-    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta, ops: res.applied ? res.ops : undefined }])
-    if (res.credits !== undefined) setCredits(res.credits)
+    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta, ops: res.applied ? res.ops : undefined, askOffice: res.askOffice || null }])
+    if (res.changesLeft !== undefined) setChangesLeft(res.changesLeft)
     if (res.applied) {
       if (!project) {
-        setUndo((u) => [...u, { rooms, credits, text: q }])
-        setCredits((c) => c - 1)
+        setUndo((u) => [...u, { rooms, changesLeft, text: q }])
+        setChangesLeft((c) => c - 1)
       }
       setRooms(res.rooms)
       const kind = res.ops?.[0]?.op === 'add' ? res.ops[0].kind : rooms.find((r) => r.id === res.ops?.[0]?.room)?.kind
@@ -161,7 +185,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     }
   }
 
-  // back to an earlier saved version; credits spent after it come back
+  // back to an earlier saved version; the changes used after it come back to the plan
   const restore = async (n) => {
     if (!project || busy) return
     setBusy(true)
@@ -169,8 +193,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       const p = await api.rollback(project.id, n)
       setProject(p)
       setRooms(p.rooms)
-      setCredits(p.credits)
-      setHistory((h) => [...h, { who: 'house', text: `Back to version ${n}.${p.refunded ? ` ${p.refunded} credit${p.refunded === 1 ? '' : 's'} returned.` : ''}`, applied: true, source: 'undo' }])
+      setChangesLeft(p.changesLeft)
+      setHistory((h) => [...h, { who: 'house', text: `Back to version ${n}.${p.refunded ? ` ${p.refunded} change${p.refunded === 1 ? '' : 's'} returned.` : ''}`, applied: true, source: 'undo' }])
     } catch (e) {
       setHistory((h) => [...h, { who: 'house', text: `Could not go back: ${e.message}`, applied: false, source: 'fallback' }])
     }
@@ -186,7 +210,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
     if (!snap) return
     setUndo((u) => u.slice(0, -1))
     setRooms(snap.rooms)
-    setCredits(snap.credits) // the credit comes back
+    setChangesLeft(snap.changesLeft) // the change comes back to the plan
     setHistory((h) => {
       // the last applied request is marked undone, so the send step does not list it
       const out = [...h]
@@ -196,7 +220,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
           break
         }
       }
-      return [...out, { who: 'house', text: `Undid "${snap.text}". Credit returned.`, applied: true, source: 'undo' }]
+      return [...out, { who: 'house', text: `Undid "${snap.text}". That change is back on your plan.`, applied: true, source: 'undo' }]
     })
   }
 
@@ -258,22 +282,14 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         <div className="side-head">
           <h2>Shape it</h2>
           {!project && <span className="muted small">not saved</span>}
-          <span className={'credits' + (credits <= 2 ? ' low' : '')}>
-            {credits} change{credits === 1 ? '' : 's'} left
-            {project && credits <= 2 && (
-              <a className="buy" href="#/billing">
-                buy more
-              </a>
-            )}
+          <span className={'credits' + (changesLeft <= 2 ? ' low' : '')} title="Free changes left on this plan. The office adds more.">
+            {changesLeft} change{changesLeft === 1 ? '' : 's'} left
           </span>
         </div>
         <div className="stats row2">
           <Stat k="Living area" v={sf(area)} />
-          <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
+          <Stat k="Rooms" v={programLine(programOf(rooms, program), ', ').replace(/, \d story$/, '')} />
         </div>
-        <p className="fine price-line" title={price.note}>
-          {rateLine(price)} · {price.county}. {price.note}
-        </p>
         <div className="log" ref={logRef}>
           {history.length === 0 && (
             <div className="msg house">
@@ -285,14 +301,14 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
               {m.text}
               {m.meta && (
                 <span className="meta">
-                  {Math.round(m.meta.sf) || Math.round(m.meta.cost) ? (
-                    <>
-                      <b>{signed(m.meta.sf, ' sf')}</b> · <b>{signed(m.meta.cost).replace(/^([+−]?)/, '$1$')}</b>
-                    </>
-                  ) : (
-                    'same size and price'
-                  )}{' '}
-                  · {m.meta.credit} credit used
+                  {Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ' sf')}</b> : 'same size'} · {m.meta.used ?? 1} change used
+                </span>
+              )}
+              {m.askOffice && !m.asked && (
+                <span className="fixes ask-office">
+                  <button onClick={() => askOffice(m.askOffice)} disabled={busy}>
+                    {ASK_LABEL[m.askOffice] || ASK_LABEL.meeting}
+                  </button>
                 </span>
               )}
               {m.picker && (
@@ -301,9 +317,9 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
                     <button
                       key={o.id}
                       className="option"
-                      aria-disabled={busy || credits <= 0}
+                      aria-disabled={busy || changesLeft <= 0}
                       onClick={() => {
-                        if (busy || credits <= 0) return
+                        if (busy || changesLeft <= 0) return
                         send(o.label, { ops: o.ops, label: o.label })
                       }}
                       title={o.did.join('. ')}
@@ -320,7 +336,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
                       />
                       <b>{o.label}</b>
                       <span className="delta">
-                        {signed(o.sf, ' sf')} · {signed(o.cost).replace(/^([+−]?)/, '$1$')}
+                        {signed(o.sf, ' sf')}
                       </span>
                       <span className="pick">Pick · 1 change</span>
                     </button>
@@ -340,7 +356,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
               {m.fixes?.length > 0 && (
                 <span className="fixes">
                   {m.fixes.map((f) => (
-                    <button key={f.label} onClick={() => send(f.label.replace(/\?$/, ''), f)} disabled={busy || credits <= 0}>
+                    <button key={f.label} onClick={() => send(f.label.replace(/\?$/, ''), f)} disabled={busy || changesLeft <= 0}>
                       {f.label}
                     </button>
                   ))}
@@ -352,7 +368,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         </div>
         <div className="chips">
           {suggestions.map((s) => (
-            <button key={s} onClick={() => send(s)} disabled={credits <= 0 || busy}>
+            <button key={s} onClick={() => send(s)} disabled={changesLeft <= 0 || busy}>
               {s}
             </button>
           ))}
@@ -364,8 +380,8 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
             send()
           }}
         >
-          <input placeholder={credits > 0 ? 'What would you like to change?' : 'No changes left. Send it, or buy more.'} value={text} onChange={(e) => setText(e.target.value)} disabled={credits <= 0 || busy} aria-label="Your change" />
-          <Button primary small type="submit" disabled={!text.trim() || credits <= 0 || busy}>
+          <input placeholder={changesLeft > 0 ? 'What would you like to change?' : 'No changes left on this plan. Ask the office for more, or send it.'} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="Your change" />
+          <Button primary small type="submit" disabled={!text.trim() || busy}>
             Change
           </Button>
         </form>
@@ -379,7 +395,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
               <a href="#/" onClick={(e) => { e.preventDefault(); window.scrollTo(0, 0); document.querySelector('#signin-email')?.focus() }}>Sign in</a> to keep a history
             </span>
           )}
-          <button className="linkish undo" onClick={undoLast} disabled={busy || !canUndo} title={canUndo ? 'Back one change, the credit comes back' : 'Nothing to undo yet'}>
+          <button className="linkish undo" onClick={undoLast} disabled={busy || !canUndo} title={canUndo ? 'Back one change; it comes back to your plan' : 'Nothing to undo yet'}>
             Undo last change
           </button>
         </div>
@@ -390,7 +406,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
                 <span className="v-n">v{v.n}</span>
                 <span className="v-text">
                   {v.text}
-                  {v.refunded ? <span className="muted"> · undone</span> : v.credit ? <span className="muted"> · 1 credit</span> : null}
+                  {v.refunded ? <span className="muted"> · undone</span> : v.used || v.credit ? <span className="muted"> · 1 change</span> : null}
                 </span>
                 {v.n === project.version ? <span className="muted small">current</span> : (
                   <button className="linkish" onClick={() => restore(v.n)} disabled={busy}>

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Stepper, Stat, money, sf } from '../ui.jsx'
+import { Button, Stepper, Stat, sf } from '../ui.jsx'
 import { kitFor, lotOf, programLimits } from '../lib/layout.js'
 import { fitsLot } from '../lib/fit.js'
 import { floorArea } from '../lib/layout.js'
-import { estimate as priceOf, range, rateLine } from '../lib/pricing.js'
 
 const EXTRAS = [
   ['office', 'Office'],
@@ -78,7 +77,6 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const footprint = program.sqft / program.stories + (program.garage ? 22 * kit.rooms.garage.perCar * program.garage : 0)
   const maxFootprint = Math.min(L.envelopeSf, L.areaSf * (L.rules?.maxCoverage ?? 0.5))
   const fit = footprint / maxFootprint
-  // priced on the drafted rooms, the same number Draft and Send show; before a draft fits, on the program
   const set = (k) => (v) => onChange({ ...program, [k]: v })
   const toggle = (k) => () => onChange({ ...program, [k]: !program[k] })
   const ref = kit.reference
@@ -89,8 +87,6 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const check = checked || { ok: false, checking: true, reasons: [], draft: { minSqft: 0, clamped: false, fitScale: 1, rooms: [] }, maxSqft: null, suggestion: null, need: null }
   // the sample card shows what its draft comes out to, not the sheet's number
   const sample = useMemo(() => (ref ? fitsLot({ ...ref.program }, style, L) : null), [ref, style, L])
-  const samplePrice = sample?.ok && sample.draft?.rooms?.length ? priceOf({ rooms: sample.draft.rooms, program: ref.program, style, lot }) : null
-  const price = useMemo(() => (check?.ok && check.draft?.rooms?.length ? priceOf({ rooms: check.draft.rooms, program, style, lot }) : priceOf({ program, style, lot })), [check, program, style, lot])
   const minSqft = check.draft.minSqft || limits.sqft[0]
   const trimmed = check.ok && check.draft.fitScale < 0.995 ? Math.round((1 - check.draft.fitScale) * 100) : 0
   const oneStory = limits.stories[1] === 1
@@ -108,7 +104,6 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
           <small>
             {[`${ref.program.beds} bed`, `${ref.program.baths}${ref.program.halfBath ? '.5' : ''} bath`, ref.program.suite2 ? 'mini primary' : null, ref.program.office ? 'office' : null, ref.program.garage ? `${ref.program.garage}-car garage` : 'no garage', ref.program.frontPorch && ref.program.rearPorch ? 'front and rear porches' : ref.program.frontPorch ? 'front porch' : ref.program.rearPorch ? 'rear porch' : null, `${ref.program.stories === 2 ? 'two' : 'one'} story`].filter(Boolean).join(' · ')}
             {sample?.ok && sample.draft?.rooms?.length ? ` · ${sf(floorArea(sample.draft.rooms, ref.program.stories || 1))}` : ` · ${sf(ref.livingSf)}`}
-            {samplePrice ? ` · ${range(samplePrice)}` : ''}
             {matchesRef ? ' · this is what you will get' : ' · tap to set the rooms below to this; the rooms below are what you will get'}
           </small>
         </button>
@@ -186,10 +181,6 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
             )}
           </p>
         )}
-        <Stat k={price.confirmed ? 'Price range' : 'Estimate'} v={range(price)} />
-        <p className="fine">
-          {price.fromRooms ? 'Priced on the drafted rooms (what Draft and Send show)' : 'Before drafting, priced on the rooms asked for'} · {rateLine(price)} · {price.county || 'county not set'}. {price.note}
-        </p>
       </div>
       <div className="actions">
         <Button ghost onClick={onBack}>

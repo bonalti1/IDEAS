@@ -152,7 +152,21 @@ export async function planPDF(design, info = {}, opts = {}) {
 }
 
 /** The homeowner's summary (letter portrait): the plan, the price range, the checks, what happens next. */
-export async function summaryPDF(design, price, audit, trust, info = {}) {
+/**
+ * The client's one-page summary: the plan, the checks, what happens next. No money on it (round 8, P0b):
+ * in place of a price it says cost is covered at the meeting with the office.
+ */
+export async function summaryPDF(design, audit, trust, info = {}) {
+  return summaryDoc(design, null, audit, trust, info, { internal: false })
+}
+/**
+ * The office's "Meeting prep" sheet: the same layout with the estimate block (range, rate line, parts),
+ * marked internal. Never offered to a homeowner.
+ */
+export async function meetingPrepPDF(design, price, audit, trust, info = {}) {
+  return summaryDoc(design, price, audit, trust, info, { internal: true })
+}
+async function summaryDoc(design, price, audit, trust, info = {}, { internal = false } = {}) {
   const { jsPDF } = await load()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
   const font = await useFont(doc)
@@ -166,6 +180,11 @@ export async function summaryPDF(design, price, audit, trust, info = {}) {
   doc.setFont(font, 'bold')
   doc.setFontSize(20)
   doc.text(design.client || 'Your house', M, y + 0.28)
+  if (internal) {
+    doc.setFontSize(9)
+    doc.setTextColor(179, 38, 30)
+    doc.text('MEETING PREP · INTERNAL: NOT FOR THE CLIENT', 8.5 - M, y + 0.28, { align: 'right' })
+  }
   y += 0.42
   doc.setFont(font, 'normal')
   doc.setFontSize(10)
@@ -186,19 +205,28 @@ export async function summaryPDF(design, price, audit, trust, info = {}) {
     doc.text(t.toUpperCase(), M, y)
     y += 0.22
   }
-  h2('Price range')
-  doc.setFontSize(20)
-  doc.text(price ? `${k(price.low)}–${k(price.high)}` : '—', M, y + 0.1)
-  y += 0.32
-  doc.setFont(font, 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(85, 85, 85)
-  if (price) {
-    const garageRate = price.areas?.garage ? `garage $${Math.round(price.parts.garage[0] / price.areas.garage)}–${Math.round(price.parts.garage[1] / price.areas.garage)}/sf · ` : ''
-    const line = `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${garageRate}${price.county}. ${price.note}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}`
+  if (internal && price) {
+    h2(price.confirmed ? 'Price range (office)' : 'Estimate (office)')
+    doc.setFontSize(20)
+    doc.text(price.needsCounty ? 'county not set' : `${k(price.low)}–${k(price.high)}`, M, y + 0.1)
+    y += 0.32
+    doc.setFont(font, 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(85, 85, 85)
+    const parts = ['living', 'garage', 'porches', 'flatwork'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x === 'flatwork' ? 'driveway and walk' : x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`)
+    const extra = (price.lines || []).map((l) => `${l.label} ${l.amount || l.text || ''}`.trim())
+    const line = `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${price.county || 'county not set'}. ${parts.join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${price.note}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}`
     const lines = doc.splitTextToSize(line, W)
     doc.text(lines, M, y)
     y += lines.length * 0.15 + 0.1
+  } else {
+    h2('What it costs')
+    doc.setFont(font, 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(26, 26, 26)
+    const lines = doc.splitTextToSize(String(trust?.costLine || 'We go over cost with you at your meeting with the South Texas Builders office.'), W)
+    doc.text(lines, M, y)
+    y += lines.length * 0.17 + 0.1
   }
   h2('Checked before you saw it')
   doc.setFontSize(9)
@@ -237,7 +265,7 @@ export async function summaryPDF(design, price, audit, trust, info = {}) {
   doc.setFontSize(8.5)
   doc.setTextColor(85, 85, 85)
   doc.text(`${info.firm || 'South Texas Builders'} · ${info.phone || ''}`, M, fy)
-  doc.text('preliminary, not for construction', 8.5 - M, fy, { align: 'right' })
+  doc.text(internal ? 'internal: not for the client · preliminary, not for construction' : 'preliminary, not for construction', 8.5 - M, fy, { align: 'right' })
   return doc
 }
 

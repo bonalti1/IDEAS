@@ -12,13 +12,17 @@ export const TRUST = {
   },
   // the audit's own count, so this line never promises more than the code checks
   checked: `Every plan is checked against ${CHECK_GROUPS.length} IRC planning checks before you see it: doors and reach, egress windows, 42" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set.`,
-  builtHomes: { label: 'See homes we have built', url: 'https://south-texasbuilders.com/' }, // PLACEHOLDER: the gallery page
+  builtHomes: { label: 'See homes we have built', url: 'https://south-texasbuilders.com/our-homes/' },
+  // what the app says about cost: nothing but this (round 8, P0b)
+  cost: 'What it costs: we go over cost with you at your meeting with the South Texas Builders office.',
+  costLine: 'We go over cost with you at your meeting with the South Texas Builders office.', // the same sentence under its own heading
+  phone: '(956) 594-6936',
   // what happens after the draft, with the dates the office keeps to
   next: [
-    { when: 'Today', what: 'Your draft, checked against the code, with a price range.' },
+    { when: 'Today', what: 'Your draft, checked against the code.' },
     { when: 'Within 1 business day', what: 'A drafter reviews the plan on your lot and approves it or sends it back with a note.' }, // PLACEHOLDER: Rolando confirms the timing
     { when: 'Within 5 business days', what: 'The full sheet set from Revit: plans, elevations, roof, foundation, electrical, code review.' }, // PLACEHOLDER: Rolando confirms the timing
-    { when: 'Then', what: 'A meeting at the office to walk the plan and the quote.' }, // PLACEHOLDER: confirm the timing
+    { when: 'Then', what: 'A meeting at the office to walk the plan and the cost.' },
   ],
 }
 

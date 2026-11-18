@@ -5,8 +5,24 @@ import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat, sf } from '../ui.jsx'
 import { api } from '../lib/api.js'
 import { STYLES } from '../lib/styles.js'
-import { floorArea, programOf, programLine } from '../lib/layout.js'
+import { floorArea, programOf, programLine, kitFor } from '../lib/layout.js'
 import { STATUS } from '../lib/status.js'
+import { buildDesign } from '../lib/contract.js'
+import { auditSummary } from '../lib/audit.js'
+import { meetingPrepPDF, pdfName } from '../lib/pdf.js'
+import { meetingPrepHTML } from '../lib/plan-svg.js'
+import { TRUST } from '../lib/trust.js'
+
+const money = (n) => '$' + Math.round(n).toLocaleString()
+/** The flags the office reads at a glance: a meeting asked for, more changes wanted. */
+function Asks({ p }) {
+  return (
+    <>
+      {p.wantsMoreChanges && <span className="pill ask">Wants more changes</span>}
+      {p.meetingRequest?.kind === 'meeting' && <span className="pill ask">Meeting requested</span>}
+    </>
+  )
+}
 
 const ago = (iso) => {
   if (!iso) return ''
@@ -25,8 +41,12 @@ function Row({ p, onOpen }) {
         </span>
       </span>
       <span className="inbox-side">
+        <Asks p={p} />
         <span className={'pill ' + s.tone}>{s.label}</span>
-        <span className="muted small">{ago(p.sentAt || p.updatedAt)}</span>
+        <span className="muted small">
+          {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
+          {ago(p.sentAt || p.updatedAt)}
+        </span>
       </span>
     </button>
   )
@@ -39,6 +59,9 @@ export default function Review({ user }) {
   const [override, setOverride] = useState('') // the office-only note that approves a plan over audit errors
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [estimate, setEstimate] = useState(null) // the office estimate of the open plan (never sent to the client)
+  const [grant, setGrant] = useState({ add: 5, note: '' })
+  const [msg, setMsg] = useState('')
 
   const refresh = async () => {
     try {
@@ -57,6 +80,42 @@ export default function Review({ user }) {
   const show = async (id) => {
     setOpen(await api.reviewProject(id))
     setNote('')
+    setEstimate(null)
+    api.estimate(id).then(setEstimate).catch(() => setEstimate({ error: true }))
+  }
+  // the office adds changes to the plan: a one-click 5, or a custom 1–50 with a note; logged with who, before and after
+  const addChanges = async (n, note = '') => {
+    if (!open || busy) return
+    setBusy(true)
+    try {
+      const p = await api.grantAllowance(open.id, n, note)
+      setOpen(p)
+      setMsg(`Added ${n}: ${p.changesUsed || 0} of ${p.changesAllowed} used`)
+      setGrant({ add: 5, note: '' })
+      refresh()
+    } catch (e) {
+      setMsg(e.message)
+    }
+    setBusy(false)
+    setTimeout(() => setMsg(''), 3000)
+  }
+  // the "Meeting prep" sheet: the client summary layout with the estimate, marked internal
+  const meetingPrep = async () => {
+    if (!open || !estimate || estimate.error) return
+    const style = STYLES.find((x) => x.id === open.style?.id) || STYLES.find((x) => x.ready)
+    const kit = kitFor(style)
+    const design = buildDesign({ rooms: open.rooms || [], program: open.program || {}, style, lot: open.lot, client: open.client })
+    const audit = auditSummary(open.rooms || [], open.program || {}, kit, open.lot)
+    try {
+      const doc = await meetingPrepPDF(design, estimate, audit, TRUST, kit.titleBlock)
+      doc.save(pdfName(design, 'meeting prep (internal)'))
+    } catch {
+      const w = window.open('', '_blank')
+      if (w) {
+        w.document.write(meetingPrepHTML(design, estimate, audit, TRUST, kit.titleBlock))
+        w.document.close()
+      }
+    }
   }
   const [lotNote, setLotNote] = useState('')
   const [planView, setPlanView] = useState(true)
@@ -122,7 +181,76 @@ export default function Review({ user }) {
             <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
             <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
             {open.program?.asked && <Stat k="Asked for" v={`${programLine(open.program.asked)} · ${sf(open.program.asked.sqft)} → drafted ${sf(floorArea(open.rooms || [], open.program?.stories || 1))} to fit the lot`} />}
-            <Stat k="Changes used" v={`${open.creditsUsed || 0} · ${open.credits ?? 0} left on the account`} />
+            <Stat k="Changes" v={`${open.changesUsed || 0} of ${open.changesAllowed ?? 10} used · ${open.changesLeft ?? Math.max(0, (open.changesAllowed ?? 10) - (open.changesUsed || 0))} left`} />
+          </div>
+          {(open.meetingRequest?.kind === 'meeting' || open.wantsMoreChanges) && (
+            <div className="card thin">
+              <h3>
+                <Asks p={open} />
+              </h3>
+              <p className="small">
+                {open.wantsMoreChanges ? 'The client ran out of changes and asked for more. Add some below; the flag clears when you do.' : `The client asked for a meeting ${ago(open.meetingRequest.at)}. Cost is covered there; the client app shows no numbers.`}
+                {open.meetingRequest?.note ? ` Note: "${open.meetingRequest.note}"` : ''}
+              </p>
+            </div>
+          )}
+          <div className="card thin allowance">
+            <h3>Free changes on this plan</h3>
+            <div className="row">
+              <Button small primary disabled={busy} onClick={() => addChanges(5)}>
+                Grant 5 more
+              </Button>
+              <input id="allowance-add" type="number" min={1} max={50} value={grant.add} onChange={(e) => setGrant({ ...grant, add: e.target.value })} aria-label="How many changes to add" />
+              <input className="note" placeholder="Note (optional)" value={grant.note} onChange={(e) => setGrant({ ...grant, note: e.target.value })} aria-label="Note" />
+              <Button small ghost disabled={busy || !(Number.isInteger(+grant.add) && +grant.add >= 1 && +grant.add <= 50)} onClick={() => addChanges(+grant.add, grant.note)}>
+                Add
+              </Button>
+            </div>
+            {msg && <p className="fine">{msg}</p>}
+            {(open.allowanceLog || []).length > 0 && (
+              <ul className="list small">
+                {open.allowanceLog.slice().reverse().map((g, i) => (
+                  <li key={i}>
+                    +{g.add} by {g.by} {ago(g.at)} ({g.before} → {g.after}){g.note ? `: ${g.note}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="fine">The client sees only how many are left. Never a price.</p>
+          </div>
+          <div className="card thin estimate">
+            <h3>
+              Office estimate <span className="internal">internal: not for the client</span>
+            </h3>
+            {!estimate ? (
+              <p className="muted small">Loading…</p>
+            ) : estimate.error ? (
+              <p className="fine bad">The estimate could not be loaded.</p>
+            ) : (
+              <>
+                <p className="big">{estimate.range}</p>
+                <p className="small">
+                  {estimate.rateLine} · {estimate.county || 'county not set'}.
+                  {estimate.parts?.living ? ` Living ${money(estimate.parts.living[0])}–${money(estimate.parts.living[1])}` : ''}
+                  {estimate.areas?.garage ? `, garage ${money(estimate.parts.garage[0])}–${money(estimate.parts.garage[1])}` : ''}
+                  {estimate.areas?.porches ? `, porches ${money(estimate.parts.porches[0])}–${money(estimate.parts.porches[1])}` : ''}
+                  {estimate.areas?.flatwork ? `, driveway and walk ${money(estimate.parts.flatwork[0])}–${money(estimate.parts.flatwork[1])}` : ''}.
+                </p>
+                {(estimate.lines || []).length > 0 && (
+                  <ul className="list small">
+                    {estimate.lines.map((l, i) => (
+                      <li key={i}>
+                        {l.label}: {l.amount || l.text}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="fine">{estimate.note}{estimate.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}</p>
+                <Button small ghost onClick={meetingPrep}>
+                  Meeting prep (PDF, internal)
+                </Button>
+              </>
+            )}
           </div>
           {open.lot?.spec?.kind === 'plat' && (
             <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')}>
@@ -312,6 +440,17 @@ export default function Review({ user }) {
           </div>
         )}
       </div>
+      {inbox?.requests?.length > 0 && (
+        <div className="card">
+          <h3>Clients asking for the office ({inbox.requests.length})</h3>
+          <p className="muted small">A meeting (cost is covered there) or more changes on the plan. Open one to add changes; the office was emailed too.</p>
+          <div className="inbox-list">
+            {inbox.requests.map((p) => (
+              <Row key={p.id} p={p} onOpen={show} />
+            ))}
+          </div>
+        </div>
+      )}
       {inbox?.lots?.length > 0 && (
         <div className="card">
           <h3>Lots to confirm ({inbox.lots.length})</h3>

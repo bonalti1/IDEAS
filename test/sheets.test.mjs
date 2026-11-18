@@ -47,14 +47,16 @@ test('the worker reads the same plan (worker/revit/build_model.py places per des
   for (const needle of ["DESIGN.get('sheetPlan')", 'IndependentTag.Create', 'CreateElevationMarker', 'CreateSheetList', "'Door Schedule'", "'Roof Plan'", "'Site Plan'", 'NewDimension', "report['sheetsNotPlaced']"]) assert.ok(py.includes(needle), needle)
 })
 
-test('the trust content names its placeholders, and the summary page carries the plan, the price range and the checks', () => {
+test('the trust content names its placeholders, and the summary page carries the plan, the checks and the cost sentence, never a price (round 8)', () => {
   assert.ok(TRUST.drafter.placeholder === true && TRUST.drafter.photo === null, 'the drafter name and photo are placeholders until Rolando supplies them')
   assert.ok(TRUST.next.length >= 3 && TRUST.next.every((n) => n.when && n.what))
   assert.match(TRUST.checked, /IRC/)
   const program = { ...DEFAULT_PROGRAM }
   const rooms = generateRooms(program, style, DEFAULT_LOT)
   const design = buildDesign({ rooms, program, style, lot: DEFAULT_LOT, client: 'Test Client' })
-  const html = summaryHTML(design, estimate({ rooms, program, style, lot: DEFAULT_LOT }), auditSummary(rooms, program, kit, DEFAULT_LOT), TRUST, kit.titleBlock)
-  assert.ok(html.includes('<svg') && /\$\d+k–\$\d+k/.test(html) && html.includes('Checked before you saw it') && (html.match(/class="ok"/g) || []).length >= 8)
+  const html = summaryHTML(design, auditSummary(rooms, program, kit, DEFAULT_LOT), TRUST, kit.titleBlock)
+  assert.ok(html.includes('<svg') && html.includes('Checked before you saw it') && (html.match(/class="ok"/g) || []).length >= 8)
+  assert.match(html, /we go over cost with you at your meeting with the South Texas Builders office/i, 'the cost sentence')
+  assert.doesNotMatch(html.replace(/<svg[\s\S]*?<\/svg>/g, ''), /\$|\d+k\b|\/sf/, 'no money on the client summary')
   assert.ok(html.includes(kit.titleBlock.firm))
 })
