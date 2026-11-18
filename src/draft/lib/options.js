@@ -45,6 +45,8 @@ function candidates(topic, rooms, kit) {
       return out
     }
     for (const n of [2, 1, 3]) out.push({ id: `garage-${n}`, label: `${n}-car garage`, ops: [{ op: 'add', kind: 'garage', w: perCar * n }] })
+    // a plan that cannot take a garage in place (the narrow 3/2) is drawn again with one
+    for (const n of [2, 1]) out.push({ id: `garage-redraft-${n}`, label: `Re-draft with a ${n}-car garage`, ops: [{ op: 'redraft', program: { garage: n } }] })
     return out
   }
   if (topic === 'porch') {
@@ -68,6 +70,8 @@ function candidates(topic, rooms, kit) {
   if (beds < 6) out.push({ id: 'wing-bed-east', label: 'One more bedroom, across the hall', ops: [{ op: 'add', kind: 'bed', side: 'east' }] })
   out.push({ id: 'wing-bath', label: 'One more full bath, across the hall', ops: [{ op: 'add', kind: 'bath', side: 'east' }] })
   if (beds < 6) out.push({ id: 'wing-both', label: 'A bedroom and a bath', ops: [{ op: 'add', kind: 'bed' }, { op: 'add', kind: 'bath' }] })
+  // a long hall: the same rooms drawn again with the bedrooms stacked on both sides of it
+  if (list.some((r) => r.kind === 'hall' && Math.max(r.w, r.d) > 30)) out.push({ id: 'wing-split', label: 'Split the bedrooms across the hall (shorter hall)', ops: [{ op: 'redraft', program: { wingSplit: true } }] })
   const smallest = list.filter((r) => r.kind === 'bed').sort((a, b) => a.w * a.d - b.w * b.d)[0]
   if (smallest) out.push({ id: 'wing-bigger', label: `${smallest.name} 2 ft deeper`, ops: [{ op: 'resize', room: smallest.id, w: smallest.w, d: smallest.d + 2 }] })
   return out
@@ -79,31 +83,61 @@ function candidates(topic, rooms, kit) {
  * same change a fix button sends).
  * @returns {{ topic, options: { id, label, ops, rooms, sf, cost, did }[] }}
  */
-export function optionsFor(topic, rooms, program, style, lot) {
+/**
+ * The same options, built one candidate a turn of the event loop so the screen paints its spinner
+ * between them (the picker used to freeze the page for a second or two on a phone).
+ */
+export async function optionsForAsync(topic, rooms, program, style, lot, opts = {}) {
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+  await tick()
+  return optionsFor(topic, rooms, program, style, lot, { ...opts, tick })
+}
+
+export function optionsFor(topic, rooms, program, style, lot, { history = [], tick = null } = {}) {
   const kit = kitFor(style)
   const L = lotOf(lot)
   const before = { sf: floorArea(rooms, program.stories || 1), cost: estimate({ rooms, program, style, lot }).mid }
   const options = []
-  for (const c of candidates(topic, rooms, kit)) {
+  const list = candidates(topic, rooms, kit)
+  if (tick) return (async () => {
+    for (const c of list) {
+      if (options.length >= 4) break
+      await tick()
+      tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history })
+    }
+    return { topic, options }
+  })()
+  for (const c of list) {
     if (options.length >= 4) break
+    tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history })
+  }
+  return { topic, options }
+}
+
+function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history }) {
+  {
     // a resize right after an add names the room the add made: give the add that id first
     const ops = c.ops.map((o) => ({ ...o }))
     let res
     try {
-      res = decide({ ops, reply: c.label, confidence: 1 }, rooms, program, style, kit, 'fix', L)
+      res = decide({ ops, reply: c.label, confidence: 1 }, rooms, program, style, kit, 'fix', L, { history })
     } catch (e) {
-      continue
+      return
     }
-    if (!res.applied) continue
+    if (!res.applied) return
     const audit = auditPlan(res.rooms, program, kit, L)
-    if (audit.errors.length) continue
+    if (audit.errors.length) return
+    // the split wing is an option only when it does shorten the hall
+    if (c.id === 'wing-split') {
+      const longest = (a) => Math.max(0, ...(a.measures?.halls || []).map((h) => h.lengthFt))
+      if (!(longest(audit) < longest(auditPlan(rooms, program, kit, L)) - 1)) return
+    }
     // a variant that draws the same house as one already offered is not another option
-    if (options.some((o) => sameShape(o.rooms, res.rooms))) continue
+    if (options.some((o) => sameShape(o.rooms, res.rooms))) return
     const sf = floorArea(res.rooms, program.stories || 1)
     const cost = estimate({ rooms: res.rooms, program, style, lot }).mid
     options.push({ id: c.id, label: c.label, ops, rooms: res.rooms, sf: Math.round(sf - before.sf), cost: Math.round(cost - before.cost), did: res.did || [], warnings: audit.warnings.length, svg: thumbnail(res.rooms, program, style, lot) })
   }
-  return { topic, options }
 }
 
 const sameShape = (a, b) => {
