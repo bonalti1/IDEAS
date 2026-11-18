@@ -77,19 +77,20 @@ test('a manual lot: rectangle, city setbacks, corner option, overrides', () => {
   const m = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'Elm St' })
   assert.equal(m.areaSf, 15000)
   assert.deepEqual(m.envelope, [
-    [6, 10],
-    [94, 10],
-    [94, 125],
-    [6, 125],
+    [5, 10],
+    [95, 10],
+    [95, 130],
+    [5, 130],
   ])
-  assert.equal(m.envelopeSf, 88 * 115)
+  // round 7: McAllen R-1 is 20 front, 5 side, 10 rear, read from the code (jurisdictions.js)
+  assert.equal(m.envelopeSf, 90 * 120)
   assert.equal(m.angle, 0)
-  assert.deepEqual(m.envelopeLabels, ["10' — REAR", "6' — SIDE", "25' — ELM ST", "6' — SIDE"])
+  assert.deepEqual(m.envelopeLabels, ["10' — REAR", "5' — SIDE", "20' — ELM ST", "5' — SIDE"])
   assert.equal(m.streets.length, 1)
   assert.equal(m.cityName, 'McAllen, TX')
   const c = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'palmview', frontStreet: 'Elm St', corner: 'right', sideStreet: 'Oak Dr' })
   assert.equal(c.edges[1].kind, 'streetSide')
-  assert.equal(c.edges[1].setback, 20)
+  assert.equal(c.edges[1].setback, 10)
   assert.equal(c.streets.length, 2)
   const o = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: { front: 30, side: '8' } })
   assert.equal(o.envelope[0][0], 8)
@@ -114,14 +115,17 @@ test('envelopeOf insets each edge by its own setback', () => {
   ])
 })
 
-test('city table: defaults for the seven jurisdictions, office overrides win, lot overrides win over those', () => {
-  assert.deepEqual(CITY_IDS, ['mission', 'mcallen', 'edinburg', 'pharr', 'palmview', 'weslaco', 'hidalgo'])
-  const t = cityTable({ mcallen: { front: 20, verified: true } })
-  assert.equal(t.mcallen.front, 20)
+test('city table: the sourced rows for 15 cities and 7 counties (round 7), office overrides win, lot overrides win over those', () => {
+  assert.deepEqual(CITY_IDS.slice(0, 7), ['mcallen', 'edinburg', 'mission', 'pharr', 'hidalgo', 'weslaco', 'sanjuan'])
+  assert.equal(CITY_IDS.length, 22)
+  for (const id of ['harlingen', 'brownsville', 'corpuschristi', 'alice', 'riograndecity', 'cameron-county', 'nueces-county']) assert.ok(CITY_IDS.includes(id), id)
+  const t = cityTable({ mcallen: { front: 22, verified: true } })
+  assert.equal(t.mcallen.front, 22)
   assert.equal(t.mcallen.verified, true)
-  assert.equal(t.mission.front, 25)
+  assert.equal(t.mission.front, 20, 'Mission R-1 front is 20 (summary row)')
+  assert.equal(t.edinburg.rear, 20, 'Edinburg R-1 rear is 20, not the old 10')
   assert.equal(rulesFor('mcallen', { front: 15 }, t).front, 15)
-  assert.equal(rulesFor('mcallen', { front: '' }, t).front, 20)
+  assert.equal(rulesFor('mcallen', { front: '' }, t).front, 22)
   assert.equal(rulesFor('nowhere').name, 'Hidalgo County (unincorporated)')
   assert.equal(guessCity('123 Main St, Edinburg TX'), 'edinburg')
   assert.equal(guessCity('somewhere'), 'hidalgo')
@@ -176,19 +180,25 @@ test('city rules are served, drafters edit them, and lots pick the edit up', asy
   const ana = await who(base, 'ana@example.com')
   const maria = await who(base, 'maria@drafthouse.test')
   const t0 = await (await fetch(base + '/api/cities')).json()
-  assert.equal(t0.mcallen.front, 25)
-  assert.equal((await ana.put('/api/admin/cities/mcallen', { front: 20 })).status, 403, 'clients cannot edit')
-  const up = await (await maria.put('/api/admin/cities/mcallen', { front: 20, verified: true, note: 'per ordinance 2024-12' })).json()
-  assert.equal(up.front, 20)
+  assert.equal(t0.mcallen.front, 20)
+  assert.equal((await ana.put('/api/admin/cities/mcallen', { front: 22 })).status, 403, 'clients cannot edit')
+  const up = await (await maria.put('/api/admin/cities/mcallen', { front: 22, verified: true, note: 'per ordinance 2024-12', source: 'McAllen Code, read 2026-11-18' })).json()
+  assert.equal(up.front, 22)
   assert.equal(up.verified, true)
   assert.equal((await maria.put('/api/admin/cities/atlantis', { front: 1 })).status, 404)
   const t1 = await (await fetch(base + '/api/cities')).json()
-  assert.equal(t1.mcallen.front, 20)
+  assert.equal(t1.mcallen.front, 22)
   assert.equal(t1.mcallen.updatedBy, 'maria@drafthouse.test')
+  // the sourced table carries the edit with its source, status and date (round 7)
+  const j = await (await fetch(base + '/api/jurisdictions')).json()
+  assert.equal(j.mcallen.front.value, 22)
+  assert.equal(j.mcallen.front.status, 'verified')
+  assert.equal(j.mcallen.front.source, 'McAllen Code, read 2026-11-18')
+  assert.equal(j.mcallen.front.by, 'maria@drafthouse.test')
   // a project on that lot: the server rebuilds the lot from its spec with the edited table
   const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'Elm St' }, t1)
   assert.equal(lot.envelope[0][1], 10)
-  assert.equal(lot.envelope[2][1], 130, 'front setback now 20')
+  assert.equal(lot.envelope[2][1], 128, 'front setback now 22')
   const prj = await (await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, lot) })).json()
   assert.equal(prj.lot.spec.kind, 'manual')
   const c = await (await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' })).json()
@@ -268,10 +278,12 @@ test('a half-typed lot size never builds a bad lot: the Lot step keeps the last 
 test('an address outside the Valley clears the city preset message: no rules yet, outside the Rio Grande Valley; the county decides the price', async () => {
   const { geoMessage, COUNTIES } = await import('../src/draft/lib/cities.js')
   const { estimate, countyOf } = await import('../src/draft/lib/pricing.js')
-  assert.match(geoMessage({ found: true, cityId: 'mcallen' }), /McAllen, TX rules/)
-  assert.match(geoMessage({ found: true, cityId: null, county: 'Travis County', place: 'Austin', state: 'TX' }), /don't have rules for this address yet.*outside the Rio Grande Valley/)
-  assert.match(geoMessage({ found: true, cityId: null, county: 'Cameron County', place: 'Harlingen' }), /don't have rules.*in the Valley/)
-  assert.match(geoMessage({ found: true, cityId: null, county: 'Nueces County', place: 'Corpus Christi' }), /outside the Rio Grande Valley; we price it/)
+  // round 7, item 2: the four cases come from the jurisdiction table
+  assert.match(geoMessage({ found: true, cityId: 'mcallen', place: 'McAllen', county: 'Hidalgo County' }), /McAllen, TX rules, from the city code/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Travis County', place: 'Austin', state: 'TX' }), /outside the eight counties we build in/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Cameron County', place: 'Los Fresnos' }), /no rules for that city yet, so the county row is used, unverified/)
+  assert.match(geoMessage({ found: true, cityId: 'corpuschristi', county: 'Nueces County', place: 'Corpus Christi' }), /Corpus Christi, TX rules; 2 of them are summaries/)
+  assert.match(geoMessage({ found: true, cityId: null, county: 'Starr County', place: null }), /Unincorporated Starr County: the county subdivision rules are used/)
   // no city preset, no county: no silent Hidalgo
   const noCity = buildLot({ kind: 'manual', width: 100, depth: 150, city: '', setbacks: {} })
   assert.equal(countyOf(noCity), null)
