@@ -99,16 +99,24 @@ test('the 5-bed wing: Bedroom 3 takes the front of the wing, Bedroom 4 and its b
   assert.ok(grew.shift < 12.75 + 6, `the hall grew ${grew.shift} ft`)
 })
 
-test('the narrow plan: the hall bath sits beside Bedroom 3 off its short hall, the dining room opens to the rear porch through its back wall, the laundry and a drop zone sit off a short cross hall', () => {
+test('the narrow plan: Bedroom 3 and the hall bath open straight off the main hall, the pantry off the kitchen (round 8: no short hall), the dining room opens to the rear porch through its back wall, the laundry and a drop zone sit off a short cross hall', () => {
   const lot = LOTS['narrow 50 x 120']
-  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2200 })]) {
-    const { audit: a, flat } = draft(program, lot)
+  for (const program of [P({ beds: 3, baths: 2, halfBath: false, office: false, garage: 0, suite2: false, sqft: 1800 }), P({ beds: 4, baths: 2, halfBath: false, office: false, garage: 2, suite2: false, sqft: 2350 })]) {
+    const { audit: a, flat, rooms } = draft(program, lot)
     assert.equal(flat.find((r) => r.kind === 'roof')?.plan, 'narrow')
     assert.deepEqual(a.errors.map((e) => e.message), [])
+    const hall = flat.find((r) => r.id === 'hall')
     const bath = flat.find((r) => r.id === 'bath2')
     const bed3 = flat.find((r) => r.id === 'bed3')
-    const hall3 = flat.find((r) => r.id === 'hall3')
-    assert.ok(bath && bed3 && hall3 && Math.abs(bath.x + bath.w - bed3.x) < 0.5 && Math.abs(hall3.x + hall3.w - bed3.x) < 0.5, 'Bath 2 and the short hall stand beside Bedroom 3')
+    const kitchen = flat.find((r) => r.id === 'kitchen')
+    const pantry = flat.find((r) => r.id === 'pantry')
+    assert.ok(hall && bath && bed3 && kitchen && pantry && !flat.some((r) => r.id === 'hall3'), 'no short hall between the bedroom and the pantry')
+    const doorOf = (id) => rooms.find((e) => e.kind === 'door' && e.room === id && !e.cased)
+    const onWall = (door, x) => Math.abs(door.x + door.w / 2 - x) < 0.4
+    assert.ok(onWall(doorOf('bed3'), hall.x + hall.w), 'Bedroom 3 opens straight off the main hall')
+    assert.ok(onWall(doorOf('bath2'), hall.x + hall.w), 'Bath 2 opens off the main hall')
+    assert.ok(onWall(doorOf('pantry'), kitchen.x + kitchen.w) && Math.abs(pantry.x - (kitchen.x + kitchen.w)) < 0.4, 'the pantry opens off the kitchen')
+    assert.ok(a.measures.halls.every((h) => h.lengthFt > 0), 'no zero-length hall in the measures')
     const yardDoor = flat.find((e) => e.kind === 'door' && e.exterior && e.room === 'dining')
     const dining = flat.find((r) => r.id === 'dining')
     assert.ok(yardDoor && yardDoor.axis === 'h' && Math.abs(yardDoor.y + yardDoor.d / 2 - dining.y) < 0.4 && yardDoor.pair, 'the dining room opens to the back yard through a pair on its rear wall')

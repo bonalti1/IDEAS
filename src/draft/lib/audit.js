@@ -182,8 +182,10 @@ export function auditPlan(rooms, program, kit, lot) {
     else if (f.home && !f.onEdge) say('window-wall', 'error', f.home, `${f.home.name}'s window ${w.mark || ''} is not on one of its walls.`)
   })
   const glazedDoor = (r) => links.some(({ d, a, b }) => d.exterior && /pair|french|glass/i.test(d.size || '') && ((a === r && !b) || (b === r && !a)))
+  // a room open to a lit room borrows its light (IRC R303.2: adjoining rooms with the opening between them)
+  const litThroughOpening = (r) => R.some((o) => o !== r && (openPairs.has(r.id + '|' + o.id) || openPairs.has(o.id + '|' + r.id) || openPairs.has(r.kind + '|' + o.kind) || openPairs.has(o.kind + '|' + r.kind)) && sharedEdge(r, o) >= 6 && (exteriorWindows(o).length || glazedDoor(o)))
   R.filter((r) => habitable.includes(r.kind)).forEach((r) => {
-    if (!exteriorWindows(r).length && !glazedDoor(r)) say('window', 'error', r, `${r.name} has no window on an outside wall.`)
+    if (!exteriorWindows(r).length && !glazedDoor(r) && !litThroughOpening(r)) say('window', 'error', r, `${r.name} has no window on an outside wall${r.kind === 'kitchen' || r.kind === 'dining' || r.kind === 'living' ? ', and is not open to a room that has one' : ''}.`)
   })
 
   // d) bedroom egress: IRC R310 net clear opening
@@ -705,7 +707,8 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   }
 
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] ?? Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, deadEndFt: deadEnds[r.id] ?? null }))
+  // a hall whose whole length is open to a public room has no enclosed run: it is listed at its drawn length, never 0
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] || Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, enclosed: !!hallRun[r.id], deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')

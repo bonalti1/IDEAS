@@ -74,7 +74,8 @@ function candidates(topic, rooms, kit) {
   out.push({ id: 'wing-bath', label: 'One more full bath, across the hall', ops: [{ op: 'add', kind: 'bath', side: 'east' }] })
   if (beds < 6) out.push({ id: 'wing-both', label: 'A bedroom and a bath', ops: [{ op: 'add', kind: 'bed' }, { op: 'add', kind: 'bath' }] })
   // a long hall: the same rooms drawn again with the bedrooms stacked on both sides of it
-  if (list.some((r) => r.kind === 'hall' && Math.max(r.w, r.d) > 30)) out.push({ id: 'wing-split', label: 'Split the bedrooms across the hall (shorter hall)', ops: [{ op: 'redraft', program: { wingSplit: true } }] })
+  // (below six bedrooms the primary already sits on the other side of the hall from the others, so the split draws the same house: hidden)
+  if (beds >= 6 && list.some((r) => r.kind === 'hall' && Math.max(r.w, r.d) > 30)) out.push({ id: 'wing-split', label: 'Split the bedrooms across the hall (shorter hall)', ops: [{ op: 'redraft', program: { wingSplit: true } }] })
   const smallest = list.filter((r) => r.kind === 'bed').sort((a, b) => a.w * a.d - b.w * b.d)[0]
   if (smallest) out.push({ id: 'wing-bigger', label: `${smallest.name} 2 ft deeper`, ops: [{ op: 'resize', room: smallest.id, w: smallest.w, d: smallest.d + 2 }] })
   return out
