@@ -7,7 +7,7 @@ import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -58,7 +58,7 @@ export function validateOps(ops, rooms, kit) {
   ops.forEach((o, i) => {
     const at = `op ${i + 1}`
     if (!o || !OPS.includes(o.op)) return errors.push(`${at}: unknown op "${o?.op}"`)
-    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && !ids.has(o.room)) errors.push(`${at}: no room "${o.room}"`)
     if (o.op === 'scale' && !(o.sqft >= 600 && o.sqft <= 10000)) errors.push(`${at}: scale needs sqft`)
     if (o.op === 'swap' && !ids.has(o.target)) errors.push(`${at}: no room "${o.target}" to swap with`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push(`${at}: resize needs w and d`)
@@ -841,7 +841,20 @@ export function spotBeside(rooms, kit, room, target, lot = DEFAULT_LOT) {
 
 const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
 
-export function regexOps(text, rooms, kit, lot = DEFAULT_LOT) {
+export function regexOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } = {}) {
+  const whole = regexOne(text, rooms, kit, lot)
+  if (!split) return whole
+  // "make the house 3,000 sf and add a bedroom": two requests in one line, each read on its own; a swap
+  // ("the office and the dining room") is one request and stays whole
+  if (/\b(swap|switch|exchange|trade)\b/.test(text.toLowerCase())) return whole
+  const clauses = text.split(/\s*(?:;|,|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i).map((c) => c.trim()).filter((c) => c.length >= 4)
+  if (clauses.length < 2) return whole
+  const parts = clauses.map((c) => ({ text: c, ...regexOne(c, rooms, kit, lot) })).filter((p) => p.ops?.length && (p.confidence ?? 1) >= 0.5)
+  if (parts.length < 2) return whole
+  return { ops: parts.flatMap((p) => p.ops), reply: parts.map((p) => p.reply.replace(/\.$/, '')).join('. ') + '.', confidence: Math.min(...parts.map((p) => p.confidence ?? 1)), parts: parts.map((p) => ({ text: p.text, ops: p.ops })) }
+}
+
+function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   const t = text.toLowerCase()
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)

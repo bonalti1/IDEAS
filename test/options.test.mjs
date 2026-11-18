@@ -101,9 +101,10 @@ test('"swap the office and the dining room" on the default draft applies: the di
   assert.equal(a.errors.length, 0, a.errors.map((e) => e.message).join(' / '))
 })
 
-test('on a lot the plan already fills, "make the house 3,000 sf" names the largest size and offers no fix that would fail; the same size is "already there", not a refusal over a snapped wall', async () => {
+test('"make the house 3,000 sf" on a lot the plan already fills: it applies (a re-draft if the stretched plan fails) or names the largest size with a fix that itself applies; the same size is "already there", not a refusal over a snapped wall', async () => {
   const { buildLot } = await import('../src/draft/lib/lot.js')
   const { decide } = await import('../src/draft/lib/interpret.js')
+  const { floorArea } = await import('../src/draft/lib/layout.js')
   const offline = async () => {
     throw new Error('no api')
   }
@@ -111,10 +112,17 @@ test('on a lot the plan already fills, "make the house 3,000 sf" names the large
   const program = { ...DEFAULT_PROGRAM, sqft: 2350 }
   const rooms = generateRooms(program, style, mcallen)
   const r = await interpretRequest('make the house 3,000 sf', rooms, program, style, { lot: mcallen, interpreter: offline, report: false })
-  assert.ok(!r.applied && /largest it fits here/.test(r.reply), r.reply)
-  for (const f of r.fixes || []) {
-    const d = decide({ ops: f.ops, reply: f.label, confidence: 1 }, rooms, program, style, kit, 'fix', mcallen)
-    assert.ok(d.applied, `the offered fix "${f.label}" must apply: ${d.reply}`)
+  if (r.applied) {
+    const sf = floorArea(r.rooms, 1)
+    assert.ok(Math.abs(sf - 3000) / 3000 < 0.05, `${Math.round(sf)} sf`)
+    assert.deepEqual(auditPlan(r.rooms, program, kit, mcallen).errors.map((e) => e.message), [])
+  } else {
+    assert.match(r.reply, /largest it fits here/)
+    assert.ok(r.fixes.length >= 1, 'the largest size is offered as a fix')
+    for (const f of r.fixes) {
+      const d = decide({ ops: f.ops, reply: f.label, confidence: 1 }, rooms, program, style, kit, 'fix', mcallen)
+      assert.ok(d.applied, `the offered fix "${f.label}" must apply: ${d.reply}`)
+    }
   }
   const drawn = Math.round(auditPlan(rooms, program, kit, mcallen).measures.livingSf / 50) * 50
   const same = await interpretRequest(`make the house ${drawn.toLocaleString()} sf`, rooms, program, style, { lot: mcallen, interpreter: offline, report: false })

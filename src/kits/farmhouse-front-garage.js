@@ -74,8 +74,9 @@ export function frontGarageVariant(plan) {
     { k: 'bed', room: 'master', x: 64.5, y: 0.5, w: 7, d: 6.5, head: 'e' },
     // primary bath: the vanity along the gallery wall, the shower and the water closet on the far side, the door's leaf clear of all three
     { k: 'vanity', room: 'mbath', x: 61, y: 13.5, w: 2, d: 6, face: 'e' },
-    { k: 'shower', room: 'mbath', x: 68, y: 12.5, w: 4, d: 4.5 },
-    { k: 'toilet', room: 'mbath', x: 70, y: 17, w: 1.5, d: 2.3, face: 'w' },
+    // the toilet keeps 15" clear of the shower above it and the wall below at every scale the plan draws
+    { k: 'shower', room: 'mbath', x: 68, y: 12.5, w: 4, d: 4 },
+    { k: 'toilet', room: 'mbath', x: 70, y: 16.8, w: 1.5, d: 2.3, face: 'w' },
     { k: 'linen', room: 'mbath', x: 65.9, y: 12.5, w: 2, d: 1.25 },
     // half bath: the vanity by the door, the water closet at the far end
     { k: 'vanity', room: 'halfbath', x: 63.6, y: 19.8, w: 1.6, d: 2.5, face: 'w' },

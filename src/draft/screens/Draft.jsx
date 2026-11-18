@@ -30,6 +30,9 @@ function suggestionsFor(rooms, kit) {
   return [...out.slice(0, 4), 'Show me garage options']
 }
 
+/** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
+const standingEdits = (history) => history.flatMap((m, i) => (m.who === 'you' && !m.undone && history[i + 1]?.applied && history[i + 1].ops?.length ? [{ text: m.text, ops: history[i + 1].ops }] : []))
+
 /** A phone-width screen: no 3D tags, they pile up. */
 function useNarrow() {
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches)
@@ -98,7 +101,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       setBusy(true)
       setHistory((h) => [...h, { who: 'you', text: q }])
       await new Promise((r) => setTimeout(r, 30))
-      const { options } = optionsFor(topic, rooms, program, style, lot)
+      const { options } = optionsFor(topic, rooms, program, style, lot, { history: standingEdits(history) })
       const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
       setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; the others cost nothing.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
       setBusy(false)
@@ -115,7 +118,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
         res = r
         if (r.applied) setProject((p) => ({ ...p, credits: r.credits, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, credit: 1, at: new Date().toISOString() }] }))
       } else {
-        const opts = { lot }
+        const opts = { lot, history: standingEdits(history) }
         if (fix) {
           opts.interpreter = async () => ({ ops: fix.ops, reply: q, confidence: 1 })
           opts.report = false
@@ -131,7 +134,7 @@ export default function Draft({ style, program, rooms, setRooms, credits, setCre
       const a2 = floorArea(res.rooms, program.stories)
       meta = { sf: a2 - before.area, cost: priceOf({ rooms: res.rooms, program, style, lot }).mid - before.estimate, credit: 1 }
     }
-    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta }])
+    setHistory((h) => [...h, { who: 'house', text: res.reply, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta, ops: res.applied ? res.ops : undefined }])
     if (res.credits !== undefined) setCredits(res.credits)
     if (res.applied) {
       if (!project) {

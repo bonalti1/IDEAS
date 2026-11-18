@@ -2,7 +2,7 @@
 // A change runs here, not in the browser: Claude (or the basic rules when it is unavailable),
 // then the plan rules, and a credit is taken only when the change is applied.
 import crypto from 'node:crypto'
-import { decide, unsupported } from '../src/draft/lib/interpret.js'
+import { decide, unsupported, editsOf } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot } from '../src/draft/lib/ops.js'
 import { kitFor, programOf } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
@@ -184,7 +184,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         diff = regexOps(request, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      const result = decide(diff, rooms, p.program, style, kit, source, lot)
+      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
+      const edits = editsOf(await store.versions.list(p.id))
+      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits })
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], credits: owner.credits, version: p.version }
       const charged = await store.users.charge(p.userId, now())

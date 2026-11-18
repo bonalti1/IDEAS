@@ -2,7 +2,7 @@
 // Claude does the interpreting through the office API (key stays server-side);
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
-import { kitFor, lotOf, minSizeOf, planIdOf, isRoom } from './layout.js'
+import { kitFor, lotOf, minSizeOf, planIdOf, isRoom, programOf, generateRooms, floorArea } from './layout.js'
 import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
@@ -50,7 +50,7 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
     diff = regexOps(text, rooms, kit, lotOf(opts.lot))
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
-  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot))
+  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [] })
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return result
 }
@@ -98,30 +98,236 @@ export function growSwaps(ops, rooms, kit) {
       // the minimum turned the way the room lies
       const [mw, md] = room.w >= room.d ? [Math.max(...min), Math.min(...min)] : [Math.min(...min), Math.max(...min)]
       if (room.w >= mw - 0.01 && room.d >= md - 0.01) return null
-      return { op: 'resize', room: room.id, w: Math.max(room.w, mw), d: Math.max(room.d, md) }
+      return { op: 'resize', room: room.id, w: Math.max(room.w, mw), d: Math.max(room.d, md), auto: true }
     }
     return [o, grow(a, b.kind), grow(b, a.kind)].filter(Boolean)
   })
 }
 
-export function decide(diff, rooms, program, style, kit, source, lot) {
+const PLAN_WORDS = { standard: 'standard', compact: 'compact', narrow: 'narrow-lot', frontgarage: 'garage-forward' }
+const PROGRAM_KINDS = ['bed', 'bath', 'halfbath', 'jackjill', 'office', 'garage', 'frontPorch', 'rearPorch', 'suite2']
+const num = (n) => Math.round(n).toLocaleString()
+
+/**
+ * The client's edits still standing, oldest first, from a project's version log: each applied change
+ * with its ops. A rollback jumps to the version it restored; a new first draft (the rooms step run
+ * again) starts the log over.
+ * @returns {{ text: string, ops: object[] }[]}
+ */
+export function editsOf(versions) {
+  const list = (versions || []).filter((v) => v && Number.isFinite(v.n))
+  if (!list.length) return []
+  const byN = new Map(list.map((v) => [v.n, v]))
+  let n = Math.max(...list.map((v) => v.n))
+  const out = []
+  for (let guard = 0; n >= 1 && byN.has(n) && guard < 500; guard++) {
+    const v = byN.get(n)
+    if (v.kind === 'rollback' && v.rollbackOf) {
+      n = v.rollbackOf
+      continue
+    }
+    if (v.kind === 'initial' || v.kind === 'program') break
+    if (v.kind === 'change' && Array.isArray(v.ops) && v.ops.length) out.unshift({ text: v.text, ops: v.ops })
+    n -= 1
+  }
+  return out
+}
+
+/** The room-level part of a change: what a new draft at the counted program does not already carry. */
+export const roomLevelOps = (ops) => (ops || []).filter((o) => o && o.op !== 'scale' && o.op !== 'redraft' && !((o.op === 'add' || o.op === 'remove') && PROGRAM_KINDS.includes(o.kind)))
+
+/**
+ * A fresh draft of the house as it stands (its rooms counted into a program) at another size or with a
+ * program change, on the same lot, with the client's room-level edits applied again on top. Each edit
+ * is kept only if it still applies and passes; the rest are reported.
+ * @param {number|null} sqft  the living area asked for (null: the size it has now)
+ * @param {object} over       program fields to change (a 2-car garage: { garage: 2 })
+ * @returns {{ ok: true, rooms, program, planId, kept: string[], dropped: {text, why}[] } | { ok: false, max: number|null, reasons: string[] }}
+ */
+export function redraft(sqft, rooms, program, style, lot, edits = [], over = {}) {
   const L = lotOf(lot)
+  const kit = kitFor(style)
+  const stories = program.stories || 1
+  const counted = programOf(rooms, program)
+  const base = { ...program, beds: counted.beds, baths: counted.baths, halfBath: counted.halfBath, office: counted.office, garage: counted.garage, suite2: counted.suite2, frontPorch: counted.frontPorch, rearPorch: counted.rearPorch, stories, sqft: Math.round(sqft || floorArea(rooms, stories)), ...over }
+  const fit = fitsLot(base, style, L)
+  if (!fit.ok) return { ok: false, max: fit.maxSqft || (fit.draft?.clamped ? fit.draft.minSqft : null), reasons: fit.reasons || [], program: base }
+  // under the plan's floor the draft comes out at the floor: that is not the size asked for
+  if (fit.draft?.clamped && fit.draft.minSqft && Math.abs(fit.draft.minSqft - base.sqft) / base.sqft > 0.05) return { ok: false, max: fit.draft.minSqft, reasons: [`the smallest this plan goes with these rooms is about ${num(fit.draft.minSqft)} sf`], program: base, floor: true }
+  let next = fit.draft?.rooms || generateRooms(base, style, L)
+  const kept = []
+  const dropped = []
+  for (const e of edits || []) {
+    const ops = roomLevelOps(e.ops)
+    if (!ops.length) continue
+    try {
+      const v = validateOps(ops, next, kit)
+      if (!v.ok) throw new Error(/no room/.test(v.errors[0]) ? 'that room is not in the new draft' : v.errors[0])
+      const out = applyOps(ops, next, kit, stories, L)
+      const rules = checkRules(out.rooms, base, style, L)
+      if (!rules.ok) throw new Error(rules.reasons[0].replace(/\.$/, ''))
+      next = out.rooms
+      kept.push(e.text)
+    } catch (err) {
+      dropped.push({ text: e.text, why: String(err.message || err).replace(/\.$/, '') })
+    }
+  }
+  const rules = checkRules(next, base, style, L)
+  if (!rules.ok) return { ok: false, max: null, reasons: rules.reasons, program: base }
+  return { ok: true, rooms: next, program: base, planId: planIdOf(next), kept, dropped }
+}
+
+/** The kept-and-dropped tail of a re-draft reply. */
+function editsLine(r) {
+  const parts = []
+  if (r.kept?.length) parts.push(`Your earlier changes still stand: ${r.kept.map((t) => `"${t}"`).join(', ')}.`)
+  if (r.dropped?.length) parts.push(`Could not keep: ${r.dropped.map((d) => `"${d.text}" (${d.why})`).join('; ')}.`)
+  return parts.length ? ' ' + parts.join(' ') : ''
+}
+
+/** One op in the client's words, for a reply that says which part of a request went through. */
+export function describeOp(o, rooms, kit) {
+  const name = (id) => rooms.find((r) => r.id === id)?.name?.toLowerCase() || 'that room'
+  const kindName = (k) => kit.rooms[k]?.name?.toLowerCase() || k
+  switch (o?.op) {
+    case 'scale':
+      return `the house at ${num(o.sqft)} sf`
+    case 'add':
+      return `adding ${/^[aeiou]/.test(kindName(o.kind)) ? 'an' : 'a'} ${kindName(o.kind)}`
+    case 'remove':
+      return `removing the ${name(o.room)}`
+    case 'resize':
+      return `the ${name(o.room)} at ${ft(o.w)}' by ${ft(o.d)}'`
+    case 'move':
+      return `moving the ${name(o.room)}`
+    case 'moveBeside':
+      return `the ${name(o.room)} next to the ${name(o.target)}`
+    case 'garage':
+      return `a ${o.cars}-car garage${o.tandem ? ' (tandem: one bay two cars deep)' : ''}${o.load ? `, ${o.load}-load` : ''}`
+    case 'swap':
+      return `swapping the ${name(o.room)} and the ${name(o.target)}`
+    case 'redraft':
+      return `a new draft${o.program?.garage !== undefined ? ` with a ${o.program.garage}-car garage` : ''}${o.sqft ? ` at ${num(o.sqft)} sf` : ''}`
+    default:
+      return 'that change'
+  }
+}
+
+/** The parts of a request: what the fallback split, or each op with the resizes a swap carries. */
+function partsOf(diff, rooms, kit) {
+  if (Array.isArray(diff.parts) && diff.parts.length > 1) return diff.parts.filter((p) => p.ops?.length).map((p) => ({ text: p.text, ops: p.ops }))
+  const out = []
+  for (const o of diff.ops) {
+    if (o.auto && out.length) out[out.length - 1].ops.push(o)
+    else out.push({ text: describeOp(o, rooms, kit), ops: [o] })
+  }
+  return out
+}
+
+const GARAGE_WORDS = (why) => {
+  const m = why.match(/(\d)-car/)
+  const n = m ? m[1] : null
+  if (/no free wall at the laundry/.test(why)) return `There is no room for a garage against the laundry on this plan.`
+  if (/no sound spot for a/.test(why)) return `There is no room for ${n ? `a ${n}-car` : 'that'} garage${/tandem/.test(why) ? ' with a tandem bay' : ''}${/side-load/.test(why) ? ', side-load,' : /front-load/.test(why) ? ', front-load,' : ''} on this lot.`
+  return null
+}
+
+/**
+ * The verdict on a diff: applied rooms, or a refusal that says why and offers the next best thing.
+ * @param {object} opts  { history: the client's edits so far [{text, ops}] (for a re-draft), depth }
+ */
+export function decide(diff, rooms, program, style, kit, source, lot, opts = {}) {
+  const L = lotOf(lot)
+  const depth = opts.depth || 0
+  const edits = opts.history || []
+  const stories = program.stories || 1
   diff = { ...diff, ops: growSwaps(normalizeOps(diff.ops, rooms), rooms, kit) }
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }
+  // a new draft of the house as it stands, with a program change or at a size (what a fix button sends
+  // when the plan cannot take the change in place)
+  const redraftOp = diff.ops.find((o) => o.op === 'redraft')
+  if (redraftOp) {
+    const r = redraft(redraftOp.sqft || null, rooms, program, style, L, edits, redraftOp.program || {})
+    if (!r.ok) return { applied: false, rooms, reply: `A new draft with that does not fit this lot${r.reasons?.[0] ? `: ${r.reasons[0].replace(/\.$/, '')}` : ''}.`, source, ops: diff.ops, reasons: r.reasons || [], fixes: [] }
+    const what = describeOp(redraftOp, rooms, kit)
+    const reply = `Drew ${what} on the ${PLAN_WORDS[r.planId] || r.planId || 'same'} plan: ${num(floorArea(r.rooms, stories))} sf of living area.${editsLine(r)}`
+    return { applied: true, rooms: r.rooms, reply, source, ops: diff.ops, did: [`New draft: ${what}`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
+  }
   const v = validateOps(diff.ops, rooms, kit)
   if (!v.ok) return { applied: false, rooms, reply: `I could not apply that: ${v.errors[0]}.`, source, ops: diff.ops, reasons: v.errors }
 
+  const scaleOp = diff.ops.length === 1 && diff.ops[0].op === 'scale' ? diff.ops[0] : null
+  const now = floorArea(rooms, stories)
+
+  // "make the house N sf" when stretching the rooms as they are fails: a new draft at N with the client's
+  // edits put back; or the largest the lot takes, offered as the fix
+  const rescale = (why) => {
+    const sqft = Math.round(scaleOp.sqft)
+    const r = redraft(sqft, rooms, program, style, L, edits)
+    if (r.ok) {
+      const got = floorArea(r.rooms, stories)
+      const plan = PLAN_WORDS[r.planId] || r.planId
+      const reply = `Re-drafted the house at ${num(got)} sf${plan && r.planId !== planIdOf(rooms) ? ` on the ${plan} plan` : ''}: stretching the rooms as they were ${why}.${editsLine(r)}`
+      return { applied: true, rooms: r.rooms, reply, source, ops: diff.ops, did: [`${num(got)} sf of living area (was ${num(now)}), re-drafted`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
+    }
+    // the largest size this lot takes with these rooms, as a fix that is itself checked
+    const max = r.max && Math.round(r.max / 10) * 10
+    const there = max && Math.abs(max - now) / now < 0.01
+    let fix = null
+    if (max && !there && depth < 2) {
+      const d = decide({ ops: [{ op: 'scale', sqft: max }], reply: '', confidence: 1 }, rooms, program, style, kit, source, L, { ...opts, depth: depth + 1 })
+      if (d.applied) fix = { label: `Make it ${num(max)} sf`, ops: [{ op: 'scale', sqft: max }] }
+    }
+    const reply = r.floor || sqft < now
+      ? `At ${num(sqft)} sf the rooms fall under their minimums${max ? `; the smallest this plan goes with these rooms is about ${num(max)} sf${there ? ', which is about where it is now' : ''}` : ''}.`
+      : `At ${num(sqft)} sf this plan runs past the setbacks on this lot${max ? `; the largest it fits here with these rooms is about ${num(max)} sf${there ? ', which is about where it is now' : ''}` : r.reasons?.[0] ? ` (${r.reasons[0].replace(/\.$/, '')})` : ''}.`
+    return { applied: false, rooms, reply, source, ops: diff.ops, reasons: [why, ...(r.reasons || [])], caused: [why], preexisting: [], fixes: fix ? [fix] : [] }
+  }
+
+  // a request in parts, applied one part at a time: what passes goes through, what does not is named
+  const inParts = (whole) => {
+    const parts = partsOf(diff, rooms, kit)
+    if (parts.length < 2 || depth >= 2) return null
+    let running = rooms
+    const kept = []
+    const dropped = []
+    const ops = []
+    const did = []
+    for (const part of parts) {
+      const d = decide({ ops: part.ops, reply: '', confidence: 1 }, running, program, style, kit, source, L, { ...opts, depth: depth + 1 })
+      if (d.applied) {
+        running = d.rooms
+        kept.push(part.text)
+        ops.push(...part.ops)
+        did.push(...(d.did || []))
+      } else dropped.push({ text: part.text, why: d.reply.replace(/^I can't do that one\. /, '').replace(/\.$/, '') })
+    }
+    if (!kept.length) return null
+    const reply = `Done: ${kept.join('; ')}.${dropped.length ? ` Not done: ${dropped.map((d) => `${d.text} (${d.why})`).join('; ')}. This counts as one change, for what was done.` : ''}`
+    return { applied: true, rooms: running, reply, source, ops, did, partial: dropped.length > 0, kept, dropped }
+  }
+
   let next
   try {
-    next = applyOps(diff.ops, rooms, kit, program.stories || 1, L)
+    next = applyOps(diff.ops, rooms, kit, stories, L)
   } catch (e) {
     // the reason is written for the client: it is the reply
     const why = String(e.message || e)
     const plain = /^[A-Za-z0-9]/.test(why) && !/at .*\.js|undefined|null|TypeError|ReferenceError/.test(why)
-    const fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
-    return { applied: false, rooms, reply: plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.', source, ops: diff.ops, reasons: [why], caused: [why], preexisting: [], fixes }
+    if (scaleOp && plain && !/already about/.test(why)) return rescale(`would not work (${why.replace(/\.$/, '')})`)
+    const parts = inParts()
+    if (parts) return parts
+    let fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
+    let reply = plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.'
+    // a garage that has no spot: plain words, then the next best thing (one bay less, a tandem bay, a new draft)
+    const gWords = plain && GARAGE_WORDS(why)
+    if (gWords) {
+      reply = gWords
+      fixes = garageFallbacks(diff.ops, rooms, program, style, kit, L, edits, depth)
+    }
+    return { applied: false, rooms, reply, source, ops: diff.ops, reasons: [why], caused: [why], preexisting: [], fixes }
   }
   // a change that draws the same house is no change: nothing applied, nothing charged
   if (sameRooms(rooms, next.rooms)) {
@@ -134,24 +340,49 @@ export function decide(diff, rooms, program, style, kit, source, lot) {
     const before = checkRules(rooms, program, style, L).reasons
     const preexisting = rules.reasons.filter((r) => before.includes(r))
     const caused = rules.reasons.filter((r) => !before.includes(r))
+    if (scaleOp && caused.length) return rescale(caused.some((r) => /setback|cover|lot/i.test(r)) ? 'would run past the setbacks' : `would not pass (${caused[0].replace(/\.$/, '')})`)
+    const parts = inParts()
+    if (parts) return parts
     const fixes = suggestFixes(diff.ops, caused.length ? caused : preexisting, rooms, next.rooms, program, style, kit, L, caused.length > 0)
-    // a whole-house size the lot cannot take: one line with the largest it takes, and that as the fix
-    const scaleOp = diff.ops.find((o) => o.op === 'scale')
-    if (scaleOp && caused.some((r) => /setback|cover|lot/i.test(r))) {
-      const f = fitsLot({ ...program, sqft: Math.round(scaleOp.sqft) }, style, L)
-      const max = f.maxSqft || (f.draft?.clamped ? f.draft.minSqft : null)
-      // the largest size is offered as the fix, unless the house is already there (within 1%)
-      const now = rooms.filter((r) => isRoom(r) && !r.open && r.kind !== 'garage').reduce((a, r) => a + r.w * r.d, 0) * (program.stories || 1)
-      const there = max && Math.abs(max - now) / now < 0.01
-      const reply2 = `At ${Math.round(scaleOp.sqft).toLocaleString()} sf this plan runs past the setbacks on this lot${max ? `; the largest it fits here with these rooms is about ${max.toLocaleString()} sf${there ? ', which is about where it is now' : ''}` : ''}.`
-      return { applied: false, rooms, reply: reply2, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes: max && !there ? [{ label: `Make it ${max.toLocaleString()} sf`, ops: [{ op: 'scale', sqft: max }] }] : there ? [] : fixes }
-    }
     const reply = caused.length
       ? `I can't do that one. ${caused.join(' ')}${preexisting.length ? ` The plan also has a problem from before: ${preexisting.join(' ')}` : ''}`
       : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting.join(' ')}`
     return { applied: false, rooms, reply, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes }
   }
   return { applied: true, rooms: next.rooms, reply: diff.reply || next.did.join('. ') + '.', source, ops: diff.ops, did: next.did }
+}
+
+/**
+ * When a garage will not go where it was asked: one bay less, a tandem third bay, and a new draft of
+ * the house with that garage, each offered only if it applies and passes.
+ */
+function garageFallbacks(ops, rooms, program, style, kit, L, edits, depth) {
+  const stories = program.stories || 1
+  const o = ops.find((x) => x.op === 'garage' || (x.op === 'add' && x.kind === 'garage'))
+  if (!o) return []
+  const cars = o.op === 'garage' ? o.cars : o.w ? Math.max(1, Math.round(o.w / (kit.rooms.garage?.perCar || 11))) : 2
+  const has = rooms.some((r) => isRoom(r) && r.kind === 'garage')
+  const fixes = []
+  const works = (candidate) => {
+    try {
+      const out = applyOps(candidate, rooms, kit, stories, L)
+      return checkRules(out.rooms, program, style, L).ok && !sameRooms(rooms, out.rooms)
+    } catch {
+      return false
+    }
+  }
+  const asOp = (n, extra = {}) => (has ? [{ op: 'garage', cars: n, ...(o.load ? { load: o.load } : {}), ...extra }] : [{ op: 'add', kind: 'garage', name: `${n}-Car Garage`, w: (kit.rooms.garage?.perCar || 11) * n, d: kit.rooms.garage?.d || 22, near: o.near }])
+  if (cars > 1 && works(asOp(cars - 1))) fixes.push({ label: `Make it a ${cars - 1}-car garage instead?`, ops: asOp(cars - 1) })
+  if (cars >= 3 && has && !o.tandem && works(asOp(cars, { tandem: true }))) fixes.push({ label: `${cars}-car with a tandem bay (one bay two cars deep)?`, ops: asOp(cars, { tandem: true }) })
+  if (depth < 2) {
+    const r = redraft(null, rooms, program, style, L, edits, { garage: cars })
+    if (r.ok && r.rooms.some((x) => isRoom(x) && x.kind === 'garage')) fixes.push({ label: `Re-draft the house with a ${cars}-car garage${r.dropped.length ? ` (${r.dropped.length} earlier change${r.dropped.length === 1 ? '' : 's'} would not carry over)` : ''}`, ops: [{ op: 'redraft', program: { garage: cars } }] })
+    else if (cars > 2) {
+      const r2 = redraft(null, rooms, program, style, L, edits, { garage: 2 })
+      if (r2.ok && r2.rooms.some((x) => isRoom(x) && x.kind === 'garage')) fixes.push({ label: 'Re-draft the house with a 2-car garage', ops: [{ op: 'redraft', program: { garage: 2 } }] })
+    }
+  }
+  return fixes.slice(0, 3)
 }
 
 const ROOM_IN_REASON = (reason, rooms) => rooms.filter((r) => r.name && reason.startsWith(r.name + ' ')).sort((a, b) => b.name.length - a.name.length)[0]
