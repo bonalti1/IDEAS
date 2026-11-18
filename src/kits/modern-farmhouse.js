@@ -391,7 +391,7 @@ export const KIT = {
     required: [['kitchen'], ['living'], ['bed', 'master', 'suite2'], ['bath', 'mbath', 'jackjill']],
     maxRoomFt: 40,
     // the largest each kind is drawn, [w, d]: a resize past this is out of range, and a fix offer never goes beyond it
-    maxSize: { bed: [18, 16], master: [22, 20], suite2: [18, 16], bath: [12, 14], mbath: [16, 14], jackjill: [12, 14], halfbath: [8, 8], kitchen: [24, 20], living: [30, 26], dining: [20, 18], office: [16, 16], laundry: [12, 14], mud: [12, 12], pantry: [10, 10], wic: [10, 12], mwic: [12, 14], foyer: [12, 12], hall: [10, 60], garage: [48, 48], frontPorch: [60, 12], rearPorch: [60, 16] },
+    maxSize: { bed: [20, 18], master: [24, 22], suite2: [20, 18], bath: [12, 14], mbath: [16, 14], jackjill: [12, 14], halfbath: [8, 8], kitchen: [24, 20], living: [30, 26], dining: [20, 18], office: [16, 16], laundry: [12, 14], mud: [12, 12], pantry: [10, 10], wic: [10, 12], mwic: [12, 14], foyer: [12, 12], hall: [10, 60], garage: [48, 48], frontPorch: [60, 12], rearPorch: [60, 16] },
   },
 
   // Revit names in the office template. The worker looks these up by name and

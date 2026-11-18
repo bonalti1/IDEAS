@@ -117,7 +117,7 @@ test('a fake Claude resize past what the roof allows is rejected, a sane one app
   const bad = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 60, d: 19 }], reply: 'Huge kitchen.', confidence: 0.9 })
   const r1 = await ask('giant kitchen', fresh(), bad)
   assert.equal(r1.applied, false)
-  assert.match(r1.reply, /roof|setback|cover|in the way|too small/)
+  assert.match(r1.reply, /roof|setback|cover|in the way|too small|goes up to/) // round 8: a size past the kit's largest is out of range
   const good = async () => ({ ops: [{ op: 'resize', room: 'office', w: 12, d: 7.5 }], reply: 'Widened the office to 12 feet.', confidence: 0.9 })
   const r2 = await ask('office 12 feet wide', fresh(), good)
   assert.equal(r2.applied, true, r2.reply)
@@ -132,7 +132,7 @@ test('low confidence or unknown ids never apply', async () => {
   const badId = async () => ({ ops: [{ op: 'remove', room: 'garage-9' }], reply: 'Removed.', confidence: 0.9 })
   const r2 = await ask('remove the garage', fresh(), badId)
   assert.equal(r2.applied, false)
-  assert.match(r2.reply, /could not apply/)
+  assert.match(r2.reply, /could not apply|There is no room/) // round 8: plain words
 })
 
 test('validateOps and regexOps shapes', () => {
@@ -160,7 +160,7 @@ test('a timeout on the Claude call falls back and is labelled', async () => {
 const withGarage = () => generateRooms({ ...program, garage: 2, rearPorch: false }, style)
 const roomOf = (rooms, kind) => rooms.filter((r) => isRoom(r) && r.kind === kind).pop()
 const SIX = [
-  ['make the garage 3 cars', withGarage, (rooms) => [{ op: 'resize', room: 'garage', w: 33, d: 22 }], (res) => assert.equal(byId(res.rooms, 'garage').w, 33)],
+  ['make the garage 3 cars', withGarage, (rooms) => [{ op: 'resize', room: 'garage', w: 33, d: 22 }], (res) => assert.equal(byId(res.rooms, 'garage').w, 32)], // a 3-car is 32 ft (round 8)
   ['move the office next to the laundry', withGarage, (rooms) => [{ op: 'moveBeside', room: 'office', target: 'laundry' }], (res) => {
     const l = byId(res.rooms, 'office'); const g = byId(res.rooms, 'laundry')
     const touching = Math.abs(l.x - (g.x + g.w)) < 1 || Math.abs(g.x - (l.x + l.w)) < 1 || Math.abs(l.y - (g.y + g.d)) < 1 || Math.abs(g.y - (l.y + l.d)) < 1
@@ -224,7 +224,7 @@ test('a stub op beside the real one (a resize with no size, a move with no dista
   const stubs = async () => ({ ops: [{ op: 'resize', room: 'garage', w: 33, d: 22 }, { op: 'resize', room: 'laundry' }, { op: 'move', room: 'mud' }], reply: 'Three cars.', confidence: 0.9 })
   const res = await ask('make the garage 3 cars', withGarage(), stubs)
   assert.equal(res.applied, true, res.reply)
-  assert.equal(byId(res.rooms, 'garage').w, 33)
+  assert.equal(byId(res.rooms, 'garage').w, 32)
   assert.equal(res.ops.length, 1)
   // a resize with one side keeps the other
   const oneSide = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 12 }], reply: 'Narrower.', confidence: 0.9 })

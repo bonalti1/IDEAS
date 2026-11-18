@@ -179,7 +179,7 @@ route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
   json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
 })
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req, { version: 'number' })).version), req))
-route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object', ifc: 'string?' }), saveDesign), req))
+route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object?', ifc: 'string?' }), saveDesign), req))
 
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
