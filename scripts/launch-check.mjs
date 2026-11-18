@@ -9,8 +9,9 @@
 //   APP_KEY        DRAFTHOUSE_APP_KEY            (for API calls the check makes itself)
 //   WORKER_KEY     DRAFTHOUSE_WORKER_KEY         (the check pretends to be the office computer unless REAL_WORKER=1)
 //   CLIENT_EMAIL / DRAFTER_EMAIL                 sign-ins (local mode; with Supabase, sign in by hand first: SKIP_SIGNIN=1)
-//   STRIPE_WEBHOOK_SECRET                        simulate the paid checkout with a signed webhook (unless REAL_STRIPE=1)
-//   REAL_STRIPE=1  drive the real Stripe Checkout page with the test card instead of the simulated webhook
+//   BILLING_ENABLED=1                            also run the dormant payment step (off by default since round 8: no money in the client app)
+//   STRIPE_WEBHOOK_SECRET                        with BILLING_ENABLED=1: simulate the paid checkout with a signed webhook (unless REAL_STRIPE=1)
+//   REAL_STRIPE=1  with BILLING_ENABLED=1: drive the real Stripe Checkout page with the test card instead of the simulated webhook
 //   REAL_WORKER=1  wait for the real office computer to build the model instead of pretending
 //   PLAT=1         read the lot from the Garza site plan (needs the Claude key) instead of typing it in
 import { chromium } from 'playwright-core'
@@ -28,7 +29,8 @@ const RUN = Date.now().toString(36).slice(-5)
 const CLIENT = process.env.CLIENT_EMAIL || `launch-${RUN}@example.com`
 const CLIENT_NAME = `Launch Client ${RUN}`
 const DRAFTER = process.env.DRAFTER_EMAIL || 'drafter@drafthouse.local'
-const REAL_STRIPE = process.env.REAL_STRIPE === '1'
+const BILLING = /^(1|true|yes)$/i.test(process.env.BILLING_ENABLED || '')
+const REAL_STRIPE = BILLING && process.env.REAL_STRIPE === '1'
 const REAL_WORKER = process.env.REAL_WORKER === '1'
 const WHSEC = process.env.STRIPE_WEBHOOK_SECRET || ''
 
@@ -72,7 +74,7 @@ async function step(name, fn, { skip } = {}) {
   }
 }
 
-console.log(`Launch check · app ${APP} · api ${API} · ${REAL_STRIPE ? 'real Stripe' : 'simulated payment'} · ${REAL_WORKER ? 'real office computer' : 'pretend office computer'}`)
+console.log(`Launch check · app ${APP} · api ${API} · ${!BILLING ? 'no payments (office-granted changes)' : REAL_STRIPE ? 'real Stripe' : 'simulated payment'} · ${REAL_WORKER ? 'real office computer' : 'pretend office computer'}`)
 browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' })
 const client = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 page = await client.newPage()
@@ -96,7 +98,7 @@ await step('production settings: keys, database, CORS', async () => {
   if (health?.store !== 'postgres') miss.push(`store is ${health?.store}, not Postgres`)
   if (!/CORS (?!open)/.test(by('auth')?.detail || '')) miss.push('CORS open to any site')
   if (health?.auth !== 'supabase') miss.push('local sign-in (no Supabase)')
-  if (!by('billing')?.ok) miss.push('payments not configured')
+  if (BILLING && !by('billing')?.ok) miss.push('payments not configured')
   if (!by('backup')?.detail?.includes('nightly')) miss.push('backup off')
   if (miss.length) throw new Error('not production grade: ' + miss.join('; '))
   return 'keys, Postgres, CORS, Supabase, Stripe, backups'
@@ -199,9 +201,9 @@ await step('undo one edit', async () => {
   return `${before} → ${after}`
 })
 
-// ── 5. pay in test mode ──
+// ── 5. pay in test mode (only with BILLING_ENABLED=1; the client app has no billing since round 8) ──
 let user
-await step('pay for a pack', async () => {
+if (BILLING) await step('pay for a pack', async () => {
   const login = await fetch(API + '/api/auth/dev-login', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ email: CLIENT }) })
   if (login.ok) user = (await login.json()).user
   await page.goto(APP + '/#/billing', { waitUntil: 'domcontentloaded' })
