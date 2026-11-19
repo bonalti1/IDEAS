@@ -208,8 +208,9 @@ route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => {
   json(res, 200, await projects.update(prj, body), req)
 })
 route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
-  const body = await readJson(req, { text: 'string', ops: 'array?' })
-  json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
+  // lang: the language of the client's screen ('es' or 'en'); without it the answer follows the language of the text (round 13)
+  const body = await readJson(req, { text: 'string', ops: 'array?', lang: 'string?' })
+  json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops, { lang: body.lang === 'es' || body.lang === 'en' ? body.lang : undefined }), req)
 })
 route('POST', '/api/projects/:id/custom', 'user', async (req, res, p, ctx) => json(res, 200, await projects.needsCustom(await projects.load(ctx.user, p.id), await readJson(req, { note: 'string?', program: 'object?', clear: 'boolean?' })), req))
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req, { version: 'number' })).version), req))

@@ -128,7 +128,13 @@ test('low confidence or unknown ids never apply', async () => {
   const unsure = async () => ({ ops: [], reply: 'Which room do you mean?', confidence: 0.2 })
   const r1 = await ask('make it nicer', fresh(), unsure)
   assert.equal(r1.applied, false)
-  assert.equal(r1.reply, 'Which room do you mean?')
+  // round 13, item 3: a request with nothing in it the chat acts on ("make it nicer") gets the plan code's own answer
+  // with example buttons in both modes; the model's question still stands when the request names a room
+  assert.match(r1.reply, /^I did not catch that\. Here are some changes that work on this plan\./)
+  assert.equal(r1.fixes.length, 3)
+  const r1b = await ask('make the bedroom nicer', fresh(), unsure)
+  assert.equal(r1b.applied, false)
+  assert.equal(r1b.reply, 'Which room do you mean?')
   const badId = async () => ({ ops: [{ op: 'remove', room: 'garage-9' }], reply: 'Removed.', confidence: 0.9 })
   const r2 = await ask('remove the garage', fresh(), badId)
   assert.equal(r2.applied, false)

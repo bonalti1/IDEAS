@@ -6,8 +6,9 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
-import { decide, dropUnsupported, editsOf, netsToNothing } from '../src/draft/lib/interpret.js'
-import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply } from '../src/draft/lib/ops.js'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
+import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
+import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
@@ -481,18 +482,41 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // one plain-language request → Claude or the basic rules → plan rules → one change used only if applied.
     // With `ops` (a fix the client clicked), the ops are taken as given and only the rules run.
     // A cost question never reaches the model and never uses a change: the answer points to the meeting (M3).
-    async change(p, text, fixOps = null) {
+    // Round 13: a request in Spanish is read as the English it means, and the answer (reply, button labels, the
+    // office button's words) leaves in Spanish when the request was Spanish or the screen is (`lang: 'es'`); what
+    // is stored and logged stays as the plan code wrote it. Typed undo does what the Undo button does.
+    async change(p, text, fixOps = null, opts = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
+      const isFix = Array.isArray(fixOps) && fixOps.length > 0
+      const spanish = isSpanish(request)
+      const said = spanish && !isFix ? fromSpanish(request) : null
+      const lang = opts.lang === 'es' || spanish ? 'es' : 'en'
+      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
+      const out = (result) => localize(result, lang)
       const left = changesLeft(p)
       const counts = () => ({ changesLeft: changesLeft(p), changesAllowed: p.changesAllowed, changesUsed: p.changesUsed })
-      const costQ = Array.isArray(fixOps) && fixOps.length ? { text: request, cost: false } : splitCost(request)
+      // "undo", "go back to how it was", "deshaz eso": the last change comes off and comes back to the plan, the way
+      // the Undo button does it; no model is asked, nothing is used, and it works at 0 left
+      if (!isFix && isUndoRequest(request)) {
+        const target = await this.undoTarget(p)
+        if (!target) {
+          const reply = 'There is nothing to undo yet. No change was used.'
+          logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'nothing to undo', reply, ops: [] })
+          return out({ applied: false, undo: true, reply, source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version })
+        }
+        const back = await this.rollback(p, target)
+        const reply = `Back to version ${target}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply, ops: [] })
+        return out({ applied: true, undo: true, reply, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, refunded: back.refunded, project: back, ops: [] })
+      }
+      const costQ = isFix ? { text: request, cost: false } : splitCost(said ? said.text : request)
       if (costQ.cost && !costQ.text) {
         const reply = costReply(costQ)
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'cost', reply, ops: [] })
-        return { applied: false, reply, source: 'fallback', reasons: ['cost question'], fixes: [], askOffice: 'meeting', ...counts(), version: p.version }
+        return out({ applied: false, reply, source: 'fallback', reasons: ['cost question'], fixes: [], askOffice: 'meeting', ...counts(), version: p.version })
       }
       const style = styleOf(p)
       const kit = kitFor(style)
@@ -503,40 +527,43 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       let diff
       let source = 'claude'
       let meta = {}
-      // "undo", "go back": the previous version, at no change (the change it used comes back); works at 0 left
-      if (/^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i.test(request)) {
-        if (p.version <= 1) return { applied: false, reply: 'There is nothing to undo yet.', source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version }
-        const before = p.version
-        const back = await this.rollback(p, p.version - 1)
-        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply: back.reply, ops: [] })
-        return { applied: true, undo: true, reply: `Back to version ${before - 1}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, project: back, ops: [] }
-      }
       // "make the kitchen bigger and then make it smaller": the two parts cancel; said so, and no change is used
       // (round 10, item 8: the app's own chat goes through here, and this check was only on the offline path)
-      const net = Array.isArray(fixOps) && fixOps.length ? null : netsToNothing(costQ.text, rooms, kit)
+      const net = isFix ? null : netsToNothing(costQ.text, rooms, kit)
       if (net) {
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'no change', reply: net, ops: [] })
-        return { applied: false, noop: true, reply: net, source: 'fallback', reasons: ['no change'], fixes: [], ...counts(), version: p.version }
+        return out({ applied: false, noop: true, reply: net, source: 'fallback', reasons: ['no change'], fixes: [], ...counts(), version: p.version })
       }
       // what this style cannot take is set aside clause by clause: the rest goes through, the dropped part is named
-      const split = dropUnsupported(costQ.text, style)
+      const split = isFix ? { text: request, dropped: [] } : dropUnsupported(costQ.text, style)
       if (!split.text) {
         const no = split.dropped.map((d) => d.why).join(' ')
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'unsupported', reply: no, ops: [] })
-        return { applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], ...counts(), version: p.version }
+        return out({ applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], ...counts(), version: p.version })
       }
       // out of changes: nothing is applied and nothing is used; the answer offers to tell the office (M8)
       if (left <= 0) {
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'out of changes', reply: OUT_OF_CHANGES, ops: [] })
-        return { applied: false, reply: OUT_OF_CHANGES, source: 'fallback', reasons: ['out of changes'], fixes: [], askOffice: 'more-changes', outOfChanges: true, ...counts(), version: p.version }
+        return out({ applied: false, reply: OUT_OF_CHANGES, source: 'fallback', reasons: ['out of changes'], fixes: [], askOffice: 'more-changes', outOfChanges: true, ...counts(), version: p.version })
       }
-      const asked = split.text
-      if (Array.isArray(fixOps) && fixOps.length) {
+      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
+      const edits = editsOf(await store.versions.list(p.id))
+      const costTail = (result) => (costQ.cost ? { reply: `${String(result.reply || '').trim().replace(/\s+$/, '')} ${costReply(costQ)}`.trim(), askOffice: 'meeting' } : {})
+      // "make the house smaller but add 2 bedrooms": two wishes that pull against each other. No model is asked: the
+      // trade-off is explained and the one option that applies on this lot is offered as a button; nothing is used
+      const trade = isFix ? null : tradeOffAsk(split.text)
+      const offer = trade ? tradeOffer(trade, rooms, p.program, style, kit, 'fallback', lot, edits) : null
+      if (offer) {
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'trade-off', reply: offer.reply, ops: [] })
+        return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
+      }
+      const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
+      if (isFix) {
         diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
       } else
       try {
-        diff = await interpreter.ask({ request: asked, program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
+        diff = await interpreter.ask({ request: asked, ...(lang === 'es' ? { lang } : {}), program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
         meta = { usage: diff.usage, cost: diff.cost, ms: diff.ms, model: diff.model }
         logInterpret({ request, client: p.email, projectId: p.id, rooms: rooms.length, diff: { ops: diff.ops, reply: diff.reply, confidence: diff.confidence }, verdict: diff.confidence < 0.5 || !diff.ops.length ? 'unsure' : 'diff', ...meta })
       } catch (e) {
@@ -544,13 +571,12 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         diff = regexOps(asked, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
-      const edits = editsOf(await store.versions.list(p.id))
-      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits, unsupported: split.dropped })
+      // "asdf", "make it nicer", "hmm": nothing in it the chat acts on; the answer shows changes that work on this plan
+      if (!isFix) diff = markUnclear(diff, split.text)
+      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits, unsupported: split.dropped.map((d) => ({ ...d, text: own(d.text) })) })
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       // a cost question beside a change: the change goes through, the answer ends with the cost sentence (M3)
-      const costTail = costQ.cost ? { reply: `${String(result.reply || '').trim().replace(/\s+$/, '')} ${costReply(costQ)}`.trim(), askOffice: 'meeting' } : {}
-      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], ...counts(), version: p.version, ...costTail }
+      if (!result.applied) return out({ applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, ...(result.offer ? { offer: result.offer } : {}), fixes: result.fixes || [], ...counts(), version: p.version, ...costTail(result) })
       const n = p.version + 1
       const t = now()
       await store.versions.add({ projectId: p.id, n, at: t, kind: 'change', text: request, used: 1, rooms: result.rooms, reply: result.reply, source, ops: result.ops, did: result.did })
@@ -561,7 +587,21 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       await store.projects.put(p)
       await event('project', `${p.client}: "${request.slice(0, 60)}" applied (${source}), ${changesLeft(p)} of ${p.changesAllowed} change${p.changesAllowed === 1 ? '' : 's'} left`, { projectId: p.id })
       // the Claude usage and its cost stay in the log and the activity (office-only); the owner gets the plan
-      return { applied: true, reply: result.reply, source, rooms: result.rooms, ...counts(), version: n, did: result.did, ops: result.ops, ms: meta.ms, ...costTail }
+      return out({ applied: true, reply: result.reply, source, rooms: result.rooms, ...counts(), version: n, did: result.did, ops: result.ops, ms: meta.ms, ...costTail(result) })
+    },
+
+    /**
+     * The version a typed "undo" goes back to, or null when there is nothing to undo: the plan as it stands (after
+     * any earlier undo) must be a change, and the version before it is the target. The Undo button does the same
+     * for its one step; typed again, the change before that comes off too, each one coming back to the plan.
+     */
+    async undoTarget(p) {
+      const all = await store.versions.list(p.id)
+      const byN = new Map(all.map((v) => [v.n, v]))
+      let n = p.version
+      for (let guard = 0; guard < 500 && byN.get(n)?.kind === 'rollback' && byN.get(n).rollbackOf; guard++) n = byN.get(n).rollbackOf
+      const v = byN.get(n)
+      return v && v.kind === 'change' && n > 1 && byN.has(n - 1) ? n - 1 : null
     },
 
     // back to any earlier version; the changes used on the versions after it come back to the plan
