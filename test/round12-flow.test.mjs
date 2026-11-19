@@ -91,12 +91,22 @@ test('screens B and A: the Kiskadee lot is saved when taken, survives sign-out a
   assert.ok(await page.getByTestId('lot-thumb').isVisible(), 'the parcel is drawn on the rooms step')
   assert.match(await page.getByTestId('lot-strip').innerText(), /2002 Kiskadee Ln/i)
   assert.match(await page.getByTestId('lot-strip').innerText(), /5,88\d sf lot/)
-  // the default 4 bed with an office and a 2-car garage does not fit a pie lot: the starter is offered, not a dead end
   const head = page.locator('.screen-head').last()
-  await page.getByText(/It fits as a 3 bed, 2 bath starter with no garage/).waitFor({ timeout: 60000 })
+  // the default 4 bed with an office and a 2-car garage does not fit a pie lot: nobody chose those rooms, so the
+  // homeowner starts with the 3 bed, 2 bath starter that does fit (item E), and never sees "does not fit" or a dead end
+  let flashed = false
+  const watch = setInterval(async () => {
+    try {
+      if (await page.getByRole('button', { name: 'Try that' }).count()) flashed = true
+    } catch {
+      /* the page is between screens */
+    }
+  }, 150)
+  await page.getByTestId('auto-start').waitFor({ timeout: 90000 })
+  clearInterval(watch)
+  assert.equal(flashed, false, 'the offer for the rooms we replaced never flashes by')
   assert.equal(await page.getByTestId('custom-lot').count(), 0, 'not a dead end')
-  await page.screenshot({ path: `${OUT}/a-kiskadee-rooms-offer-1440.png` })
-  await page.getByRole('button', { name: 'Try that' }).click()
+  assert.equal(await page.getByRole('button', { name: 'Try that' }).count(), 0)
   await page.getByText(/The house is turned \d+(\.\d)?° from square to the street/).waitFor({ timeout: 60000 })
   const body = await page.locator('main').innerText()
   assert.doesNotMatch(body, /setback/i, 'plain words on the rooms step')

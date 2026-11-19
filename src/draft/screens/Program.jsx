@@ -214,7 +214,9 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
         <div className="meter" aria-label="Lot fit">
           <div className={'meter-fill' + (!check.ok ? ' over' : fit > 0.85 || trimmed ? ' tight' : '')} style={{ width: Math.min(100, fit * 100) + '%' }} />
         </div>
-        {(checking && !checked) || (settling && !check.ok && !check.deadEnd) ? (
+        {/* the last clause: right after we started the homeowner with what fits, the answer still on hand is the one for
+            the rooms we replaced; its "does not fit, try that" must not flash while the new rooms are checked */}
+        {(checking && !checked) || (settling && !check.ok && !check.deadEnd) || (checking && autoNote && !check.ok && !check.deadEnd) ? (
           <p className="muted fit-note">Checking the lot…</p>
         ) : check.ok ? (
           <p className="fine">

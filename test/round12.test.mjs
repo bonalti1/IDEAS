@@ -27,6 +27,7 @@ import { parcelSpec, lotMatchNotes } from '../src/draft/lib/parcel-spec.js'
 import { generateRooms, DEFAULT_PROGRAM } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { fixtureEnv } from './server-env.mjs'
+import { camerasFor, topHeight, topShows, streetNamePoints } from '../src/draft/lib/camera.js'
 import { floodFailure, checkFloodSkips } from './live-flood.mjs'
 import { makeAlerts } from '../server/alerts.mjs'
 
@@ -281,6 +282,30 @@ test('5: a roof is worked out once per set of masses (the fit asked twice for ea
   const kis = buildLot(parcelSpec(k, { city: 'mission' }))
   assert.equal(envelopeStats().runsTried - e2.runsTried, 1, 'the six front chords, and not the two 9.6 ft pieces at the back corner')
   assert.ok(kis.envelopeSf >= 2900 && kis.envelopeSf <= 3200, `buildable ${Math.round(kis.envelopeSf)} sf`)
+})
+
+test('7: the top view of a lot holds the lot and its street names in a picture of any shape (323 N 11th St at 390 px lost its street name off the right edge)', async () => {
+  const all = await recordedLots()
+  const near = all.find((x) => /323 N 11th/.test(x.address)).lot
+  const cam = camerasFor(near, []).top
+  const names = streetNamePoints(near)
+  assert.ok(names.length >= 1, 'the lot has a named street')
+  // the height the camera stood at before showed less than the street's name needs in a square picture (390 px)
+  const before = topShows(cam.position[1], 1)
+  assert.ok(before.w / 2 < cam.hold.x1 - cam.target[0], `the old height showed ${Math.round(before.w / 2)} ft to the right of the lot's middle; the street name needs ${Math.round(cam.hold.x1 - cam.target[0])}`)
+  for (const { address, lot } of all) {
+    const c = camerasFor(lot, []).top
+    for (const p of streetNamePoints(lot)) assert.ok(p[0] > c.hold.x0 && p[0] < c.hold.x1 && p[1] > c.hold.z0 && p[1] < c.hold.z1, `${address}: a street name is outside what the picture holds`)
+    for (const aspect of [0.6, 1, 1.78]) {
+      const shows = topShows(topHeight(c, aspect), aspect)
+      assert.ok(c.target[0] - shows.w / 2 <= c.hold.x0 && c.target[0] + shows.w / 2 >= c.hold.x1, `${address} at ${aspect}: cut off at the left or right`)
+      assert.ok(c.target[2] - shows.d / 2 <= c.hold.z0 && c.target[2] + shows.d / 2 >= c.hold.z1, `${address} at ${aspect}: cut off at the top or bottom`)
+    }
+    // a wide desktop picture is not pushed back for nothing: it stands where it did unless something was cut off
+    assert.ok(topHeight(c, 1.78) < c.position[1] * 1.6, `${address}: the desktop view backs off ${(topHeight(c, 1.78) / c.position[1]).toFixed(2)} times`)
+  }
+  // with a house drawn the view frames the house, as before
+  assert.equal(camerasFor(near, [{ id: 'a', kind: 'living', center: [0, 0], w: 20, d: 20 }]).top.hold, undefined)
 })
 
 // ── item 6 ─────────────────────────────────────────────────────────────────────────────────
