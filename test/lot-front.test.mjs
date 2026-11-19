@@ -53,6 +53,10 @@ const LOTS = [
   { slug: 'kerria', address: '1201 Kerria Ave, McAllen, TX 78501', street: 'Kerria Ave', front: '79.75', area: /10,40\d sf/, corner: 'N 12th St' },
   { slug: 'armagoza', address: '1534 Armagoza Dr, Edinburg, TX 78541', street: 'N Armagoza Dr', front: '67.43', area: /9,45\d sf/ },
   { slug: 'curtis-clark', address: '5435 Curtis Clark Dr, Corpus Christi, TX 78412', street: 'Curtis Clark Dr', front: '31.15', area: /9,50\d sf/ },
+  // round 11, item 2: a pie lot on a cul-de-sac; the street side is six chords, said once with their total
+  { slug: 'kiskadee', address: '2002 Kiskadee Ln, Mission, TX 78572', street: 'Kiskadee Ln', front: '49.92', area: /5,88\d sf/, curve: "49.92' along the curve, in 6 pieces" },
+  // round 11, item 6: Willacy lists this lot as 329; the homeowner is told so before saying yes
+  { slug: 'n-11th-near', address: '323 N 11th St, Raymondville, TX 78580', street: 'N 11th St', front: '50.18', area: /6,01\d sf/, near: '329 11TH' },
 ]
 
 test('screens: the parcel is drawn with the street on its true frontage; Curtis Clark is the 31 x 300 sliver; a previous lot never stays', { skip, timeout: 420000 }, async (t) => {
@@ -73,6 +77,12 @@ test('screens: the parcel is drawn with the street on its true frontage; Curtis 
       if (lot.corner) assert.match(offer, new RegExp(`A corner lot: the side on ${lot.corner} takes the street-side setback`))
       else assert.doesNotMatch(offer, /A corner lot/)
       assert.doesNotMatch(offer, /best guess/)
+      if (lot.curve) {
+        assert.ok(offer.includes(lot.curve), `${lot.slug} ${size.name}: the curved street side is said once with its total:\n${offer}`)
+        assert.equal((offer.match(/street side/g) || []).length, 1, 'one street-side line, not six')
+      }
+      if (lot.near) assert.match(await page.getByTestId('listed-as').innerText(), new RegExp(lot.near), `${lot.slug} ${size.name}: the county lists it under another number`)
+      else assert.equal(await page.getByTestId('listed-as').count(), 0)
       // before the parcel is taken the page shows the typed 100 x 150 assumption (15,000 sf)
       await page.getByTestId('parcel-yes').click()
       await page.waitForTimeout(1500)
@@ -89,6 +99,11 @@ test('screens: the parcel is drawn with the street on its true frontage; Curtis 
         assert.doesNotMatch(tag, /no room|very little room/i)
       }
       await page.waitForTimeout(1200)
+      // round 11, item 7: the north mark is whole inside the picture at every width (its "N" was cut off under the header at 390 px)
+      const north = await page.getByTestId('north').boundingBox()
+      const view = await page.locator('.viewport').boundingBox()
+      assert.ok(north && view, `${lot.slug} ${size.name}: a north mark`)
+      assert.ok(north.x >= view.x && north.y >= view.y && north.x + north.width <= view.x + view.width && north.y + north.height <= view.y + view.height, `${lot.slug} ${size.name}: the north mark sits inside the picture (${JSON.stringify(north)} in ${JSON.stringify(view)})`)
       await page.screenshot({ path: `${OUT}/lot-${lot.slug}-${size.name}.png`, fullPage: size.name === '390' })
       assert.deepEqual(errors, [], `${lot.slug} ${size.name}: page errors`)
       await ctx.close()

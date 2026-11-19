@@ -345,6 +345,15 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
               <div className="edges">
                 {parcel.edges?.map((e, i) => {
                   const st = (parcel.streets || []).find((s) => s.edge === i && s.role !== 'rear')
+                  // a curved frontage (round 11): its chords are one street side, said once with their total
+                  const curved = (parcel.frontChords || 1) > 1
+                  if (curved && parcel.edgeKinds?.[i] === 'front' && i !== (parcel.frontEdge ?? 0)) return null
+                  if (curved && i === (parcel.frontEdge ?? 0))
+                    return (
+                      <span key={i} className="front">
+                        street side{st ? ` (${st.name})` : ''} {parcel.frontWidthFt}' along the curve, in {parcel.frontChords} pieces
+                      </span>
+                    )
                   return (
                     <span key={i} className={i === (parcel.frontEdge ?? 0) ? 'front' : ''}>
                       {i === (parcel.frontEdge ?? 0) ? `street side${st ? ` (${st.name})` : ''} ` : st ? `side street (${st.name}) ` : ''}
@@ -354,6 +363,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 })}
               </div>
             )}
+            {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">The county address map puts {String(address).split(',')[0]} on this parcel; the appraisal district lists it as {parcel.listedAs}. Check that it is your lot; the drafter checks it too.</p>}
             {!parcel.large && parcel.corner && <p className="fine">A corner lot: the side on {(parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(' and ')} takes the street-side setback.</p>}
             {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.</p>}
             <p className="fine">

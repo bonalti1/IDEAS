@@ -282,9 +282,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         <div className="side-head">
           <h2>Shape it</h2>
           {!project && <span className="muted small">not saved</span>}
-          <span className={'credits' + (changesLeft <= 2 ? ' low' : '')} title="Free changes left on this plan. The office adds more.">
-            {changesLeft} change{changesLeft === 1 ? '' : 's'} left
-          </span>
+          {/* round 11, item 7: the changes left are said once, in the header (they were here too, twice on one screen) */}
         </div>
         <div className="stats row2">
           <Stat k="Living area" v={sf(area)} />

@@ -35,8 +35,8 @@ const services = (opts = {}) => {
 }
 
 test('fixtures: committed recordings carry no owner, mailing or any other person key (an allow-list, checked file by file)', () => {
-  assert.ok(FIX.length >= 14)
-  const allowed = /^(prop_id|geo_id|legal_desc|legal1|situs|situsdispl|situs_num|situs_street_prefx|situs_street|situs_street_sufix|situs_city|acres|legal_acreage)$/
+  assert.ok(FIX.length >= 18)
+  const allowed = /^(prop_id|geo_id|legal_desc|legal1|situs|situsdispl|situs_num|situs_street_prefx|situs_street|situs_street_sufix|situs_city|acres|legal_acreage|legal_acre|situs_st_1|geoID|pid|legalDescr|legalAcrea|situsAddre)$/ // the last seven are Willacy's and Jim Wells' spellings of the id, legal, situs and acres columns (round 11)
   for (const f of FIX) {
     assert.doesNotThrow(() => assertNoPersonKeys(f), f.slug)
     for (const p of f.parcels) for (const k of Object.keys(p.properties)) assert.match(k, allowed, `${f.slug}: ${k}`)
@@ -155,6 +155,10 @@ test('the acceptance addresses resolve to one parcel each with the id, legal, ar
       assert.ok(f >= t.expect.frontFt[0] && f <= t.expect.frontFt[1], `${t.address}: street side ${f} ft`)
     }
     assert.equal(r.frontBy, 'named-road', t.address)
+    if (t.expect.frontWidthFt != null) assert.ok(Math.abs(r.frontWidthFt - t.expect.frontWidthFt) <= 1, `${t.address}: street side ${r.frontWidthFt} ft`)
+    if (t.expect.frontChords) assert.equal(r.frontChords, t.expect.frontChords, `${t.address}: ${r.edgeKinds.join(',')}`)
+    if (t.expect.corner != null) assert.equal(!!r.corner, t.expect.corner, `${t.address}: corner`)
+    if (t.expect.confidence) assert.equal(r.confidence, t.expect.confidence, t.address)
     assert.match(r.frontStreet, t.expect.frontStreet, t.address)
     if (t.expect.notThis) assert.ok(!r.situs.startsWith(t.expect.notThis), `${t.address}: ${r.situs}`)
     assert.ok(r.closure <= 0.5, `${t.address}: closure ${r.closure}`)
@@ -190,7 +194,8 @@ test('the acceptance addresses resolve to one parcel each with the id, legal, ar
   assert.match(pharr.disagreements[0].situs, /118 W PARK AVE/)
   assert.equal(pharr.addressPoint, undefined, "the neighbour's address point is never used for the front")
   const h = await parcels.health()
-  assert.equal(h.disagreements[0].parcelId, '259436')
+  // (the newest disagreement on the page is now Willacy's near match, looked up after Pharr in the loop above)
+  assert.ok(h.disagreements.some((d) => d.parcelId === '259436'), JSON.stringify(h.disagreements.map((d) => d.parcelId)))
   // the parcel as a lot: kind parcel, the rules resolved on its own dims, the drafter's checks
   const lot = buildLot({ kind: 'parcel', calls: k.calls, front: k.frontEdge, kinds: k.edgeKinds, streets: k.streets.filter((x) => x.role !== 'rear').map((x) => ({ edge: x.edge, name: x.name })), city: 'mcallen', setbacks: {}, legal: k.legal, propId: k.propId })
   assert.equal(lot.kind, 'parcel')
@@ -300,19 +305,23 @@ test('Regrid stays dormant without REGRID_API_TOKEN; with one it is called last,
 test('the daily check runs the acceptance addresses against the sources (not the cache) and records the result', async () => {
   const { parcels, store } = services()
   const emails = []
-  const rec = await parcels.dailyCheck({ email: async (s, t) => emails.push({ s, t }) })
+  // the recordings carry no owner columns: owner presence is checked with the made-up owner in test/round11.test.mjs
+  const rec = await parcels.dailyCheck({ requireOwner: false, email: async (s, t) => emails.push({ s, t }) })
   assert.equal(rec.ok, true)
-  assert.equal(rec.results.length, TEST_ADDRESSES.length, 'the nine street-side addresses and Pharr 118 S Cage')
-  assert.equal(rec.results.length, 10)
+  assert.equal(rec.results.length, TEST_ADDRESSES.length, 'the nine street-side addresses, Pharr 118 S Cage, Kiskadee, two in Willacy and one in Jim Wells')
+  assert.equal(rec.results.length, 14)
   assert.ok(rec.results.every((r) => r.ok), JSON.stringify(rec.results.filter((r) => !r.ok)))
   assert.equal(emails.length, 0)
   assert.equal((await store.meta.get('parcels:daily')).failedDays, 0)
   // a dead county: the check fails, counts the day and emails the office
   const dead = services({ failUrls: ['gis.rgv911.org'] })
-  const r2 = await dead.parcels.dailyCheck({ email: async (s, t) => emails.push({ s, t }) })
+  const r2 = await dead.parcels.dailyCheck({ requireOwner: false, email: async (s, t) => emails.push({ s, t }) })
   assert.equal(r2.ok, false)
   assert.equal(r2.failedDays, 1)
-  assert.equal(emails.length, 1)
+  assert.equal(emails.length, 0, 'one failed run does not email (round 11, item 5)')
+  const r3 = await dead.parcels.dailyCheck({ requireOwner: false, email: async (s, t) => emails.push({ s, t }) })
+  assert.equal(r3.failedDays, 2)
+  assert.equal(emails.length, 1, 'the second failed run of the same addresses does')
   assert.match(emails[0].s, /daily check/)
   assert.match(emails[0].t, /FAIL 1201 Kerria Ave/)
   assert.ok(!/token/i.test(emails[0].t.replace('REGRID_API_TOKEN', '')))

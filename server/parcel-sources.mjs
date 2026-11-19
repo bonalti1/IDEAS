@@ -134,18 +134,26 @@ export const sourceById = (id) => PARCEL_SOURCES.find((s) => s.id === id) || nul
 // The acceptance set (and the daily health check's). Round 10, item 1: the nine lots whose front edge the architect
 // measured against the named TIGERweb road on Nov 19, 2026 (frontFt is that edge, give or take a foot), then the Pharr
 // address whose county address point names the neighbour.
+// frontWidthFt and corner are the values recorded live on Nov 19, 2026: the daily check compares against them (round 11, item 5).
 export const TEST_ADDRESSES = [
-  { address: '1201 Kerria Ave, McAllen, TX 78501', county: 'Hidalgo County', expect: { propId: '255056', geoId: 'P2500-00-004-0007-00', legal: /PALMS LOT 7 BLK 4/, edges: 4, areaSf: [10300, 10550], frontFt: [78.6, 80.8], frontStreet: /KERRIA/i, flood: 'no-digital-firm', zoning: 'R-1' } },
-  { address: '36 Melissa Dr, Brownsville, TX 78526', county: 'Cameron County', expect: { propId: '144311', legal: /MCKENZIE ESTATES LOT 16 BLK 1/, edges: 4, areaSf: [8042, 8204], notThis: '1021 CLARISSA DR', frontFt: [62.4, 64.6], frontStreet: /MELISSA/i, flood: 'x', firm: '48061C', zoning: 'R-1' } },
-  { address: '5435 Curtis Clark Dr, Corpus Christi, TX 78412', county: 'Nueces County', expect: { propId: '236866', legal: /GARDENDALE 2 SE\/2 OF LT 8 BK 5/, areaSf: [9384, 9574], notThis: '5402 BURTON', frontFt: [30.1, 32.2], frontStreet: /CURTIS CLARK/i, flood: 'x', firm: '48355C', zoning: 'SF-6' } },
-  { address: '3305 N 27th St, McAllen, TX 78501', county: 'Hidalgo County', expect: { propId: '177413', frontFt: [64.1, 66.3], frontStreet: /27TH ST/i, flood: 'no-digital-firm', zoning: 'R-1' } },
-  { address: '1534 Armagoza Dr, Edinburg, TX 78541', county: 'Hidalgo County', expect: { propId: '634314', frontFt: [66.3, 68.5], frontStreet: /ARMAGOZA/i, flood: 'no-digital-firm' } },
-  { address: '3013 Yvonne St, Edinburg, TX 78542', county: 'Hidalgo County', expect: { propId: '121595', frontFt: [53.8, 56], frontStreet: /YVONNE/i, flood: 'no-digital-firm' } },
-  { address: '2218 Royal Palm Dr, Mission, TX 78572', county: 'Hidalgo County', expect: { propId: '273291', frontFt: [79.1, 81.3], frontStreet: /ROYAL PALM/i, flood: 'no-digital-firm' } },
-  { address: '2454 E 30th St, Brownsville, TX 78521', county: 'Cameron County', expect: { propId: '52374', frontFt: [49.1, 51.2], frontStreet: /30TH/i, flood: 'x', firm: '48061C' } },
-  { address: '4175 Sierra Madre Dr, Brownsville, TX 78521', county: 'Cameron County', expect: { propId: '42520', frontFt: [48.9, 51.1], frontStreet: /SIERRA MADRE/i, flood: 'x', firm: '48061C' } },
+  { address: '1201 Kerria Ave, McAllen, TX 78501', county: 'Hidalgo County', expect: { frontWidthFt: 79.75, corner: true, propId: '255056', geoId: 'P2500-00-004-0007-00', legal: /PALMS LOT 7 BLK 4/, edges: 4, areaSf: [10300, 10550], frontFt: [78.6, 80.8], frontStreet: /KERRIA/i, flood: 'no-digital-firm', zoning: 'R-1' } },
+  { address: '36 Melissa Dr, Brownsville, TX 78526', county: 'Cameron County', expect: { frontWidthFt: 63.53, corner: false, propId: '144311', legal: /MCKENZIE ESTATES LOT 16 BLK 1/, edges: 4, areaSf: [8042, 8204], notThis: '1021 CLARISSA DR', frontFt: [62.4, 64.6], frontStreet: /MELISSA/i, flood: 'x', firm: '48061C', zoning: 'R-1' } },
+  { address: '5435 Curtis Clark Dr, Corpus Christi, TX 78412', county: 'Nueces County', expect: { frontWidthFt: 31.15, corner: false, propId: '236866', legal: /GARDENDALE 2 SE\/2 OF LT 8 BK 5/, areaSf: [9384, 9574], notThis: '5402 BURTON', frontFt: [30.1, 32.2], frontStreet: /CURTIS CLARK/i, flood: 'x', firm: '48355C', zoning: 'SF-6' } },
+  { address: '3305 N 27th St, McAllen, TX 78501', county: 'Hidalgo County', expect: { frontWidthFt: 65.23, corner: false, propId: '177413', frontFt: [64.1, 66.3], frontStreet: /27TH ST/i, flood: 'no-digital-firm', zoning: 'R-1' } },
+  { address: '1534 Armagoza Dr, Edinburg, TX 78541', county: 'Hidalgo County', expect: { frontWidthFt: 67.43, corner: false, propId: '634314', frontFt: [66.3, 68.5], frontStreet: /ARMAGOZA/i, flood: 'no-digital-firm' } },
+  { address: '3013 Yvonne St, Edinburg, TX 78542', county: 'Hidalgo County', expect: { frontWidthFt: 54.9, corner: false, propId: '121595', frontFt: [53.8, 56], frontStreet: /YVONNE/i, flood: 'no-digital-firm' } },
+  { address: '2218 Royal Palm Dr, Mission, TX 78572', county: 'Hidalgo County', expect: { frontWidthFt: 80.28, corner: true, propId: '273291', frontFt: [79.1, 81.3], frontStreet: /ROYAL PALM/i, flood: 'no-digital-firm' } },
+  { address: '2454 E 30th St, Brownsville, TX 78521', county: 'Cameron County', expect: { frontWidthFt: 50.17, corner: false, propId: '52374', frontFt: [49.1, 51.2], frontStreet: /30TH/i, flood: 'x', firm: '48061C' } },
+  { address: '4175 Sierra Madre Dr, Brownsville, TX 78521', county: 'Cameron County', expect: { frontWidthFt: 50.04, corner: false, propId: '42520', frontFt: [48.9, 51.1], frontStreet: /SIERRA MADRE/i, flood: 'x', firm: '48061C' } },
   // round 9, item 5: the RGV911 address point carries the neighbour's parcel (259436, 118 W Park Ave); the situs check must refuse it
-  { address: '118 S Cage Blvd, Pharr, TX 78577', county: 'Hidalgo County', expect: { propId: '259430', never: '259436', frontStreet: /CAGE/i, zoning: 'C-2' } },
+  { address: '118 S Cage Blvd, Pharr, TX 78577', county: 'Hidalgo County', expect: { frontWidthFt: 256.69, corner: true, propId: '259430', never: '259436', frontStreet: /CAGE/i, zoning: 'C-2' } },
+  // round 11, item 2: a pie lot on a cul-de-sac; the street side is an arc of six 8.3 ft chords, 49.92 ft in all
+  { address: '2002 Kiskadee Ln, Mission, TX 78572', county: 'Hidalgo County', expect: { frontWidthFt: 49.92, frontChords: 6, corner: false, propId: '707917', legal: /TANGLEWOOD AT BENTSEN PALM PH 1 LOT 169/, frontStreet: /KISKADEE/i, flood: 'no-digital-firm' } },
+  // round 11, item 6: Willacy. The county's address point for 323 sits on the parcel it lists as "329 11TH": the answer, marked near
+  { address: '323 N 11th St, Raymondville, TX 78580', county: 'Willacy County', expect: { frontWidthFt: 50.18, corner: false, propId: '11327', confidence: 'near', frontStreet: /11TH/i } },
+  { address: '510 W Harris Ave, Raymondville, TX 78580', county: 'Willacy County', expect: { frontWidthFt: 74.87, corner: true, propId: '15848', frontStreet: /HARRIS/i } },
+  // Jim Wells (its own appraisal district server)
+  { address: '344 SE 3rd St, Premont, TX 78375', county: 'Jim Wells County', expect: { frontWidthFt: 49.92, corner: false, propId: '34725', frontStreet: /3RD/i } },
 ]
 
 /** A county from a route key: "Hidalgo County", "hidalgo", "hidalgo-county" and "Hidalgo%20County" all name the same one (round 9, item 8). */

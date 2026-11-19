@@ -203,7 +203,7 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
           {user && (
             <span className="dh-user">
               {!office && (step === 4 || step === 5) && (
-                <span className="dh-credits" title="Free changes left on this plan. The office adds more.">
+                <span className={'dh-credits' + (changesLeft <= 2 ? ' low' : '')} data-testid="changes-left" title="Free changes left on this plan. The office adds more.">
                   {changesLeft} change{changesLeft === 1 ? '' : 's'} left on this plan
                 </span>
               )}

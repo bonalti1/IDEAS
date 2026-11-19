@@ -64,7 +64,6 @@ export const PLAT_SYSTEM = `You read recorded plats, surveys and site plans of r
 - Confidence below 0.6 when bearings were inferred, text was hard to read, or the calls do not close.`
 
 export const FEMA_DOWN = 'FEMA did not answer; the office checks the flood zone'
-const FEMA_RETRY_MS = 400
 export const CENSUS_DOWN = "the address service didn't answer; try again in a moment or type the lot in"
 const DIRS = { N: 'N', S: 'S', E: 'E', W: 'W', NE: 'NE', NW: 'NW', SE: 'SE', SW: 'SW', NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', NORTHEAST: 'NE', NORTHWEST: 'NW', SOUTHEAST: 'SE', SOUTHWEST: 'SW' }
 /** The number, the direction before the street, and the street's core name from the first line of an address. */
@@ -95,28 +94,32 @@ export function addressMismatch(typed, matched) {
 }
 
 export function makeLots({ env = process.env, store, files, interpreter, event, log = console.log, fetchImpl = globalThis.fetch }) {
+  // the waits between FEMA tries; FEMA_BACKOFF_MS="5,10" shortens them for a test server
+  const femaBackoffMs = String(env.FEMA_BACKOFF_MS || '1000,3000').split(',').map((x) => Math.max(0, +x || 0)).slice(0, 4)
   const now = () => new Date().toISOString()
   const fetch = fetchImpl
   const NFHL = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer'
   /** One NFHL layer at a point: the features' attributes (empty when none). */
-  async function nfhl(layer, lon, lat, outFields) {
+  async function nfhl(layer, lon, lat, outFields, { soft = false } = {}) {
     const q = new URLSearchParams({ geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields, returnGeometry: 'false', f: 'json' })
     // a dropped connection, a timeout or a bad answer from FEMA is a 502 with a plain line, never a 500 (round 10, item 6)
-    // FEMA drops a connection now and then (the review saw it; so did the live run of this round): one more try
-    // after a short wait, then the plain line
+    // FEMA drops a connection now and then, and sometimes for a minute (ECONNRESET, a connect timeout, a 504): two
+    // more tries, after 1 s and after 3 s, then the plain line (round 11, item 4). Each try has 8 s, so the whole
+    // read stays inside the Lot step's 30 s.
     let body
-    for (let attempt = 1; ; attempt++) {
+    for (let attempt = 0; ; attempt++) {
       try {
-        const r = await fetch(`${NFHL}/${layer}/query?${q}`, { signal: AbortSignal.timeout(15000) })
+        const r = await fetch(`${NFHL}/${layer}/query?${q}`, { signal: AbortSignal.timeout(8000) })
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         body = await r.json()
         if (body.error) throw new Error(body.error.message || 'query error')
         break
       } catch (e) {
         if (e?.code === 'DH_NETWORK_GUARD') throw e
-        log(`flood: FEMA NFHL layer ${layer} did not answer (${String(e?.cause?.code || e?.message || e).slice(0, 80)})${attempt < 2 ? '; trying once more' : ''}`)
-        if (attempt >= 2) throw fail(502, FEMA_DOWN, { upstream: 'fema' })
-        await new Promise((ok) => setTimeout(ok, FEMA_RETRY_MS))
+        const last = soft || attempt >= femaBackoffMs.length // a soft layer (availability, LOMRs, LOMAs) gets one try
+        log(`flood: FEMA NFHL layer ${layer} did not answer (${String(e?.cause?.code || e?.message || e).slice(0, 80)})${last ? '' : `; trying again in ${femaBackoffMs[attempt]} ms`}`)
+        if (last) throw fail(502, FEMA_DOWN, { upstream: 'fema' })
+        await new Promise((ok) => setTimeout(ok, femaBackoffMs[attempt]))
       }
     }
     return (body.features || []).map((f) => f.attributes || {})
@@ -208,6 +211,13 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       return store.meta.get(`plat:${platId}`)
     },
 
+    /** The geocode already made for an address, from the cache only (no outside call), or null. */
+    async geocodeCached(address) {
+      const a = String(address || '').trim()
+      if (a.length < 6) return null
+      const hit = await store.meta.get('geo:' + a.toLowerCase().replace(/\s+/g, ' '))
+      return hit && hit.v === 2 && Date.now() - Date.parse(hit.at) < 30 * 86400000 ? hit : null
+    },
     /** Where an address is: the Census geocoder's match, with city, county, state and the street name. */
     async geocode(address) {
       const a = String(address || '').trim()
@@ -268,13 +278,16 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       // Hazard Zones, 1 LOMRs, 34 LOMAs. Layer 0 (NFHL Availability) only has STUDY_ID. Preliminary data is not in the
       // public NFHL MapServer: not queried, and the record says so.
       const base = { v: 2, address, matched, lat: +lat, lon: +lon, where, source: 'FEMA National Flood Hazard Layer (FIRM panels layer 3, zones 28, LOMRs 1, LOMAs 34) at the parcel interior point', prelim: null, prelimNote: 'Preliminary maps are not in the public NFHL service; the drafter checks FEMA\'s preliminary viewer before the permit set.', at: now() }
-      const [panels, avail] = await Promise.all([nfhl(3, lon, lat, 'DFIRM_ID,FIRM_PAN,EFF_DATE,PANEL_TYP'), nfhl(0, lon, lat, 'STUDY_ID').catch(() => [])])
-      if (!panels.length && !avail.length) {
+      // the two layers the answer stands on first (3 FIRM panels, 28 zones); the soft ones (0 availability, 1 LOMRs,
+      // 34 LOMAs) only after those answered, so a bad minute at FEMA costs two calls, not five (round 11, item 4)
+      const [panels, zones] = await Promise.all([nfhl(3, lon, lat, 'DFIRM_ID,FIRM_PAN,EFF_DATE,PANEL_TYP'), nfhl(28, lon, lat, 'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,DFIRM_ID,FLD_AR_ID,DEPTH')])
+      const avail = panels.length || zones.length ? [] : await nfhl(0, lon, lat, 'STUDY_ID', { soft: true }).catch(() => [])
+      if (!panels.length && !zones.length && !avail.length) {
         const rec = { ...base, status: 'no-digital-firm', zone: null, subtype: null, sfha: null, bfe: null, firm: null, panel: null, lomr: null, loma: null, note: 'FEMA has no digital flood map (FIRM) for this spot, so no zone can be read here. The county floodplain administrator and the paper map decide; the office checks before the slab height is set.' }
         await store.meta.set(key, rec)
         return rec
       }
-      const [zones, lomrs, lomas] = await Promise.all([nfhl(28, lon, lat, 'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,DFIRM_ID,FLD_AR_ID,DEPTH'), nfhl(1, lon, lat, 'CASE_NO,EFF_DATE,STATUS,LOMR_ID').catch(() => []), nfhl(34, lon, lat, 'CASENUMBER,STATUS,DETERMINATIONTYPE,DATEENDED').catch(() => [])])
+      const [lomrs, lomas] = await Promise.all([nfhl(1, lon, lat, 'CASE_NO,EFF_DATE,STATUS,LOMR_ID', { soft: true }).catch(() => []), nfhl(34, lon, lat, 'CASENUMBER,STATUS,DETERMINATIONTYPE,DATEENDED', { soft: true }).catch(() => [])])
       const f = zones[0] || null
       const sfha = f ? f.SFHA_TF === 'T' : null
       const shadedX = !!f && f.FLD_ZONE === 'X' && /0\.2 PCT|LEVEE|FLOODWAY/i.test(f.ZONE_SUBTY || '')
