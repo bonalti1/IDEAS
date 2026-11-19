@@ -52,7 +52,7 @@ Layer 21 does not exist (the service answers "Invalid URL"); layer 34 is LOMAs.
 
 ## Verification
 
-- `npm test`: see the PR for the final numbers (this file is written before the last run; the PR body has them).
+- `npm test` on this branch: 341 tests, 335 pass, 0 fail, 6 skipped (the four `LIVE=1` tests, the two Stripe tests). New files: `test/round9.test.mjs` (6), `test/live-acceptance.test.mjs` (2, `LIVE=1`), `test/browser.mjs` (the shared helper); `test/parcels.test.mjs` grew to 13 with the strict fixture server, the integer where, the situs check, the routes' login, limit and county keys.
 - `vite build` clean; the entry chunk has no rates; `office-*.js`, `Review-*.js`, `Admin-*.js` are separate chunks.
 - `npm audit --omit=dev`: 0 vulnerabilities.
 - The no-money suite (Style step included, both widths, the PDF, the bundle) and the lot-flow suite (the parcel offer, the rules panel, the C-2 block at 390 px, the drafter's card and owner lookup, the second send with the PDF text, the sources page and the rules table) on free ports.
