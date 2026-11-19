@@ -415,6 +415,53 @@ test('2 and 6 on the live recordings: Kiskadee fronts on its six chords (49.92 f
   assert.equal(TEST_ADDRESSES.find((t) => /Kiskadee/.test(t.address)).expect.frontChords, 6)
 })
 
+test('2 (found on the way): a street side that curves into the lot no longer halves the buildable area, and every setback still holds', async () => {
+  const { parcels } = services()
+  const segDist = (p, a, b) => {
+    const dx = b[0] - a[0]
+    const dz = b[1] - a[1]
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)))
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz)
+  }
+  // the safe side, checked on every recorded lot: no corner of the envelope is nearer a lot line than that line's setback
+  const holds = (lot, name) => {
+    const B = lot.boundary
+    for (const p of lot.envelope) for (const e of lot.edges) {
+      const d = segDist(p, B[e.index], B[(e.index + 1) % B.length])
+      assert.ok(d >= e.setback - 0.05, `${name}: an envelope corner is ${d.toFixed(2)} ft from edge ${e.index} (${e.kind}, ${e.setback} ft)`)
+    }
+  }
+  const k = await parcels.lookup({ address: '2002 Kiskadee Ln, Mission, TX 78572' })
+  const lot = buildLot(parcelSpec(k, { city: 'mission' }))
+  assert.equal(lot.boundary.length, lot.corners.length, 'a parcel lot has no arcs: boundary and corners are the same points')
+  holds(lot, 'Kiskadee')
+  assert.ok(lot.envelopeSf >= 2900, `buildable ${Math.round(lot.envelopeSf)} sf (edge by edge: 1,614 sf; the true inset of the curve is about 3,200)`)
+  assert.ok(lot.envelopeSf <= 3200, 'never more than the true inset')
+  // every piece of the street side is labelled with the street, never "SIDE"
+  for (const e of lot.edges.filter((x) => x.kind === 'front')) assert.equal(e.label, "20' — KISKADEE LN", `edge ${e.index}: ${e.label}`)
+  // the house faces the middle of the curve, not its first chord
+  const o = [Math.cos(lot.angle + Math.PI / 2), Math.sin(lot.angle + Math.PI / 2)]
+  const frames = edgeFrames(lot.corners.map(([x, z]) => [x, z]))
+  const fronts = lot.edges.filter((e) => e.kind === 'front').map((e) => e.index)
+  const dots = fronts.map((i) => {
+    const a = lot.corners[i]
+    const b = lot.corners[(i + 1) % lot.corners.length]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    return Math.abs((b[0] - a[0]) * o[0] + (b[1] - a[1]) * o[1]) / len
+  })
+  assert.ok(frames.length === 11 && Math.max(...dots) < Math.sin((30 * Math.PI) / 180), `the house is within 30 degrees of square to every front chord (${dots.map((d) => d.toFixed(2))})`)
+  // every other recorded lot: the setbacks hold, and a lot with no curve keeps the envelope it had
+  for (const t of TEST_ADDRESSES) {
+    const r = await parcels.lookup({ address: t.address })
+    const city = { McAllen: 'mcallen', Brownsville: 'brownsville', 'Corpus Christi': 'corpuschristi', Pharr: 'pharr', Edinburg: 'edinburg', Mission: 'mission' }[(r.census?.place || '').trim()] || ''
+    const L = buildLot(parcelSpec(r, { city, county: t.county }))
+    holds(L, t.address)
+  }
+  // a plain 100 x 150 lot is untouched
+  const plain = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  assert.equal(plain.envelope.length, 4)
+})
+
 // ── item 7 ───────────────────────────────────────────────────────────────────────────────────────────
 test('7: a roof runs on past its wall only under a higher roof; otherwise it closes with a hip (the 2,800 sf default)', () => {
   const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
