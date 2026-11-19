@@ -546,6 +546,42 @@ details.more.card > summary { font-weight: 600; }
   .chips button { font-size: 12px; padding: 7px 11px; white-space: normal; text-align: left; }
 }
 
+/* round 13, item 1: the ES/EN switch (lib/i18n.js LangSwitch): one pill, the language in use is the dark half */
+.lang-switch { display: inline-flex; align-items: center; align-self: center; flex: 0 0 auto; min-height: 30px; padding: 2px; border: 1px solid var(--brand-hair); border-radius: 999px; background: #fff; color: var(--brand-muted); font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 1; cursor: pointer; }
+.lang-switch span { padding: 6px 8px; border-radius: 999px; }
+.lang-switch span.on { background: var(--brand-ink); color: #fff; }
+.lang-switch:focus-visible { outline: 2px solid var(--brand-brown); outline-offset: 2px; }
+.lang-switch.in-menu { align-self: flex-start; }
+/* the header with the switch in it (wide screens): the count and "Sign out" stay on one line, and a long email
+   gives way first instead of pushing the page wider than the screen */
+@media (min-width: 601px) {
+  .dh-links, .dh-user { min-width: 0; }
+  .dh-user { flex: 0 1 auto; }
+  .dh-signout, .lang-switch { white-space: nowrap; flex: 0 0 auto; }
+  .dh-email { min-width: 0; flex: 0 1000 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (min-width: 1001px) {
+  .dh-credits { white-space: nowrap; flex: 0 0 auto; }
+}
+/* between a phone and a wide screen the switch is paid for with tighter gaps, so the header is no wider than it was */
+@media (min-width: 601px) and (max-width: 1100px) {
+  .dh-head { gap: 12px; }
+  .dh-links { gap: 10px; }
+  .steps li { padding: 6px 8px; gap: 6px; }
+}
+/* Spanish runs longer: on the Draft step the line that names the house sits under the row of view buttons, not behind it */
+:root[lang='es'] .screen.split > .viewport:not(.lot-view) .viewport-tag { top: 60px; }
+@media (min-width: 601px) {
+  :root[lang='es'] .viewport-views button { padding: 6px 8px; }
+}
+/* round 13, item 7: one line under "Shape it" saying what the count in the header means */
+.changes-note { margin: 2px 0 10px; }
+@media (max-width: 600px) {
+  /* a thumb can tap it: 40px tall, like every other button on the phone */
+  .lang-switch { min-height: 40px; padding: 3px; font-size: 12px; }
+  .lang-switch span { padding: 10px 10px; }
+}
+
 /* Round 13, item 3: the whole flow on a phone. One page that scrolls, top to bottom: the picture scrolls away with
    the words (a panel that scrolled on its own slid its text under the lot picture), the lot picture is big enough
    to read, and everything that is tapped is at least 40px tall with air around it. */

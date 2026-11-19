@@ -52,7 +52,7 @@ export const CITY_DEFAULTS = Object.fromEntries(JURISDICTION_IDS.map((id) => [id
 export const CITY_IDS = JURISDICTION_IDS
 
 /** What the lot step says about a geocoded address: our city rules, county defaults, or outside the eight counties. */
-export const geoMessage = (geo, table = JURISDICTIONS) => jGeoMessage(geo, table && table.mcallen?.row ? Object.fromEntries(Object.values(table).map((c) => [c.id, c.row])) : table)
+export const geoMessage = (geo, table = JURISDICTIONS, lang = 'en') => jGeoMessage(geo, table && table.mcallen?.row ? Object.fromEntries(Object.values(table).map((c) => [c.id, c.row])) : table, lang)
 
 /** The city table with the office's edits applied (flat rows; each carries its sourced `row`). */
 export function cityTable(overrides = {}) {

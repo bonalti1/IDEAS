@@ -3,6 +3,9 @@
 // STB design team" show) until Rolando OKs showing him.
 import { CHECK_GROUPS } from './audit.js'
 
+// the same sentence with the count left open, so the Spanish one carries the same number
+export const CHECKED = `Every plan is checked against {count} IRC planning checks before you see it: doors and reach, egress windows, 42" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set.`
+
 export const TRUST = {
   team: 'Plans by the South Texas Builders design team',
   drafter: {
@@ -15,7 +18,7 @@ export const TRUST = {
     placeholderName: 'The STB design team',
   },
   // the audit's own count, so this line never promises more than the code checks
-  checked: `Every plan is checked against ${CHECK_GROUPS.length} IRC planning checks before you see it: doors and reach, egress windows, 42" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set.`,
+  checked: CHECKED.replace('{count}', CHECK_GROUPS.length),
   builtHomes: { label: 'See homes we have built', url: 'https://south-texasbuilders.com/our-homes/' },
   // what the app says about cost: nothing but this (round 8, P0b)
   cost: 'What it costs: we go over cost with you at your meeting with the South Texas Builders office.',

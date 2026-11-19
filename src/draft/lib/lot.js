@@ -467,7 +467,9 @@ const labelFor = (edge, frontName) => {
  * setbacks that leave no buildable area, or a lot under the city's minimum. The Lot step shows the
  * last good lot while this is set, so a half-typed depth never blanks the page.
  */
-export function lotProblem(spec, lot) {
+export function lotProblem(spec, lot, lang = 'en') {
+  // round 13: the same sentences in Spanish for a homeowner who reads Spanish (the English ones are unchanged)
+  if (lang === 'es') return lotProblemEs(spec, lot)
   if (spec?.kind === 'manual') {
     const W = +spec.width
     const D = +spec.depth
@@ -485,6 +487,25 @@ export function lotProblem(spec, lot) {
     return `The setbacks leave no buildable area: ${r.front ?? 25}' front and ${r.rear ?? 10}' rear need a lot deeper than ${(r.front ?? 25) + (r.rear ?? 10)} ft, ${r.side ?? 5}' each side a lot wider than ${2 * (r.side ?? 5)} ft.`
   }
   if (lot.envelopeSf < 1500) return 'The buildable area is very small. Check the dimensions and the setbacks.'
+  return null
+}
+
+/** `lotProblem` in Spanish. No jargon: the space the city keeps open along each edge of the lot is said in those words. */
+function lotProblemEs(spec, lot) {
+  if (spec?.kind === 'manual') {
+    if (!(+spec.width >= 20)) return 'Escribe el ancho del lote en pies (20 pies o más).'
+    if (!(+spec.depth >= 20)) return 'Escribe el fondo del lote en pies (20 pies o más).'
+  }
+  if (spec?.kind === 'parcel') {
+    if (!Array.isArray(spec.calls) || spec.calls.length < 3) return 'El contorno del lote necesita por lo menos tres lados; un dibujante lo puede trazar con el plat.'
+    if (lot && lot.closure > 1.5) return `El contorno del lote no cierra (le faltan ${lot.closure} pies); un dibujante lo revisa con el plat.`
+  }
+  if (!lot) return 'No pudimos dibujar el lote con estas medidas.'
+  if (!lot.envelope || lot.envelope.length < 3 || !(lot.envelopeSf > 0)) {
+    const r = lot.rules || {}
+    return `El espacio que la ciudad mantiene libre a lo largo de las orillas no deja lugar para construir: ${r.front ?? 25} pies al frente y ${r.rear ?? 10} pies al fondo piden un lote de más de ${(r.front ?? 25) + (r.rear ?? 10)} pies de fondo, y ${r.side ?? 5} pies de cada lado, un lote de más de ${2 * (r.side ?? 5)} pies de ancho.`
+  }
+  if (lot.envelopeSf < 1500) return 'El área donde se puede construir es muy chica. Revisa las medidas y el espacio que la ciudad mantiene libre a lo largo de cada orilla del lote.'
   return null
 }
 

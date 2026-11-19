@@ -40,10 +40,11 @@ export function parcelSpec(parcel, { address, city, county, geo, flood, zoning, 
 /**
  * What the drafter must know about how a parcel lot was matched before confirming it (round 12, item 1). The
  * fields are stamped by the server from its own parcel record, never taken from the browser. Plain lines, each a
- * warning; an exact match has none.
+ * warning; an exact match has none. `lang` 'es' gives the same lines in Spanish (round 13); the drafter's card is English.
  */
-export function lotMatchNotes(spec) {
+export function lotMatchNotes(spec, lang = 'en') {
   if (!spec || spec.kind !== 'parcel') return []
+  if (lang === 'es') return lotMatchNotesEs(spec)
   const typed = String(spec.address || '').split(',')[0].trim() || 'the address typed'
   const notes = []
   if (spec.confidence === 'near' && spec.listedAs) notes.push(`Near match: the county lists this parcel as ${spec.listedAs}, not ${typed}. Check the deed or plat before confirming.`)
@@ -54,5 +55,19 @@ export function lotMatchNotes(spec) {
         : `The address alone did not settle the parcel: this one${spec.situs ? ` (listed as ${spec.situs})` : ''} was picked. Check the deed or plat before confirming.`,
     )
   if (spec.outlineBy === 'browser' || spec.confidence === 'unchecked') notes.push('The county did not answer when this lot was saved, so its outline has not been checked against the county yet. It is checked when you confirm.')
+  return notes
+}
+
+function lotMatchNotesEs(spec) {
+  const typed = String(spec.address || '').split(',')[0].trim() || 'la dirección que se escribió'
+  const notes = []
+  if (spec.confidence === 'near' && spec.listedAs) notes.push(`Coincidencia cercana: el condado tiene este lote como ${spec.listedAs}, no como ${typed}. Revisa la escritura o el plat antes de confirmar.`)
+  if (spec.confidence === 'pick')
+    notes.push(
+      spec.addressGives
+        ? `La dirección lleva al lote ${spec.addressGives} del condado, pero este es el lote ${spec.propId}${spec.situs ? ` (registrado como ${spec.situs})` : ''}. Revisa la escritura o el plat antes de confirmar.`
+        : `La dirección sola no bastó para saber cuál es el lote: se eligió este${spec.situs ? ` (registrado como ${spec.situs})` : ''}. Revisa la escritura o el plat antes de confirmar.`,
+    )
+  if (spec.outlineBy === 'browser' || spec.confidence === 'unchecked') notes.push('El condado no respondió cuando se guardó este lote, así que su contorno todavía no se ha revisado con el condado. Se revisa cuando confirmes.')
   return notes
 }

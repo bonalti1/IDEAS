@@ -95,9 +95,9 @@ test(`screens 3 (${LANG}): every step of the homeowner flow at 390 x 844 has not
   if (!(map && map.h >= 844 * 0.4 && map.w >= 380)) found.push(`04-lot-taken: the lot picture is ${map && Math.round(map.w)} x ${map && Math.round(map.h)}px, under 40% of the screen's height`)
 
   await page.getByTestId('lot-next').click()
-  await page.getByRole('button', { name: /Modern Farmhouse/ }).waitFor({ timeout: 20000 })
+  await page.getByTestId('style-farmhouse').waitFor({ timeout: 20000 })
   await check('05-style')
-  await page.getByRole('button', { name: /Modern Farmhouse/ }).click()
+  await page.getByTestId('style-farmhouse').click()
   await check('05b-style-picked')
   await page.locator('.actions button').last().click()
   await page.getByTestId('lot-strip').waitFor({ timeout: 20000 })

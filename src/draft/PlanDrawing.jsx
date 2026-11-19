@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildDesign } from './lib/contract.js'
 import { planSVG, sitePlanSVG } from './lib/plan-svg.js'
+import { useLang, roomName } from './lib/i18n.js'
 
 export default function PlanDrawing({ rooms, program, style, lot, client, api, highlightKind, mode = 'plan' }) {
   const { svg, design } = useMemo(() => {
@@ -15,6 +16,7 @@ export default function PlanDrawing({ rooms, program, style, lot, client, api, h
   }, [rooms, program, style, lot, client, mode])
   const [t, setT] = useState({ k: 1, x: 0, y: 0 })
   const [tip, setTip] = useState(null) // { x, y, name, size }
+  const { lang, t: tr } = useLang() // `t` is the pan and zoom here
   const pointers = useRef(new Map())
   const drag = useRef(null)
   const pinch = useRef(null)
@@ -97,14 +99,14 @@ export default function PlanDrawing({ rooms, program, style, lot, client, api, h
       const i = total - f * 12
       return i ? `${f}'-${i}"` : `${f}'`
     }
-    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, name: room.name, size: `${ft(room.w)} × ${ft(room.d)} · ${Math.round(room.w * room.d)} sf` })
+    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, name: room.name, size: `${ft(room.w)} × ${ft(room.d)} · ${Math.round(room.w * room.d)} ${tr('sf')}` })
   }
   return (
     <div ref={box} className={'plan-drawing' + (highlightKind ? ' hl-' + highlightKind : '') + (mode === 'site' ? ' site' : '')} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <div className="plan-drawing-inner" style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.k})` }} dangerouslySetInnerHTML={{ __html: svg }} />
       {tip && (
         <div className="plan-tip" style={{ left: tip.x, top: tip.y }}>
-          <b>{tip.name}</b>
+          <b>{roomName(tip.name, lang)}</b>
           <span>{tip.size}</span>
         </div>
       )}

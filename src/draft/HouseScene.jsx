@@ -6,6 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Edges, Line, Html } from '@react-three/drei'
 import SitePlan from '../components/SitePlan.jsx'
 import { FlatLabel } from '../components/labels.jsx'
+import { useLang, roomName } from './lib/i18n.js'
 import { DEFAULT_LOT } from './lib/lot.js'
 import { wallsFrom } from './lib/ifc.js'
 import { splitWalls } from './lib/openings.js'
@@ -332,13 +333,15 @@ function Driveway({ rooms, centre, lot }) {
 }
 
 function Room({ r, highlight, labels, lot }) {
+  const { lang } = useLang()
+  const name = roomName(r.name, lang) // the room's name in the homeowner's language (English: r.name itself)
   const [x, z] = r.center
   // labels sit above the walls and furniture, where the plan view can read them
   const LY = 10.2
   // every room gets its name and size, sized to fit inside the room (plan view only)
   const sideways = r.d > r.w * 1.4
   const along = sideways ? r.d : r.w
-  const nameSize = Math.min(1.9, Math.max(0.9, (along - 1.5) / (r.name.length * 0.62)))
+  const nameSize = Math.min(1.9, Math.max(0.9, (along - 1.5) / (name.length * 0.62)))
   const dimSize = Math.min(1.2, Math.max(0.8, nameSize * 0.7))
   return (
     <group position={[x, 0, z]} rotation-y={-lot.angle}>
@@ -350,7 +353,7 @@ function Room({ r, highlight, labels, lot }) {
       {labels && (
         <>
           <FlatLabel x={sideways ? -0.9 : 0} z={sideways ? 0 : -0.9} y={LY} angle={lot.angle + (sideways ? Math.PI / 2 : 0)} size={nameSize} bold color={highlight ? '#4e3c30' : '#2a2520'}>
-            {r.name.toUpperCase()}
+            {name.toUpperCase()}
           </FlatLabel>
           {Math.min(r.w, r.d) >= 4 && (
             <FlatLabel x={sideways ? 1.1 : 0} z={sideways ? 0 : 1.1} y={LY} angle={lot.angle + (sideways ? Math.PI / 2 : 0)} size={dimSize} color="#7a6558">
@@ -402,12 +405,13 @@ function RoomTags({ rooms, highlightKind, showRoof, controlsRef }) {
 }
 
 function RoomTag({ r, highlight, showRoof, size = '' }) {
+  const { lang } = useLang()
   const [x, z] = r.center
   const y = r.open ? 2 : showRoof ? (r.plate || 9) + 7 : (r.plate || 9) + 1.5
   return (
     <Html position={[x, y, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
       <span data-testid="room-tag" className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '') + size}>
-        {r.name}
+        {roomName(r.name, lang)}
       </span>
     </Html>
   )
@@ -466,6 +470,7 @@ function FirstFrame({ onDrawn }) {
  * outline when there is no house yet) and one line of text, in the page, over the canvas.
  */
 function SceneLoading({ rooms, lot, showHouse }) {
+  const { t } = useLang()
   const shapes = useMemo(() => {
     const solid = showHouse ? rooms.filter((r) => isRoom(r) && r.local) : []
     if (solid.length) return { rects: solid.map((r) => ({ x: r.local[0] - r.w / 2, y: r.local[1] - r.d / 2, w: r.w, h: r.d, open: !!r.open })), outline: null }
@@ -489,12 +494,13 @@ function SceneLoading({ rooms, lot, showHouse }) {
           {shapes.outline && shapes.outline.length > 2 && <polygon points={shapes.outline.map((p) => p.join(',')).join(' ')} />}
         </svg>
       )}
-      <span>{shapes.rects.length ? 'Drawing your house…' : 'Drawing your lot…'}</span>
+      <span>{shapes.rects.length ? t('Drawing your house…') : t('Drawing your lot…')}</span>
     </div>
   )
 }
 
 export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false, lotProblem = '' }) {
+  const { t } = useLang()
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
   const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
   const cam = cams[view] || cams['3d']
@@ -520,7 +526,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       {/* the top view is always north-up: its north mark is fixed in the corner of the picture, whole at any width
           (round 11, item 7); it is outside the canvas, so no camera or scene position moves it */}
       {view === 'top' && (
-        <div className="compass" data-testid="north" aria-label="North is up">
+        <div className="compass" data-testid="north" aria-label={t('North is up')}>
           <span>N</span>
           <i />
         </div>

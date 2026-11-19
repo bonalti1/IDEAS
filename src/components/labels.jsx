@@ -1,4 +1,5 @@
 import { Text } from '@react-three/drei'
+import { useLang, groundWords } from '../draft/lib/i18n.js'
 
 /**
  * Text lying flat on the ground plane, plat-style. Sizes are world feet.
@@ -22,6 +23,9 @@ export function FlatLabel({
 }) {
   let a = angle
   if (a > Math.PI / 2 || a < -Math.PI / 2) a += Math.PI
+  // round 13: the words on the ground in the homeowner's language ("SCALE IN FEET", "10' — REAR"); English is untouched
+  const { lang } = useLang()
+  const words = lang === 'en' ? children : groundWords(Array.isArray(children) ? children.join('') : children, lang)
   return (
     <Text
       position={[x, y, z]}
@@ -33,7 +37,7 @@ export function FlatLabel({
       anchorY="middle"
       letterSpacing={letterSpacing}
     >
-      {children}
+      {words}
     </Text>
   )
 }
