@@ -193,7 +193,8 @@ route('POST', '/api/auth/dev-login', 'app', async (req, res) => {
 route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { user: safeUser(ctx.user), auth: users.devMode ? 'local' : 'supabase' }, req))
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await projects.list(ctx.user), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
-  const body = await readJson(req, { rooms: 'array', style: 'object', program: 'object', lot: 'object?', client: 'string?' })
+  // round 12, item B: rooms and style are optional when a lot is saved on its own
+  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?' })
   // the drafter's marks on a lot and its zoning never come from a browser (rounds 10 and 11): the server reads the
   // zoning of a parcel lot itself, within the homeowner's lookup limit
   if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx) })
@@ -202,7 +203,7 @@ route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => {
   const prj = await projects.load(ctx.user, p.id)
-  const body = await readJson(req, { rooms: 'array?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?' })
+  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?', stage: 'string?' })
   if (body.lot) body.lot = await projects.ownerLot(body.lot, prj.lot, { mayLookup: () => mayLookup(req, ctx) })
   json(res, 200, await projects.update(prj, body), req)
 })
@@ -210,6 +211,7 @@ route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
   const body = await readJson(req, { text: 'string', ops: 'array?' })
   json(res, 200, await projects.change(await projects.load(ctx.user, p.id), body.text, body.ops), req)
 })
+route('POST', '/api/projects/:id/custom', 'user', async (req, res, p, ctx) => json(res, 200, await projects.needsCustom(await projects.load(ctx.user, p.id), await readJson(req, { note: 'string?', program: 'object?', clear: 'boolean?' })), req))
 route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => json(res, 200, await projects.rollback(await projects.load(ctx.user, p.id), (await readJson(req, { version: 'number' })).version), req))
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object?', ifc: 'string?' }), saveDesign), req))
 // the homeowner asks the office for a meeting (cost is covered there), or for more changes (round 8, M4/M8)

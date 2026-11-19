@@ -46,6 +46,8 @@ export function outlineGapFt(a, b) {
 // what a parcel lot takes from the county's record and never from a browser (round 12, items 1 and 2)
 const COUNTY_KEYS = ['calls', 'streets', 'front', 'kinds', 'cornerLot', 'frontBy', 'frontWidthFt', 'propId', 'geoId', 'legal', 'acres', 'source', 'parcelFetchedAt', 'matchedBy', 'confidence', 'interior']
 const SERVER_KEYS = [...COUNTY_KEYS, 'listedAs', 'situs', 'outlineBy', 'addressGives']
+const STAGES = ['style', 'rooms', 'draft']
+const stageOf = (v, otherwise) => (STAGES.includes(v) ? v : otherwise)
 const sameText = (a, b) => String(a || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots, alerts = null, parcels = null, zoning = null }) {
@@ -308,8 +310,13 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
     },
     async create(user, body) {
-      if (!Array.isArray(body.rooms) || !body.rooms.length) throw fail(400, 'rooms required')
-      if (!body.style?.id) throw fail(400, 'style required')
+      // round 12, item B: a project is saved as soon as the homeowner takes a lot, before any rooms exist ("lot-only").
+      // A lot taken and then lost on sign-out never reached a drafter either. Rooms and a style are needed only
+      // when there is no lot to save.
+      const hasRooms = Array.isArray(body.rooms) && body.rooms.length > 0
+      const lotOnly = !hasRooms && !!body.lot?.spec && body.lot.spec.kind !== 'reference'
+      if (!hasRooms && !lotOnly) throw fail(400, 'rooms required (or a lot to save on its own)')
+      if (hasRooms && !body.style?.id) throw fail(400, 'style required')
       await this.checkLot(body.lot)
       const t = now()
       const p = {
@@ -319,19 +326,42 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         client: body.client || user.name || user.email,
         address: body.lot?.address || '',
         lot: body.lot || null,
-        style: { id: body.style.id, name: body.style.name || body.style.id },
+        style: body.style?.id ? { id: body.style.id, name: body.style.name || body.style.id } : null,
         program: body.program || {},
         status: 'drafting',
+        // where the homeowner is: 'style', 'rooms' or 'draft' (resume opens that step)
+        stage: hasRooms ? 'draft' : stageOf(body.stage, 'style'),
         changesAllowed: await allowanceDefault(),
         changesUsed: 0,
         allowanceLog: [],
-        version: 1,
+        version: hasRooms ? 1 : 0, // 0: a lot saved on its own, no rooms yet, no change used
         createdAt: t,
         updatedAt: t,
       }
       await store.projects.add(p)
-      await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
-      await event('project', `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}`, { projectId: p.id })
+      if (hasRooms) await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
+      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
+      return this.detail(p)
+    },
+    /**
+     * "Send my lot to the drafter" (round 12, item A): no plan of ours fits this lot, so the homeowner hands it over
+     * with the rooms they asked for. The plan is flagged for the drafter's queue; nothing is used and nothing is sent
+     * for a build. `clear` takes the flag off (the homeowner found a program that fits after all).
+     */
+    async needsCustom(p, { note = '', program = null, clear = false } = {}) {
+      if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
+      if (!p.lot?.spec || p.lot.spec.kind === 'reference') throw fail(409, 'this plan has no lot of its own to send')
+      if (program && typeof program === 'object') p.program = program
+      p.updatedAt = now()
+      if (clear) {
+        if (p.needsCustom) await event('project', `${p.client}: no longer asks for a custom design`, { projectId: p.id })
+        p.needsCustom = null
+      } else {
+        const first = !p.needsCustom
+        p.needsCustom = { at: p.needsCustom?.at || p.updatedAt, note: String(note || '').trim().slice(0, 500) }
+        if (first) await event('request', `${p.client}: no standard plan fits the lot at ${p.address || 'their address'}; they sent it to a drafter for a custom design`, { projectId: p.id })
+      }
+      await store.projects.put(p)
       return this.detail(p)
     },
 
@@ -424,10 +454,16 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (body.style?.id) p.style = { id: body.style.id, name: body.style.name || body.style.id }
       if (body.program) p.program = body.program
       if (body.client) p.client = body.client
+      if (body.stage) p.stage = stageOf(body.stage, p.stage || 'style')
       p.updatedAt = now()
       if (Array.isArray(body.rooms) && body.rooms.length) {
-        p.version += 1
-        await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: 'program', text: body.note || 'Rooms changed', used: 0, rooms: body.rooms })
+        if (!p.style?.id) throw fail(400, 'style required before the rooms')
+        // the first rooms of a lot saved on its own are the first draft (round 12, item B): free, like every draft
+        const first = !p.version
+        p.version = (p.version || 0) + 1
+        p.stage = 'draft'
+        await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: first ? 'initial' : 'program', text: first ? 'First draft' : body.note || 'Rooms changed', used: 0, rooms: body.rooms })
+        if (first) await event('project', `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}`, { projectId: p.id })
       }
       await store.projects.put(p)
       return this.detail(p)
@@ -447,6 +483,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // A cost question never reaches the model and never uses a change: the answer points to the meeting (M3).
     async change(p, text, fixOps = null) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
+      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
       const left = changesLeft(p)
@@ -557,6 +594,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // the client hands the design to the drafters; nothing is built until a drafter approves
     async send(p, { design, ifc }, saveDesign) {
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
+      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to send yet')
       if ((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
       // decision B6 (round 10, item 4): a lot that is not a house district blocks Send, never the draft, and only when
@@ -600,10 +638,12 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       for (const p of open) await withAllowance(p)
       const lots = open.filter((p) => (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
+      // round 12, item A: lots no standard plan fits, sent by the homeowner for a custom design, oldest first
+      const custom = open.filter((p) => p.needsCustom).sort((a, b) => Date.parse(a.needsCustom.at) - Date.parse(b.needsCustom.at))
       // what clients asked the office for (a meeting, more changes), newest first, and every open plan's allowance
       const requests = open.filter((p) => p.meetingRequest || p.wantsMoreChanges).sort((a, b) => Date.parse(b.meetingRequest?.at || b.updatedAt) - Date.parse(a.meetingRequest?.at || a.updatedAt))
       const plans = open.map((p) => ({ id: p.id, client: p.client, email: p.email, address: p.address, status: p.status, version: p.version, updatedAt: p.updatedAt, changesAllowed: p.changesAllowed, changesUsed: p.changesUsed, meetingRequest: p.meetingRequest || null, wantsMoreChanges: !!p.wantsMoreChanges }))
-      return { waiting, recent, lots, requests, plans }
+      return { waiting, recent, lots, custom, requests, plans }
     },
 
     // a drafter confirms the lot read from a plat, with corrected calls or setbacks when needed

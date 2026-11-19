@@ -13,7 +13,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { outlineGapFt } from '../server/projects.mjs'
-import { buildLot, envelopeOf, envelopeStats } from '../src/draft/lib/lot.js'
+import { buildLot, envelopeOf, envelopeStats, insideRect, turnLot, lotTurn } from '../src/draft/lib/lot.js'
+import { checkRules } from '../src/draft/lib/rules.js'
+import { starterDraft } from '../src/draft/lib/layout.js'
+import { TEST_ADDRESSES } from '../server/parcel-sources.mjs'
+import { plainReason } from '../src/draft/lib/plain.js'
 import { roofSurfaces, dormerWalls, roofWork } from '../src/draft/lib/roof.js'
 import { fitsLot, clearFitCache } from '../src/draft/lib/fit.js'
 import { makeParcels } from '../server/parcels.mjs'
@@ -46,7 +50,7 @@ async function startServer(t, env = {}) {
       await new Promise((r) => setTimeout(r, 100))
     }
   }
-  return { base, log: () => out }
+  return { base, log: () => out, kill: () => proc.kill() }
 }
 async function who(base, email, extra = {}) {
   const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: email.split('@')[0] }) })
@@ -365,4 +369,225 @@ test('7: two taps of "Check now" a minute apart are one failed run and send no e
   const r6 = await parcels.dailyCheck({ email, at: at(54 * 60) })
   assert.equal(r6.results[0].failedDays, 1)
   assert.equal(emails.length, 1)
+})
+
+// ── item B ─────────────────────────────────────────────────────────────────────────────────
+test('B: a lot is saved the moment it is taken: 201 with no rooms, in "Your houses" and in the drafter\'s lots to confirm, no change used, and still there after the office API restarts', async (t) => {
+  const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'dh-r12-b-'))
+  let srv = await startServer(t, { DATA_DIR })
+  let ana = await who(srv.base, 'ana@example.com')
+  let maria = await who(srv.base, 'maria@drafthouse.test')
+  const address = '2002 Kiskadee Ln, Mission, TX 78572'
+  const parcel = await (await ana.get(`/api/lot/parcel?address=${enc(address)}`)).json()
+  const lot = buildLot(parcelSpec(parcel, { address, city: 'mission', county: 'Hidalgo County' }))
+  // the lot alone: no rooms, no style
+  const made = await ana.post('/api/projects', { lot, program: small, client: 'Ana Garza' })
+  assert.equal(made.status, 201, 'round 11 answered 400 "rooms required": ' + (await made.clone().text()))
+  const prj = await made.json()
+  assert.equal(prj.version, 0)
+  assert.equal(prj.stage, 'style')
+  assert.deepEqual(prj.rooms, [])
+  assert.equal(prj.changesUsed, 0)
+  assert.equal(prj.changesLeft, 10, 'a saved lot uses no free change')
+  assert.equal(prj.lot.spec.propId, '707917')
+  assert.equal(prj.lot.spec.outlineBy, 'county')
+  // the homeowner's list, and the drafter's queue, at once
+  const mine = await (await ana.get('/api/projects')).json()
+  assert.equal(mine.length, 1)
+  assert.equal(mine[0].id, prj.id)
+  assert.equal(mine[0].version, 0)
+  const inbox = await (await maria.get('/api/review')).json()
+  assert.ok(inbox.lots.some((p) => p.id === prj.id), 'the drafter can confirm the lot while the homeowner is still choosing rooms')
+  // there is no plan to change or send yet
+  assert.equal((await ana.post(`/api/projects/${prj.id}/change`, { text: 'make the kitchen bigger' })).status, 409)
+  assert.equal((await ana.post(`/api/projects/${prj.id}/send`, { design })).status, 409)
+  // each step updates it: the style, then the rooms asked for
+  const st = await (await ana.put(`/api/projects/${prj.id}`, { style: { id: style.id, name: style.name }, stage: 'rooms' })).json()
+  assert.equal(st.stage, 'rooms')
+  assert.equal(st.style.id, style.id)
+  const pr = await (await ana.put(`/api/projects/${prj.id}`, { program: { ...small, beds: 2 }, stage: 'rooms' })).json()
+  assert.equal(pr.program.beds, 2)
+  assert.equal(pr.version, 0)
+  // the drafter confirms it meanwhile
+  const conf = await (await maria.post(`/api/review/${prj.id}/lot`, { confirmed: true })).json()
+  assert.equal(conf.lot.spec.confirmed, true)
+  // the office API restarts: the project is in the store, not in memory
+  srv.kill()
+  srv = await startServer(t, { DATA_DIR })
+  ana = await who(srv.base, 'ana@example.com')
+  maria = await who(srv.base, 'maria@drafthouse.test')
+  const after = await (await ana.get('/api/projects')).json()
+  assert.equal(after.length, 1, 'still there after a restart')
+  const back = await (await ana.get(`/api/projects/${prj.id}`)).json()
+  assert.equal(back.stage, 'rooms')
+  assert.equal(back.program.beds, 2)
+  assert.equal(back.lot.spec.confirmed, true)
+  assert.ok(back.lot.envelope.length >= 3, 'the lot comes back built: resume draws the parcel')
+  // the first rooms are the first draft: version 1, free
+  const plain = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const typed = await (await ana.post('/api/projects', { lot: plain, program: small })).json()
+  assert.equal(typed.version, 0)
+  const noStyle = await ana.put(`/api/projects/${typed.id}`, { rooms: generateRooms(small, style, plain) })
+  assert.equal(noStyle.status, 400, 'rooms need a style')
+  const drafted = await (await ana.put(`/api/projects/${typed.id}`, { style: { id: style.id, name: style.name }, program: small, rooms: generateRooms(small, style, plain) })).json()
+  assert.equal(drafted.version, 1)
+  assert.equal(drafted.stage, 'draft')
+  assert.equal(drafted.versions[0].kind, 'initial')
+  assert.equal(drafted.changesUsed, 0)
+  assert.ok(drafted.rooms.length > 5)
+  // nothing to save: still refused
+  assert.equal((await ana.post('/api/projects', { program: small })).status, 400)
+  assert.equal((await ana.post('/api/projects', { rooms: generateRooms(small, style, plain) })).status, 400, 'rooms without a style')
+  // the app saves at the Lot step, the Style step and on the Rooms step, and resumes where it was left
+  const app = fs.readFileSync('src/draft/DraftApp.jsx', 'utf8')
+  assert.match(app, /saveDraft\(\{ lot: taken, program/)
+  assert.match(app, /saveDraft\(\{ program \}, 'rooms'\)/)
+  assert.match(fs.readFileSync('src/draft/screens/Start.jsx', 'utf8'), /Lot saved, rooms not chosen yet/)
+})
+
+// ── item A ─────────────────────────────────────────────────────────────────────────────────
+const CITY = { McAllen: 'mcallen', Brownsville: 'brownsville', 'Corpus Christi': 'corpuschristi', Pharr: 'pharr', Edinburg: 'edinburg', Mission: 'mission' }
+async function recordedLots() {
+  const FIX = loadFixtures()
+  const m = new Map()
+  const store = { meta: { get: async (k) => (m.has(k) ? m.get(k) : null), set: async (k, v) => m.set(k, v) } }
+  const fetchImpl = fixtureFetch(FIX)
+  const lots = makeLots({ store, fetchImpl, files: {}, interpreter: {}, event: async () => {}, log: () => {}, env: {} })
+  const parcels = makeParcels({ store, fetchImpl, geocode: (x) => lots.geocode(x), log: () => {}, env: {}, event: async () => {} })
+  const out = []
+  for (const t of TEST_ADDRESSES) {
+    const k = await parcels.lookup({ address: t.address })
+    out.push({ address: t.address, lot: buildLot(parcelSpec(k, { address: t.address, city: CITY[(k.census?.place || '').trim()] || '', county: t.county })) })
+  }
+  return out
+}
+const inPoly = (poly, [x, z]) => {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i]
+    const [xj, zj] = poly[j]
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside
+  }
+  return inside
+}
+
+test('A: the Kiskadee pie lot can be drafted: a 3 bed, 2 bath house fits once the house is turned, and the default program is offered that starter', async () => {
+  const all = await recordedLots()
+  const kis = all.find((x) => /Kiskadee/.test(x.address)).lot
+  const three = { ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 0, sqft: 1400 }
+  clearFitCache()
+  const f = fitsLot(three, style, kis)
+  assert.equal(f.ok, true, `round 11: "Does not fit" at every size (${f.reasons?.[0]})`)
+  assert.ok(Math.abs(f.turn) > 0 && Math.abs(f.turn) <= 15, `turn ${f.turn}`)
+  // the lot the app then builds, and the office rebuilds from the spec, carries the turn; the first draft passes the rules on it
+  const turned = buildLot({ ...kis.spec, turn: f.turn })
+  assert.equal(lotTurn(turned.spec), f.turn)
+  assert.ok(Math.abs(turned.angle - turnLot(kis, f.turn).angle) < 1e-9, 'turnLot and buildLot agree')
+  const d = starterDraft(three, style, turned)
+  const rules = checkRules(d.rooms, three, style, turned)
+  assert.equal(rules.ok, true, rules.reasons.join(' | '))
+  assert.ok(d.fitScale >= 0.95)
+  assert.ok(d.rooms.filter((r) => r.kind === 'bed' || r.kind === 'master').length === 3)
+  // a turn is never more than 15 degrees, whatever a browser sends
+  assert.equal(lotTurn({ turn: 40 }), 15)
+  assert.equal(lotTurn({ turn: -90 }), -15)
+  assert.equal(lotTurn({ turn: 'x' }), 0)
+  assert.ok(Math.abs(buildLot({ ...kis.spec, turn: 40 }).angle - buildLot({ ...kis.spec, turn: 15 }).angle) < 1e-9)
+  // the default 4 bed with an office and a 2-car garage: not a dead end, the starter is offered, and taking it fits
+  clearFitCache()
+  const dflt = fitsLot(DEFAULT_PROGRAM, style, kis)
+  assert.equal(dflt.ok, false)
+  assert.ok(!dflt.deadEnd, 'round 11 left the homeowner with nothing to do')
+  assert.match(dflt.suggestion.label, /3 bed, 2 bath starter with no garage/)
+  const taken = fitsLot(dflt.suggestion.program, style, kis)
+  assert.equal(taken.ok, true)
+  // a plain rectangle of a lot is never turned
+  const plain = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  assert.equal(fitsLot(DEFAULT_PROGRAM, style, plain).turn, undefined)
+  assert.equal(lotTurn(turnLot(plain, 0).spec), 0)
+})
+
+test('A: "the space you can build on" is the largest rectangle inside the buildable area, never its bounding box; a lot nothing fits says so and is never a dead end', async () => {
+  const all = await recordedLots()
+  for (const { address, lot } of all) {
+    const r = insideRect(lot)
+    // the rectangle really is inside the buildable area, and it is not bigger than the area
+    for (const c of r.corners) {
+      const pulled = [c[0] + (lot.centre[0] - c[0]) * 0.002, c[1] + (lot.centre[1] - c[1]) * 0.002]
+      assert.ok(inPoly(lot.envelope, pulled), `${address}: a corner of the largest rectangle is outside the buildable area`)
+    }
+    assert.ok(r.areaSf <= lot.envelopeSf + 1, address)
+    assert.ok(r.areaSf >= 0.45 * lot.envelopeSf, `${address}: ${Math.round(r.areaSf)} of ${Math.round(lot.envelopeSf)} sf`)
+  }
+  const kis = all.find((x) => /Kiskadee/.test(x.address)).lot
+  const kr = insideRect(kis)
+  assert.ok(kr.w < 45 && kr.d < 50, `Kiskadee holds about a 40 x 40 ft house square to the street (${kr.w.toFixed(1)} x ${kr.d.toFixed(1)}), not the 90 x 56 its bounding box says`)
+  assert.ok(Math.max(...[2.5, 5, 7.5, 10, 12.5, 15].map((t) => insideRect(kis, t).areaSf)) > kr.areaSf * 1.03, 'and more of one when the house is turned')
+  // lots where no plan of ours fits (the 21 ft wide sliver, the 35 ft deep corner lot): deadEnd, with honest numbers
+  let deadEnds = 0
+  for (const { address, lot } of all) {
+    clearFitCache()
+    const f = fitsLot({ ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 0, sqft: 1400 }, style, lot)
+    if (f.ok || f.maxSqft || f.suggestion) continue
+    deadEnds++
+    assert.equal(f.deadEnd, true, `${address}: nothing fits, so the step offers the drafter`)
+    const r = insideRect(lot)
+    assert.ok(f.need.lotWidth <= r.w + 1e-9 && f.need.lotDepth <= r.d + 1e-9, `${address}: need says ${f.need.lotWidth} x ${f.need.lotDepth}, the largest rectangle inside is ${r.w.toFixed(1)} x ${r.d.toFixed(1)}`)
+  }
+  assert.ok(deadEnds >= 2, 'Curtis Clark (31 ft wide) and W Harris (35 ft deep) are dead ends for our plans')
+  // the step shows the button and the fit message in plain words
+  const step = fs.readFileSync('src/draft/screens/Program.jsx', 'utf8')
+  assert.match(step, /check\.deadEnd/)
+  assert.match(step, /Send my lot to the drafter/)
+  assert.match(step, /data-testid="send-lot"/)
+  assert.doesNotMatch(step, /setback/i, 'no "setback" on the rooms step')
+  assert.equal(plainReason('Bedroom 2 would cross the setback at 6 ft from side.'), 'Bedroom 2 would sit too close to the side of the lot (the city keeps 6 ft open there).')
+  assert.equal(plainReason('Garage would cross the setback at 20 ft from kiskadee ln.'), 'Garage would sit too close to the street side (Kiskadee Ln) (the city keeps 20 ft open there).')
+  assert.doesNotMatch(plainReason('A 2-car garage has no spot on this lot that a car can be driven to (front-load does not fit the setbacks, and a side driveway has no room to turn).'), /setback/i)
+})
+
+test('A over HTTP: "Send my lot to the drafter" saves the lot with needsCustom, puts it in the drafter\'s queue, uses no change, and can be taken back', async (t) => {
+  const { base } = await startServer(t)
+  const ana = await who(base, 'ana@example.com')
+  const maria = await who(base, 'maria@drafthouse.test')
+  const address = '5435 Curtis Clark Dr, Corpus Christi, TX 78412'
+  const parcel = await (await ana.get(`/api/lot/parcel?address=${enc(address)}`)).json()
+  const lot = buildLot(parcelSpec(parcel, { address, city: 'corpuschristi', county: 'Nueces County' }))
+  const prj = await (await ana.post('/api/projects', { lot, program: small, client: 'Ana Sliver' })).json()
+  assert.equal(prj.version, 0)
+  const sent = await ana.post(`/api/projects/${prj.id}/custom`, { note: 'We would like a porch.', program: { ...small, beds: 4 } })
+  assert.equal(sent.status, 200, await sent.clone().text())
+  const after = await sent.json()
+  assert.ok(after.needsCustom?.at)
+  assert.equal(after.needsCustom.note, 'We would like a porch.')
+  assert.equal(after.program.beds, 4, 'the rooms asked for go with it')
+  assert.equal(after.changesUsed, 0)
+  const inbox = await (await maria.get('/api/review')).json()
+  assert.ok(inbox.custom.some((p) => p.id === prj.id), 'in the drafter\'s queue')
+  assert.ok(inbox.lots.some((p) => p.id === prj.id), 'and still a lot to confirm')
+  assert.ok((await (await ana.get('/api/projects')).json())[0].needsCustom, 'and "Your houses" says it is with a drafter')
+  // asking twice is one request; taking it back clears it
+  const again = await (await ana.post(`/api/projects/${prj.id}/custom`, {})).json()
+  assert.equal(again.needsCustom.at, after.needsCustom.at)
+  const cleared = await (await ana.post(`/api/projects/${prj.id}/custom`, { clear: true })).json()
+  assert.equal(cleared.needsCustom, null)
+  assert.equal((await (await maria.get('/api/review')).json()).custom.length, 0)
+  // another homeowner cannot flag it, and a bad body is a 400
+  const eve = await who(base, 'eve@example.com')
+  assert.equal((await eve.post(`/api/projects/${prj.id}/custom`, {})).status, 404)
+  assert.equal((await ana.post(`/api/projects/${prj.id}/custom`, { note: 5 })).status, 400)
+  // the turn is the lot's: saved with it, held to 15 degrees, and the stored lot is built with it
+  const kAddr = '2002 Kiskadee Ln, Mission, TX 78572'
+  const kp = await (await ana.get(`/api/lot/parcel?address=${enc(kAddr)}`)).json()
+  const kSpec = parcelSpec(kp, { address: kAddr, city: 'mission', county: 'Hidalgo County' })
+  const kLot = buildLot({ ...kSpec, turn: 40 })
+  const saved = await (await ana.post('/api/projects', { lot: kLot, program: small })).json()
+  assert.equal(lotTurn(saved.lot.spec), 15)
+  assert.ok(Math.abs(saved.lot.angle - buildLot({ ...kSpec, turn: 15 }).angle) < 1e-6)
+  const three = { ...DEFAULT_PROGRAM, beds: 3, baths: 2, halfBath: false, office: false, garage: 0, sqft: 1400 }
+  const drafted = await ana.put(`/api/projects/${saved.id}`, { lot: buildLot({ ...kSpec, turn: 15 }), style: { id: style.id, name: style.name }, program: three, rooms: starterDraft(three, style, buildLot({ ...kSpec, turn: 15 })).rooms })
+  assert.equal(drafted.status, 200, await drafted.clone().text())
+  const dj = await drafted.json()
+  assert.equal(dj.version, 1)
+  assert.equal(lotTurn(dj.lot.spec), 15)
 })

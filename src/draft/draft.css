@@ -491,3 +491,24 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 .compass i { display: block; width: 2px; height: 26px; background: #1c1e21; position: relative; }
 .compass i::before { content: ''; position: absolute; left: -5px; top: -2px; border: 6px solid transparent; border-top: 0; border-bottom: 11px solid #1c1e21; }
 .dh-credits.low { color: #a33; border-color: #a33; }
+
+/* round 12, item J: the drafter's checklist, first thing on the review card */
+.checklist .checks { list-style: none; margin: 6px 0 0; padding: 0; counter-reset: chk; }
+.checklist .checks > li { counter-increment: chk; position: relative; padding: 7px 0 7px 30px; border-top: 1px solid #e8e3da; font-size: 13.5px; line-height: 1.4; }
+.checklist .checks > li:first-child { border-top: 0; }
+.checklist .checks > li::before { content: counter(chk); position: absolute; left: 0; top: 7px; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #efe9dc; color: #5b4a3a; }
+.checklist .checks > li.done::before { content: '✓'; background: #dcefe0; color: #1f7a3a; }
+.checklist .checks > li.stop::before { content: '!'; background: #fbe3e0; color: #b3261e; }
+.checklist .check-row { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.checklist .check-buttons { display: flex; gap: 6px; flex: none; }
+.checklist .warnline { margin: 6px 0 0; }
+details.more > summary { cursor: pointer; font-size: 13px; color: #5b4a3a; padding: 4px 0; }
+details.more.card > summary { font-weight: 600; }
+/* round 12, item A: the "send my lot to the drafter" card on the rooms step */
+.custom-lot { margin-top: 14px; border-color: #e3b23c; background: #fffaf0; }
+.custom-lot h3 { margin-top: 0; }
+
+/* the lot, drawn small, at the top of the rooms step (round 12) */
+.lot-strip { display: flex; gap: 14px; align-items: center; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #e3ddd0; border-radius: 10px; background: #fbfaf7; }
+.lot-strip .lot-thumb { width: 84px; height: 84px; flex: none; }
+.lot-strip p { margin: 2px 0 0; }

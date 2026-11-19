@@ -53,6 +53,7 @@ export const api = {
   project: (id) => call(`/api/projects/${id}`),
   createProject: (body) => call('/api/projects', { method: 'POST', body: JSON.stringify(body) }, 20000),
   updateProject: (id, body) => call(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) }, 20000),
+  customProject: (id, body = {}) => call(`/api/projects/${id}/custom`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   change: (id, text, ops) => call(`/api/projects/${id}/change`, { method: 'POST', body: JSON.stringify(ops ? { text, ops } : { text }) }, 20000),
   rollback: (id, version) => call(`/api/projects/${id}/rollback`, { method: 'POST', body: JSON.stringify({ version }) }, 20000),
   sendProject: (id, design, ifc) => call(`/api/projects/${id}/send`, { method: 'POST', body: JSON.stringify({ design, ifc }) }, 30000),

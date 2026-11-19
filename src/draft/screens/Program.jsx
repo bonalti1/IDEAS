@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Stepper, Stat, sf } from '../ui.jsx'
 import { kitFor, lotOf, programLimits } from '../lib/layout.js'
 import { fitsLot } from '../lib/fit.js'
+import { turnLot, insideRect } from '../lib/lot.js'
+import { plainReason } from '../lib/plain.js'
 import { floorArea } from '../lib/layout.js'
 
 const EXTRAS = [
@@ -70,8 +72,50 @@ function useFitCheck(program, style, L) {
   return state
 }
 
-export default function Program({ program, style, lot, onChange, onNext, onBack }) {
-  const L = lotOf(lot)
+/**
+ * The lot, drawn small: its outline, the space the city lets you build on (dashed) and the street side. The rooms
+ * step had no picture of the lot at all; a homeowner who comes back to a saved lot sees it is theirs (round 12, item B).
+ */
+function LotThumb({ lot }) {
+  const B = lot?.boundary || []
+  if (B.length < 3) return null
+  const xs = B.map((p) => p[0])
+  const zs = B.map((p) => p[1])
+  const pad = 6
+  const x0 = Math.min(...xs) - pad
+  const z0 = Math.min(...zs) - pad
+  const w = Math.max(...xs) - Math.min(...xs) + pad * 2
+  const h = Math.max(...zs) - Math.min(...zs) + pad * 2
+  const pts = (poly) => poly.map(([x, z]) => `${(x - x0).toFixed(1)},${(z - z0).toFixed(1)}`).join(' ')
+  const fronts = (lot.edges || []).filter((e) => e.kind === 'front')
+  const stroke = Math.max(w, h) / 90
+  return (
+    <svg className="lot-thumb" data-testid="lot-thumb" viewBox={`0 0 ${w.toFixed(1)} ${h.toFixed(1)}`} role="img" aria-label="Your lot, drawn from above">
+      <polygon points={pts(B)} fill="#eceae5" stroke="#c8102e" strokeWidth={stroke} strokeLinejoin="round" />
+      {(lot.envelope || []).length >= 3 && <polygon points={pts(lot.envelope)} fill="#f7f5ef" stroke="#1f8a3b" strokeWidth={stroke * 0.8} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />}
+      {fronts.map((e) => {
+        const a = (lot.corners || B)[e.index]
+        const b = (lot.corners || B)[(e.index + 1) % (lot.corners || B).length]
+        return a && b ? <line key={e.index} x1={a[0] - x0} y1={a[1] - z0} x2={b[0] - x0} y2={b[1] - z0} stroke="#3b3f4a" strokeWidth={stroke * 2.2} strokeLinecap="round" /> : null
+      })}
+    </svg>
+  )
+}
+
+export default function Program({ program, style, lot, onChange, onNext, onBack, project = null, onSendLot = null }) {
+  // the fit always starts from the lot square to the street and says what turn (if any) makes the plan fit (round 12, item A)
+  const L = useMemo(() => turnLot(lotOf(lot), 0), [lot])
+  const [sendState, setSendState] = useState(project?.needsCustom ? 'sent' : 'idle') // idle | sending | sent | an error line
+  const sendLot = async () => {
+    if (!onSendLot) return setSendState('Sign in first, so we can save your lot and send it to a drafter.')
+    setSendState('sending')
+    try {
+      await onSendLot()
+      setSendState('sent')
+    } catch (e) {
+      setSendState(e.message || 'We could not reach the office. Try again in a minute.')
+    }
+  }
   const kit = kitFor(style)
   const limits = programLimits(style)
   const footprint = program.sqft / program.stories + (program.garage ? 22 * kit.rooms.garage.perCar * program.garage : 0)
@@ -90,6 +134,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
   const minSqft = check.draft.minSqft || limits.sqft[0]
   const trimmed = check.ok && check.draft.fitScale < 0.995 ? Math.round((1 - check.draft.fitScale) * 100) : 0
   const oneStory = limits.stories[1] === 1
+  const room = useMemo(() => insideRect(L), [L])
 
   return (
     <div className="screen padded narrow">
@@ -97,6 +142,17 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
         <h2>What goes in the house?</h2>
         <p className="muted">{style.name}. Change anything later in plain language.</p>
       </div>
+      {lot?.spec && lot.spec.kind !== 'reference' && (
+        <div className="lot-strip" data-testid="lot-strip">
+          <LotThumb lot={lot} />
+          <div>
+            <b>{String(lot.address || lot.spec.address || 'Your lot').split(',')[0]}</b>
+            <p className="muted small">
+              {Math.round(lot.areaSf).toLocaleString()} sf lot. The largest house that fits the space you can build on is about {Math.floor(room.w)} by {Math.floor(room.d)} ft.
+            </p>
+          </div>
+        </div>
+      )}
       {ref && (
         <button className={'preset' + (matchesRef ? ' on' : '')} onClick={() => onChange({ ...ref.program })} aria-pressed={matchesRef}>
           <span>{matchesRef ? 'Rooms set to a recent build' : 'Use the rooms of a recent build'}</span>
@@ -155,13 +211,14 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
           <p className="muted fit-note">Checking the lot…</p>
         ) : check.ok ? (
           <p className="fine">
-            {trimmed ? `Fits once trimmed about ${trimmed}% to stay inside the setbacks on this lot.` : 'Passes the setback, size and coverage rules on this lot.'}
+            {trimmed ? `Fits once trimmed about ${trimmed}% to keep the space the city requires along the edges of this lot.` : "Fits this lot and the city's rules for it."}
+            {check.turn ? ` The house is turned ${Math.abs(check.turn)}° from square to the street, to sit in the widest part of your lot.` : ''}
             {checking && <span className="muted fit-note"> Checking the lot…</span>}
           </p>
         ) : (
           <p className="fine bad">
             {checking && <span className="muted fit-note">Checking the lot… </span>}
-            Does not fit this lot: {check.reasons[0]}
+            Does not fit this lot: {plainReason(check.reasons[0])}
             {check.maxSqft ? (
               <>
                 {' '}
@@ -179,7 +236,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
                 </button>
               </>
             ) : check.need ? (
-              ` This style's smallest plan is about ${check.need.houseWidth} by ${check.need.houseDepth} ft; the buildable area here is ${check.need.lotWidth} by ${check.need.lotDepth} ft. It needs a wider lot, or another style once more kits are ready.`
+              ` Our smallest plan is about ${check.need.houseWidth} by ${check.need.houseDepth} ft, and the largest house that fits the space you can build on here is about ${check.need.lotWidth} by ${check.need.lotDepth} ft.`
             ) : lot?.spec?.noStreetGarage && program.garage > 0 ? (
               ' With the deed restriction (no garage facing the street) the garage has to load from the side or a side street, and that needs a wider lot. Try fewer cars, or no garage.'
             ) : (
@@ -188,6 +245,26 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
           </p>
         )}
       </div>
+      {/* round 12, item A: never a dead end. When none of our plans fits the lot, the lot goes to a drafter with the rooms asked for */}
+      {!check.ok && !checking && check.deadEnd && (
+        <div className="card thin custom-lot" data-testid="custom-lot">
+          {sendState === 'sent' ? (
+            <>
+              <h3>Your lot is with our drafter</h3>
+              <p className="small">We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest.</p>
+            </>
+          ) : (
+            <>
+              <h3>This lot needs a house designed for it</h3>
+              <p className="small">None of our ready plans fits the space you can build on here. That happens on narrow, shallow and pie-shaped lots. Send it to our drafter, who designs for this lot with the rooms you chose above.</p>
+              <Button primary disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot">
+                {sendState === 'sending' ? 'Sending…' : 'Send my lot to the drafter'}
+              </Button>
+              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
+            </>
+          )}
+        </div>
+      )}
       <div className="actions">
         <Button ghost onClick={onBack}>
           Back
@@ -198,7 +275,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack 
           onClick={() => {
             // the plan does not go under its smallest size: that is what gets drafted, and the ask says so
             if (check.draft.clamped && program.sqft < minSqft) onChange({ ...program, sqft: minSqft })
-            onNext()
+            onNext({ turn: check.turn || 0 })
           }}
           title={check.ok ? '' : 'Make it fit the lot first'}
         >

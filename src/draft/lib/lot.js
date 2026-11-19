@@ -285,6 +285,76 @@ export function zoningBlocksSend(lot) {
   return !!z.confirmedBy
 }
 
+export const MAX_TURN = 15
+/** The turn a lot spec asks for, in degrees, held to 15 either way (0 when none). */
+export function lotTurn(spec) {
+  const t = +spec?.turn
+  return Number.isFinite(t) ? Math.max(-MAX_TURN, Math.min(MAX_TURN, t)) : 0
+}
+/** The same lot with the house turned `deg` from square to the street (replacing any turn it had). */
+export function turnLot(lot, deg) {
+  if (!lot?.spec || lot.spec.kind === 'reference') return lot
+  const was = lotTurn(lot.spec)
+  const now = lotTurn({ turn: deg })
+  return { ...lot, angle: lot.angle + ((now - was) * Math.PI) / 180, spec: { ...lot.spec, turn: now } }
+}
+/**
+ * The largest rectangle, square to the house, that fits inside the buildable area: { w, d, areaSf } in feet, w across
+ * the street side and d front to back. This is what a house plan has to fit in; the area's bounding box (90 x 56 ft
+ * on the Kiskadee wedge, where the largest rectangle is about 40 x 40) is not. `turn` looks at the lot turned that
+ * many more degrees. The buildable area is convex, so a rectangle is inside it when its four corners are.
+ */
+export function insideRect(lot, turn = 0) {
+  const env = lot?.envelope || []
+  if (env.length < 3) return { w: 0, d: 0, areaSf: 0 }
+  const a = (lot.angle || 0) + (turn * Math.PI) / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const c = lot.centre || [0, 0]
+  const pts = env.map(([X, Z]) => [(X - c[0]) * cos + (Z - c[1]) * sin, -(X - c[0]) * sin + (Z - c[1]) * cos])
+  const xs = pts.map((p) => p[0])
+  const lo = Math.min(...xs)
+  const hi = Math.max(...xs)
+  // the area's reach front to back at a given x
+  const span = (x) => {
+    let z0 = Infinity
+    let z1 = -Infinity
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]
+      const q = pts[(i + 1) % pts.length]
+      if ((p[0] - x) * (q[0] - x) > 0) continue
+      if (Math.abs(q[0] - p[0]) < 1e-9) {
+        z0 = Math.min(z0, p[1], q[1])
+        z1 = Math.max(z1, p[1], q[1])
+        continue
+      }
+      const z = p[1] + ((x - p[0]) / (q[0] - p[0])) * (q[1] - p[1])
+      z0 = Math.min(z0, z)
+      z1 = Math.max(z1, z)
+    }
+    return [z0, z1]
+  }
+  const N = 48
+  const at = []
+  for (let i = 0; i <= N; i++) {
+    const x = lo + ((hi - lo) * i) / N
+    at.push([x, ...span(x)])
+  }
+  let best = { w: 0, d: 0, areaSf: 0 }
+  for (let i = 0; i < N; i++)
+    for (let j = i + 1; j <= N; j++) {
+      const d = Math.min(at[i][2], at[j][2]) - Math.max(at[i][1], at[j][1])
+      const w = at[j][0] - at[i][0]
+      if (d > 0 && w * d > best.areaSf) {
+        const z0 = Math.max(at[i][1], at[j][1])
+        // its corners on the lot (world feet), for whoever wants to draw or check it
+        const world = [[at[i][0], z0], [at[j][0], z0], [at[j][0], z0 + d], [at[i][0], z0 + d]].map(([x, z]) => [c[0] + x * cos - z * sin, c[1] + x * sin + z * cos])
+        best = { w, d, areaSf: w * d, corners: world }
+      }
+    }
+  return best
+}
+
 /** Build the full lot from a spec. Deterministic, so the server can repeat it. */
 export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
   if (!spec || spec.kind === 'reference') return referenceLot()
@@ -397,7 +467,10 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     const sl = Math.hypot(sx, sz)
     if (sl > 1e-9) nrm = [sx / sl, sz / sl]
   }
-  const angle = Math.atan2(nrm[1], nrm[0]) - Math.PI / 2 // +lz of the house frame points at the street
+  // round 12, item A: the house may be turned a little from square to the street (15 degrees at most either way)
+  // to sit in the widest part of a wedge-shaped buildable area; the fit chooses the turn and it is kept on the spec
+  const turn = lotTurn(spec)
+  const angle = Math.atan2(nrm[1], nrm[0]) - Math.PI / 2 + (turn * Math.PI) / 180 // +lz of the house frame points at the street
   const envC = polygonCentroid(envelope)
   const centre = isFinite(envC[0]) ? envC : polygonCentroid(boundary)
   const areaSf = Math.abs(polygonArea(boundary))
