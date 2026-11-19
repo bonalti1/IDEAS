@@ -50,6 +50,7 @@ export const es = {
   'Your lot': 'Tu lote',
   'lot to be set': 'lote por definir',
   'With a drafter: a design for your lot': 'Con un dibujante: un diseño para tu lote',
+  'Address saved, lot not chosen yet': 'Dirección guardada; falta elegir el lote',
   'Lot saved, rooms not chosen yet': 'Lote guardado, falta elegir los cuartos',
   'Start another house': 'Empezar otra casa',
   'Where is the lot?': '¿Dónde está el lote?',

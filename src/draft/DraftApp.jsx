@@ -162,12 +162,12 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   const projectRef = useRef(null)
   projectRef.current = project
   const saving = useRef(Promise.resolve())
-  const saveDraft = (patch, stage) => {
+  const saveDraft = (patch, stage, clientName = null) => {
     if (!user) return Promise.resolve(null)
     const run = async () => {
       const cur = projectRef.current
       try {
-        const body = { ...patch, stage, client: intake?.client || user.name }
+        const body = { ...patch, stage, client: clientName || intake?.client || user.name }
         const p = cur && EDITABLE.includes(cur.status) ? await api.updateProject(cur.id, body) : cur ? cur : await api.createProject(body)
         projectRef.current = p
         setProject(p)
@@ -447,6 +447,15 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             onNext={(l) => {
               setIntake(l)
               go(1)
+              // round 13: the address is saved before a lot is taken, so signing out here loses nothing. One already
+              // saved for this address (typed before, never taken) is opened again, not doubled.
+              if (user && !l.file && l.address) {
+                const same = projects.find((p) => !p.version && !p.lot && String(p.address || '').trim().toLowerCase() === String(l.address).trim().toLowerCase())
+                if (same) {
+                  projectRef.current = same
+                  setProject(same)
+                } else saveDraft({ address: l.address }, 'lot', l.client)
+              }
             }}
           />
         )}

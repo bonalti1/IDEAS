@@ -79,6 +79,8 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
                   {/* a lot saved before any rooms were chosen (round 12, item B), or one sent to the drafter for a custom design (item A) */}
                   {p.needsCustom ? (
                     <span className="pill wait" data-testid="house-custom">{t('With a drafter: a design for your lot')}</span>
+                  ) : !p.version && !p.lot ? (
+                    <span className="pill" data-testid="house-address-only">{t('Address saved, lot not chosen yet')}</span>
                   ) : !p.version ? (
                     <span className="pill" data-testid="house-lot-only">{t('Lot saved, rooms not chosen yet')}</span>
                   ) : (

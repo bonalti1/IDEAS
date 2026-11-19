@@ -194,7 +194,7 @@ route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { use
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await projects.list(ctx.user), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
   // round 12, item B: rooms and style are optional when a lot is saved on its own
-  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?' })
+  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?', address: 'string?' })
   // the drafter's marks on a lot and its zoning never come from a browser (rounds 10 and 11): the server reads the
   // zoning of a parcel lot itself, within the homeowner's lookup limit
   if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx) })
@@ -415,7 +415,7 @@ route('GET', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res,
 route('POST', '/api/review/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.review(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { decision: 'string', note: 'string?' }), queueJob), req))
 // a drafter confirms the zoning of a typed lot (round 10, item 4): only then can zoning block its Send
 route('POST', '/api/review/:id/zoning', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmZoning(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { district: 'string?', residential: 'boolean?', use: 'string?', note: 'string?', clear: 'boolean?' })), req))
-route('POST', '/api/review/:id/lot', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmLot(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { confirmed: 'boolean?', lot: 'object?', note: 'string?' })), req))
+route('POST', '/api/review/:id/lot', 'drafter', async (req, res, p, ctx) => json(res, 200, await projects.confirmLot(await projects.load(ctx.user, p.id, { drafter: true }), ctx.user, await readJson(req, { confirmed: 'boolean?', lot: 'object?', note: 'string?', checked: 'boolean?' })), req))
 route('GET', '/api/admin/users', 'drafter', async (req, res) => json(res, 200, await store.users.list(), req))
 route('POST', '/api/admin/users/:id/role', 'drafter', async (req, res, p, ctx) => {
   if (ctx.user.role !== 'admin') return json(res, 403, { error: 'only an admin changes roles' }, req)
@@ -643,7 +643,7 @@ const server = http.createServer(async (req, res) => {
     const requestId = own && status < 500 ? null : crypto.randomBytes(4).toString('hex')
     if (status >= 500) console.error(`[api] ${req.method} ${req.url} → ${status} (request ${requestId}):`, e?.stack || e)
     const error = own ? String(e.message || e) : status === 413 ? 'body too large' : `Something went wrong on our side; the office has been told. Reference ${requestId}.`
-    json(res, status, { error, ...(requestId ? { requestId } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
+    json(res, status, { error, ...(requestId ? { requestId } : {}), ...(e.lotPending ? { lotPending: true } : {}), ...(e.unchecked ? { unchecked: true } : {}), ...(e.noParcel ? { noParcel: true } : {}), ...(e.rules ? { rules: e.rules } : {}) }, req)
   }
 })
 
