@@ -1,7 +1,7 @@
 // Rules engine. Checks a plan (rooms + elements) and returns reasons a client
 // can read. Run on the plan as it would be after a change, before applying it.
 import { isRoom, isConditioned, kitFor, lotOf, minSizeOf, planIdOf } from './layout.js'
-import { DEFAULT_LOT } from './lot.js'
+import { DEFAULT_LOT, outsidePoint } from './lot.js'
 import { auditPlan } from './audit.js'
 
 function inside(poly, [x, z]) {
@@ -65,7 +65,8 @@ export function checkRules(rooms, program, style, lot = DEFAULT_LOT, { audit: wi
   // 1. setbacks
   solid.forEach((r) => {
     if (!r.center) return
-    const out = corners(r, L).find((p) => !inside(L.envelope, p))
+    // (where a curved street side notches the buildable area, the curve cutting through a room counts too: round 12)
+    const out = outsidePoint(L.envelope, corners(r, L))
     if (out) {
       const edge = L.edges?.[nearestEdge(L.corners, out)]?.label || 'the property line'
       reasons.push(`${label(r)} would cross the setback at ${edge.replace(/^(\d+)' — /, '$1 ft from ').toLowerCase()}.`)

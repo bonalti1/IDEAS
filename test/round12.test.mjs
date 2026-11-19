@@ -13,7 +13,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { outlineGapFt } from '../server/projects.mjs'
-import { buildLot, envelopeOf, envelopeStats, insideRect, turnLot, lotTurn } from '../src/draft/lib/lot.js'
+import { buildLot, envelopeOf, envelopeStats, insideRect, turnLot, lotTurn, outsidePoint, boxInside } from '../src/draft/lib/lot.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { starterDraft } from '../src/draft/lib/layout.js'
 import { TEST_ADDRESSES } from '../server/parcel-sources.mjs'
@@ -545,6 +545,63 @@ test('A: "the space you can build on" is the largest rectangle inside the builda
   assert.equal(plainReason('Bedroom 2 would cross the setback at 6 ft from side.'), 'Bedroom 2 would sit too close to the side of the lot (the city keeps 6 ft open there).')
   assert.equal(plainReason('Garage would cross the setback at 20 ft from kiskadee ln.'), 'Garage would sit too close to the street side (Kiskadee Ln) (the city keeps 20 ft open there).')
   assert.doesNotMatch(plainReason('A 2-car garage has no spot on this lot that a car can be driven to (front-load does not fit the setbacks, and a side driveway has no room to turn).'), /setback/i)
+})
+
+test('A: the buildable area follows the curve: nothing closer to any lot line than the city allows, more room than one straight line gave, and a house cannot straddle the notch', async () => {
+  const all = await recordedLots()
+  const kis = all.find((x) => /Kiskadee/.test(x.address)).lot
+  const B = kis.boundary
+  const E = kis.envelope
+  const distTo = (p, a, b) => {
+    const vx = b[0] - a[0]
+    const vz = b[1] - a[1]
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / (vx * vx + vz * vz)))
+    return Math.hypot(p[0] - a[0] - vx * t, p[1] - a[1] - vz * t)
+  }
+  // an independent check: every corner of the buildable area, and the middle of every side of it, keeps each lot
+  // line's own distance (20 ft from each of the six pieces of the curve, the side and rear distances elsewhere)
+  let least = Infinity
+  const probes = []
+  E.forEach((p, i) => {
+    const q = E[(i + 1) % E.length]
+    probes.push(p, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2])
+  })
+  for (const p of probes) {
+    kis.edges.forEach((e, i) => {
+      least = Math.min(least, distTo(p, B[i], B[(i + 1) % B.length]) - e.setback)
+    })
+  }
+  assert.ok(least > -0.05, `the buildable area comes ${(-least).toFixed(2)} ft too close to a lot line`)
+  assert.ok(kis.envelopeSf > 3100 && kis.envelopeSf < 3300, `following the curve gives ${Math.round(kis.envelopeSf)} sf; one straight line behind it gave 3,026`)
+  assert.ok(E.length > 8, 'the curve leaves a notch with several short sides, not one line')
+  // the fit's quick test and the plain one agree on 4,000 boxes, including ones whose four corners are all inside
+  // the buildable area while the notch pokes into the box
+  const xs = E.map((p) => p[0])
+  const zs = E.map((p) => p[1])
+  const lo = [Math.min(...xs), Math.min(...zs)]
+  const hi = [Math.max(...xs), Math.max(...zs)]
+  let seed = 12
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
+  let straddle = 0
+  let insideCount = 0
+  for (let i = 0; i < 4000; i++) {
+    const x0 = lo[0] + rnd() * (hi[0] - lo[0])
+    const z0 = lo[1] + rnd() * (hi[1] - lo[1])
+    const x1 = x0 + 2 + rnd() * 45
+    const z1 = z0 + 2 + rnd() * 45
+    const quad = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]
+    const out = outsidePoint(E, quad)
+    assert.equal(boxInside(E, x0, z0, x1, z1), !out, `box ${x0.toFixed(1)}, ${z0.toFixed(1)} to ${x1.toFixed(1)}, ${z1.toFixed(1)}`)
+    if (!out) insideCount++
+    else if (!quad.some((c) => outsidePoint(E, [c, c, c, c]))) straddle++
+  }
+  assert.ok(insideCount > 20, 'some boxes fit')
+  assert.ok(straddle > 0, 'some boxes have all four corners inside and still cross the notch; they are refused')
+  // every other recorded lot keeps its straight-sided buildable area
+  for (const x of all) {
+    if (/Kiskadee/.test(x.address)) continue
+    assert.ok(x.lot.envelope.length <= x.lot.boundary.length, `${x.address}: ${x.lot.envelope.length} corners in the buildable area of a ${x.lot.boundary.length}-corner lot`)
+  }
 })
 
 test('A over HTTP: "Send my lot to the drafter" saves the lot with needsCustom, puts it in the drafter\'s queue, uses no change, and can be taken back', async (t) => {

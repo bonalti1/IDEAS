@@ -2,7 +2,7 @@
 // Schema in docs/change-diff.md. Plan feet throughout.
 import { makeRoom, placeLocal, kitFor, isRoom, lotOf, attachGarage, fitToLot, overheadDoors, garageFacing, minSizeOf, planIdOf, scalePlan, isConditioned } from './layout.js'
 import { attachBeside, addPorch, addInWing, moveBeside, removeRoom, fixturesFor, doorsOf } from './add.js'
-import { DEFAULT_LOT, worldOf } from './lot.js'
+import { DEFAULT_LOT, worldOf, outsidePoint } from './lot.js'
 import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
@@ -101,14 +101,13 @@ function insidePoly(poly, [x, z]) {
 }
 /** Is a plan rectangle inside the lot's setback envelope once placed on the lot? */
 function insideSetbacks(rect, centre, lot = DEFAULT_LOT) {
-  return [
+  const quad = [
     [rect.x, rect.y],
     [rect.x + rect.w, rect.y],
     [rect.x + rect.w, rect.y + rect.d],
     [rect.x, rect.y + rect.d],
-  ].every(([px, py]) => {
-    return insidePoly(lot.envelope, worldOf(lot, px - centre[0], py - centre[1]))
-  })
+  ].map(([px, py]) => worldOf(lot, px - centre[0], py - centre[1]))
+  return !outsidePoint(lot.envelope, quad)
 }
 
 /** Width and depth of the lot's setback envelope in the house frame. */

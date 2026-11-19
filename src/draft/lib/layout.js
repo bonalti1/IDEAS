@@ -4,7 +4,7 @@
 // service, rear porch), centered on the envelope, rotated to the lot.
 import { KIT as FARMHOUSE, FIXTURE_H, FIXTURE_NAME } from '../../kits/modern-farmhouse.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
-import { DEFAULT_LOT, worldOf } from './lot.js'
+import { DEFAULT_LOT, worldOf, boxInside, outsidePoint } from './lot.js'
 import { applyOps, envelopeSize, pushWall, settleIslands, settleKitchen } from './ops.js'
 import { fillVoid } from './add.js'
 import { drivewaySlabs, drivewayProblem, frameOf } from './site.js'
@@ -163,7 +163,7 @@ export function fitsEnvelope(placed, kit, lot) {
   const env = L.envelope.map((p) => localOf(L, p))
   return placed
     .filter((r) => isRoom(r) && !r.open && r.local)
-    .every((r) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => insidePoly(env, [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + sy * (r.d / 2 - 0.05)])))
+    .every((r) => !outsidePoint(env, [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + sy * (r.d / 2 - 0.05)])))
 }
 
 /**
@@ -1177,7 +1177,7 @@ export function fitToLot(rooms, kit, stories = 1, lot = DEFAULT_LOT, { maxShift 
     // the driveway is checked as a real path by attachGarage and the audit (site.js); nothing to add here
     return rs.filter(() => false)
   }
-  const fits = (s, dx, dy) => roomsAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(env, p))) && (!bound || lanesAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(bound, p))))
+  const fits = (s, dx, dy) => roomsAt(s).every((r) => boxInside(env, r.x + dx - centre[0], r.y + dy - centre[1], r.x + dx - centre[0] + r.w, r.y + dy - centre[1] + r.d)) && (!bound || lanesAt(s).every((r) => cornersOf(r, dx, dy).every((p) => insidePoly(bound, p))))
   // the house's box must fit the envelope's box at all before any shift is worth trying
   const ex = env.map((p) => p[0])
   const ez = env.map((p) => p[1])
@@ -1286,7 +1286,7 @@ export function slideToFront(rooms, kit, stories = 1, lot = DEFAULT_LOT) {
   const dz = Math.floor(envFront - houseFront - FRONT_YARD_FT)
   if (dz < 1) return { rooms, shift: 0 }
   const solid = placed.filter((r) => !r.open)
-  const inside = solid.every((r) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([sx, sy]) => insidePoly(env, [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + dz + sy * (r.d / 2 - 0.05)])))
+  const inside = solid.every((r) => !outsidePoint(env, [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => [r.local[0] + sx * (r.w / 2 - 0.05), r.local[1] + dz + sy * (r.d / 2 - 0.05)])))
   if (!inside) return { rooms, shift: 0 }
   const centre = kit.plan ? [kit.plan.footprint.w / 2, kit.plan.footprint.d / 2] : [0, 0]
   const flat = rooms.map((r) => (r.x !== undefined || !r.local ? { ...r } : { ...r, x: r.local[0] + centre[0] - r.w / 2, y: r.local[1] + centre[1] - r.d / 2 }))
