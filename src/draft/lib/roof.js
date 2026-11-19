@@ -30,6 +30,28 @@ function local(m, k, centre, offset = [0, 0]) {
   return { x0: sx(m.x0), x1: sx(m.x1), z0: sz(m.y0 ?? m.face), z1: sz(m.y1 ?? m.face), face: m.face !== undefined ? sz(m.face) : undefined, cuts: (m.cuts || []).map((c) => ({ x0: sx(c.x0), x1: sx(c.x1), z0: sz(c.y0), z1: sz(c.y1) })) }
 }
 
+/** A gable mass in local feet: across the ridge it runs lo..hi with the ridge at r (height hr); along it, wall w0..w1. */
+function gableGeo(m, L, oh) {
+  const ew = m.ridge === 'ew'
+  const s = m.pitch / 12
+  const plateA = m.plate // near side: north for ew, west for ns
+  const plateB = m.plate2 ?? m.plate // far side: south for ew, east for ns
+  const lo = ew ? L.z0 : L.x0
+  const hi = ew ? L.z1 : L.x1
+  // ridge position from the two eave heights
+  const r = (plateB - plateA) / (2 * s) + (lo + hi) / 2
+  const hr = plateA + (r - lo) * s
+  return { m, L, oh, ew, s, plateA, plateB, lo, hi, r, hr, w0: ew ? L.x0 : L.z0, w1: ew ? L.x1 : L.z1 }
+}
+/** The height of a gable roof at a plan point inside its own walls and overhangs (not in a cut-out), else -Infinity. */
+function heightOnGable(g, x, z) {
+  const u = g.ew ? z : x
+  const t = g.ew ? x : z
+  if (u < g.lo - g.oh || u > g.hi + g.oh || t < g.w0 - g.oh || t > g.w1 + g.oh) return -Infinity
+  if (g.L.cuts.some((c) => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1)) return -Infinity
+  return Math.min(g.plateA + (u - g.lo) * g.s, g.plateB + (g.hi - u) * g.s)
+}
+
 /**
  * Sheets: { id, mass, kind, plane: {a, b, c} with h = a x + b z + c,
  * footprint: MultiPolygon in plan, edges: outer eave/rake lines for fascia,
@@ -39,6 +61,8 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
   const sheets = []
   const ends = []
   const cutEdges = [] // { mass, a: [x, z], b: [x, z], out: [nx, nz] } edges of cut-outs, normal pointing into the remaining roof
+  // every gable's own geometry first: an end of one roof is decided by the roofs around it
+  const geos = masses.map((m) => (m.kind === 'gable' ? gableGeo(m, local(m, k, centre, offset), m.overhang ?? OVERHANG) : null))
   masses.forEach((m) => {
     const L = local(m, k, centre, offset)
     L.cuts.forEach((c) => {
@@ -52,48 +76,134 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
     const mat = m.material || 'shingles'
     const cut = (poly) => (L.cuts.length ? polygonClipping.difference(poly, ...L.cuts.map((c) => rect(c.x0, c.z0, c.x1, c.z1))) : poly)
     if (m.kind === 'gable') {
-      const ew = m.ridge === 'ew'
-      const plateA = m.plate // near side: north for ew, west for ns
-      const plateB = m.plate2 ?? m.plate // far side: south for ew, east for ns
-      const lo = ew ? L.z0 : L.x0
-      const hi = ew ? L.z1 : L.x1
-      // ridge position from the two eave heights
-      const r = (plateB - plateA) / (2 * s) + (lo + hi) / 2
-      const hr = plateA + (r - lo) * s
+      const g = gableGeo(m, L, oh)
+      const { ew, lo, hi, r, hr, plateA, plateB, w0, w1 } = g
       const endsList = m.ends || []
-      const startOh = endsList.includes(ew ? 'w' : 'n') ? oh : 0
-      const endOh = endsList.includes(ew ? 'e' : 's') ? oh : 0
-      const startExt = startOh || RUN_INTO
-      const endExt = endOh || RUN_INTO
-      const [a0, a1] = ew ? [L.x0 - startExt, L.x1 + endExt] : [L.z0 - startExt, L.z1 + endExt]
-      // two sheets either side of the ridge
-      const sideA = ew ? rect(a0, lo - oh, a1, r) : rect(lo - oh, a0, r, a1)
-      const sideB = ew ? rect(a0, r, a1, hi + oh) : rect(r, a0, hi + oh, a1)
+      // each end of the ridge is one of three things (round 11, item 7):
+      //   'gable'  a listed gable end: the roof stops at the wall with its overhang and a vertical triangle
+      //   'dies'   the ridge runs on and meets a roof that is as high or higher within 20 ft: the roof runs in under
+      //            it, but only over other roofs (it used to run 20 ft on over open ground and lower roofs too), and
+      //            a triangle at its own wall closes whatever stays exposed
+      //   'hip'    nothing higher to meet: the end is closed with a hip, never left as a cut 20 ft out
+      const others = geos.filter((o) => o && o.m !== m)
+      const kindOf = (which) => {
+        if (endsList.includes(which === 'start' ? (ew ? 'w' : 'n') : ew ? 'e' : 's')) return 'gable'
+        for (let d = 0.5; d <= RUN_INTO; d += 0.5) {
+          const t = which === 'start' ? w0 - d : w1 + d
+          const [x, z] = ew ? [t, r] : [r, t]
+          if (others.some((o) => heightOnGable(o, x, z) >= hr - 0.05)) return 'dies'
+        }
+        return 'hip'
+      }
+      const kStart = kindOf('start')
+      const kEnd = kindOf('end')
+      const pH = Math.min(plateA, plateB)
+      const dA = (plateA - pH) / s
+      const dB = (plateB - pH) / s
+      const tApex = (hi - lo + dA + dB) / 2 // how far in from its eave a hip reaches the ridge
+      const uApex = (lo + hi + dB - dA) / 2
+      // a hip's eave sits at the wall; on a wing shallower than its own half span it moves out (at most the run-in)
+      // so that 4 ft of ridge stay behind the gable at the other end
+      let eStart = w0
+      let eEnd = w1
+      if (kStart === 'hip' && kEnd === 'gable') eStart = Math.max(w0 - RUN_INTO, Math.min(w0, w1 - 4 - tApex))
+      if (kEnd === 'hip' && kStart === 'gable') eEnd = Math.min(w1 + RUN_INTO, Math.max(w1, w0 + 4 + tApex))
+      const a0 = kStart === 'gable' ? w0 - oh : kStart === 'hip' ? eStart - oh : w0
+      const a1 = kEnd === 'gable' ? w1 + oh : kEnd === 'hip' ? eEnd + oh : w1
+      // plan rectangles in (across u, along t) → world
+      const R = (u0, u1, t0, t1) => (ew ? rect(t0, u0, t1, u1) : rect(u0, t0, u1, t1))
+      const P = (u, t) => (ew ? [t, u] : [u, t])
+      let sideA = R(lo - oh, r, a0, a1)
+      let sideB = R(r, hi + oh, a0, a1)
+      // the run-in under a higher roof: only where another roof's own footprint is
+      const othersPlan = others.map((o) => rect(o.L.x0 - o.oh, o.L.z0 - o.oh, o.L.x1 + o.oh, o.L.z1 + o.oh))
+      const runIn = (side, t0, t1) => {
+        if (!othersPlan.length) return side
+        try {
+          const ext = polygonClipping.intersection(side === 'A' ? R(lo - oh, r, t0, t1) : R(r, hi + oh, t0, t1), polygonClipping.union(...othersPlan))
+          return ext
+        } catch (e) {
+          return []
+        }
+      }
+      const join = (base, extra) => {
+        if (!extra || !extra.length) return base
+        try {
+          return polygonClipping.union(base, extra)
+        } catch (e) {
+          return base
+        }
+      }
+      if (kStart === 'dies') {
+        sideA = join(sideA, runIn('A', w0 - RUN_INTO, w0))
+        sideB = join(sideB, runIn('B', w0 - RUN_INTO, w0))
+      }
+      if (kEnd === 'dies') {
+        sideA = join(sideA, runIn('A', w1, w1 + RUN_INTO))
+        sideB = join(sideB, runIn('B', w1, w1 + RUN_INTO))
+      }
       const planeA = ew ? { a: 0, b: s, c: hr - r * s } : { a: s, b: 0, c: hr - r * s }
       const planeB = ew ? { a: 0, b: -s, c: hr + r * s } : { a: -s, b: 0, c: hr + r * s }
-      const edgesA = ew ? [{ axis: 'z', at: lo - oh }, startOh && { axis: 'x', at: a0 }, endOh && { axis: 'x', at: a1 }] : [{ axis: 'x', at: lo - oh }, startOh && { axis: 'z', at: a0 }, endOh && { axis: 'z', at: a1 }]
-      const edgesB = ew ? [{ axis: 'z', at: hi + oh }, startOh && { axis: 'x', at: a0 }, endOh && { axis: 'x', at: a1 }] : [{ axis: 'x', at: hi + oh }, startOh && { axis: 'z', at: a0 }, endOh && { axis: 'z', at: a1 }]
-      // the eave edge only carries fascia across the room itself plus its overhangs, not the run-in
-      const eaveSpan = ew ? [L.x0 - startOh, L.x1 + endOh] : [L.z0 - startOh, L.z1 + endOh]
-      edgesA[0].span = eaveSpan
-      edgesB[0].span = eaveSpan
+      // hips: the triangle (a pentagon when the two eaves differ) where the hip plane is the lowest of the three
+      const hips = []
+      const mid = (eStart + eEnd) / 2
+      const hipAt = (which) => {
+        const e = which === 'start' ? eStart : eEnd
+        const dir = which === 'start' ? 1 : -1 // t grows into the roof
+        const at = (t) => e + dir * t
+        let ring = [P(lo - oh, at(-oh)), P(hi + oh, at(-oh)), ...(dB > 0.01 ? [P(hi + oh, at(-oh + dB))] : []), P(uApex, at(tApex)), ...(dA > 0.01 ? [P(lo - oh, at(-oh + dA))] : [])]
+        ring.push(ring[0])
+        let poly = [[ring]]
+        // two hips on a short roof meet in the middle (a pyramid), neither runs past the other
+        if (kStart === 'hip' && kEnd === 'hip') {
+          try {
+            poly = polygonClipping.intersection(poly, which === 'start' ? R(lo - oh - 1, hi + oh + 1, e - oh - 1, mid) : R(lo - oh - 1, hi + oh + 1, mid, e + oh + 1))
+          } catch (err) {}
+        }
+        const plane = ew ? { a: dir * s, b: 0, c: pH - dir * s * e } : { a: 0, b: dir * s, c: pH - dir * s * e }
+        hips.push({ which, poly, plane, eave: at(-oh) })
+      }
+      if (kStart === 'hip') hipAt('start')
+      if (kEnd === 'hip') hipAt('end')
+      hips.forEach((h) => {
+        try {
+          sideA = polygonClipping.difference(sideA, h.poly)
+          sideB = polygonClipping.difference(sideB, h.poly)
+        } catch (err) {}
+      })
+      const rakeAxis = ew ? 'x' : 'z'
+      const eaveAxis = ew ? 'z' : 'x'
+      // the eave edge carries fascia across the roof itself, its overhangs and its hips, not across a run-in
+      const eaveSpan = [kStart === 'dies' ? w0 : a0, kEnd === 'dies' ? w1 : a1]
+      const edgesA = [{ axis: eaveAxis, at: lo - oh, span: eaveSpan }, kStart === 'gable' && { axis: rakeAxis, at: a0 }, kEnd === 'gable' && { axis: rakeAxis, at: a1 }]
+      const edgesB = [{ axis: eaveAxis, at: hi + oh, span: eaveSpan }, kStart === 'gable' && { axis: rakeAxis, at: a0 }, kEnd === 'gable' && { axis: rakeAxis, at: a1 }]
       sheets.push({ id: m.id + '-a', mass: m.id, kind: 'slope', plane: planeA, footprint: cut(sideA), edges: edgesA.filter(Boolean), material: mat })
       sheets.push({ id: m.id + '-b', mass: m.id, kind: 'slope', plane: planeB, footprint: cut(sideB), edges: edgesB.filter(Boolean), material: mat })
-      // gable end triangles at listed ends
-      const tri = (at, axis) => ({
+      hips.forEach((h) => sheets.push({ id: m.id + '-hip-' + h.which, mass: m.id, kind: 'slope', hip: true, plane: h.plane, footprint: cut(h.poly), edges: [{ axis: rakeAxis, at: h.eave, span: [lo - oh, hi + oh] }], material: mat }))
+      // gable end triangles at listed ends; at a run-in end a triangle at the wall itself, which the roofs it runs
+      // under hide, so only the part left in the open shows
+      const tri = (at, axis, wall = false) => ({
         id: m.id + '-' + axis + at.toFixed(1),
         mass: m.id,
         kind: 'end',
         axis, // 'x' means the end wall is at x = at and runs along z
         at,
-        tri: [
-          [lo - oh, plateA - oh * s],
-          [r, hr],
-          [hi + oh, plateB - oh * s],
-        ],
+        tri: wall
+          ? [
+              [lo, plateA],
+              [r, hr],
+              [hi, plateB],
+            ]
+          : [
+              [lo - oh, plateA - oh * s],
+              [r, hr],
+              [hi + oh, plateB - oh * s],
+            ],
       })
-      if (startOh) ends.push(tri(a0, ew ? 'x' : 'z'))
-      if (endOh) ends.push(tri(a1, ew ? 'x' : 'z'))
+      if (kStart === 'gable') ends.push(tri(a0, rakeAxis))
+      if (kEnd === 'gable') ends.push(tri(a1, rakeAxis))
+      if (kStart === 'dies') ends.push(tri(w0 - 0.03, rakeAxis, true))
+      if (kEnd === 'dies') ends.push(tri(w1 + 0.03, rakeAxis, true))
     } else if (m.kind === 'dormer') {
       const top = m.plate
       // plane rises away from the street from the face; extends far enough to die into the main roof

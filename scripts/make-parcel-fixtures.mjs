@@ -45,6 +45,12 @@ const CASES = [
   { slug: 'cage-118-pharr', address: '118 S Cage Blvd, Pharr, TX 78577', county: 'Hidalgo County', cityId: 'pharr' },
   { slug: 's-10th-2200-mcallen', address: '2200 S 10th St, McAllen, TX 78503', county: 'Hidalgo County', cityId: 'mcallen' },
   { slug: 'e-elizabeth-1001-brownsville', address: '1001 E Elizabeth St, Brownsville, TX 78520', county: 'Cameron County', cityId: 'brownsville' },
+  // a pie lot on a cul-de-sac: the street side is an arc of six 8 ft chords (round 11, item 2)
+  { slug: 'kiskadee-2002-mission', address: '2002 Kiskadee Ln, Mission, TX 78572', county: 'Hidalgo County', cityId: 'mission' },
+  // Willacy: the address point for 323 is on the parcel the county lists as 329 (round 11, item 6); a corner lot; Jim Wells
+  { slug: 'n-11th-323-raymondville', address: '323 N 11th St, Raymondville, TX 78580', county: 'Willacy County', cityId: null },
+  { slug: 'w-harris-510-raymondville', address: '510 W Harris Ave, Raymondville, TX 78580', county: 'Willacy County', cityId: null },
+  { slug: 'se-3rd-344-premont', address: '344 SE 3rd St, Premont, TX 78375', county: 'Jim Wells County', cityId: null },
   // typed W, matched E by the Census (round 10, item 3): the homeowner is asked before any parcel is offered
   { slug: 'w-nolana-1300-mcallen', address: '1300 W Nolana Ave, McAllen, TX 78504', county: 'Hidalgo County', cityId: 'mcallen' },
   {
@@ -136,7 +142,7 @@ async function pipeline(address, fetchImpl) {
   const parcels = makeParcels({ store, fetchImpl, geocode: (a) => lots.geocode(a), log: () => {}, event: async () => {}, env: {} })
   const zoning = makeZoning({ store, fetchImpl, log: () => {} })
   const p = await parcels.lookup({ address, force: true })
-  const out = { match: p.match, propId: p.propId || null, matchedBy: p.matchedBy || null, areaSf: p.areaSf || null, edges: p.edges?.length || 0, frontFt: p.match === 'one' ? p.edges[p.frontEdge].lengthFt : null, frontBy: p.frontBy || null, frontStreet: p.frontStreet || null, corner: !!p.corner, interior: p.interior || null }
+  const out = { match: p.match, propId: p.propId || null, matchedBy: p.matchedBy || null, areaSf: p.areaSf || null, edges: p.edges?.length || 0, frontFt: p.match === 'one' ? p.edges[p.frontEdge].lengthFt : null, frontBy: p.frontBy || null, frontStreet: p.frontStreet || null, corner: !!p.corner, frontWidthFt: p.frontWidthFt ?? null, frontChords: p.frontChords ?? null, confidence: p.confidence || null, interior: p.interior || null }
   return { out, lots, zoning, parcel: p }
 }
 
@@ -230,7 +236,7 @@ async function record(c) {
   if (rec.ownerCheck.ownerStringsInKeptColumns) throw new Error(`${rec.ownerCheck.ownerStringsInKeptColumns} owner string(s) still sit in a kept column`)
   // the replay must give the live answer
   const replay = await pipeline(c.address, fixtureFetch([rec], { strict: true }))
-  const same = ['match', 'propId', 'matchedBy', 'areaSf', 'edges', 'frontFt', 'frontBy', 'frontStreet', 'corner'].filter((k) => JSON.stringify(replay.out[k]) !== JSON.stringify(live.out[k]))
+  const same = ['match', 'propId', 'matchedBy', 'confidence', 'areaSf', 'edges', 'frontFt', 'frontWidthFt', 'frontChords', 'frontBy', 'frontStreet', 'corner'].filter((k) => JSON.stringify(replay.out[k]) !== JSON.stringify(live.out[k]))
   if (same.length) throw new Error(`the recording does not replay the live answer (${same.map((k) => `${k}: live ${JSON.stringify(live.out[k])}, replay ${JSON.stringify(replay.out[k])}`).join('; ')})`)
   return rec
 }

@@ -25,7 +25,7 @@ export const MORE_CHANGES_THANKS = `Done. The office has your request and usuall
 export const OUT_OF_CHANGES = "You've used the free changes on this plan. The office will add more for you. Want me to let them know?"
 export const REQUEST_KINDS = ['meeting', 'more-changes']
 
-export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots, alerts = null }) {
+export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots, alerts = null, parcels = null, zoning = null }) {
   // free changes a new plan starts with; the office changes the default on the dashboard (store.meta)
   const DEFAULT_ALLOWANCE = (() => {
     const n = Number(env.CHANGES_PER_PROJECT ?? env.CREDITS_PER_PROJECT ?? 10)
@@ -125,25 +125,53 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       return { default: n }
     },
     /**
-     * A lot as a homeowner's browser may send it (round 10): the drafter's marks are never taken from the browser. A
-     * confirmed lot keeps its confirmation only while its outline is the one the drafter confirmed; a zoning carries
-     * `confirmedBy` only when the stored lot's does. Anything else arrives unconfirmed.
+     * The zoning of a parcel lot, read by the server (round 11, item 1): the district at the interior point of the
+     * parcel the lot names, from the server's own copy of that parcel, in the city the server geocoded the address to.
+     * Nothing here comes from the browser but the parcel's id and the address. null for a lot that is not a parcel;
+     * an "unknown" record when it could not be read (the drafter's confirmation reads it again). mayLookup says whether
+     * an outside call may be made for it now (the homeowner's lookup limit); a drafter's read always may.
      */
-    ownerLot(lot, prev = null) {
+    async readZoning(spec, { mayLookup = () => true } = {}) {
+      if (!zoning || !parcels || spec?.kind !== 'parcel' || spec.propId == null || spec.propId === '') return null
+      const unread = (reason) => ({ status: 'unknown', district: null, residential: null, reason, readBy: 'server', at: now() })
+      let allowed
+      const may = () => (allowed ??= !!mayLookup())
+      try {
+        let rec = spec.address ? await parcels.cached(spec.address) : null
+        if (!rec || String(rec.propId) !== String(spec.propId)) {
+          const county = spec.county || rec?.county
+          if (!county) return unread('no county on the lot; the drafter reads the zoning')
+          rec = (await parcels.byId({ county, propId: spec.propId, cachedOnly: true }).catch(() => null)) || (may() ? await parcels.byId({ county, propId: spec.propId }) : null)
+        }
+        if (!rec?.interior) return unread('the parcel was not read; the zoning is read when the drafter confirms the lot')
+        const geo = spec.address ? (await lots.geocodeCached?.(spec.address)) || (may() ? await lots.geocode(spec.address).catch(() => null) : null) : null
+        const cityId = geo?.found ? geo.cityId || '' : spec.city || ''
+        const z = await zoning.lookup({ cityId, lat: rec.interior.lat, lon: rec.interior.lon })
+        const { raw, cached, ...keep } = z
+        return { ...keep, propId: String(spec.propId), readBy: 'server' }
+      } catch (e) {
+        return unread(e?.status === 502 ? String(e.message) : 'the zoning could not be read; the drafter reads it')
+      }
+    },
+    /**
+     * A lot as a homeowner's browser may send it (rounds 10 and 11): the drafter's marks and the zoning are never
+     * taken from the browser. A confirmed lot keeps its confirmation, and any lot its stored zoning, only while its
+     * outline (and the parcel it names) is the one already stored. A parcel lot that is new or changed gets its zoning
+     * from the server's own read; a typed lot has none until a drafter confirms one.
+     */
+    async ownerLot(lot, prev = null, { mayLookup } = {}) {
       if (!lot?.spec || typeof lot.spec !== 'object') return lot
-      const { confirmedBy, confirmedAt, confirmNote, ...spec } = lot.spec
+      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, ...spec } = lot.spec
       const was = prev?.spec || null
-      const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null)
+      const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null) && String(was.propId ?? '') === String(spec.propId ?? '')
       if (spec.kind === 'plat' || spec.kind === 'parcel') {
         if (sameOutline && was.confirmed) Object.assign(spec, { confirmed: true, confirmedBy: was.confirmedBy || null, confirmedAt: was.confirmedAt || null, confirmNote: was.confirmNote || null, setbacks: was.setbacks || spec.setbacks })
         else spec.confirmed = false
       }
-      if (was?.zoning?.confirmedBy && was.kind === spec.kind) spec.zoning = was.zoning
-      else if (spec.zoning && typeof spec.zoning === 'object') {
-        const { confirmedBy: zb, confirmedAt: za, ...z } = spec.zoning
-        spec.zoning = spec.kind === 'parcel' || spec.kind === 'plat' ? z : null // a typed lot has no zoning until a drafter confirms one
-      }
-      return { ...lot, spec }
+      if (sameOutline && was.zoning) spec.zoning = was.zoning
+      else if (was?.zoning?.confirmedBy && was.kind === spec.kind && spec.kind === 'manual') spec.zoning = was.zoning // a drafter's zoning on a typed lot stays with the plan
+      else spec.zoning = spec.kind === 'parcel' ? await this.readZoning(spec, { mayLookup }) : null
+      return { ...lot, spec, zoning: spec.zoning || null, ...(spec.kind === 'plat' || spec.kind === 'parcel' ? { confirmed: !!spec.confirmed } : {}) }
     },
     /** A lot spec the office cannot build is refused at the door, not on the first change. */
     async checkLot(lot) {
@@ -469,6 +497,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async confirmLot(p, drafter, { confirmed = true, spec, note }) {
       if (p.lot?.spec?.kind !== 'plat' && p.lot?.spec?.kind !== 'parcel') throw fail(409, 'this lot was typed in, nothing to confirm')
       const next = { ...p.lot.spec, ...(spec || {}), kind: p.lot.spec.kind === 'parcel' ? 'parcel' : 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
+      // round 11, item 1: the lot is confirmed with its zoning. The server reads the district again at the parcel (a
+      // drafter's read is never limited); a read that fails keeps the one already stored. The zoning it confirmed
+      // carries who confirmed it, so nothing a browser sends later can replace it.
+      if (confirmed) {
+        const fresh = await this.readZoning(next)
+        const z = fresh && fresh.status !== 'unknown' ? fresh : next.zoning || fresh
+        next.zoning = z ? { ...z, confirmedBy: drafter.email, confirmedAt: now() } : null
+      }
       const lot = { ...(await lots.lotOfProject({ lot: { spec: next, plat: p.lot.plat } })), plat: p.lot.plat || null }
       const changed = spec && JSON.stringify(spec) !== '{}'
       p.lot = lot

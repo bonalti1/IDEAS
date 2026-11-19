@@ -113,20 +113,88 @@ function clipHalfPlane(poly, p0, nrm) {
   }
   return out
 }
-/** Inset polygon: setback per boundary edge (feet). Convex result; a notch in the lot is cut off, which is the safe side. */
+/**
+ * Inset polygon: setback per boundary edge (feet). Convex result; a notch in the lot is cut off, which is the safe side.
+ *
+ * A side that curves INTO the lot (the street side of a pie lot on a cul-de-sac is an arc of short chords) is the
+ * case plain edge-by-edge clipping gets badly wrong: each chord's setback line, run on across the lot, cuts off what
+ * its neighbours left, and 2002 Kiskadee Ln kept 1,614 sf of a true 3,200 (round 11). For a run of edges that turn
+ * gently and share a setback, one line is tried instead: square to the run's mean direction, the setback behind the
+ * run's deepest point. Every point past that line is at least the setback from every point of the run, so it is
+ * still the safe side. The run takes whichever of the two leaves more room.
+ */
 export function envelopeOf(boundary, setbackPerEdge) {
   const n = boundary.length
-  let poly = boundary.map((p) => [...p])
-  for (let i = 0; i < n; i++) {
-    const off = setbackPerEdge[i] ?? 0
+  const area = (poly) => (poly.length >= 3 ? Math.abs(polygonArea(poly)) : 0)
+  const inwardOf = (i) => {
     const nrm = outwardNormal(boundary, i)
-    const inward = [-nrm[0], -nrm[1]]
-    const a = boundary[i]
-    poly = clipHalfPlane(poly, [a[0] + inward[0] * off, a[1] + inward[1] * off], inward)
-    if (poly.length < 3) return []
+    return [-nrm[0], -nrm[1]]
   }
-  // drop the near-duplicate points arcs leave behind
-  return poly.filter((p, i) => i === 0 || Math.hypot(p[0] - poly[i - 1][0], p[1] - poly[i - 1][1]) > 0.05)
+  const clip = (runs) => {
+    const inRun = new Set(runs.flat())
+    let poly = boundary.map((p) => [...p])
+    for (let i = 0; i < n && poly.length >= 3; i++) {
+      if (inRun.has(i)) continue
+      const off = setbackPerEdge[i] ?? 0
+      const inward = inwardOf(i)
+      const a = boundary[i]
+      poly = clipHalfPlane(poly, [a[0] + inward[0] * off, a[1] + inward[1] * off], inward)
+    }
+    for (const run of runs) {
+      if (poly.length < 3) break
+      let mx = 0
+      let mz = 0
+      for (const i of run) {
+        const a = boundary[i]
+        const b = boundary[(i + 1) % n]
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+        const inward = inwardOf(i)
+        mx += inward[0] * len
+        mz += inward[1] * len
+      }
+      const ml = Math.hypot(mx, mz)
+      if (ml < 1e-9) return []
+      const mean = [mx / ml, mz / ml]
+      let deepest = -Infinity
+      for (const i of run) for (const p of [boundary[i], boundary[(i + 1) % n]]) deepest = Math.max(deepest, p[0] * mean[0] + p[1] * mean[1])
+      const at = deepest + (setbackPerEdge[run[0]] ?? 0)
+      poly = clipHalfPlane(poly, [mean[0] * at, mean[1] * at], mean)
+    }
+    if (poly.length < 3) return []
+    // drop the near-duplicate points arcs leave behind
+    return poly.filter((p, i) => i === 0 || Math.hypot(p[0] - poly[i - 1][0], p[1] - poly[i - 1][1]) > 0.05)
+  }
+  let best = clip([])
+  // runs: neighbours with the same setback, each turning under 30 degrees from the one before, under 120 in all
+  const turn = (i, j) => {
+    const a = inwardOf(i)
+    const b = inwardOf(j)
+    return (Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1]))) * 180) / Math.PI
+  }
+  const joins = (i) => (setbackPerEdge[i] ?? 0) > 0 && (setbackPerEdge[i] ?? 0) === (setbackPerEdge[(i + 1) % n] ?? 0) && turn(i, (i + 1) % n) < 30
+  if (n < 4 || !boundary.some((_, i) => joins(i)) || boundary.every((_, i) => joins(i))) return best
+  const start = boundary.findIndex((_, i) => !joins((i - 1 + n) % n))
+  const found = []
+  let run = []
+  for (let k = 0; k < n; k++) {
+    const i = (start + k) % n
+    run.push(i)
+    if (!joins(i) || turn(run[0], (i + 1) % n) >= 120) {
+      if (run.length > 1) found.push(run)
+      run = []
+    }
+  }
+  let kept = []
+  let bestSf = area(best)
+  for (const r of found) {
+    const cand = clip([...kept, r])
+    if (area(cand) > bestSf + 1) {
+      best = cand
+      bestSf = area(cand)
+      kept = [...kept, r]
+    }
+  }
+  return best
 }
 
 /** Outward unit normal of boundary edge i. */
@@ -148,7 +216,12 @@ function outwardNormal(boundary, i) {
   return [nx, nz]
 }
 
-const labelFor = (edge) => `${edge.setback}' — ${edge.street ? edge.street.toUpperCase() : edge.kind === 'rear' ? 'REAR' : 'SIDE'}`
+// a street side drawn in several pieces (a curved frontage) carries the street's name on one piece only: the others
+// are labelled with it too, never "SIDE" (round 11)
+const labelFor = (edge, frontName) => {
+  const name = edge.street || (edge.kind === 'front' ? frontName || 'FRONT' : '')
+  return `${edge.setback}' — ${name ? name.toUpperCase() : edge.kind === 'rear' ? 'REAR' : 'SIDE'}`
+}
 
 /**
  * Why a lot cannot be drafted on yet, in one sentence, or null: a size still being typed (under 20 ft),
@@ -281,9 +354,27 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     return edges[edgeIndexOfBoundaryPoint(boundary, corners, i)]?.setback ?? perEdge[i]
   })
   const envelope = envelopeOf(boundary, perEdgeAligned)
+  const frontName = edges.find((e) => e.kind === 'front' && e.street)?.street || ''
   const frontEdge = edges.findIndex((e) => e.kind === 'front')
   const fi = Math.max(0, frontEdge)
-  const nrm = outwardNormal(corners, fi)
+  // the house faces the street: square to the front edge, or to the middle of a street side drawn in several pieces
+  // (a curved frontage: the length-weighted mean of its pieces, round 11)
+  const fronts = edges.map((e, i) => (e.kind === 'front' ? i : -1)).filter((i) => i >= 0)
+  let nrm = outwardNormal(corners, fi)
+  if (fronts.length > 1) {
+    let sx = 0
+    let sz = 0
+    for (const i of fronts) {
+      const a = corners[i]
+      const b = corners[(i + 1) % corners.length]
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const o = outwardNormal(corners, i)
+      sx += o[0] * len
+      sz += o[1] * len
+    }
+    const sl = Math.hypot(sx, sz)
+    if (sl > 1e-9) nrm = [sx / sl, sz / sl]
+  }
   const angle = Math.atan2(nrm[1], nrm[0]) - Math.PI / 2 // +lz of the house frame points at the street
   const envC = polygonCentroid(envelope)
   const centre = isFinite(envC[0]) ? envC : polygonCentroid(boundary)
@@ -319,9 +410,9 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     corners: corners.map(([x, z]) => [r2(x), r2(z)]),
     arcs,
     closure,
-    edges: edges.map((e, i) => ({ ...e, label: labelFor(e), index: i })),
+    edges: edges.map((e, i) => ({ ...e, label: labelFor(e, frontName), index: i })),
     envelope: envelope.map(([x, z]) => [r2(x), r2(z)]),
-    envelopeLabels: edges.map(labelFor),
+    envelopeLabels: edges.map((e) => labelFor(e, frontName)),
     envelopeSf: Math.abs(polygonArea(envelope)),
     areaSf,
     centroid: polygonCentroid(boundary),

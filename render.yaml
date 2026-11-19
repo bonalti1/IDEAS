@@ -64,8 +64,8 @@ services:
         value: "1500"
       - key: PARCEL_LOOKUPS_PER_10MIN  # round 9: per signed-in user; three times that per address; cache hits are free. Round 10: the geocode, flood, zoning and wind routes each count the same way
         value: "20"
-      - key: TRUST_PROXY_HOPS          # round 10: how many proxies sit in front of the API; x-forwarded-for is read only that far from the right. 1 on Render; 0 ignores the header
-        value: "1"
+      - key: TRUST_PROXY_HOPS          # how many entries from the right of x-forwarded-for the visitor is. Round 11: 3 on Render (client, Cloudflare, Render's load balancer), to be confirmed from the "proxy chain:" line the API logs at its first request; an address many visitors share is never used as a limit key, so a wrong value cannot lock everyone out
+        value: "3"
       - key: ASCE_HAZARD_API_KEY     # round 7: dormant; the wind speed is a drafter lookup per city until this is set. Never commit a key.
         sync: false
       - key: CAD_POSTGIS             # round 7, item 12: "1" only once the monthly CAD import is agreed and loaded

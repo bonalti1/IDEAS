@@ -21,7 +21,7 @@ import { countyFromKey } from './parcel-sources.mjs'
 import { makeZoning } from './zoning.mjs'
 import { makeWind } from './wind.mjs'
 import { fixtureMode, fixtureFetch, guardNetwork } from './fixtures.mjs'
-import { clientIp, makeWindow } from './net.mjs'
+import { clientIp, makeWindow, isSharedAddress, proxyChain, proxyChainLine } from './net.mjs'
 import { makeBilling } from './billing.mjs'
 import { regexOps } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
@@ -56,7 +56,7 @@ const lots = makeLots({ store, files, interpreter, event, fetchImpl })
 const parcels = makeParcels({ store, event, fetchImpl, geocode: (a) => lots.geocode(a) })
 const zoning = makeZoning({ store, fetchImpl })
 const wind = makeWind({ store, fetchImpl })
-const projects = makeProjects({ store, interpreter, event, logInterpret, lots, alerts })
+const projects = makeProjects({ store, interpreter, event, logInterpret, lots, alerts, parcels, zoning })
 // Payments are dormant (round 8, P0b): the client app never talks about money and plan changes are free,
 // granted by the office. BILLING_ENABLED=1 registers the Stripe routes again; off, they do not exist (404).
 const BILLING_ENABLED = /^(1|true|yes)$/i.test(String(process.env.BILLING_ENABLED || ''))
@@ -194,15 +194,16 @@ route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { use
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await projects.list(ctx.user), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
   const body = await readJson(req, { rooms: 'array', style: 'object', program: 'object', lot: 'object?', client: 'string?' })
-  // the drafter's marks on a lot (confirmed, a confirmed zoning) never come from a browser (round 10)
-  if (body.lot) body.lot = projects.ownerLot(body.lot, null)
+  // the drafter's marks on a lot and its zoning never come from a browser (rounds 10 and 11): the server reads the
+  // zoning of a parcel lot itself, within the homeowner's lookup limit
+  if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx) })
   json(res, 201, await projects.create(ctx.user, body), req)
 })
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => {
   const prj = await projects.load(ctx.user, p.id)
   const body = await readJson(req, { rooms: 'array?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?' })
-  if (body.lot) body.lot = projects.ownerLot(body.lot, prj.lot)
+  if (body.lot) body.lot = await projects.ownerLot(body.lot, prj.lot, { mayLookup: () => mayLookup(req, ctx) })
   json(res, 200, await projects.update(prj, body), req)
 })
 route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
@@ -279,7 +280,25 @@ const countLookup = (key) => lookups.count(key)
 setInterval(() => lookups.prune(), 600000).unref()
 // x-forwarded-for is trusted only behind a known proxy: TRUST_PROXY_HOPS is how many sit in front (1 on Render); unset, the socket's address
 const TRUST_PROXY_HOPS = Math.max(0, Math.floor(+(process.env.TRUST_PROXY_HOPS || 0)) || 0)
-const lookupKeys = (req, ctx, kind = 'parcel') => [`${kind}:u:${ctx.user?.id || 'anon'}`, `${kind}:ip:${clientIp(req, TRUST_PROXY_HOPS)}`]
+// The per-address key is left out when the address is one many visitors share (a private address, a Cloudflare one):
+// behind a proxy chain whose depth is not verified yet, that key would be one count for every homeowner at once
+// (round 11, item 3). The per-user key always stands.
+const lookupKeys = (req, ctx, kind = 'parcel') => {
+  const ip = clientIp(req, TRUST_PROXY_HOPS)
+  return [`${kind}:u:${ctx.user?.id || 'anon'}`, ...(isSharedAddress(ip) ? [] : [`${kind}:ip:${ip}`])]
+}
+// Once per process, the shape of the proxy chain in positions only (no address is logged): the entry count of
+// X-Forwarded-For and where CF-Connecting-IP sits in it, which is the right TRUST_PROXY_HOPS. Logged for the first
+// request, and once more for the first request that carries CF-Connecting-IP if the first one did not.
+const chainLogged = { any: false, cf: false }
+function noteProxyChain(req) {
+  if (chainLogged.cf) return
+  const c = proxyChain(req)
+  if (chainLogged.any && !c.cf) return
+  chainLogged.any = true
+  if (c.cf) chainLogged.cf = true
+  console.log(proxyChainLine(c, TRUST_PROXY_HOPS))
+}
 const LOOKUP_LIMIT_MESSAGE = 'Too many lot lookups for now. Try again in ten minutes, or type the lot in; the drafter can pull the parcel later.'
 /** The limiter for one kind of lookup: the keys to count on a real lookup, or null after a 429 was sent. */
 function limited(kind, req, res, ctx) {
@@ -289,6 +308,13 @@ function limited(kind, req, res, ctx) {
     return null
   }
   return keys
+}
+/** May this request reach a county or a city server once more, for a lookup the server makes itself? Counts it when yes. */
+function mayLookup(req, ctx, kind = 'parcel') {
+  const keys = lookupKeys(req, ctx, kind)
+  if (keys.some((k) => lookupsLeft(k) <= 0)) return false
+  keys.forEach(countLookup)
+  return true
 }
 route('GET', '/api/lot/parcel', 'user', async (req, res, p, ctx) => {
   const url = new URL(req.url, 'http://x')
@@ -309,8 +335,9 @@ route('GET', '/api/lot/parcel/:county/:propId', 'user', async (req, res, p, ctx)
   if (!county) return json(res, 404, { error: `no parcel source for "${decodeURIComponent(p.county)}"; use the county name or its slug (hidalgo, cameron, nueces, starr, willacy, jimwells, kleberg, sanpatricio)` }, req)
   const keys = lookupKeys(req, ctx)
   if (keys.some((k) => lookupsLeft(k) <= 0)) return json(res, 429, { error: LOOKUP_LIMIT_MESSAGE, retryAfterS: 600 }, req)
-  keys.forEach(countLookup)
-  json(res, 200, parcelView(await parcels.byId({ county, propId: safe(p.propId) }), ctx), req)
+  const rec = await parcels.byId({ county, propId: safe(p.propId) })
+  if (!rec.cached) keys.forEach(countLookup)
+  json(res, 200, parcelView(rec, ctx), req)
 })
 route('GET', '/api/lot/zoning', 'user', async (req, res, p, ctx) => {
   const url = new URL(req.url, 'http://x')
@@ -338,7 +365,9 @@ route('PUT', '/api/admin/jurisdictions/:id', 'drafter', async (req, res, p, ctx)
 route('GET', '/api/admin/sources', 'drafter', async (req, res) => json(res, 200, { ...(await parcels.health()), zoning: Object.entries(zoning.layers).map(([cityId, L]) => ({ cityId, url: L.url, field: L.field })), fixtures: fixtureMode() }, req))
 // the mapped columns against each layer's own field list (round 10, item 5): run at start, daily, and on demand here
 route('POST', '/api/admin/sources/fields', 'drafter', async (req, res) => json(res, 200, await parcels.checkFields(), req))
-route('POST', '/api/admin/sources/check', 'drafter', async (req, res) => json(res, 200, await parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }), req))
+// the recordings carry no owner columns, so a server on the fixtures checks owner presence only with the made-up owner on
+const DAILY_NEEDS_OWNER = !fixtureMode() || process.env.DRAFTHOUSE_FIXTURE_OWNER === 'sentinel'
+route('POST', '/api/admin/sources/check', 'drafter', async (req, res) => json(res, 200, await parcels.dailyCheck({ requireOwner: DAILY_NEEDS_OWNER, email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }), req))
 
 // ── billing: pricing, Stripe Checkout, the webhook, receipts (only with BILLING_ENABLED=1) ──
 if (billing) {
@@ -572,6 +601,7 @@ route('POST', '/api/admin/backup', 'drafter', async (req, res) => json(res, 200,
 
 // ── server ─────────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
+  noteProxyChain(req)
   try {
     if (req.method === 'OPTIONS') return json(res, 204, {}, req)
     const url = new URL(req.url, 'http://x')
@@ -627,7 +657,7 @@ async function main() {
     // the mapped columns against the layers' own field lists, once at start (round 10, item 5); PARCEL_FIELD_CHECK=0 turns it off
     if (process.env.PARCEL_FIELD_CHECK !== '0') parcels.checkFields().then((r) => console.log(`parcels: mapped columns ${r.ok ? 'all present on the layers' : 'NOT all present: ' + r.rows.filter((x) => !x.ok).map((x) => `${x.id} (${[...x.missing, ...x.wrongType, x.error].filter(Boolean).join('; ')})`).join(', ')}`)).catch((e) => console.error('parcel field check:', e.message))
     if (process.env.PARCEL_DAILY_CHECK === '1') {
-      const run = () => parcels.checkFields().catch((e) => console.error('parcel field check:', e.message)).then(() => parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }).catch((e) => console.error('parcel daily check:', e.message)))
+      const run = () => parcels.checkFields().catch((e) => console.error('parcel field check:', e.message)).then(() => parcels.dailyCheck({ requireOwner: DAILY_NEEDS_OWNER, email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }).catch((e) => console.error('parcel daily check:', e.message)))
       setTimeout(run, 5 * 60000).unref()
       setInterval(run, 24 * 3600000).unref()
     }

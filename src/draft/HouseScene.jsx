@@ -473,11 +473,20 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
   const roomList = rooms.filter(isRoom)
   const hasPlan = rooms.some((r) => r.element)
   return (
+    <>
+      {/* the top view is always north-up: its north mark is fixed in the corner of the picture, whole at any width
+          (round 11, item 7); it is outside the canvas, so no camera or scene position moves it */}
+      {view === 'top' && (
+        <div className="compass" data-testid="north" aria-label="North is up">
+          <span>N</span>
+          <i />
+        </div>
+      )}
     <Canvas shadows camera={{ position: cam.position, fov: 42, near: 1, far: 6000 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
       <color attach="background" args={[sun ? '#f3e9d6' : '#ebe9e5']} />
       <ambientLight intensity={sun ? 1.1 : 2.0} />
       <directionalLight position={sun ? sunPosition(L) : [-150, 300, -200]} intensity={sun ? 2.2 : 1.4} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-220} shadow-camera-right={220} shadow-camera-top={220} shadow-camera-bottom={-220} shadow-camera-near={10} shadow-camera-far={2000} shadow-bias={-0.0004} />
-      <SitePlan lot={L} problem={lotProblem} />
+      <SitePlan lot={L} problem={lotProblem} northArrow={view !== 'top'} />
       <mesh rotation-x={-Math.PI / 2} position={[L.centre[0], -0.36, L.centre[1]]} receiveShadow>
         <planeGeometry args={[2000, 2000]} />
         <shadowMaterial transparent opacity={sun ? 0.35 : 0.18} />
@@ -494,5 +503,6 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={15} maxDistance={1200} enableRotate={view !== 'top'} screenSpacePanning />
       <CameraFollow cam={cam} centreKey={L.centre.join(',')} />
     </Canvas>
+    </>
   )
 }

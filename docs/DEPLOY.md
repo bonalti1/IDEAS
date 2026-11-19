@@ -67,7 +67,7 @@ The Lot step looks the address up at the county appraisal district (free ArcGIS 
 reads the FEMA flood zone at a point inside the parcel, and the city zoning district where the city publishes a
 layer. Nothing here needs a key:
 
-- `PARCEL_DAILY_CHECK=1` runs the ten acceptance addresses once a day and emails `ALERT_EMAIL_TO` when a source fails.
+- `PARCEL_DAILY_CHECK=1` runs the 14 acceptance addresses once a day (Hidalgo, Cameron, Nueces, Willacy and Jim Wells). For each it checks the parcel id, the legal description, the street side's width (within 1 ft of the recorded one), the corner flag, and that an owner and a mailing address came back (yes or no; the values are never stored or logged). It emails `ALERT_EMAIL_TO` when the same address fails two runs in a row, so one bad minute at a county does not page the office. The Sources page shows each failed address with the reason and how many runs it has failed.
   The office dashboard shows the same under Sources, with a "Check now" button.
 - The mapped columns (round 10): at start, daily, and on "Check the columns" the server reads each layer's own field
   list and compares it with the columns `server/parcel-sources.mjs` maps (ids, owner, mailing, situs, legal, acres). A
@@ -77,11 +77,17 @@ layer. Nothing here needs a key:
   (`tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer`, layers 8 and 6, then 2): the edge
   nearest the road that carries the address's street name. When TIGERweb does not answer, the lookup still works and
   the street side falls back to the county address point, then the Census point; the Sources page shows the row red.
-- `TRUST_PROXY_HOPS` (round 10): the per-address lookup limit reads `x-forwarded-for` only behind a known proxy. It is
-  the number of proxies in front of the API (1 in `render.yaml`); the address is the entry that many places from the
-  right. To confirm the number on Render, sign in from a phone on mobile data and look for your public address in one
-  API log line; if the limiter key shows a Render or Cloudflare address instead, raise it by one. Unset or 0, the
-  header is ignored and the socket's address is used (right for a laptop).
+- `TRUST_PROXY_HOPS` (rounds 10 and 11): the per-address lookup limit reads `x-forwarded-for` only behind a known
+  chain of proxies. It is the visitor's position in that header counted from the right. On Render the chain is
+  client, Cloudflare, Render's load balancer, so `render.yaml` sets 3. To confirm it, read one line in the Render
+  log: at its first request (and once more at the first request that came through Cloudflare) the API logs
+
+      proxy chain: X-Forwarded-For has 3 entries; CF-Connecting-IP is entry 3 from the right; TRUST_PROXY_HOPS is 3 (right)
+
+  The line carries positions only, never an address. If it ends "(set it to N)", set `TRUST_PROXY_HOPS` to N.
+  Until then nobody is locked out by a wrong value: when the entry it picks is an address many visitors share (a
+  private address such as a load balancer's, or one of Cloudflare's), the per-address limit is left out and only
+  the per-user limit counts. Unset or 0, the header is ignored and the socket's address is used (a laptop).
 - `REGRID_API_TOKEN` (optional, paid): the Regrid fallback. Leave it empty. The office turns it on only if the free
   sources fail more than 5% of lookups in a month or the daily check fails three days running. `REGRID_MONTHLY_CAP`
   (default 1500) stops the calls for the month. Never commit a token, and the server never logs one.

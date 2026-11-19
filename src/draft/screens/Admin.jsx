@@ -236,7 +236,7 @@ function Sources() {
         </table>
       </div>
       <p className="fine">
-        Daily check: {h.daily ? `${h.daily.ok ? 'passed' : 'FAILED'} at ${h.daily.at.slice(0, 16)}Z${h.daily.failedDays ? `, ${h.daily.failedDays} day(s) running` : ''}: ${h.daily.results.map((r) => `${r.address.split(',')[0]} ${r.ok ? 'ok' : r.error || r.match || 'missing ' + (r.missing || []).join('/')}`).join('; ')}` : 'not run yet'}.{' '}
+        Daily check: {h.daily ? `${h.daily.ok ? 'passed' : 'FAILED'} at ${h.daily.at.slice(0, 16)}Z${h.daily.failedDays ? `, ${h.daily.failedDays} day(s) running` : ''}: ${h.daily.results.map((r) => `${r.address.split(',')[0]} ${r.ok ? 'ok' : `${(r.why || []).join(', ') || r.error || r.match || 'missing ' + (r.missing || []).join('/')}${r.failedDays > 1 ? ` (${r.failedDays} runs running)` : ''}`}`).join('; ')}` : 'not run yet'}.{' '}
         <Button small ghost disabled={busy} onClick={check} data-testid="sources-check">
           {busy ? 'Checking…' : 'Check now'}
         </Button>{' '}

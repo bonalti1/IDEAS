@@ -202,7 +202,7 @@ function ScaleBar({ x0 = 20, z0 = 175 }) {
   )
 }
 
-export default function SitePlan({ lot = DEFAULT_LOT, problem = '' }) {
+export default function SitePlan({ lot = DEFAULT_LOT, problem = '', northArrow = true }) {
   const [cx, cz] = lot.centroid
   const xs = lot.boundary.map((p) => p[0])
   const zs = lot.boundary.map((p) => p[1])
@@ -274,7 +274,9 @@ export default function SitePlan({ lot = DEFAULT_LOT, problem = '' }) {
         </>
       )}
 
-      <NorthArrow x={minX - 40} z={minZ - 10} />
+      {/* the top view is always north-up, so its north arrow is a fixed mark in the corner of the picture (HouseScene);
+          drawn here it fell outside a phone's frame (round 11, item 7). The 3D view turns, so it keeps this one. */}
+      {northArrow && <NorthArrow x={minX - 40} z={minZ - 10} />}
       <ScaleBar x0={minX + 20} z0={maxZ + 58} />
     </group>
   )

@@ -358,6 +358,9 @@ async function homeownerFlow(browser, app, api, viewport, tag) {
   await page.getByText(/changes? left/).first().waitFor({ timeout: 40000 })
   await page.waitForTimeout(1500)
   await check('draft')
+  // round 11, item 7: the changes left are said once on the Draft step (they were in the header and on the card)
+  const leftLines = ((await page.locator('body').innerText()).match(/\b\d+ changes? left\b/gi) || []).length
+  assert.equal(leftLines, 1, `${tag}: "changes left" appears ${leftLines} times on the Draft step`)
   await shot('04-draft')
   const ask = async (text) => {
     await page.getByPlaceholder(/change|Move the laundry|No changes left/).fill(text)
