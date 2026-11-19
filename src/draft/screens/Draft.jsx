@@ -8,6 +8,7 @@ import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
 import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
+import { isUndoRequest } from '../lib/ops.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = says(['Thanks! The office will reach out within 1 business day. You can also call {phone}.', { phone: TRUST.phone }])
@@ -141,7 +142,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       return
     }
     // "undo", "go back": the last change comes off and comes back to the plan; no model, nothing used
-    if (!fix && (UNDO_RE.test(q) || UNDO_ES.test(q))) {
+    if (!fix && (isUndoRequest(q) || UNDO_RE.test(q) || UNDO_ES.test(q))) {
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!canUndo) {
         setHistory((h) => [...h, { who: 'house', ...says(['There is nothing to undo yet.']), applied: false, source: 'fallback' }])
@@ -180,7 +181,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       const a2 = floorArea(res.rooms, program.stories)
       meta = { sf: a2 - before.area, used: 1 }
     }
-    setHistory((h) => [...h, { who: 'house', text: res.reply, i18n: res.i18n, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta, ops: res.applied ? res.ops : undefined, askOffice: res.askOffice || null }])
+    setHistory((h) => [...h, { who: 'house', text: res.reply, i18n: res.i18n, source: res.source, applied: res.applied, fixes: res.applied ? null : res.fixes || null, meta, ops: res.applied ? res.ops : undefined, askOffice: res.askOffice || null, askLabel: res.askLabel || null }])
     if (res.changesLeft !== undefined) setChangesLeft(res.changesLeft)
     if (res.applied) {
       if (!project) {
@@ -318,7 +319,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
               {m.askOffice && !m.asked && (
                 <span className="fixes ask-office">
                   <button onClick={() => askOffice(m.askOffice)} disabled={busy}>
-                    {t(ASK_LABEL[m.askOffice] || ASK_LABEL.meeting)}
+                    {/* the office writes the button in the language of the answer above it */}
+                    {m.askLabel || t(ASK_LABEL[m.askOffice] || ASK_LABEL.meeting)}
                   </button>
                 </span>
               )}

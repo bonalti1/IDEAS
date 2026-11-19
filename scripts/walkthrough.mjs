@@ -17,6 +17,9 @@ import net from 'node:net'
 import { spawn, spawnSync } from 'node:child_process'
 
 const mode = process.argv[2] === 'claude' ? 'claude' : 'basic'
+// WALK_LANG=es: the same walk with the browser set to Spanish (round 13); pictures and the report are named "-es"
+const ES = process.env.WALK_LANG === 'es'
+const tag = mode + (ES ? '-es' : '')
 const OUT = process.env.OUT || 'docs/walkthrough'
 const ONLY = (process.argv[3] || '').split(',').filter(Boolean)
 fs.mkdirSync(OUT, { recursive: true })
@@ -39,7 +42,7 @@ const app = `http://127.0.0.1:${appPort}`
 const apiBase = `http://127.0.0.1:${apiPort}`
 start(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(appPort), '--strictPort', '--host', '127.0.0.1'], {})
 // live lookups (no fixtures), billing off, no email, its own data folder; the Claude key only in the claude run
-const api = start(process.execPath, ['server/index.mjs'], { PORT: String(apiPort), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), `dh-walk-${mode}-`)), DRAFTHOUSE_FIXTURES: '', DRAFTHOUSE_CLAUDE_KEY: mode === 'claude' ? key : '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'walk', DRAFTHOUSE_DRAFTERS: 'drafter@walk.test', REGRID_API_TOKEN: '', PARCEL_DAILY_CHECK: '0', ALLOWED_ORIGINS: '*', NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY || '' })
+const api = start(process.execPath, ['server/index.mjs'], { PORT: String(apiPort), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), `dh-walk-${tag}-`)), DRAFTHOUSE_FIXTURES: '', DRAFTHOUSE_CLAUDE_KEY: mode === 'claude' ? key : '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'walk', DRAFTHOUSE_DRAFTERS: 'drafter@walk.test', REGRID_API_TOKEN: '', PARCEL_DAILY_CHECK: '0', ALLOWED_ORIGINS: '*', NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY || '' })
 await up(app)
 await up(apiBase + '/api/health')
 
@@ -53,30 +56,38 @@ const LOTS = [
   { id: 'near', address: '323 N 11th St, Raymondville, TX 78580', what: 'the near match' },
   { id: 'c2', address: '118 S Cage Blvd, Pharr, TX 78577', what: 'the C-2 lot' },
   { id: 'we', address: '1300 W Nolana Ave, McAllen, TX 78504', what: 'the W/E mismatch' },
+  { id: 'typo', address: '3305 N 27 street mcallen', what: 'the address typed with a slip' },
 ].filter((l) => !ONLY.length || ONLY.includes(l.id))
 const SIZES = [
   { name: '1440', viewport: { width: 1440, height: 900 } },
   { name: '390', viewport: { width: 390, height: 844 } },
 ]
-const CHAT = ['I want 4 bedrooms', 'Add a covered patio in the back', 'Make the kitchen bigger', 'Make it feel more open']
+// the four sentences of the first customer test, then round 13's: typed undo, a contradictory request, a vague one
+const CHAT = ES
+  ? ['quiero 4 recámaras', 'quiero un porche atrás', 'deshaz eso', 'la cocina más grande', 'que se sienta más abierta', 'haz la casa más chica pero agrega 2 recámaras', 'asdf']
+  : ['I want 4 bedrooms', 'Add a covered patio in the back', 'undo that', 'Make the kitchen bigger', 'Make it feel more open', 'make the house smaller but add 2 bedrooms', 'asdf']
+// English left on a Spanish screen: the words a homeowner would notice
+const ENGLISH = /\b(Sign out|Bedrooms|changes left|Your lot|Pick a style|What goes in the house|Shape it|Ready to hand off|Find my lot|Draft my house|Send to drafters|I did not catch|No change was used|cannot get|does not fit|Make the|Add a|Draw a)\b/
 const report = { mode, at: new Date().toISOString(), runs: [], drafter: [] }
-const BAD = /setback|\bNaN\b|\bundefined\b|\$\s?\d|could not send/i
+const BAD = /setback|\bNaN\b|\bundefined\b|\$\s?\d|could not send|no se pudo enviar/i
 
 async function homeowner(lot, size, signOutMidway) {
   const run = { lot: lot.id, what: lot.what, size: size.name, steps: [], chat: [], errors: [], badWords: [], reached: 'start' }
   report.runs.push(run)
-  const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: 2 })
+  const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: 2, locale: ES ? 'es-MX' : 'en-US' })
   await ctx.addInitScript((a) => { try { localStorage.setItem('drafthouse.api', a) } catch {} }, apiBase)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => run.errors.push(String(e.message).slice(0, 200)))
-  const email = `walk-${mode}-${lot.id}-${size.name}@example.com`
+  const email = `walk-${tag}-${lot.id}-${size.name}@example.com`
   const name = 'Walk Tester'
   const step = async (label, t0) => {
     await page.waitForTimeout(700)
     const text = await page.evaluate(() => document.body.innerText).catch(() => '')
     const bad = text.match(BAD)
     if (bad) run.badWords.push(`${label}: "${bad[0]}"`)
-    const file = `walk-${mode}-${size.name}-${lot.id}-${label}.png`
+    const eng = ES && text.match(ENGLISH)
+    if (eng) run.badWords.push(`${label}: English on a Spanish screen: "${eng[0]}"`)
+    const file = `walk-${tag}-${size.name}-${lot.id}-${label}.png`
     await page.screenshot({ path: path.join(OUT, file) }).catch(() => {})
     run.steps.push({ label, ms: t0 ? Date.now() - t0 : null, file, says: text.replace(/\s+/g, ' ').slice(0, 900) })
     run.reached = label
@@ -86,14 +97,14 @@ async function homeowner(lot, size, signOutMidway) {
     await page.locator('#signin-email').waitFor({ timeout: 30000 })
     if (await page.locator('#signin-name').count()) await page.locator('#signin-name').fill(name)
     await page.locator('#signin-email').fill(email)
-    await page.getByRole('button', { name: /Continue|Email me/ }).click()
+    await page.getByRole('button', { name: /Continue|Email me|Continuar|Enviarme/ }).click()
     await page.locator('#start-address').waitFor({ timeout: 30000 })
   }
   const signOut = async () => {
     if (size.name === '390') {
       await page.getByTestId('account').locator('summary').click()
-      await page.locator('.dh-account-menu').getByRole('button', { name: 'Sign out' }).click()
-    } else await page.getByRole('button', { name: 'Sign out' }).first().click()
+      await page.locator('.dh-account-menu').getByRole('button', { name: /Sign out|Salir/ }).click()
+    } else await page.getByRole('button', { name: /Sign out|Salir/ }).first().click()
   }
   try {
     let t = Date.now()
@@ -102,11 +113,12 @@ async function homeowner(lot, size, signOutMidway) {
     await step('01-start', t)
     t = Date.now()
     await page.locator('#start-address').fill(lot.address)
-    await page.getByRole('button', { name: 'Find my lot' }).click()
+    await page.getByRole('button', { name: /Find my lot|Buscar mi lote/ }).click()
     await page.locator('#lot-city').waitFor({ timeout: 60000 })
     // the lot step: the address question (W typed, E matched), or the parcel
     await Promise.race([page.getByTestId('parcel-card').waitFor({ timeout: 60000 }), page.getByTestId('address-check').waitFor({ timeout: 60000 }), page.getByTestId('parcel-error').waitFor({ timeout: 60000 })]).catch(() => {})
     await page.waitForTimeout(2500)
+    run.askedAddress = (await page.getByTestId('address-check').count()) > 0
     await step('02-lot-found', t)
     if (await page.getByTestId('address-no').count()) {
       await page.getByTestId('address-no').click()
@@ -123,13 +135,13 @@ async function homeowner(lot, size, signOutMidway) {
     await step('03-lot-taken', null)
     t = Date.now()
     await page.getByTestId('lot-next').click()
-    await page.getByRole('button', { name: /Modern Farmhouse/ }).waitFor({ timeout: 30000 })
+    await page.getByTestId('style-farmhouse').waitFor({ timeout: 30000 })
     await step('04-style', t)
-    await page.getByRole('button', { name: /Modern Farmhouse/ }).click()
+    await page.getByTestId('style-farmhouse').click()
     t = Date.now()
-    await page.getByRole('button', { name: /Next, rooms/ }).click()
-    await page.getByRole('button', { name: 'More Bedrooms' }).waitFor({ timeout: 30000 })
-    await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
+    await page.getByRole('button', { name: /Next, rooms|Siguiente: cuartos/ }).click()
+    await page.getByTestId('lot-strip').waitFor({ timeout: 30000 })
+    await page.waitForFunction(() => !/Checking the lot…|Revisando el lote…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
     await step('05-rooms', t)
     if (signOutMidway) {
       t = Date.now()
@@ -140,8 +152,8 @@ async function homeowner(lot, size, signOutMidway) {
       if (run.houseListed) {
         t = Date.now()
         await page.locator('.houses .house').first().click()
-        await page.getByRole('button', { name: 'More Bedrooms' }).waitFor({ timeout: 30000 }).catch(() => {})
-        await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
+        await page.getByTestId('lot-strip').waitFor({ timeout: 30000 }).catch(() => {})
+        await page.waitForFunction(() => !/Checking the lot…|Revisando el lote…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
         await step('07-resumed', t)
       }
     }
@@ -149,34 +161,35 @@ async function homeowner(lot, size, signOutMidway) {
     if (await page.getByTestId('send-lot').count()) {
       t = Date.now()
       await page.getByTestId('send-lot').click()
-      await page.getByText(/Your lot is with our drafter/i).waitFor({ timeout: 30000 }).catch(() => {})
+      await page.getByText(/Your lot is with our drafter|Tu lote ya está con nuestro dibujante/i).waitFor({ timeout: 30000 }).catch(() => {})
       await step('08-lot-sent-to-drafter', t)
       run.outcome = 'no plan fits: lot sent to the drafter'
       await ctx.close()
       return
     }
-    const draft = page.getByRole('button', { name: /Draft my house/ })
+    const draft = page.getByRole('button', { name: /Draft my house|Dibujar mi casa/ })
     if (!(await draft.isEnabled())) {
-      const offer = page.locator('button.linkish', { hasText: /try that|^use /i }).first()
+      const offer = page.locator('button.linkish', { hasText: /try that|^use |probar así|^usar /i }).first()
       if (await offer.count()) {
         await offer.click()
-        await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
+        await page.waitForFunction(() => !/Checking the lot…|Revisando el lote…/.test(document.body.innerText), null, { timeout: 120000 }).catch(() => {})
       }
     }
     t = Date.now()
     await draft.click()
-    await page.getByLabel('Your change').waitFor({ timeout: 90000 })
+    const box = page.getByLabel(/^(Your change|Tu cambio)$/)
+    await box.waitFor({ timeout: 90000 })
     await page.waitForTimeout(3500)
     await step('08-draft-3d', t)
-    await page.getByRole('button', { name: 'Plan', exact: true }).click()
+    await page.locator('.viewport-views button').first().click()
     await page.waitForTimeout(1500)
     await step('09-draft-plan', null)
-    await page.getByRole('button', { name: '3D', exact: true }).click()
+    await page.locator('.viewport-views button', { hasText: '3D' }).click()
     // the chat: the four sentences of the customer test
     for (const [i, ask] of CHAT.entries()) {
       t = Date.now()
-      await page.getByLabel('Your change').fill(ask)
-      await page.getByRole('button', { name: 'Change', exact: true }).click()
+      await box.fill(ask)
+      await box.press('Enter')
       // "Working on it…" shows while the office answers; the reply is there when it is gone
       await page.locator('.log .msg.thinking').waitFor({ timeout: 4000 }).catch(() => {})
       await page.locator('.log .msg.thinking').waitFor({ state: 'detached', timeout: 90000 }).catch(() => {})
@@ -189,18 +202,43 @@ async function homeowner(lot, size, signOutMidway) {
       run.chat.push({ ask, reply, buttons, ms: replyMs, changesLeft: left.replace(/\s+/g, ' ') })
       await step(`10-chat-${i + 1}`, t)
     }
+    run.note = await page.getByTestId('changes-note').innerText().catch(() => '')
+    // round 13, item 2: the browser's Back goes to the rooms step, Forward comes back, and a reload opens the draft again
+    try {
+      const at = () => page.evaluate(() => window.location.hash.replace(/prj_\w+/, 'prj'))
+      const left = await page.getByTestId('changes-left').innerText().catch(() => '')
+      const nav = { draft: await at() }
+      await page.goBack()
+      await page.getByTestId('lot-strip').waitFor({ timeout: 30000 })
+      nav.back = await at()
+      await step('10b-browser-back', null)
+      await page.goForward()
+      await page.getByTestId('changes-left').waitFor({ timeout: 30000 })
+      nav.forward = await at()
+      t = Date.now()
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.getByTestId('changes-left').waitFor({ timeout: 60000 })
+      nav.reload = await at()
+      nav.sameChangesLeft = (await page.getByTestId('changes-left').innerText().catch(() => '')) === left
+      nav.officeText = /Not a drafter account|Office sign-in/.test(await page.evaluate(() => document.body.innerText))
+      run.nav = nav
+      await page.waitForTimeout(2500)
+      await step('10c-reloaded-on-draft', t)
+    } catch (e) {
+      run.nav = { failed: String(e.message || e).split('\n')[0].slice(0, 160) }
+    }
     t = Date.now()
-    await page.getByRole('button', { name: /send to drafters/i }).first().click()
-    await page.getByText('Ready to hand off?').waitFor({ timeout: 30000 })
+    await page.locator('.actions button').last().click()
+    await page.getByText(/Ready to hand off\?|¿Listo para entregarlo\?/).waitFor({ timeout: 30000 })
     await page.waitForTimeout(1500)
     const send = await step('11-send-before-confirm', t)
-    run.sendBefore = /Your plan is saved/i.test(send) ? 'calm card: lot with a drafter' : /cannot be sent yet/i.test(send) ? 'blocked: ' + (send.match(/This lot is zoned [^.]+\./)?.[0] || 'rules') : (await page.getByRole('button', { name: 'Send to drafters' }).count()) ? 'Send button shown' : 'unclear'
+    run.sendBefore = /Your plan is saved|Tu plano está guardado/i.test(send) ? 'calm card: lot with a drafter' : /cannot be sent yet|todavía no se puede enviar/i.test(send) ? 'blocked: ' + (send.match(/(This lot is zoned|Este lote tiene zonificación) [^.]+\./)?.[0] || 'rules') : (await page.getByRole('button', { name: 'Send to drafters' }).count()) ? 'Send button shown' : 'unclear'
     run.page = page
     run.ctx = ctx
     run.email = email
   } catch (e) {
     run.failed = String(e.message || e).split('\n')[0].slice(0, 300)
-    await page.screenshot({ path: path.join(OUT, `walk-${mode}-${size.name}-${lot.id}-FAILED.png`) }).catch(() => {})
+    await page.screenshot({ path: path.join(OUT, `walk-${tag}-${size.name}-${lot.id}-FAILED.png`) }).catch(() => {})
     await ctx.close().catch(() => {})
   }
 }
@@ -216,7 +254,7 @@ async function drafter() {
   await page.getByRole('button', { name: /Continue|Email me/ }).click()
   await page.getByText('Review inbox').waitFor({ timeout: 30000 })
   await page.waitForTimeout(2500)
-  await page.screenshot({ path: path.join(OUT, `walk-${mode}-drafter-inbox.png`), fullPage: true })
+  await page.screenshot({ path: path.join(OUT, `walk-${tag}-drafter-inbox.png`), fullPage: true })
   const inbox = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
   report.drafterInbox = inbox.slice(0, 1500)
   // every lot to confirm: open it, read the card, confirm the lot
@@ -231,13 +269,13 @@ async function drafter() {
     const box = await list.boundingBox()
     const card = (await list.innerText()).replace(/\s+/g, ' ')
     const tag = label.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)
-    await page.screenshot({ path: path.join(OUT, `walk-${mode}-drafter-card-${guard + 1}-${tag}.png`) })
+    await page.screenshot({ path: path.join(OUT, `walk-${tag}-drafter-card-${guard + 1}-${tag}.png`) })
     const t = Date.now()
     await page.getByTestId('check-confirm-lot').click()
     await page.getByText(/Confirmed by drafter@walk\.test/i).first().waitFor({ timeout: 60000 }).catch(() => {})
     await page.waitForTimeout(1200)
     const after = (await list.innerText()).replace(/\s+/g, ' ')
-    await page.screenshot({ path: path.join(OUT, `walk-${mode}-drafter-card-${guard + 1}-${tag}-confirmed.png`) })
+    await page.screenshot({ path: path.join(OUT, `walk-${tag}-drafter-card-${guard + 1}-${tag}-confirmed.png`) })
     report.drafter.push({ row: label, checklistOnFirstScreen: !!box && box.y >= 0 && box.y + box.height <= 900, card: card.slice(0, 900), afterConfirm: after.slice(0, 900), confirmMs: Date.now() - t })
     await page.getByRole('button', { name: /Inbox/ }).click()
     await page.getByText('Review inbox').waitFor({ timeout: 30000 })
@@ -253,16 +291,16 @@ async function finish(run) {
   if (!page) return
   try {
     const t = Date.now()
-    const btn = page.getByRole('button', { name: 'Send to drafters' })
+    const btn = page.getByRole('button', { name: /^(Send to drafters|Enviar a los dibujantes)$/ })
     await btn.waitFor({ timeout: 50000 }).catch(() => {})
     const text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ')
     if ((await btn.count()) && (await btn.isEnabled())) {
       await btn.click()
-      await page.getByRole('button', { name: /Download your summary/ }).waitFor({ timeout: 60000 }).catch(() => {})
+      await page.getByRole('button', { name: /Download your summary|Descargar tu resumen/ }).waitFor({ timeout: 60000 }).catch(() => {})
       await page.waitForTimeout(1500)
-      run.outcome = /Download your summary/i.test(await page.evaluate(() => document.body.innerText)) ? 'sent to the drafters' : 'pressed Send; no confirmation seen'
-    } else run.outcome = /zoned/i.test(text) ? 'Send blocked by the zoning: ' + (text.match(/This lot is zoned [^.]+\.[^.]*\./)?.[0] || '') : 'Send not available: ' + text.slice(0, 200)
-    const file = `walk-${mode}-${run.size}-${run.lot}-12-send-after-confirm.png`
+      run.outcome = /Download your summary|Descargar tu resumen/i.test(await page.evaluate(() => document.body.innerText)) ? 'sent to the drafters' : 'pressed Send; no confirmation seen'
+    } else run.outcome = /zoned|zonificación/i.test(text) ? 'Send blocked by the zoning: ' + (text.match(/(This lot is zoned|Este lote tiene zonificación) [^.]+\.[^.]*\./)?.[0] || '') : 'Send not available: ' + text.slice(0, 200)
+    const file = `walk-${tag}-${run.size}-${run.lot}-12-send-after-confirm.png`
     await page.screenshot({ path: path.join(OUT, file) })
     run.steps.push({ label: '12-send-after-confirm', ms: Date.now() - t, file, says: (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, ' ').slice(0, 900) })
   } catch (e) {
@@ -275,7 +313,7 @@ async function finish(run) {
 
 async function sheets(dir) {
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, `walkthrough-${mode}.json`), JSON.stringify(report, null, 1))
+  fs.writeFileSync(path.join(dir, `walkthrough-${tag}.json`), JSON.stringify(report, null, 1))
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
   const sheet = async (name, title, files, each, cols) => {
     const have = files.filter((f) => fs.existsSync(path.join(OUT, f.file)))
@@ -293,10 +331,10 @@ async function sheets(dir) {
   }
   for (const run of report.runs) {
     const phone = run.size === '390'
-    await sheet(`walk-${mode}-${run.size}-${run.lot}`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'} · ${run.size} px · ${run.what} · ${run.outcome || run.failed || run.reached}`, run.steps.map((st) => ({ file: st.file, label: st.label + (st.ms ? ` · ${(st.ms / 1000).toFixed(1)} s` : '') })), phone ? 280 : 620, phone ? 6 : 3)
+    await sheet(`walk-${tag}-${run.size}-${run.lot}`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'}${ES ? ' · Spanish' : ''} · ${run.size} px · ${run.what} · ${run.outcome || run.failed || run.reached}`, run.steps.map((st) => ({ file: st.file, label: st.label + (st.ms ? ` · ${(st.ms / 1000).toFixed(1)} s` : '') })), phone ? 280 : 620, phone ? 6 : 3)
   }
-  const cards = fs.readdirSync(OUT).filter((f) => f.startsWith(`walk-${mode}-drafter-`) && f.endsWith('.png')).sort()
-  await sheet(`walk-${mode}-drafter`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'} · the drafter: lots to confirm and each review card, before and after confirming`, cards.map((f) => ({ file: f, label: f.replace(`walk-${mode}-drafter-`, '').replace('.png', '') })), 620, 3)
+  const cards = fs.readdirSync(OUT).filter((f) => f.startsWith(`walk-${tag}-drafter-`) && f.endsWith('.png')).sort()
+  await sheet(`walk-${tag}-drafter`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'}${ES ? ' · Spanish' : ''} · the drafter: lots to confirm and each review card, before and after confirming`, cards.map((f) => ({ file: f, label: f.replace(`walk-${tag}-drafter-`, '').replace('.png', '') })), 620, 3)
 }
 
 try {
@@ -312,7 +350,7 @@ try {
 } finally {
   for (const run of report.runs) { delete run.page; delete run.ctx }
   report.apiLogTail = api.log().split('\n').filter((l) => /error|alert|proxy chain|flood:|parcels:|interpret/i.test(l)).slice(-40).map((l) => l.replace(/[\w.+-]+@[\w.-]+/g, '<email>').slice(0, 220))
-  fs.writeFileSync(path.join(OUT, `walkthrough-${mode}.json`), JSON.stringify(report, null, 1))
+  fs.writeFileSync(path.join(OUT, `walkthrough-${tag}.json`), JSON.stringify(report, null, 1))
   // SHEETS=<folder>: one picture per run with every step in order (small enough to keep in the repository), the
   // drafter's screens on one more, and a copy of the report
   if (process.env.SHEETS) {

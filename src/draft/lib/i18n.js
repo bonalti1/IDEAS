@@ -12,6 +12,7 @@
 //  - `sentence(text, lang)` is for the sentences the plan code writes (chat replies, rule reasons, notes from the
 //    office API). ONE place below plugs in `toSpanish` from ./es.js when that file lands.
 import { createElement, Fragment, useEffect, useState, useSyncExternalStore } from 'react'
+import { toSpanish } from './es.js'
 import { plainReason } from './plain.js'
 import { es } from './i18n-es.js'
 
@@ -112,15 +113,15 @@ export function translateRich(lang, text, params = {}) {
 
 // ── sentences the plan code writes ───────────────────────────────────────────────────────────────────
 
-// ▼▼▼ PLUG `toSpanish` IN HERE (round 13) ▼▼▼
-// When src/draft/lib/es.js lands, add at the top of this file:
-//     import { toSpanish } from './es.js'
-// and replace the line below with:
-//     const planSentence = (text) => toSpanish(text)
-// Nothing else changes: every chat reply, rule reason and office note on a homeowner screen already comes through
-// `sentence(...)`, and always as the English a homeowner reads today (after plain.js took "setback" out).
-const planSentence = (text) => text
-// ▲▲▲ PLUG `toSpanish` IN HERE ▲▲▲
+// The sentences the plan code writes (chat replies, rule and fit reasons, button labels) are put into Spanish by
+// lib/es.js. A sentence it has no words for is left as written; Spanish that the office already sent stays as it is.
+const planSentence = (text) => {
+  try {
+    return toSpanish(text)
+  } catch {
+    return text
+  }
+}
 
 /**
  * A sentence written by the plan code, the rules or the office API, in the homeowner's language. English comes

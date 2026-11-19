@@ -537,8 +537,9 @@ route('POST', '/api/workers/:id/commands', 'drafter', async (req, res, p) => {
 
 // ── change interpreter for the no-account path (the app decides and keeps credits locally) ──
 route('POST', '/api/interpret', 'app', async (req, res) => {
-  const body = await readJson(req, { text: 'string', rooms: 'array', program: 'object?', kit: 'object?', lot: 'object?', client: 'string?' })
-  const input = { request: String(body.text).slice(0, 500), program: body.program, kit: body.kit, rooms: body.rooms }
+  const body = await readJson(req, { text: 'string', rooms: 'array', program: 'object?', kit: 'object?', lot: 'object?', client: 'string?', lang: 'string?' })
+  // the language of the homeowner's screen, when the app sends it (round 13): the reply is written in it
+  const input = { request: String(body.text).slice(0, 500), ...(body.lang === 'es' ? { lang: 'es' } : {}), program: body.program, kit: body.kit, rooms: body.rooms }
   try {
     const out = await interpreter.ask(input)
     logInterpret({ request: input.request, client: body.client || null, rooms: body.rooms.length, diff: { ops: out.ops, reply: out.reply, confidence: out.confidence }, verdict: out.confidence < 0.5 || !out.ops.length ? 'unsure' : 'diff', ms: out.ms, usage: out.usage, cost: out.cost, model: out.model })

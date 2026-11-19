@@ -143,19 +143,20 @@ test('3: {name} and {n|one|many} are filled; English is the sentence as written'
 // ── 4. sentences the plan code writes ───────────────────────────────────────────────────────────────
 
 test('4: sentence() is the one door for what the plan code writes; English comes back untouched', () => {
-  const reply = 'A 3-car garage does not fit on this lot: it would run 4.0 ft past the space the city keeps open on the left side.'
+  const reply = 'This plan already has 4 bedrooms. No change was used.'
   assert.equal(sentence(reply, 'en'), reply)
-  // until lib/es.js lands the sentence is shown as the plan wrote it (and never lost)
-  assert.equal(sentence(reply, 'es'), reply)
+  // lib/es.js is plugged in: what the plan code writes is read in Spanish, with nothing of the English left
+  assert.equal(sentence(reply, 'es'), 'Este plano ya tiene 4 recámaras. No se usó ningún cambio.')
+  assert.equal(sentence('Making the kitchen about 15 percent bigger.', 'es'), 'Hice la cocina más o menos un 15 por ciento más grande.')
+  // Spanish the office already sent stays as it is, and a sentence nobody has words for is shown as written, never lost
+  assert.equal(sentence('Hice la cocina 2 pies más ancha.', 'es'), 'Hice la cocina 2 pies más ancha.')
+  assert.equal(sentence('A sentence nobody wrote words for.', 'es'), 'A sentence nobody wrote words for.')
   assert.equal(sentence('', 'es'), '')
   assert.equal(sentence(undefined, 'es'), undefined)
   // a sentence the dictionary has word for word is Spanish already
   assert.equal(sentence('without the office', 'es'), 'sin la oficina')
-  // one marked place to plug toSpanish in
   const src = fs.readFileSync('src/draft/lib/i18n.js', 'utf8')
-  assert.equal((src.match(/PLUG `toSpanish` IN HERE/g) || []).length, 2, 'one marked block (opened and closed)')
-  assert.match(src, /const planSentence = \(text\) => text/)
-  assert.doesNotMatch(src, /^import .*from '\.\/es\.js'/m, 'lib/es.js is not imported yet')
+  assert.match(src, /^import \{ toSpanish \} from '\.\/es\.js'/m, 'lib/es.js is the one place the plan\'s sentences are put into Spanish')
   // a line of the chat without its own parts goes through the same door, after "setback" is taken out
   assert.equal(houseText({ who: 'house', text: 'It crosses the rear setback.' }, 'en'), plainReason('It crosses the rear setback.'))
   assert.doesNotMatch(houseText({ who: 'house', text: 'It crosses the rear setback.' }, 'es'), /setback/)
@@ -430,8 +431,9 @@ test('6: the Draft step tells the office which language the homeowner reads', ()
   const api = fs.readFileSync('src/draft/lib/api.js', 'utf8')
   assert.match(api, /change: \(id, text, ops, lang\) =>.*\.\.\.\(lang \? \{ lang \} : \{\}\)/)
   assert.match(fs.readFileSync('src/draft/screens/Draft.jsx', 'utf8'), /api\.change\(project\.id, q, fix\?\.ops, lang\)/)
-  // today's office reads { text, ops? } and ignores a key it does not know (server/index.mjs `need`): nothing is rejected
+  // the office reads it on both chat routes (an account's plan, and the no-account interpreter)
   const server = fs.readFileSync('server/index.mjs', 'utf8')
-  assert.match(server, /readJson\(req, \{ text: 'string', ops: 'array\?' \}\)/)
+  assert.match(server, /readJson\(req, \{ text: 'string', ops: 'array\?', lang: 'string\?' \}\)/)
+  assert.match(server, /client: 'string\?', lang: 'string\?' \}\)/)
   assert.match(server, /const BAD_KEYS = new Set\(\['__proto__', 'constructor', 'prototype'\]\)/)
 })
