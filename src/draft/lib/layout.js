@@ -12,6 +12,8 @@ import { auditPlan } from './audit.js'
 
 // the reference lot's envelope centre, kept for older call sites
 const ENVELOPE_CENTER = DEFAULT_LOT.centre
+// a garage's walls, and the eaves of its roof (the other rooms take their plate from the kit)
+const GARAGE_PLATE = 11
 /** A lot object, or the reference lot when none (or only an address) was given. */
 export const lotOf = (lot) => (lot && lot.envelope && lot.angle !== undefined ? lot : DEFAULT_LOT)
 
@@ -360,7 +362,9 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
       // a mass drawn for a room that is not there takes its 'absent' shape (the bed wing runs on over Bath 1 without the mini primary)
       const { absent, ...mass } = m
       Object.entries(absent || {}).forEach(([id, over]) => { if (!ids2.has(id)) Object.assign(mass, over) })
-      return m.id === 'bedwing' && wingShift ? { ...mass, y0: mass.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...mass, x1: drawnGarage.x + drawnGarage.w } : mass
+      // a drawn garage's roof sits on its walls, which are 11 ft like an attached garage's (round 12, item 7c: at the
+      // kit's 9.5 ft the walls stood a foot and a half above the eaves, a parapet round the roof)
+      return m.id === 'bedwing' && wingShift ? { ...mass, y0: mass.y0 - wingShift } : m.id === 'garage' && drawnGarage ? { ...mass, x1: drawnGarage.x + drawnGarage.w, plate: Math.max(mass.plate, GARAGE_PLATE) } : mass
     })
     // the rooms across the hall from the wing, behind the porch: a gable tied into the bed wing's
     if (wing.east) {
@@ -379,6 +383,9 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
         masses.push({ id: `awning-${r.id}`, kind: 'shed', x0: r.x - 2.5, x1: r.x, y0: cy - win.span / 2 - 0.5, y1: cy + win.span / 2 + 0.5, high: 'e', plate: 8.5, pitch: 4, material: 'metal awning', overhang: 0 })
       })
     })
+    // round 12, item 7c: no heated room is left without a roof over part of it (the mud room's bump-out behind the
+    // main roof had none)
+    masses.push(...leanTos(rooms.filter((r) => isRoom(r) && !r.open), masses, kit))
     rooms.push({ id: 'roof', kind: 'roof', element: true, open: true, name: 'Roof', x: -100, y: -100, w: 0, d: 0, h: 0, local: [0, 0], center: [0, 0], masses, scale: 1, centre: [cx, cy], offset: [0, 0], faces: roofSurfaces(masses, 1, [cx, cy]), dormers: dormerWalls(masses, 1, [cx, cy]), plan: T.id || 'standard' })
   }
   const areaAt = (k) => {
@@ -450,6 +457,73 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   // moves up to the front setback line, a few feet behind it, so the driveway is short and the back yard deep
   const slid = slideToFront(fit.rooms, kit, program.stories, lot)
   return { rooms: slid.rooms, planScale: Array.isArray(k) ? k[0] : k, planScaleY: Array.isArray(k) ? k[1] : null, minSqft, capped, clamped: kReq < kMin - 1e-9, fitScale: first.scale * fit.scale, fitShift: [first.shift[0] + fit.shift[0], first.shift[1] + fit.shift[1] + slid.shift] }
+}
+
+/**
+ * Lean-to roofs over whatever part of an enclosed room no roof mass covers (round 12, item 7c). The piece of the room
+ * outside every gable and porch roof gets a shed roof of its own, high against the roof it sticks out from and
+ * meeting that roof's eave, so the room reads as a bump-out under the same roof. The first lean-to of a room carries
+ * the room's id (when no mass has it): it then follows the room and goes when the room goes, like a room's own gable.
+ * Plan feet, the masses' own frame (before the plan is scaled or placed).
+ */
+function leanTos(solid, masses, kit) {
+  const rectOf = (m) => ({ m, x0: Math.min(m.x0, m.x1), x1: Math.max(m.x0, m.x1), y0: Math.min(m.y0, m.y1), y1: Math.max(m.y0, m.y1) })
+  const covers = masses.filter((m) => (m.kind === 'gable' || m.kind === 'shed') && m.x0 !== undefined && m.y0 !== undefined && !String(m.id || '').startsWith('awning-')).map(rectOf)
+  const gables = covers.filter((c) => c.m.kind === 'gable')
+  const out = []
+  solid.forEach((r) => {
+    let pieces = [{ x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.d }]
+    for (const c of covers) {
+      if (!pieces.length) break
+      pieces = pieces.flatMap((p) => {
+        const ix0 = Math.max(p.x0, c.x0)
+        const ix1 = Math.min(p.x1, c.x1)
+        const iy0 = Math.max(p.y0, c.y0)
+        const iy1 = Math.min(p.y1, c.y1)
+        if (ix0 >= ix1 || iy0 >= iy1) return [p]
+        // what is left of the piece around the covered part: two full-width strips, two side strips between them
+        return [{ ...p, y1: iy0 }, { ...p, y0: iy1 }, { ...p, y0: iy0, y1: iy1, x1: ix0 }, { ...p, y0: iy0, y1: iy1, x0: ix1 }].filter((q) => q.x1 - q.x0 > 1e-6 && q.y1 - q.y0 > 1e-6)
+      })
+    }
+    // a strip narrower than the eaves reach is under the overhang already
+    pieces.filter((p) => p.x1 - p.x0 > 0.75 && p.y1 - p.y0 > 0.75).forEach((p, i) => {
+      // the roof it sticks out from: the gable with the longest wall along one of the piece's sides
+      let host = null
+      const overlap = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0)
+      gables.forEach((g) => {
+        const tries = [
+          ['n', Math.abs(g.y1 - p.y0) < 0.5, overlap(p.x0, p.x1, g.x0, g.x1), g.m.ridge === 'ew'],
+          ['s', Math.abs(g.y0 - p.y1) < 0.5, overlap(p.x0, p.x1, g.x0, g.x1), g.m.ridge === 'ew'],
+          ['w', Math.abs(g.x1 - p.x0) < 0.5, overlap(p.y0, p.y1, g.y0, g.y1), g.m.ridge === 'ns'],
+          ['e', Math.abs(g.x0 - p.x1) < 0.5, overlap(p.y0, p.y1, g.y0, g.y1), g.m.ridge === 'ns'],
+        ]
+        tries.forEach(([high, touches, len, atEave]) => {
+          if (touches && len > 0.5 && (!host || len > host.len)) host = { high, len, eave: atEave ? Math.min(g.m.plate, g.m.plate2 ?? g.m.plate) : null }
+        })
+      })
+      const id = i === 0 && !masses.some((m) => m.id === r.id) && !out.some((m) => m.id === r.id) ? r.id : `lean-${r.id}-${i}`
+      if (!host) {
+        // nothing to lean on: a gable of its own, ridge along its long side
+        const ew = p.x1 - p.x0 >= p.y1 - p.y0
+        out.push({ id, kind: 'gable', x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, ridge: ew ? 'ew' : 'ns', plate: kit.plates?.default || 9, pitch: +String(kit.roof?.pitch || '10').split(':')[0] || 10, ends: ew ? ['w', 'e'] : ['n', 's'] })
+        return
+      }
+      const depth = host.high === 'n' || host.high === 's' ? p.y1 - p.y0 : p.x1 - p.x0
+      let plate = kit.plates?.byRoom?.[r.kind] || kit.plates?.default || 9
+      let pitch = 3
+      if (host.eave !== null) {
+        // its high side meets the eave it leans on; never flatter than 1:12
+        pitch = ((host.eave - plate) / depth) * 12
+        if (pitch < 1) {
+          pitch = 1
+          plate = host.eave - depth / 12
+        }
+        pitch = Math.min(pitch, 6)
+      }
+      out.push({ id, kind: 'shed', x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, high: host.high, plate: Math.round(plate * 100) / 100, pitch: Math.round(pitch * 100) / 100, material: 'shingles' })
+    })
+  })
+  return out
 }
 
 /** The smallest k in [lo, hi] (to 0.01) for which `ok(k)` holds; ok is monotone (false below, true above). */

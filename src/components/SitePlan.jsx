@@ -70,7 +70,7 @@ function nearestLabel(lot, p) {
   return best
 }
 
-function SetbackEnvelope({ lot }) {
+function SetbackEnvelope({ lot, textScale = 1 }) {
   const E = lot.envelope || []
   // an empty envelope (the setbacks meet in the middle of a sliver lot) draws nothing here; the lot itself still shows
   const pts = useMemo(() => (E.length < 3 ? [] : [...E, E[0]].map(([x, z]) => [x, Y.setback, z])), [lot])
@@ -89,14 +89,14 @@ function SetbackEnvelope({ lot }) {
         const nz = bx - ax
         const l = Math.hypot(nx, nz)
         const toC = (C[0] - (ax + bx) / 2) * nx + (C[1] - (az + bz) / 2) * nz
-        const s = (toC > 0 ? -1 : 1) * 4
+        const s = (toC > 0 ? -1 : 1) * Math.max(2, 4 * textScale)
         return (
           <FlatLabel
             key={i}
             x={(ax + bx) / 2 + (nx / l) * s}
             z={(az + bz) / 2 + (nz / l) * s}
             angle={angle}
-            size={4}
+            size={4 * textScale}
             color={COLORS.setback}
           >
             {nearestLabel(lot, [(ax + bx) / 2, (az + bz) / 2])}
@@ -107,7 +107,7 @@ function SetbackEnvelope({ lot }) {
   )
 }
 
-function Street({ street, lot }) {
+function Street({ street, lot, textScale = 1 }) {
   const { geom, edgeInner, edgeOuter, label } = useMemo(() => {
     const inner = street.pts
     const outer = offsetPolyline(inner, STREET_WIDTH_ILLUSTRATIVE, lot.centroid)
@@ -134,7 +134,7 @@ function Street({ street, lot }) {
         x={label.point[0]}
         z={label.point[1]}
         angle={label.angle}
-        size={8}
+        size={8 * textScale}
         color="#4c525a"
         letterSpacing={0.25}
         bold
@@ -202,7 +202,12 @@ function ScaleBar({ x0 = 20, z0 = 175 }) {
   )
 }
 
-export default function SitePlan({ lot = DEFAULT_LOT, problem = '', northArrow = true }) {
+/**
+ * `textScale` (round 12, item I) sizes the words drawn on the ground: 1 where the picture is the lot itself (the Lot
+ * step's top view), smaller beside a house in the 3D view, where full-size lettering was as tall as a door.
+ */
+export default function SitePlan({ lot = DEFAULT_LOT, problem = '', northArrow = true, textScale = 1 }) {
+  const ts = textScale
   const [cx, cz] = lot.centroid
   const xs = lot.boundary.map((p) => p[0])
   const zs = lot.boundary.map((p) => p[1])
@@ -220,7 +225,9 @@ export default function SitePlan({ lot = DEFAULT_LOT, problem = '', northArrow =
     streetNorth = (a[1] + b[1]) / 2 < cz - 1
   }
   const anyStreetNorth = streetNorth || (lot.streets || []).some((st) => st.pts?.some((p) => p[1] < minZ - 4))
-  const labelZ = anyStreetNorth ? maxZ + 9 : minZ - 8
+  // smaller text sits closer to the lot line it belongs to
+  const near = Math.max(ts, 0.6)
+  const labelZ = anyStreetNorth ? maxZ + 9 * near : minZ - 8 * near
   return (
     <group>
       <Grid
@@ -237,37 +244,37 @@ export default function SitePlan({ lot = DEFAULT_LOT, problem = '', northArrow =
         followCamera={false}
       />
       {(lot.streets || []).map((s) => (
-        <Street key={s.name + (s.edge ?? '')} street={s} lot={lot} />
+        <Street key={s.name + (s.edge ?? '')} street={s} lot={lot} textScale={ts} />
       ))}
       <LotFill lot={lot} bad={!!problem} />
       <PropertyLine lot={lot} />
-      <SetbackEnvelope lot={lot} />
+      <SetbackEnvelope lot={lot} textScale={ts} />
       {problem && !isRef ? (
-        <FlatLabel x={cx} z={anyStreetNorth ? maxZ + 22 : maxZ + 9} angle={0} size={3.6} color={COLORS.property} bold>
+        <FlatLabel x={cx} z={anyStreetNorth ? maxZ + 22 : maxZ + 9} angle={0} size={3.6 * ts} color={COLORS.property} bold>
           {String(problem).toUpperCase().slice(0, 64)}
         </FlatLabel>
       ) : null}
 
       {isRef ? (
         <>
-          <FlatLabel x={150} z={27} angle={lot.angle} size={7} bold>
+          <FlatLabel x={150} z={27} angle={lot.angle} size={7 * ts} bold>
             LOT 514
           </FlatLabel>
-          <FlatLabel x={151} z={33} angle={lot.angle} size={3.2} color="#5a6069">
+          <FlatLabel x={151} z={27 + 6 * Math.max(ts, 0.6)} angle={lot.angle} size={3.2 * ts} color="#5a6069">
             ±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC
           </FlatLabel>
-          <FlatLabel x={110} z={-14} angle={lot.angle} size={5} color="#7a808a">
+          <FlatLabel x={110} z={-14} angle={lot.angle} size={5 * ts} color="#7a808a">
             LOT 513 — NEIGHBOR (6' SIDE SETBACK)
           </FlatLabel>
         </>
       ) : (
         <>
           {/* two short lines, so the text stays inside the picture on a narrow lot (round 10) */}
-          <FlatLabel x={cx} z={labelZ} angle={0} size={3.6} color="#5a6069">
+          <FlatLabel x={cx} z={labelZ} angle={0} size={3.6 * ts} color="#5a6069">
             {lot.address ? lot.address.split(',')[0].toUpperCase().slice(0, 40) + ' · ' : ''}±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC
           </FlatLabel>
           {lot.confirmed === false && (
-            <FlatLabel x={cx} z={labelZ + (anyStreetNorth ? 6 : -6)} angle={0} size={3} color="#5a6069">
+            <FlatLabel x={cx} z={labelZ + (anyStreetNorth ? 6 : -6) * Math.max(ts, 0.6)} angle={0} size={3 * ts} color="#5a6069">
               LOT PENDING DRAFTER CONFIRMATION
             </FlatLabel>
           )}
