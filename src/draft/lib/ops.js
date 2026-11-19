@@ -7,7 +7,7 @@ import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -39,6 +39,12 @@ export function normalizeOps(ops, rooms) {
         return { ...o, dx, dy }
       }
       if (o.op === 'add' && !o.kind) return null
+      // "4 bedrooms", "3 bathrooms": the kind is bed or bath whatever word came with it, the count a whole number
+      if (o.op === 'count') {
+        const kind = /bath/i.test(String(o.kind || '')) ? 'bath' : /bed|master|primary|suite/i.test(String(o.kind || '')) ? 'bed' : o.kind
+        const count = Number.isFinite(+o.count) && o.count !== null && o.count !== '' ? Math.round(+o.count) : o.count
+        return { op: 'count', kind, count }
+      }
       // a garage op without a bay count keeps the garage's bays ("make the garage side-load")
       if (o.op === 'garage' && !(o.cars >= 1)) {
         const g = rooms.find((r) => isRoom(r) && r.kind === 'garage')
@@ -63,7 +69,8 @@ export function validateOps(ops, rooms, kit) {
     if (!o || typeof o !== 'object') return errors.push('That change did not come through whole.')
     if (unsafe(o)) return errors.push('That change is not valid.')
     if (!OPS.includes(o.op)) return errors.push(`I do not know how to "${String(o.op ?? '')}" a room.`)
-    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
+    if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12)) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
     if (o.op === 'scale' && !(typeof o.sqft === 'number' && o.sqft >= 600 && o.sqft <= 10000)) errors.push('Give a size between 600 and 10,000 sf.')
     if (o.op === 'swap' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to swap with.`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push('A resize needs a width and a depth in feet.')
@@ -742,7 +749,8 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       const id = o.id || `${o.kind}-${n}-${Date.now().toString(36).slice(-4)}`
       let room = null
       if (o.kind === 'rearPorch' || o.kind === 'frontPorch') {
-        room = addPorch(flat, kit, o.kind === 'rearPorch' ? 'rear' : 'front')
+        // a size the client gave ("a 12 by 14 patio") is kept; without one the porch takes the free wall, the kit's depth
+        room = addPorch(flat, kit, o.kind === 'rearPorch' ? 'rear' : 'front', { w: o.w > 0 ? q(o.w) : null, d: o.d > 0 ? q(o.d) : null })
         if (!room) throw new Error(flat.some((r) => isRoom(r) && r.kind === o.kind) ? `the plan already has a ${t.name.toLowerCase()}` : `there is no free wall for a ${t.name.toLowerCase()}`)
       } else if (o.kind === 'garage') {
         if (flat.some((r) => isRoom(r) && r.kind === 'garage')) throw new Error('the plan already has a garage')
@@ -788,7 +796,7 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
     if (refit.scale === 1 && (refit.shift[0] || refit.shift[1])) {
       placed = refit.rooms
       const [dx, dy] = refit.shift
-      did.push(`The house moved ${Math.abs(dx) >= Math.abs(dy) ? `${Math.abs(dx)}' ${dx > 0 ? 'east' : 'west'}` : `${Math.abs(dy)}' ${dy > 0 ? 'toward the street' : 'toward the back'}`} on the lot to stay inside the setbacks`)
+      did.push(`The house moved ${Math.abs(dx) >= Math.abs(dy) ? `${Math.abs(dx)}' ${dx > 0 ? 'east' : 'west'}` : `${Math.abs(dy)}' ${dy > 0 ? 'toward the street' : 'toward the back'}`} on the lot to stay clear of the space the city keeps open along each edge`) // round 12: the reply carries this, in a homeowner's words
     }
   }
   return { rooms: placed, did }
@@ -810,7 +818,7 @@ const KINDS = [
   ['bath', /\bbath/],
   ['laundry', /laundry|utility/],
   ['frontPorch', /front porch|porch (on|at|in|to) the front|porch out front/],
-  ['rearPorch', /rear porch|back porch|patio|porch (on|at|in|to) the (back|rear)|porch out back|covered patio/],
+  ['rearPorch', /rear porch|back porch|patio|lanai|porch (on|at|in|to) the (back|rear)|porch out back|covered patio/],
   ['porch', /\bporch\b/],
   ['office', /office|study/],
   ['pantry', /pantry/],
@@ -881,6 +889,46 @@ export function splitCost(text) {
   return { text: kept.join('; ').replace(/;\s*$/, ''), cost: true, spanish: asked.some((c) => SPANISH_RE.test(c)) }
 }
 
+// ── "4 bedrooms" and "make it feel more open" (round 12, item G) ──────────────────────────────
+const COUNT_RE = /(?<![\d.,$#-])(?<!\b(?:the|all|both|these|those|my|our|your)\s+)\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:full[\s-]+)?(bed(?:room)?s?|bath(?:room)?s?)\b/g
+/**
+ * The room counts a request asks for: "I want 4 bedrooms", "make it 3 bathrooms", "a 4 bed 3 bath house" →
+ * [{ kind: 'bed', count: 4 }, ...]. Empty for anything that is not a plain count: "add 2 bedrooms" (two more),
+ * "make bedroom 2 bigger" (a room by its number), "the 3 bedrooms" (the rooms as they are), "2.5 baths".
+ */
+export function countAsk(text) {
+  const t = String(text || '').toLowerCase()
+  if (/\b(add|another|extra|more|fewer|less|put in|remove|delete|drop|get rid of|without|take out|bigger|larger|wider|deeper|longer|smaller|narrower|shorter|tighter|expand|enlarge|shrink|reduce|move|shift|swap|switch|next to|beside|closet|window|door)\b/.test(t)) return []
+  if (/\d\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/.test(t)) return []
+  // "2.5 baths" is a bath and a half bath, not a count this reads (and never "5 baths")
+  if (/\d[.,]\d+[\s-]*(?:full[\s-]+)?(?:bed|bath)/.test(t)) return []
+  const out = []
+  for (const m of t.matchAll(COUNT_RE)) {
+    const kind = m[2].startsWith('bed') ? 'bed' : 'bath'
+    const count = WORDS[m[1]] || +m[1]
+    // a half ("3 bedrooms 2.5 baths") is not a count this reads; two different counts of one kind are not one ask
+    if (/^\s*(?:and a half|1\/2|½)/.test(t.slice(m.index + m[0].length))) return []
+    const had = out.find((c) => c.kind === kind)
+    if (had && had.count !== count) return []
+    if (!had) out.push({ kind, count })
+  }
+  return out
+}
+
+const OPEN_STRICT = /\bmore open\b|\bopen[- ]?(?:concept|plan|layout|floor ?plan)\b|\bopen(?:s|ed|ing)? (?:it|things|everything|the (?:house|home|plan|place|space|layout|floor ?plan|rooms?)) up\b|\bopen(?:s|ed|ing)? up\b|\bopen (?:the |up the )?[a-z &]{2,30}? (?:to|into|onto|with) the\b|\b(?:less|not so|too|so|feels?|feeling) (?:closed|boxy|boxed|chopped|cramped|shut)(?:[- ](?:in|up|off))?\b|\bclosed[- ](?:in|off)\b|\bair(?:y|ier)\b|\b(?:taller|higher|raised?|vaulted|cathedral)\b[a-z ]{0,12}\bceilings?\b|\bceilings?\b[a-z ]{0,12}\b(?:taller|higher|raised)\b|\b(?:remove|removing|take (?:out|down)|taking (?:out|down)|knock (?:out|down)|tear (?:out|down)|lose|get rid of|without|fewer|no) (?:a |an |the |that |those |some |any )?(?:[a-z&]+ ){0,3}?walls?\b/
+const OPEN_SOFT = /\b(?:feels?|feeling|felt) (?:a (?:little|bit) |kind of |so |too |more |much )?(?:bigger|larger|roomier|spacious|small|tight|dark)\b|\b(?:more spacious|roomier|more breathing room)\b/
+const ANY_ROOM = /kitchen|living|family room|great room|dining|garage|bed|bath|laundry|porch|patio|office|study|pantry|mud ?room|foyer|closet|primary|master/
+/**
+ * A request for the house to feel more open: "make it feel more open", "open the kitchen to the living room",
+ * "take out the dining wall", "taller ceilings". None of these is an edit the plan code has (the kit draws the
+ * public rooms open already, and ceiling heights are the kit's), so the answer is an offer, never a change.
+ */
+export function wantsOpen(text) {
+  const t = String(text || '').toLowerCase()
+  return OPEN_STRICT.test(t) || (OPEN_SOFT.test(t) && !ANY_ROOM.test(t))
+}
+export const OPEN_ASK = 'Tell me which room should get more space and I will make it bigger.'
+
 /** The room a parsed clause is about, by name, for the next clause's "it". */
 function subjectOf(diff, rooms, kit) {
   const o = diff?.ops?.[0]
@@ -909,7 +957,7 @@ export function regexOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } =
     if (one.ops?.length && (one.confidence ?? 1) >= 0.5) {
       parts.push({ text: c, ...one })
       subject = subjectOf(one, rooms, kit) || subject
-    } else unread.push({ text: c, why: one.reply || '' })
+    } else unread.push({ text: c, why: one.reply || '', ...(one.intent === 'open' ? { hint: 'send that on its own and I will show what can be done' } : {}) })
   }
   if (!parts.length) return whole
   if (parts.length === 1 && !unread.length) return whole
@@ -920,9 +968,18 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   // money is never read as a change: the answer points to the meeting with the office (M3)
   if (isCostQuestion(text)) return { ops: [], reply: costReply(text), confidence: 1 }
   const t = text.toLowerCase()
+  // "make it feel more open", "take out the dining wall", "taller ceilings": never a room removed or resized on a
+  // guess; the verdict (decide) says what the plan already has open and offers the changes that do apply
+  if (wantsOpen(t)) return { ops: [], intent: 'open', reply: OPEN_ASK, confidence: 0.7 }
+  // "I want 4 bedrooms", "make it 3 bathrooms": the house is set to that many (rooms added, or a new draft)
+  const counts = countAsk(t)
+  if (counts.length) {
+    const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}`
+    return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
+  }
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
-  const add = /\b(add|another|extra|one more|put in)\b/.test(t)
+  const add = /\b(add|another|extra|one more|put in)\b|\b(?:\d+|two|three|four|five|six) more (?:bed|bath|office|room)/.test(t) // "2 more bedrooms" adds two; "2 more feet" does not
   const remove = /\b(remove|delete|drop|get rid of|without|take out|no longer)\b/.test(t)
   const much = /\b(much|a lot|way|double)\b/.test(t) ? 1.3 : 1.15
   const roomsOnly = rooms.filter(isRoom)
@@ -1038,6 +1095,14 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
       // round 9, item 11: a full plan says so, not "ask for 0 more"
       const reply = left === 0 ? `This plan already has the most ${room}s this lot holds (${cap}).` : `This plan holds up to ${cap} ${room}s${kind === 'bed' || kind === 'bath' ? ' on this lot' : ''}; it has ${have}. Ask for ${left} more at most${left === 1 ? ' (one)' : ''}.`
       return { ops: [], reply, confidence: 0.6 }
+    }
+    // a patio is the plan's rear porch (round 12): "add a covered patio in the back", with its size when one is given
+    if (kind === 'rearPorch' || kind === 'frontPorch') {
+      const size = t.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*(?:by|x|×)\s*(\d+(?:\.\d+)?)/)
+      const patio = /\bpatio|lanai\b/.test(t)
+      const op = { op: 'add', kind, ...(patio ? { name: 'Covered Patio' } : {}), ...(size ? { w: q(+size[1]), d: q(+size[2]) } : {}) }
+      const what = patio ? 'a covered patio' : `a ${kit.rooms[kind].name.toLowerCase()}`
+      return { ops: [op], reply: `Adding ${what}${patio ? (kind === 'rearPorch' ? ' at the back of the house' : ' at the front of the house') : ''}${size ? `, ${q(+size[1])} by ${q(+size[2])} feet` : ''}.${patio ? ` On the plan it is labelled ${kit.rooms[kind].name}.` : ''}`, confidence: 0.7 }
     }
     const ops = Array.from({ length: Math.max(1, Math.min(count, 4)) }, () => ({ op: 'add', kind, ...(near ? { near } : {}) }))
     return { ops, reply: `Adding ${count > 1 ? `${count} ${kit.rooms[kind].name.toLowerCase()}s` : `${/^[aeiou]/i.test(kit.rooms[kind].name) ? 'an' : 'a'} ${kit.rooms[kind].name.toLowerCase()}`}${near ? ' next to the ' + roomsOnly.find((r) => r.id === near).name.toLowerCase() : ''}.`, confidence: 0.7 }
