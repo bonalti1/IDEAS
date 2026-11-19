@@ -2,14 +2,15 @@
 // by hand. City rules give the setbacks; the buildable envelope is drawn on the lot.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene from '../HouseScene.jsx'
-import { Button, Stat, sf } from '../ui.jsx'
+import { Button, Stat } from '../ui.jsx'
 import { api } from '../lib/api.js'
 import { buildLot, traverse, lotProblem } from '../lib/lot.js'
 import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
 import RulesPanel from '../RulesPanel.jsx'
-import { parcelSpec } from '../lib/parcel-spec.js'
+import { parcelSpec, lotSides } from '../lib/parcel-spec.js'
 import { plainReason } from '../lib/plain.js'
+import { useLang, placeName } from '../lib/i18n.js'
 
 export { parcelSpec }
 
@@ -50,6 +51,7 @@ function PlatPreview({ file, read }) {
   const canvas = useRef()
   const [size, setSize] = useState(null)
   const [err, setErr] = useState('')
+  const { t } = useLang()
   useEffect(() => {
     let dead = false
     ;(async () => {
@@ -67,7 +69,7 @@ function PlatPreview({ file, read }) {
         await page.render({ canvasContext: canvas.current.getContext('2d'), viewport: vp }).promise
         if (!dead) setSize({ w: vp.width, h: vp.height })
       } catch (e) {
-        if (!dead) setErr('Could not draw the PDF here, but the office read it.')
+        if (!dead) setErr(t('Could not draw the PDF here, but the office read it.'))
       }
     })()
     return () => {
@@ -116,8 +118,8 @@ function ImagePreview({ file, read }) {
 }
 
 /** A service's own plain line as it came ("FEMA did not answer; the office checks the flood zone"), anything else wrapped; one full stop. */
-const plain = (err, wrap) => {
-  const t = /did not answer|didn't answer|Too many/.test(err) ? err : wrap(err)
+const plain = (err, wrap, say = (s) => s) => {
+  const t = /did not answer|didn't answer|Too many/.test(err) ? say(err) : wrap(say(err))
   const s = String(t).replace(/\.+$/, '')
   return s[0].toUpperCase() + s.slice(1) + '.'
 }
@@ -149,6 +151,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const [addressOk, setAddressOk] = useState(null) // true: "yes, that is right"; false: "no"; null: not asked or not answered
   const mismatch = geo?.found && geo.mismatch ? geo.mismatch : null
   const addressHeld = !!mismatch && addressOk !== true
+  const { lang, t, rich, say, sf } = useLang()
 
   useEffect(() => {
     api.cities().then((t) => setTable(t)).catch(() => {})
@@ -252,7 +255,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
     }
   }, [spec, table, address, flood, read, geo, zoning])
   // what is wrong with the lot as typed; the last good lot stays on the screen until it is right
-  const problem = lotProblem(spec, built)
+  const problem = lotProblem(spec, built, lang)
   const lastGood = useRef(null)
   if (!problem && built) lastGood.current = built
   const lot = problem ? null : built
@@ -260,41 +263,41 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   // even when the setbacks leave no room on it: a previous lot must never stay on the screen (round 10, item 1)
   const drawAnyway = built && (spec.kind === 'parcel' || spec.kind === 'plat') && built.boundary?.length >= 3
   const shown = lot || (drawAnyway ? built : lastGood.current)
-  const city = table[spec.city] || { name: 'No city rules yet', county: null }
+  const city = table[spec.city] || { name: t('No city rules yet'), county: null }
   const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))
   const tooSmall = !!problem
   // round 12, item F: a lot with no city row has no coverage figure; the rules use 50%, and the screen says so (it said "NaN% · NaN sf")
   const hasCover = Number.isFinite(+city?.maxCoverage) && +city.maxCoverage > 0
   const cover = hasCover ? +city.maxCoverage : 0.5
-  const coverLine = hasCover ? `${Math.round(cover * 100)}%` : '50% (county default, the drafter confirms)'
+  const coverLine = hasCover ? `${Math.round(cover * 100)}%` : t('50% (county default, the drafter confirms)')
 
   return (
     <div className="screen split">
       <div className="viewport lot-view">
-        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? 'Very little room to build on this lot' : 'No room to build on this lot') : ''} />}
+        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? t('Very little room to build on this lot') : t('No room to build on this lot')) : ''} />}
         <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag">
-          {shown ? `${shown.address || 'your lot'} · ${city.name}` : 'Enter the lot'}
-          {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? 'very little room to build' : 'no room to build'}` : ''}
+          {shown ? `${shown.address || t('your lot')} · ${placeName(city.name, lang)}` : t('Enter the lot')}
+          {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? t('very little room to build') : t('no room to build')}` : ''}
         </div>
         {mode === 'plat' && read && (
           <div className="viewport-views">
             <button className={showPlat ? 'on' : ''} onClick={() => setShowPlat(true)}>
-              Plat
+              {t('Plat')}
             </button>
             <button className={!showPlat ? 'on' : ''} onClick={() => setShowPlat(false)}>
-              Lot
+              {t('Lot')}
             </button>
           </div>
         )}
       </div>
       <aside className="side lot-side">
-        <h2>Your lot</h2>
-        <p className="muted small">{address || 'No address yet.'}</p>
+        <h2>{t('Your lot')}</h2>
+        <p className="muted small">{address || t('No address yet.')}</p>
         {geo?.found && !mismatch && (
           <p className={'fine ' + (geo.cityId ? 'good' : 'warn')}>
-            Found: {geo.matched}
-            {geo.place ? ` · ${geo.place}, ${geo.county || ''}` : geo.county ? ` · ${geo.county}` : ''}. {geoMessage(geo, table)}
+            {t('Found: {address}', { address: geo.matched })}
+            {geo.place ? ` · ${geo.place}, ${placeName(geo.county || '', lang)}` : geo.county ? ` · ${placeName(geo.county, lang)}` : ''}. {geoMessage(geo, table, lang)}
           </p>
         )}
         {mismatch && (
@@ -302,86 +305,78 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             <p className="fine warn">
               {mismatch.what.length === 1 && mismatch.what[0] === 'direction' ? (
                 <>
-                  We found {mismatch.found.split(' ')[0]} <b>{mismatch.foundDirection}</b> {mismatch.found.split(' ').slice(2).join(' ')}, not {mismatch.typedDirection}. Is that right?
+                  {rich('We found {number} {direction} {street}, not {typed}. Is that right?', { number: mismatch.found.split(' ')[0], direction: <b>{mismatch.foundDirection}</b>, street: mismatch.found.split(' ').slice(2).join(' '), typed: mismatch.typedDirection })}
                 </>
               ) : (
                 <>
-                  We found <b>{mismatch.found}</b>, not {mismatch.typed}. Is that right?
+                  {rich('We found {found}, not {typed}. Is that right?', { found: <b>{mismatch.found}</b>, typed: mismatch.typed })}
                 </>
               )}
             </p>
             {addressOk === null && (
               <div className="row2">
                 <Button small primary onClick={() => setAddressOk(true)} data-testid="address-yes">
-                  Yes, that is my address
+                  {t('Yes, that is my address')}
                 </Button>
                 <Button small ghost onClick={() => setAddressOk(false)} data-testid="address-no">
-                  No
+                  {t('No')}
                 </Button>
               </div>
             )}
             {addressOk === true && (
               <p className="fine">
-                Using {mismatch.found}
-                {geo.place ? ` · ${geo.place}, ${geo.county || ''}` : ''}. {geoMessage(geo, table)}
+                {t('Using {address}', { address: mismatch.found })}
+                {geo.place ? ` · ${geo.place}, ${placeName(geo.county || '', lang)}` : ''}. {geoMessage(geo, table, lang)}
               </p>
             )}
-            {addressOk === false && <p className="fine">Then we did not find your address. Type the lot in below, or go back and check the street number and the direction (N, S, E, W).</p>}
+            {addressOk === false && <p className="fine">{t('Then we did not find your address. Type the lot in below, or go back and check the street number and the direction (N, S, E, W).')}</p>}
           </div>
         )}
-        {geo && !geo.found && <p className="fine warn">{geo.note}</p>}
-        {!geo && address && !geoErr && !saved?.spec && <p className="fine">Looking the address up…</p>}
-        {geoErr && <p className="fine warn">Could not look the address up ({geoErr}). Pick the city yourself.</p>}
+        {geo && !geo.found && <p className="fine warn">{say(geo.note)}</p>}
+        {!geo && address && !geoErr && !saved?.spec && <p className="fine">{t('Looking the address up…')}</p>}
+        {geoErr && <p className="fine warn">{t('Could not look the address up ({error}). Pick the city yourself.', { error: say(geoErr) })}</p>}
         {/* round 7: the parcel from the county appraisal district, offered before anything is typed */}
-        {address && !saved?.spec && parcelBusy && !parcel && <p className="fine">Looking the lot up at the county appraisal district…</p>}
+        {address && !saved?.spec && parcelBusy && !parcel && <p className="fine">{t('Looking the lot up at the county appraisal district…')}</p>}
         {parcel?.match === 'one' && parcelAnswer !== 'no' && (
           <div className="card thin parcel-card" data-testid="parcel-card">
-            <h3>{parcelAnswer === 'yes' ? 'Your lot, from the county parcel map' : 'Is this your lot?'}</h3>
+            <h3>{parcelAnswer === 'yes' ? t('Your lot, from the county parcel map') : t('Is this your lot?')}</h3>
             <p className="small">
-              {parcel.legal ? <b>{parcel.legal}</b> : <b>Parcel {parcel.propId}</b>}
-              {parcel.situs ? ` · ${parcel.situs}` : ''}. {parcel.edges?.length} sides, about {Math.round(parcel.areaSf).toLocaleString()} sf ({parcel.acres} acres)
-              {parcel.cleaned?.short || parcel.cleaned?.straight ? `; ${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0)} sliver corner${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0) === 1 ? '' : 's'} under a foot removed` : ''}.
+              {parcel.legal ? <b>{parcel.legal}</b> : <b>{t('Parcel {id}', { id: parcel.propId })}</b>}
+              {parcel.situs ? ` · ${parcel.situs}` : ''}. {t('{n} sides, about {area} sf ({acres} acres)', { n: parcel.edges?.length, area: Math.round(parcel.areaSf).toLocaleString(), acres: parcel.acres })}
+              {parcel.cleaned?.short || parcel.cleaned?.straight ? `; ${t('{n} sliver {n|corner|corners} under a foot removed', { n: (parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0) })}` : ''}.
             </p>
             {parcel.large || zoning?.residential === false ? (
               <p className="fine warn">
-                {parcel.large ? `A large tract (${parcel.acres} acres, ${parcel.edges?.length} sides): the office draws this one.` : 'Not a house district: the sides are not drawn.'} {zoning?.residential === false ? zoning.message : ''}
+                {parcel.large ? t('A large tract ({acres} acres, {n} sides): the office draws this one.', { acres: parcel.acres, n: parcel.edges?.length }) : t('Not a house district: the sides are not drawn.')} {zoning?.residential === false ? say(zoning.message) : ''}
               </p>
             ) : (
-              <div className="edges">
-                {parcel.edges?.map((e, i) => {
-                  const st = (parcel.streets || []).find((s) => s.edge === i && s.role !== 'rear')
-                  // a curved frontage (round 11): its chords are one street side, said once with their total
-                  const curved = (parcel.frontChords || 1) > 1
-                  if (curved && parcel.edgeKinds?.[i] === 'front' && i !== (parcel.frontEdge ?? 0)) return null
-                  if (curved && i === (parcel.frontEdge ?? 0))
-                    return (
-                      <span key={i} className="front">
-                        street side{st ? ` (${st.name})` : ''} {parcel.frontWidthFt}' along the curve, in {parcel.frontChords} pieces
-                      </span>
-                    )
-                  return (
-                    <span key={i} className={i === (parcel.frontEdge ?? 0) ? 'front' : ''}>
-                      {i === (parcel.frontEdge ?? 0) ? `street side${st ? ` (${st.name})` : ''} ` : st ? `side street (${st.name}) ` : ''}
-                      {e.lengthFt}' {e.bearing}
-                    </span>
-                  )
-                })}
+              // round 13: the sides in a homeowner's words (front, left, right, back, in whole feet); the surveyor's
+              // bearings are the drafter's, on the review card
+              <div className="edges plain" data-testid="lot-sides">
+                {lotSides(parcel).map((sd) => (
+                  <span key={sd.key} className={sd.key === 'front' ? 'front' : ''}>
+                    {sd.key === 'front' ? t('Front') : sd.key === 'left' ? t('Left side') : sd.key === 'right' ? t('Right side') : t('Back of the lot')}
+                    {sd.street ? ` (${sd.street})` : ''}: {t('about {ft} ft', { ft: sd.ft })}
+                    {sd.key === 'front' && sd.pieces > 1 ? `, ${t('curved')}` : ''}
+                  </span>
+                ))}
+                <span className="muted">{t('Left and right are as you face the lot from the street.')}</span>
               </div>
             )}
-            {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">The county address map puts {String(address).split(',')[0]} on this parcel; the appraisal district lists it as {parcel.listedAs}. Check that it is your lot; the drafter checks it too.</p>}
-            {!parcel.large && parcel.corner && <p className="fine">A corner lot: the side on {(parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(' and ')} keeps the wider open space the city asks for along a street.</p>}
-            {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.</p>}
+            {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">{t('The county address map puts {address} on this parcel; the appraisal district lists it as {listed}. Check that it is your lot; the drafter checks it too.', { address: String(address).split(',')[0], listed: parcel.listedAs })}</p>}
+            {!parcel.large && parcel.corner && <p className="fine">{t('A corner lot: the side on {streets} keeps the wider open space the city asks for along a street.', { streets: (parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(` ${t('and')} `) })}</p>}
+            {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">{t('The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.')}</p>}
             <p className="fine">
-              From the {parcel.source?.name || 'county appraisal district'}
-              {parcel.source?.fetchedAt ? `, read ${String(parcel.source.fetchedAt).slice(0, 10)}` : ''}. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built.
+              {t('From the {source}', { source: parcel.source?.name || t('county appraisal district') })}
+              {parcel.source?.fetchedAt ? `, ${t('read {date}', { date: String(parcel.source.fetchedAt).slice(0, 10) })}` : ''}. {t('The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built.')}
             </p>
             {parcelAnswer !== 'yes' && (
               <div className="row2">
                 <Button small primary onClick={() => takeParcel(parcel)} data-testid="parcel-yes">
-                  Yes, this is my lot
+                  {t('Yes, this is my lot')}
                 </Button>
                 <Button small ghost onClick={() => setParcelAnswer('no')} data-testid="parcel-no">
-                  Not my lot
+                  {t('Not my lot')}
                 </Button>
                 <Button
                   small
@@ -391,122 +386,122 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                     setMode('manual')
                   }}
                 >
-                  Type it in
+                  {t('Type it in')}
                 </Button>
               </div>
             )}
             {parcelAnswer === 'yes' && (
               <button className="linkish" onClick={() => setParcelAnswer('no') || setMode('manual') || setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, county: spec.county, frontStreet: spec.streets?.[0]?.name || '', corner: '', sideStreet: '', setbacks: {} })}>
-                Not my lot after all
+                {t('Not my lot after all')}
               </button>
             )}
           </div>
         )}
         {parcel?.match === 'none' && parcel.candidates?.length > 0 && parcelAnswer !== 'no' && (
           <div className="card thin parcel-card candidates" data-testid="parcel-candidates">
-            <h3>Which of these is your lot?</h3>
-            <p className="small">The county map has {parcel.candidates.length} parcels near this address; none carries it exactly. Tap yours, or type the lot in.</p>
+            <h3>{t('Which of these is your lot?')}</h3>
+            <p className="small">{t('The county map has {n} parcels near this address; none carries it exactly. Tap yours, or type the lot in.', { n: parcel.candidates.length })}</p>
             <ul className="candidates">
               {parcel.candidates.map((c) => (
                 <li key={c.propId}>
                   <span>
-                    <b>{c.situs || `Parcel ${c.propId}`}</b>
+                    <b>{c.situs || t('Parcel {id}', { id: c.propId })}</b>
                     {c.legal ? <span className="muted small"> · {c.legal}</span> : ''}
-                    {c.distanceFt != null ? <span className="muted small"> · {c.distanceFt} ft away</span> : ''}
+                    {c.distanceFt != null ? <span className="muted small"> · {t('{n} ft away', { n: c.distanceFt })}</span> : ''}
                   </span>
                   <Button small ghost disabled={parcelBusy} onClick={() => pickCandidate(c)}>
-                    This one
+                    {t('This one')}
                   </Button>
                 </li>
               ))}
             </ul>
             <button className="linkish" onClick={() => setParcelAnswer('no')}>
-              None of these, type it in
+              {t('None of these, type it in')}
             </button>
           </div>
         )}
-        {parcel && parcel.match !== 'one' && !parcel.candidates?.length && parcel.match !== 'error' && !saved?.spec && <p className="fine warn">{parcel.reason === 'the address was not found' ? 'The county parcel map did not find this address; type the lot in or upload the plat.' : `The county parcel map has no entry we could match (${parcel.reason || 'no match'}); type the lot in or upload the plat.`}</p>}
+        {parcel && parcel.match !== 'one' && !parcel.candidates?.length && parcel.match !== 'error' && !saved?.spec && <p className="fine warn">{parcel.reason === 'the address was not found' ? t('The county parcel map did not find this address; type the lot in or upload the plat.') : t('The county parcel map has no entry we could match ({reason}); type the lot in or upload the plat.', { reason: say(parcel.reason) || t('no match') })}</p>}
         {/* round 10, item 6: an outside service that did not answer is said in a plain line, never left blank */}
-        {parcelErr && <p className="fine warn" data-testid="parcel-error">{plain(parcelErr, (e) => `Could not reach the county parcel map (${e}). Type the lot in or upload the plat; the drafter pulls the parcel later`)}</p>}
-        {floodErr && <p className="fine warn" data-testid="flood-error">{plain(floodErr, (e) => `The flood map could not be read (${e}); the office checks the flood zone`)}</p>}
-        {zoningErr && <p className="fine warn" data-testid="zoning-error">{plain(zoningErr, (e) => `The zoning map could not be read (${e}); the drafter reads the zoning`)}</p>}
+        {parcelErr && <p className="fine warn" data-testid="parcel-error">{plain(parcelErr, (e) => t('Could not reach the county parcel map ({error}). Type the lot in or upload the plat; the drafter pulls the parcel later', { error: e }), say)}</p>}
+        {floodErr && <p className="fine warn" data-testid="flood-error">{plain(floodErr, (e) => t('The flood map could not be read ({error}); the office checks the flood zone', { error: e }), say)}</p>}
+        {zoningErr && <p className="fine warn" data-testid="zoning-error">{plain(zoningErr, (e) => t('The zoning map could not be read ({error}); the drafter reads the zoning', { error: e }), say)}</p>}
         <div className="tabs small">
           <button className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual') || (spec.kind !== 'manual' && setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, county: spec.county, frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))}>
-            Type it in
+            {t('Type it in')}
           </button>
           <button className={mode === 'plat' ? 'on' : ''} onClick={() => setMode('plat')}>
-            From the plat
+            {t('From the plat')}
           </button>
           {spec.kind === 'parcel' && (
             <button className={mode === 'parcel' ? 'on' : ''} onClick={() => setMode('parcel')}>
-              County parcel
+              {t('County parcel')}
             </button>
           )}
         </div>
 
         <label className="field">
-          <span>City</span>
+          <span>{t('City')}</span>
           <select id="lot-city" value={spec.city || ''} onChange={(e) => set('city', e.target.value)}>
-            <option value="">No rules for this city yet (county defaults, a drafter checks them)</option>
+            <option value="">{t('No rules for this city yet (county defaults, a drafter checks them)')}</option>
             {CITY_IDS.map((id) => (
               <option key={id} value={id}>
-                {table[id].name}
+                {placeName(table[id].name, lang)}
               </option>
             ))}
           </select>
         </label>
         {!table[spec.city] && (
           <label className="field">
-            <span>County</span>
+            <span>{t('County')}</span>
             <select id="lot-county" value={spec.county || ''} onChange={(e) => set('county', e.target.value)}>
-              <option value="">Pick the county</option>
+              <option value="">{t('Pick the county')}</option>
               {COUNTIES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {placeName(c, lang)}
                 </option>
               ))}
             </select>
-            <small className="fine">We use the county to look up the building rules.</small>
+            <small className="fine">{t('We use the county to look up the building rules.')}</small>
           </label>
         )}
 
         {mode === 'manual' && (
           <>
             <p className="fine assume">
-              We do not have your plat, so the {spec.width} by {spec.depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.
+              {rich('We do not have your plat, so the {width} by {depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.', { width: spec.width, depth: spec.depth })}
             </p>
             <div className="row2">
               <label className="field">
-                <span>Width (ft)</span>
+                <span>{t('Width (ft)')}</span>
                 <input id="lot-width" type="number" min="20" value={spec.width} onChange={(e) => set('width', e.target.value)} />
               </label>
               <label className="field">
-                <span>Depth (ft)</span>
+                <span>{t('Depth (ft)')}</span>
                 <input id="lot-depth" type="number" min="20" value={spec.depth} onChange={(e) => set('depth', e.target.value)} />
               </label>
             </div>
             <label className="field">
-              <span>Front street</span>
-              <input id="lot-street" placeholder="The street the house faces" value={spec.frontStreet} onChange={(e) => set('frontStreet', e.target.value)} />
+              <span>{t('Front street')}</span>
+              <input id="lot-street" placeholder={t('The street the house faces')} value={spec.frontStreet} onChange={(e) => set('frontStreet', e.target.value)} />
             </label>
             <label className="field">
-              <span>Corner lot</span>
+              <span>{t('Corner lot')}</span>
               <select value={spec.corner || ''} onChange={(e) => set('corner', e.target.value)}>
-                <option value="">No, one street</option>
-                <option value="left">Yes, second street on the left</option>
-                <option value="right">Yes, second street on the right</option>
+                <option value="">{t('No, one street')}</option>
+                <option value="left">{t('Yes, second street on the left')}</option>
+                <option value="right">{t('Yes, second street on the right')}</option>
               </select>
             </label>
             {spec.corner && (
               <label className="field">
-                <span>Second street</span>
+                <span>{t('Second street')}</span>
                 <input value={spec.sideStreet || ''} onChange={(e) => set('sideStreet', e.target.value)} />
               </label>
             )}
             <label className="confirm deed">
               <input id="lot-no-street-garage" type="checkbox" checked={!!spec.noStreetGarage} onChange={(e) => set('noStreetGarage', e.target.checked)} />
               <span>
-                Deed restrictions: the garage may not face the street. <small className="fine">Some subdivisions require rear or side entry; the drafter checks the recorded restrictions.</small>
+                {t('Deed restrictions: the garage may not face the street.')} <small className="fine">{t('Some subdivisions require rear or side entry; the drafter checks the recorded restrictions.')}</small>
               </span>
             </label>
           </>
@@ -516,23 +511,23 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           <>
             <label className={'drop' + (file ? ' has-file' : '')}>
               <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => readFile(e.target.files?.[0] || null)} hidden />
-              <span>{reading ? 'Reading the plat…' : file ? <b>{file.name}</b> : <b>Upload the plat or survey (PDF or photo)</b>}</span>
+              <span>{reading ? t('Reading the plat…') : file ? <b>{file.name}</b> : <b>{t('Upload the plat or survey (PDF or photo)')}</b>}</span>
             </label>
-            {readErr && <p className="fine bad">{readErr}</p>}
+            {readErr && <p className="fine bad">{say(readErr)}</p>}
             {read && (
               <div className="card thin">
-                <h3>What we read</h3>
+                <h3>{t('What we read')}</h3>
                 <p className="small">
                   {read.lotNumber ? `${read.lotNumber}${read.subdivision ? ', ' + read.subdivision : ''}. ` : ''}
-                  {read.calls?.length} calls{lot ? `, closes within ${lot.closure} ft, ${sf(lot.areaSf)}` : ''}. Confidence {Math.round((read.confidence || 0) * 100)}%.
+                  {t('{n} calls', { n: read.calls?.length })}{lot ? `, ${t('closes within {ft} ft', { ft: lot.closure })}, ${sf(lot.areaSf)}` : ''}. {t('Confidence {pct}%.', { pct: Math.round((read.confidence || 0) * 100) })}
                 </p>
                 <ol className="list small">
                   {read.calls?.map((c, i) => (
-                    <li key={i}>{c.curve ? `Curve R ${c.curve.radius}' ${c.curve.arcLength ? `L ${c.curve.arcLength}'` : c.curve.delta ? `Δ ${c.curve.delta}°` : ''}` : `${c.bearing} ${c.distance}'`}</li>
+                    <li key={i}>{c.curve ? `${t('Curve')} R ${c.curve.radius}' ${c.curve.arcLength ? `L ${c.curve.arcLength}'` : c.curve.delta ? `Δ ${c.curve.delta}°` : ''}` : `${c.bearing} ${c.distance}'`}</li>
                   ))}
                 </ol>
-                {read.notes && <p className="fine">{read.notes}</p>}
-                <p className="fine warn">A drafter checks this against the plat before anything is built. You can keep going meanwhile.</p>
+                {read.notes && <p className="fine">{say(read.notes)}</p>}
+                <p className="fine warn">{t('A drafter checks this against the plat before anything is built. You can keep going meanwhile.')}</p>
               </div>
             )}
           </>
@@ -540,54 +535,54 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
         <details className="setbacks">
           <summary>
-            Space the city keeps open along each edge · {city.name}
-            {city.verified ? '' : ' (office defaults, unverified)'}
+            {t('Space the city keeps open along each edge')} · {placeName(city.name, lang)}
+            {city.verified ? '' : ` ${t('(office defaults, unverified)')}`}
           </summary>
           <div className="row2">
             {[
-              ['front', 'Front'],
-              ['side', 'Side'],
-              ['rear', 'Rear'],
-              ['streetSide', 'Street side'],
+              ['front', t('Front')],
+              ['side', t('Side')],
+              ['rear', t('Rear')],
+              ['streetSide', t('Street side')],
             ].map(([k, l]) => (
               <label key={k} className="field">
-                <span>{l} (ft)</span>
+                <span>{t('{label} (ft)', { label: l })}</span>
                 <input type="number" min="0" placeholder={city[k] != null && Number.isFinite(+city[k]) ? String(city[k]) : ''} value={spec.setbacks?.[k] ?? ''} onChange={(e) => setSetback(k, e.target.value)} />
               </label>
             ))}
           </div>
           <p className="fine">
-            Blank uses the city rule. A house may cover {coverLine} of the lot; height: {Number.isFinite(+city.maxHeightFt) ? `${city.maxHeightFt} ft` : 'the drafter confirms'}.
+            {t('Blank uses the city rule. A house may cover {cover} of the lot; height: {height}.', { cover: coverLine, height: Number.isFinite(+city.maxHeightFt) ? t('{n} ft', { n: city.maxHeightFt }) : t('the drafter confirms') })}
           </p>
         </details>
 
         {lot && (
           <div className="stats">
-            <Stat k="Lot area" v={sf(lot.areaSf)} />
-            <Stat k="Buildable area" v={sf(lot.envelopeSf)} />
-            <Stat k="Max coverage" v={`${coverLine} · ${sf(lot.areaSf * cover)}`} />
-            <Stat k="Flood zone" v={flood ? (flood.status === 'no-digital-firm' ? 'no digital FEMA map here · the county decides' : flood.zone ? `${flood.zone}${flood.sfha ? ' · special flood hazard area' : flood.status === 'shaded-x' ? ' · 0.2% flood area' : ' · outside the 1% flood area'}${flood.where && /street/.test(flood.where) ? ' (at the street; the parcel point once the lot is picked)' : ''}` : flood.status === 'no-address' ? 'not found for this address' : 'no zone polygon at this point') : floodErr ? 'FEMA did not answer · the office checks' : addressHeld ? 'after the address is settled' : address ? 'checking FEMA…' : '—'} />
-            {zoning?.status === 'found' && <Stat k="Zoning" v={`${zoning.district} · ${zoning.use}`} />}
+            <Stat k={t('Lot area')} v={sf(lot.areaSf)} />
+            <Stat k={t('Buildable area')} v={sf(lot.envelopeSf)} />
+            <Stat k={t('Max coverage')} v={`${coverLine} · ${sf(lot.areaSf * cover)}`} />
+            <Stat k={t('Flood zone')} v={flood ? (flood.status === 'no-digital-firm' ? t('no digital FEMA map here · the county decides') : flood.zone ? `${flood.zone}${flood.sfha ? ` · ${t('special flood hazard area')}` : flood.status === 'shaded-x' ? ` · ${t('0.2% flood area')}` : ` · ${t('outside the 1% flood area')}`}${flood.where && /street/.test(flood.where) ? ` ${t('(at the street; the parcel point once the lot is picked)')}` : ''}` : flood.status === 'no-address' ? t('not found for this address') : t('no zone polygon at this point')) : floodErr ? t('FEMA did not answer · the office checks') : addressHeld ? t('after the address is settled') : address ? t('checking FEMA…') : '—'} />
+            {zoning?.status === 'found' && <Stat k={t('Zoning')} v={`${zoning.district} · ${say(zoning.use)}`} />}
           </div>
         )}
         {lot && <RulesPanel lot={lot} mode="homeowner" />}
-        {lot?.zoning?.residential === false && <p className="fine bad">{lot.zoning.message}</p>}
+        {lot?.zoning?.residential === false && <p className="fine bad">{say(lot.zoning.message)}</p>}
         {problem && <p className="fine bad">{plainReason(problem)}</p>}
-        <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' || spec.kind === 'parcel' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
+        <p className="fine">{t('Red is your property line. Green dashed is where the house can sit.')} {mode === 'plat' || spec.kind === 'parcel' ? t('A drafter confirms the lot before the design is sent on.') : t('A drafter double-checks this before anything is final.')}</p>
         {mode === 'manual' && (
           <label className="confirm">
             <input id="lot-confirm" type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
             <span>
-              The lot is about {spec.width} by {spec.depth} ft and faces {spec.frontStreet || 'the street'}. I know this is my assumption until a drafter checks it.
+              {t('The lot is about {width} by {depth} ft and faces {street}. I know this is my assumption until a drafter checks it.', { width: spec.width, depth: spec.depth, street: spec.frontStreet || t('the street') })}
             </span>
           </label>
         )}
         <div className="actions">
           <Button ghost onClick={onBack}>
-            Back
+            {t('Back')}
           </Button>
-          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? 'Confirm the lot size first' : ''} data-testid="lot-next">
-            Looks right, pick a style
+          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? t('Confirm the lot size first') : ''} data-testid="lot-next">
+            {t('Looks right, pick a style')}
           </Button>
         </div>
       </aside>

@@ -472,8 +472,9 @@ export function jurisdictionFor({ place, county } = {}, table = JURISDICTIONS) {
 // a homeowner reads this line: the rules are named in plain words, not by their field names (round 12 walkthrough)
 const RULE_WORDS = { front: 'the street side', side: 'the sides', rear: 'the back', streetSide: 'a side street', garageFt: 'the garage door', maxCoverage: 'how much of the lot a house may cover', maxHeightFt: 'the height', minLotSf: 'the smallest lot', minLotWidth: 'the narrowest lot' }
 /** What the lot step says about a geocoded address (item 2): the four cases. */
-export function geoMessage(geo, table = JURISDICTIONS) {
+export function geoMessage(geo, table = JURISDICTIONS, lang = 'en') {
   if (!geo) return ''
+  if (lang === 'es') return geoMessageEs(geo, table)
   if (!geo.found) return geo.note || 'The address was not found. Check it, or type the lot in.'
   const j = geo.jurisdiction || jurisdictionFor(geo, table)
   if (j?.type === 'city') {
@@ -486,4 +487,23 @@ export function geoMessage(geo, table = JURISDICTIONS) {
     return `Unincorporated ${j.county}: the county subdivision rules are used${j.id === 'hidalgo' ? '' : ' (office defaults until they are read)'}, and a drafter checks them.`
   }
   return `${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'This address'} is outside the eight counties we build in (${COUNTIES.map((c) => c.replace(' County', '')).join(', ')}). You can still draft to see a plan; the setbacks shown are office defaults.`
+}
+
+// round 13: the same four cases for a homeowner who reads Spanish. No jargon: where the English says "setbacks"
+// this says the space the city keeps open along each edge of the lot.
+const RULE_WORDS_ES = { front: 'el lado de la calle', side: 'los lados', rear: 'el fondo', streetSide: 'una calle lateral', garageFt: 'la puerta de la cochera', maxCoverage: 'cuánto del lote puede cubrir una casa', maxHeightFt: 'la altura', minLotSf: 'el lote más chico', minLotWidth: 'el lote más angosto' }
+const condado = (c) => String(c || '').replace(/^(.+?) County$/, 'Condado de $1')
+function geoMessageEs(geo, table) {
+  if (!geo.found) return geo.note || 'No encontramos la dirección. Revísala, o escribe las medidas del lote.'
+  const j = geo.jurisdiction || jurisdictionFor(geo, table)
+  if (j?.type === 'city') {
+    const row = table[j.id]
+    const unverified = RULE_FIELDS.filter((k) => row[k]?.status !== 'verified')
+    return unverified.length ? `Tenemos las reglas de ${row.name}; ${unverified.length === 1 ? 'una es un resumen' : `${unverified.length} son resúmenes`} que la oficina confirma (${unverified.map((k) => RULE_WORDS_ES[k] || k).join(', ')}).` : `Tenemos las reglas de ${row.name}, tomadas del código de la ciudad.`
+  }
+  if (j?.type === 'county') {
+    if (geo.place) return `${geo.place} está en el ${condado(j.county)}; todavía no tenemos las reglas de esa ciudad, así que usamos las del condado, sin verificar, y un dibujante revisa las reglas de la ciudad.`
+    return `Fuera de los límites de la ciudad, en el ${condado(j.county)}: usamos las reglas de subdivisión del condado${j.id === 'hidalgo' ? '' : ' (los valores de la oficina, hasta que se lean)'}, y un dibujante las revisa.`
+  }
+  return `${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'Esta dirección'} queda fuera de los ocho condados donde construimos (${COUNTIES.map((c) => c.replace(' County', '')).join(', ')}). De todos modos puedes hacer un borrador para ver un plano; el espacio que la ciudad mantiene libre a lo largo de cada orilla del lote se muestra con los valores de la oficina.`
 }

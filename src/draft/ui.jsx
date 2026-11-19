@@ -1,4 +1,6 @@
 // Small shared UI pieces for the Draft House flow.
+import { useLang } from './lib/i18n.js'
+
 export function Mark({ size = 28 }) {
   return <img src="/brand/mark.svg" alt="" style={{ height: size, width: 'auto', display: 'block' }} />
 }
@@ -13,18 +15,19 @@ export function Button({ children, primary, ghost, small, ...rest }) {
 }
 
 export function Stepper({ label, value, min, max, onChange, suffix = '' }) {
+  const { t } = useLang()
   return (
     <div className="stepper">
       <span className="stepper-label">{label}</span>
       <div className="stepper-ctl">
-        <button onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label={`Fewer ${label}`}>
+        <button onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label={t('Fewer {label}', { label })}>
           −
         </button>
         <span className="stepper-val">
           {value}
           {suffix}
         </span>
-        <button onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`More ${label}`}>
+        <button onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={t('More {label}', { label })}>
           +
         </button>
       </div>

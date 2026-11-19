@@ -136,9 +136,34 @@ export function streetCore(name) {
     .filter(Boolean)
     .map((w) => SUFFIX[w] || w)
   if (words.length > 1 && /^\d+[A-Z]?$/.test(words[0]) && !/^(ST|ND|RD|TH)$/.test(words[1])) words.shift() // a leading house number
-  const core = words.filter((w) => !DIR_RE.test(w))
+  const core = cutTail(words.filter((w) => !DIR_RE.test(w)))
   if (core.length > 1 && SUFFIX_SHORT.has(core[core.length - 1])) core.pop()
-  return core.join(' ')
+  return ordinal(core).join(' ')
+}
+/**
+ * Round 13, item 6: an address typed in one run, with no commas ("3305 N 27 street mcallen tx 78501"). What comes
+ * after the street's suffix is the city, the state and the ZIP, not part of the street's name. Only whole words of
+ * three letters or more are cut, so "County Rd 12", "Loop 499" and "Ave B" keep their ends.
+ */
+function cutTail(words) {
+  const w = [...words]
+  // "23 rd st": a number and its ending typed apart
+  for (let i = 0; i < w.length - 2; i++) if (/^\d{1,3}$/.test(w[i]) && /^(ST|ND|RD|TH)$/.test(w[i + 1]) && SUFFIX_SHORT.has(w[i + 2])) w.splice(i, 2, w[i] + w[i + 1])
+  while (w.length > 2 && (/^\d{5}(-\d{4})?$/.test(w[w.length - 1]) || /^(TX|TEXAS)$/.test(w[w.length - 1]))) w.pop()
+  let at = -1
+  for (let i = 1; i < w.length - 1; i++) if (SUFFIX_SHORT.has(w[i])) at = i
+  if (at < 1) return w
+  const tail = w.slice(at + 1)
+  // a city can be two words ("Mc Allen", "San Juan", "La Joya"); a lone letter or a number after the suffix is the street's own
+  return tail.every((x) => /^[A-Z]{2,}$/.test(x) && !SUFFIX_SHORT.has(x)) ? w.slice(0, at + 1) : w
+}
+/** A numbered street typed without its ending ("27" for 27th St): the counties and the Census write "27TH". */
+function ordinal(core) {
+  const name = SUFFIX_SHORT.has(core[core.length - 1]) && core.length > 1 ? core.slice(0, -1) : core
+  if (name.length !== 1 || !/^\d{1,3}$/.test(name[0])) return core
+  const n = +name[0]
+  const end = n % 100 >= 11 && n % 100 <= 13 ? 'TH' : n % 10 === 1 ? 'ST' : n % 10 === 2 ? 'ND' : n % 10 === 3 ? 'RD' : 'TH'
+  return [n + end, ...core.slice(name.length)]
 }
 /** The suffix a street name ends with, the short way ("Kerria Avenue" → "AVE"), or null. */
 export function streetSuffix(name) {
@@ -343,7 +368,7 @@ export function interiorLonLat(ring) {
 }
 
 // ── situs normalisation and the where clause ────────────────────────────────────────────────────────
-const SUFFIX = { STREET: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD', LANE: 'LN', BOULEVARD: 'BLVD', COURT: 'CT', CIRCLE: 'CIR', PLACE: 'PL', TERRACE: 'TER', PARKWAY: 'PKWY', HIGHWAY: 'HWY', TRAIL: 'TRL', WAY: 'WAY', LOOP: 'LOOP', EXPRESSWAY: 'EXPY', CALLE: 'CLL' }
+const SUFFIX = { STREET: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD', LANE: 'LN', BOULEVARD: 'BLVD', COURT: 'CT', CIRCLE: 'CIR', PLACE: 'PL', TERRACE: 'TER', PARKWAY: 'PKWY', HIGHWAY: 'HWY', TRAIL: 'TRL', WAY: 'WAY', LOOP: 'LOOP', EXPRESSWAY: 'EXPY', CALLE: 'CLL', AV: 'AVE', AVEN: 'AVE', STR: 'ST', BLV: 'BLVD', DRV: 'DR', CRT: 'CT', CIRC: 'CIR', PKY: 'PKWY', EXPWY: 'EXPY' }
 const SUFFIX_SHORT = new Set([...Object.values(SUFFIX), 'CIR', 'LOOP', 'EXPY', 'PASS', 'RUN', 'ROW', 'PT', 'CV', 'XING'])
 /** Collapse spaces, uppercase, drop ", TX" and the ZIP, and spell suffixes the short way. */
 export function normalizeSitus(s) {
@@ -362,10 +387,10 @@ export function parseAddress(address) {
   const n = normalizeSitus(String(address || '').split(',')[0])
   const m = n.match(/^(\d+[A-Z]?)\s+(.*)$/)
   if (!m) return { number: null, street: null }
-  const words = m[2].split(' ').filter((w) => !/^(N|S|E|W|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST)$/.test(w))
+  const words = cutTail(m[2].split(' ').filter((w) => !/^(N|S|E|W|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST)$/.test(w)))
   const last = words[words.length - 1]
   if (words.length > 1 && Object.values(SUFFIX).includes(last)) words.pop()
-  return { number: m[1], street: words.join(' ') }
+  return { number: m[1], street: ordinal(words).join(' ') }
 }
 const FIELD_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 /**

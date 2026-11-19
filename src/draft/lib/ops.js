@@ -6,6 +6,7 @@ import { DEFAULT_LOT, worldOf, outsidePoint } from './lot.js'
 import { auditPlan } from './audit.js'
 import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
+import { isSpanish, fromSpanish, isUndoEs, COST_REPLY_ES } from './es.js'
 
 export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count']
 const q = (v) => Math.round(v * 4) / 4
@@ -869,11 +870,63 @@ export function splitClauses(text) {
 export const COST_RE = /\$|\b(how much(?!\s+(bigger|larger|smaller|wider|deeper|longer|more|less|room|space|closer|further|farther))|costs?|costing|price[sd]?|pricing|precios?|cu[aá]ntos?(?!\s+(m[aá]s|menos|mide|miden|espacio|pies|cuartos|rec[aá]maras|ba[ñn]os))|cuesta[n]?|costar[aá]n?|budget|presupuesto|afford|per square foot|per sq\.? ?ft|per sf|\/sf|estimates?|estimado|quote|cotizaci[oó]n|payments?|pagos?|pagar|financing|financiamiento|mortgage|hipoteca|down payment|enganche)\b/i
 const SPANISH_RE = /\b(precios?|cu[aá]ntos?|cuesta|costar|presupuesto|estimado|cotizaci[oó]n|pagos?|pagar|financiamiento|hipoteca|enganche)\b/i
 export const COST_REPLY = "Great question. Cost is something we go over with you in person at your meeting with the South Texas Builders office, so it's based on your exact plan, lot and selections. Want me to ask the office to set up that meeting?"
-export const COST_REPLY_ES = 'Buena pregunta. El costo lo revisamos con usted en persona en su reunión con la oficina de South Texas Builders, porque depende de su plano exacto, su lote y sus selecciones. ¿Quiere que le pida a la oficina que programe esa reunión?'
+export { COST_REPLY_ES } // the Spanish answer lives with the rest of the Spanish, in es.js
 /** True when a request asks about money in any form. */
 export const isCostQuestion = (text) => COST_RE.test(String(text || ''))
 /** The cost answer, in the language the question was asked in. No number ever appears in it. */
 export const costReply = (q) => (typeof q === 'object' ? q?.spanish : SPANISH_RE.test(String(q || ''))) ? COST_REPLY_ES : COST_REPLY
+
+// ── typed undo, a request nobody can read, two wishes that pull against each other (round 13) ──────────────
+const UNDO_EN = /^\s*(?:please,? )?(?:undo(?: that| it| this| the last(?: change| one)?| my last change| the change)?|go back(?: one| a step| a version| to (?:how|the way) it was(?: before)?| to (?:the )?(?:previous|last|earlier) (?:version|one))?|put it back(?: (?:how|the way) it was)?|take (?:that|it) back|revert(?: that| it)?|change it back|(?:back )?to how it was(?: before)?)(?:,? please)?\s*[.!]?\s*$/i
+/**
+ * "undo", "undo that", "go back", "go back to how it was", "put it back", "deshaz eso", "regresa como estaba",
+ * "quita el último cambio": the last change comes off and comes back to the plan, the way the Undo button does it.
+ */
+export function isUndoRequest(text) {
+  const t = String(text || '')
+  return UNDO_EN.test(t) || isUndoEs(t)
+}
+
+const SMALL_HOUSE = /\b(?:smaller|tinier|more compact|downsized?)\s+(?:house|home|plan|footprint|place)\b|\b(?:house|home|plan|footprint|place|whole thing|everything|it)\b[^,;.]{0,24}?\b(?:smaller|tinier|more compact|shrunk|downsized)\b|\b(?:shrink|downsize|reduce)\s+(?:the\s+|my\s+|our\s+)?(?:house|home|plan|footprint|place|whole thing|it)\b/
+const BED_BATH = /\b(bed(?:room)?s?|bath(?:room)?s?)\b/
+/**
+ * A smaller house and more bedrooms (or bathrooms) asked for in one breath, with no size given: "make the house
+ * smaller but add 2 bedrooms", "a smaller house with 5 bedrooms". The two pull against each other, so the answer is
+ * an explanation and one option, never a guess. { kind: 'bed' | 'bath', add: how many more } or { kind, count: the
+ * total asked for }, or null. A request in Spanish is read as the English it means first.
+ */
+export function tradeOffAsk(text) {
+  let t = String(text || '')
+  if (isSpanish(t)) t = fromSpanish(t).text
+  t = t.toLowerCase()
+  if (/\d\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/.test(t)) return null
+  const m = SMALL_HOUSE.exec(t)
+  if (!m) return null
+  // "make the kitchen wider, then make it smaller": "it" is that room, not the house
+  if (!/\b(?:house|home|plan|footprint|place|whole thing|everything)\b/.test(m[0]) && /kitchen|living|family room|great room|dining|garage|laundry|porch|patio|office|study|pantry|mud ?room|foyer|closet|primary|master/.test(t.slice(0, m.index))) return null
+  const rest = `${t.slice(0, m.index)} ${t.slice(m.index + m[0].length)}`
+  const room = BED_BATH.exec(rest)
+  if (!room || /\b(?:remove|delete|drop|get rid of|without|take out|fewer|less)\b/.test(rest)) return null
+  const kind = room[1].startsWith('bed') ? 'bed' : 'bath'
+  const said = rest.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+|extra\s+|additional\s+|full\s+)?(?:bed|bath)/)
+  const n = said ? WORDS[said[1]] || +said[1] : null
+  if (/\b(?:add|another|one more|an? extra|extra|additional|more)\b/.test(rest)) return { kind, add: n || 1 }
+  return n ? { kind, count: n } : null
+}
+
+/**
+ * A message with nothing in it the chat acts on: no room, no size, no count, nothing about the house, the garage
+ * or the walls ("asdf", "make it nicer", "hmm"). Used when the model comes back with nothing to do.
+ */
+export function unclearAsk(text) {
+  let t = String(text || '')
+  if (isSpanish(t)) t = fromSpanish(t).text
+  t = t.toLowerCase()
+  if (!t.trim()) return true
+  if (isCostQuestion(t) || wantsOpen(t) || isUndoRequest(t) || /\d/.test(t)) return false
+  if (KINDS.some(([, re]) => re.test(t))) return false
+  return !/\b(?:house|home|plan|rooms?|size|sq|square|feet|foot|walls?|ceilings?|windows?|doors?|roof|lot|yard|driveway|stor(?:y|ies)|floors?|bigger|smaller|larger|wider|deeper|add|remove|move|swap|switch|casa|cuartos?|pared(?:es)?|techos?|ventanas?|puertas?)\b/.test(t)
+}
 /**
  * A request with its cost clauses set aside: { text: what is left to interpret, cost: whether money was
  * asked about, spanish: whether that part was in Spanish }. "Make it 2,400 sf, how much is that?" keeps the
@@ -897,7 +950,9 @@ const COUNT_RE = /(?<![\d.,$#-])(?<!\b(?:the|all|both|these|those|my|our|your)\s
  * "make bedroom 2 bigger" (a room by its number), "the 3 bedrooms" (the rooms as they are), "2.5 baths".
  */
 export function countAsk(text) {
-  const t = String(text || '').toLowerCase()
+  let t = String(text || '')
+  if (isSpanish(t)) t = fromSpanish(t).text // "quiero 4 recámaras" (round 13)
+  t = t.toLowerCase()
   if (/\b(add|another|extra|more|fewer|less|put in|remove|delete|drop|get rid of|without|take out|bigger|larger|wider|deeper|longer|smaller|narrower|shorter|tighter|expand|enlarge|shrink|reduce|move|shift|swap|switch|next to|beside|closet|window|door)\b/.test(t)) return []
   if (/\d\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/.test(t)) return []
   // "2.5 baths" is a bath and a half bath, not a count this reads (and never "5 baths")
@@ -924,7 +979,9 @@ const ANY_ROOM = /kitchen|living|family room|great room|dining|garage|bed|bath|l
  * public rooms open already, and ceiling heights are the kit's), so the answer is an offer, never a change.
  */
 export function wantsOpen(text) {
-  const t = String(text || '').toLowerCase()
+  let t = String(text || '')
+  if (isSpanish(t)) t = fromSpanish(t).text // "que se sienta más abierta" (round 13)
+  t = t.toLowerCase()
   return OPEN_STRICT.test(t) || (OPEN_SOFT.test(t) && !ANY_ROOM.test(t))
 }
 export const OPEN_ASK = 'Tell me which room should get more space and I will make it bigger.'
@@ -941,6 +998,17 @@ function subjectOf(diff, rooms, kit) {
 }
 
 export function regexOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } = {}) {
+  // a request in Spanish (round 13) is read as the English it means, clause by clause; what an answer quotes back
+  // (a part that was done, a part that was not read) is the client's own words
+  if (isSpanish(text)) {
+    const said = fromSpanish(text)
+    const out = readOps(said.text, rooms, kit, lot, { split })
+    const own = (list) => list?.map((p) => ({ ...p, text: said.back(p.text) }))
+    return { ...out, ...(out.parts ? { parts: own(out.parts) } : {}), ...(out.unread ? { unread: own(out.unread) } : {}) }
+  }
+  return readOps(text, rooms, kit, lot, { split })
+}
+function readOps(text, rooms, kit, lot = DEFAULT_LOT, { split = true } = {}) {
   const whole = regexOne(text, rooms, kit, lot)
   if (!split) return whole
   // "make the house 3,000 sf and add a bedroom": two requests in one line, each read on its own; a swap
@@ -1039,7 +1107,10 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
     }
     return { ops: [], reply: 'Which two rooms should trade places? Say it like "swap the office and the dining room".', confidence: 0.4 }
   }
-  if (!kind) return { ops: [], reply: 'I did not catch which room you mean. Try "make the kitchen bigger", "add an office", "make the house 2,400 sf", or "swap the office and the dining room".', confidence: 0.2 }
+  // "make the house bigger", "haz la casa más chica": the house, but no size: asked for, never guessed (round 13)
+  if (!kind && /\b(?:house|home|whole (?:house|plan|thing)|floor ?plan)\b/.test(t) && /\b(?:bigger|larger|smaller|tighter|shrink|reduce|expand|enlarge|downsize)\b/.test(t)) return { ops: [], reply: 'How big should the house be? Tell me the living area you want, like "make the house 2,400 sf".', confidence: 0.3 }
+  // nothing here names a room or the house: the verdict answers with changes that work on this plan, as buttons (round 13)
+  if (!kind) return { ops: [], intent: 'unclear', reply: 'I did not catch which room you mean. Try "make the kitchen bigger", "add an office", "make the house 2,400 sf", or "swap the office and the dining room".', confidence: 0.2 }
   if (kind === 'porch') return { ops: [], reply: 'Front porch or back porch?', confidence: 0.3 }
   // "make the garage 3 cars", "three-car garage"
   const cars = t.match(/(\d+|one|two|three|four)[- ]?cars?\b/)

@@ -6,8 +6,9 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
-import { decide, dropUnsupported, editsOf, netsToNothing } from '../src/draft/lib/interpret.js'
-import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply } from '../src/draft/lib/ops.js'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
+import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
+import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
@@ -18,6 +19,31 @@ import { STYLES } from '../src/draft/lib/styles.js'
 const id = (p) => p + '_' + crypto.randomBytes(5).toString('hex')
 const now = () => new Date().toISOString()
 const fail = (status, error, extra = {}) => Object.assign(new Error(error), { status, ...extra })
+/**
+ * The rooms a homeowner asks for, as the office stores them (round 13, M2): the fields a program has and no others,
+ * each of its own type and inside the widest range any plan of ours draws. What a browser adds beside them is
+ * dropped; a count that is not a number, or far outside the range, is refused in plain words.
+ */
+const PROGRAM_RANGE = { beds: [1, 8], baths: [1, 8], garage: [0, 4], stories: [1, 2], sqft: [600, 10000] }
+const PROGRAM_FLAGS = ['halfBath', 'office', 'suite2', 'frontPorch', 'rearPorch', 'tandem', 'wingSplit']
+export function cleanProgram(program, { nested = false } = {}) {
+  if (program == null) return null
+  if (typeof program !== 'object' || Array.isArray(program)) throw fail(400, 'the rooms asked for must be a list of counts (bedrooms, bathrooms, garage, size)')
+  const out = {}
+  for (const [k, [lo, hi]] of Object.entries(PROGRAM_RANGE)) {
+    if (program[k] === undefined || program[k] === null) continue
+    const v = Number(program[k])
+    if (!Number.isFinite(v) || v < lo || v > hi) throw fail(400, `${k === 'sqft' ? 'the size' : k === 'beds' ? 'the bedrooms' : k === 'baths' ? 'the bathrooms' : k === 'garage' ? 'the garage' : 'the floors'} asked for must be between ${lo} and ${hi}`)
+    out[k] = k === 'sqft' ? Math.round(v) : k === 'baths' ? Math.round(v * 2) / 2 : Math.floor(v)
+  }
+  for (const k of PROGRAM_FLAGS) if (typeof program[k] === 'boolean') out[k] = program[k]
+  // what was asked before the plan was fitted to the lot rides along, cleaned the same way, one level deep
+  if (!nested && program.asked && typeof program.asked === 'object') {
+    const asked = cleanProgram(program.asked, { nested: true })
+    if (asked && Object.keys(asked).length) out.asked = asked
+  }
+  return out
+}
 export const EDITABLE = ['drafting', 'returned']
 // what the office tells a homeowner who asks for a meeting, or for more changes (round 8, M4/M8)
 export const OFFICE_PHONE = '(956) 594-6936'
@@ -46,7 +72,7 @@ export function outlineGapFt(a, b) {
 // what a parcel lot takes from the county's record and never from a browser (round 12, items 1 and 2)
 const COUNTY_KEYS = ['calls', 'streets', 'front', 'kinds', 'cornerLot', 'frontBy', 'frontWidthFt', 'propId', 'geoId', 'legal', 'acres', 'source', 'parcelFetchedAt', 'matchedBy', 'confidence', 'interior']
 const SERVER_KEYS = [...COUNTY_KEYS, 'listedAs', 'situs', 'outlineBy', 'addressGives']
-const STAGES = ['style', 'rooms', 'draft']
+const STAGES = ['lot', 'style', 'rooms', 'draft']
 const stageOf = (v, otherwise) => (STAGES.includes(v) ? v : otherwise)
 const sameText = (a, b) => String(a || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
@@ -208,7 +234,17 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (hit && String(hit.propId) === String(spec.propId)) return { rec: hit, byAddress: true, addressGives: null }
       const county = spec.county || hit?.county
       if (!county) return null
-      const rec = (await parcels.byId({ county, propId: spec.propId, cachedOnly: true }).catch(() => null)) || (mayLookup() ? await parcels.byId({ county, propId: spec.propId }).catch(() => null) : null)
+      let rec = await parcels.byId({ county, propId: spec.propId, cachedOnly: true }).catch(() => null)
+      if (!rec && mayLookup()) {
+        try {
+          rec = await parcels.byId({ county, propId: spec.propId })
+        } catch (e) {
+          // round 13, M1: the county answered and has no parcel with that number. That is not an outage: a made-up
+          // number must not ride in on "the county did not answer".
+          if (e?.status === 404 && /parcel not found/i.test(e.message || '')) return { missing: true }
+          rec = null
+        }
+      }
       return rec?.match === 'one' ? { rec, byAddress: false, addressGives: hit ? String(hit.propId) : null } : null
     },
     /**
@@ -266,6 +302,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         } else {
           spec.confirmed = false
           const own = await this.serverParcel(spec, { mayLookup })
+          if (own?.missing) throw fail(400, `The county has no parcel number ${String(spec.propId).slice(0, 40)}. Look the address up again, or type the lot in.`)
           if (own) {
             const sides = Array.isArray(spec.calls) ? spec.calls.length : 0
             const gap = await this.countyLot(spec, own)
@@ -274,7 +311,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
             // the county could not be read now: the lot waits for the drafter, and nothing about the match is taken on trust
             Object.assign(spec, { matchedBy: null, confidence: 'unchecked', listedAs: null, situs: null, addressGives: null, outlineBy: 'browser' })
           }
-          spec.zoning = await this.readZoning(spec, { mayLookup, own })
+          spec.zoning = await this.readZoning(spec, { mayLookup, own: own || undefined })
         }
         return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
       }
@@ -315,7 +352,11 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       // when there is no lot to save.
       const hasRooms = Array.isArray(body.rooms) && body.rooms.length > 0
       const lotOnly = !hasRooms && !!body.lot?.spec && body.lot.spec.kind !== 'reference'
-      if (!hasRooms && !lotOnly) throw fail(400, 'rooms required (or a lot to save on its own)')
+      // round 13: the address a homeowner typed is saved before a lot is taken, so signing out on the lot step loses
+      // nothing ("Your houses" lists it and opens the lot step again). It has no lot yet, so no drafter sees it.
+      const typed = String(body.address || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+      const addressOnly = !hasRooms && !lotOnly && !body.lot && typed.length >= 5
+      if (!hasRooms && !lotOnly && !addressOnly) throw fail(400, 'rooms required (or a lot, or an address, to save on its own)')
       if (hasRooms && !body.style?.id) throw fail(400, 'style required')
       await this.checkLot(body.lot)
       const t = now()
@@ -324,13 +365,13 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         userId: user.id,
         email: user.email,
         client: body.client || user.name || user.email,
-        address: body.lot?.address || '',
+        address: body.lot?.address || (addressOnly ? typed : ''),
         lot: body.lot || null,
         style: body.style?.id ? { id: body.style.id, name: body.style.name || body.style.id } : null,
-        program: body.program || {},
+        program: cleanProgram(body.program) || {},
         status: 'drafting',
         // where the homeowner is: 'style', 'rooms' or 'draft' (resume opens that step)
-        stage: hasRooms ? 'draft' : stageOf(body.stage, 'style'),
+        stage: hasRooms ? 'draft' : addressOnly ? 'lot' : stageOf(body.stage, 'style'),
         changesAllowed: await allowanceDefault(),
         changesUsed: 0,
         allowanceLog: [],
@@ -340,7 +381,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
       await store.projects.add(p)
       if (hasRooms) await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
-      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
+      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
       return this.detail(p)
     },
     /**
@@ -351,7 +392,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async needsCustom(p, { note = '', program = null, clear = false } = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       if (!p.lot?.spec || p.lot.spec.kind === 'reference') throw fail(409, 'this plan has no lot of its own to send')
-      if (program && typeof program === 'object') p.program = program
+      // round 13, M2: the rooms sent with the request are cleaned like any others, never stored as the browser sent them
+      const asked = cleanProgram(program)
+      if (asked && Object.keys(asked).length) p.program = { ...cleanProgram(p.program || {}), ...asked }
       p.updatedAt = now()
       if (clear) {
         if (p.needsCustom) await event('project', `${p.client}: no longer asks for a custom design`, { projectId: p.id })
@@ -452,7 +495,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         p.address = body.lot.address || p.address
       }
       if (body.style?.id) p.style = { id: body.style.id, name: body.style.name || body.style.id }
-      if (body.program) p.program = body.program
+      if (body.program) p.program = cleanProgram(body.program)
       if (body.client) p.client = body.client
       if (body.stage) p.stage = stageOf(body.stage, p.stage || 'style')
       p.updatedAt = now()
@@ -481,18 +524,41 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // one plain-language request → Claude or the basic rules → plan rules → one change used only if applied.
     // With `ops` (a fix the client clicked), the ops are taken as given and only the rules run.
     // A cost question never reaches the model and never uses a change: the answer points to the meeting (M3).
-    async change(p, text, fixOps = null) {
+    // Round 13: a request in Spanish is read as the English it means, and the answer (reply, button labels, the
+    // office button's words) leaves in Spanish when the request was Spanish or the screen is (`lang: 'es'`); what
+    // is stored and logged stays as the plan code wrote it. Typed undo does what the Undo button does.
+    async change(p, text, fixOps = null, opts = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
       if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
+      const isFix = Array.isArray(fixOps) && fixOps.length > 0
+      const spanish = isSpanish(request)
+      const said = spanish && !isFix ? fromSpanish(request) : null
+      const lang = opts.lang === 'es' || spanish ? 'es' : 'en'
+      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
+      const out = (result) => localize(result, lang)
       const left = changesLeft(p)
       const counts = () => ({ changesLeft: changesLeft(p), changesAllowed: p.changesAllowed, changesUsed: p.changesUsed })
-      const costQ = Array.isArray(fixOps) && fixOps.length ? { text: request, cost: false } : splitCost(request)
+      // "undo", "go back to how it was", "deshaz eso": the last change comes off and comes back to the plan, the way
+      // the Undo button does it; no model is asked, nothing is used, and it works at 0 left
+      if (!isFix && isUndoRequest(request)) {
+        const target = await this.undoTarget(p)
+        if (!target) {
+          const reply = 'There is nothing to undo yet. No change was used.'
+          logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'nothing to undo', reply, ops: [] })
+          return out({ applied: false, undo: true, reply, source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version })
+        }
+        const back = await this.rollback(p, target)
+        const reply = `Back to version ${target}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply, ops: [] })
+        return out({ applied: true, undo: true, reply, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, refunded: back.refunded, project: back, ops: [] })
+      }
+      const costQ = isFix ? { text: request, cost: false } : splitCost(said ? said.text : request)
       if (costQ.cost && !costQ.text) {
         const reply = costReply(costQ)
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'cost', reply, ops: [] })
-        return { applied: false, reply, source: 'fallback', reasons: ['cost question'], fixes: [], askOffice: 'meeting', ...counts(), version: p.version }
+        return out({ applied: false, reply, source: 'fallback', reasons: ['cost question'], fixes: [], askOffice: 'meeting', ...counts(), version: p.version })
       }
       const style = styleOf(p)
       const kit = kitFor(style)
@@ -503,40 +569,43 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       let diff
       let source = 'claude'
       let meta = {}
-      // "undo", "go back": the previous version, at no change (the change it used comes back); works at 0 left
-      if (/^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i.test(request)) {
-        if (p.version <= 1) return { applied: false, reply: 'There is nothing to undo yet.', source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version }
-        const before = p.version
-        const back = await this.rollback(p, p.version - 1)
-        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply: back.reply, ops: [] })
-        return { applied: true, undo: true, reply: `Back to version ${before - 1}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, project: back, ops: [] }
-      }
       // "make the kitchen bigger and then make it smaller": the two parts cancel; said so, and no change is used
       // (round 10, item 8: the app's own chat goes through here, and this check was only on the offline path)
-      const net = Array.isArray(fixOps) && fixOps.length ? null : netsToNothing(costQ.text, rooms, kit)
+      const net = isFix ? null : netsToNothing(costQ.text, rooms, kit)
       if (net) {
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'no change', reply: net, ops: [] })
-        return { applied: false, noop: true, reply: net, source: 'fallback', reasons: ['no change'], fixes: [], ...counts(), version: p.version }
+        return out({ applied: false, noop: true, reply: net, source: 'fallback', reasons: ['no change'], fixes: [], ...counts(), version: p.version })
       }
       // what this style cannot take is set aside clause by clause: the rest goes through, the dropped part is named
-      const split = dropUnsupported(costQ.text, style)
+      const split = isFix ? { text: request, dropped: [] } : dropUnsupported(costQ.text, style)
       if (!split.text) {
         const no = split.dropped.map((d) => d.why).join(' ')
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'unsupported', reply: no, ops: [] })
-        return { applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], ...counts(), version: p.version }
+        return out({ applied: false, reply: no, source: 'fallback', reasons: ['unsupported'], fixes: [], ...counts(), version: p.version })
       }
       // out of changes: nothing is applied and nothing is used; the answer offers to tell the office (M8)
       if (left <= 0) {
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'out of changes', reply: OUT_OF_CHANGES, ops: [] })
-        return { applied: false, reply: OUT_OF_CHANGES, source: 'fallback', reasons: ['out of changes'], fixes: [], askOffice: 'more-changes', outOfChanges: true, ...counts(), version: p.version }
+        return out({ applied: false, reply: OUT_OF_CHANGES, source: 'fallback', reasons: ['out of changes'], fixes: [], askOffice: 'more-changes', outOfChanges: true, ...counts(), version: p.version })
       }
-      const asked = split.text
-      if (Array.isArray(fixOps) && fixOps.length) {
+      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
+      const edits = editsOf(await store.versions.list(p.id))
+      const costTail = (result) => (costQ.cost ? { reply: `${String(result.reply || '').trim().replace(/\s+$/, '')} ${costReply(costQ)}`.trim(), askOffice: 'meeting' } : {})
+      // "make the house smaller but add 2 bedrooms": two wishes that pull against each other. No model is asked: the
+      // trade-off is explained and the one option that applies on this lot is offered as a button; nothing is used
+      const trade = isFix ? null : tradeOffAsk(split.text)
+      const offer = trade ? tradeOffer(trade, rooms, p.program, style, kit, 'fallback', lot, edits) : null
+      if (offer) {
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'trade-off', reply: offer.reply, ops: [] })
+        return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
+      }
+      const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
+      if (isFix) {
         diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
       } else
       try {
-        diff = await interpreter.ask({ request: asked, program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
+        diff = await interpreter.ask({ request: asked, ...(lang === 'es' ? { lang } : {}), program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
         meta = { usage: diff.usage, cost: diff.cost, ms: diff.ms, model: diff.model }
         logInterpret({ request, client: p.email, projectId: p.id, rooms: rooms.length, diff: { ops: diff.ops, reply: diff.reply, confidence: diff.confidence }, verdict: diff.confidence < 0.5 || !diff.ops.length ? 'unsure' : 'diff', ...meta })
       } catch (e) {
@@ -544,13 +613,12 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         diff = regexOps(asked, rooms, kit, lot)
         source = e.timeout ? 'timeout' : 'fallback'
       }
-      // the client's edits so far, so a re-draft (a new size, a garage the plan cannot add in place) puts them back
-      const edits = editsOf(await store.versions.list(p.id))
-      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits, unsupported: split.dropped })
+      // "asdf", "make it nicer", "hmm": nothing in it the chat acts on; the answer shows changes that work on this plan
+      if (!isFix) diff = markUnclear(diff, split.text)
+      const result = decide(diff, rooms, p.program, style, kit, source, lot, { history: edits, unsupported: split.dropped.map((d) => ({ ...d, text: own(d.text) })) })
       logInterpret({ request, client: p.email, projectId: p.id, source, verdict: result.applied ? 'applied' : 'rejected', reasons: result.reasons || [], reply: result.reply, ops: result.ops })
       // a cost question beside a change: the change goes through, the answer ends with the cost sentence (M3)
-      const costTail = costQ.cost ? { reply: `${String(result.reply || '').trim().replace(/\s+$/, '')} ${costReply(costQ)}`.trim(), askOffice: 'meeting' } : {}
-      if (!result.applied) return { applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, fixes: result.fixes || [], ...counts(), version: p.version, ...costTail }
+      if (!result.applied) return out({ applied: false, reply: result.reply, source, reasons: result.reasons || [], caused: result.caused, preexisting: result.preexisting, ...(result.offer ? { offer: result.offer } : {}), fixes: result.fixes || [], ...counts(), version: p.version, ...costTail(result) })
       const n = p.version + 1
       const t = now()
       await store.versions.add({ projectId: p.id, n, at: t, kind: 'change', text: request, used: 1, rooms: result.rooms, reply: result.reply, source, ops: result.ops, did: result.did })
@@ -561,7 +629,21 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       await store.projects.put(p)
       await event('project', `${p.client}: "${request.slice(0, 60)}" applied (${source}), ${changesLeft(p)} of ${p.changesAllowed} change${p.changesAllowed === 1 ? '' : 's'} left`, { projectId: p.id })
       // the Claude usage and its cost stay in the log and the activity (office-only); the owner gets the plan
-      return { applied: true, reply: result.reply, source, rooms: result.rooms, ...counts(), version: n, did: result.did, ops: result.ops, ms: meta.ms, ...costTail }
+      return out({ applied: true, reply: result.reply, source, rooms: result.rooms, ...counts(), version: n, did: result.did, ops: result.ops, ms: meta.ms, ...costTail(result) })
+    },
+
+    /**
+     * The version a typed "undo" goes back to, or null when there is nothing to undo: the plan as it stands (after
+     * any earlier undo) must be a change, and the version before it is the target. The Undo button does the same
+     * for its one step; typed again, the change before that comes off too, each one coming back to the plan.
+     */
+    async undoTarget(p) {
+      const all = await store.versions.list(p.id)
+      const byN = new Map(all.map((v) => [v.n, v]))
+      let n = p.version
+      for (let guard = 0; guard < 500 && byN.get(n)?.kind === 'rollback' && byN.get(n).rollbackOf; guard++) n = byN.get(n).rollbackOf
+      const v = byN.get(n)
+      return v && v.kind === 'change' && n > 1 && byN.has(n - 1) ? n - 1 : null
     },
 
     // back to any earlier version; the changes used on the versions after it come back to the plan
@@ -647,7 +729,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     },
 
     // a drafter confirms the lot read from a plat, with corrected calls or setbacks when needed
-    async confirmLot(p, drafter, { confirmed = true, spec, note }) {
+    async confirmLot(p, drafter, { confirmed = true, spec, note, checked = false }) {
       if (p.lot?.spec?.kind !== 'plat' && p.lot?.spec?.kind !== 'parcel') throw fail(409, 'this lot was typed in, nothing to confirm')
       const wasConfirmed = !!p.lot.spec.confirmed
       const next = { ...p.lot.spec, ...(spec || {}), kind: p.lot.spec.kind === 'parcel' ? 'parcel' : 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
@@ -662,6 +744,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         if (spec?.calls) next.outlineBy = 'drafter'
         else if (next.outlineBy !== 'county' && next.outlineBy !== 'drafter') {
           own = await this.serverParcel(next)
+          // round 13, M1: an outline the server never checked is not confirmed on trust. The county is asked again
+          // now. A number the county does not have cannot be confirmed as a county parcel at all; when the county
+          // still does not answer, the drafter has to say they checked the outline themselves.
+          if (own?.missing) throw fail(409, `The county has no parcel number ${String(next.propId).slice(0, 40)}, so this outline cannot be confirmed as a county parcel. Correct the lot from the plat, or ask the homeowner to look the address up again.`, { noParcel: true })
+          if (!own && confirmed && !checked) throw fail(409, 'The county did not answer, so this outline is still not checked against the county. Try again in a moment, or tick "I checked the outline myself" and confirm.', { unchecked: true })
+          if (!own && confirmed && checked) {
+            Object.assign(next, { outlineBy: 'drafter', confidence: 'drafter', matchedBy: 'drafter' })
+            await event('lot', `${p.client}: ${drafter.email} confirmed parcel ${next.propId} on their own check of the outline; the county did not answer`)
+          }
           if (own) {
             const gap = await this.countyLot(next, own)
             rebuilt = gap > 1

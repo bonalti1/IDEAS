@@ -14,6 +14,13 @@ export const OPTION_TOPICS = ['garage', 'porch', 'wing']
 /** Which topic a request names, or null: "show me options for the garage", "porch options", "what are my choices for the bedrooms". */
 export function optionTopic(text) {
   const t = String(text || '').toLowerCase()
+  // round 13: the same question in Spanish ("muéstrame opciones de cochera", "opciones para los porches")
+  if (/\b(opci[oó]n|opciones|alternativas|posibilidades|mu[eé]strame|ens[eé][nñ]ame)/.test(t)) {
+    if (/cochera|garaje|carros?\b|autos?\b/.test(t)) return 'garage'
+    if (/porche|patio|terraza/.test(t)) return 'porch'
+    if (/rec[aá]mara|cuarto|habitaci|dormitorio|ba[nñ]o|\bala\b/.test(t)) return 'wing'
+    return null
+  }
   if (!/\b(options?|choices|alternatives|possibilities|what (could|can) (i|we) do|show me)\b/.test(t)) return null
   if (/\bgarage|cars?\b/.test(t)) return 'garage'
   if (/\bporch|patio\b/.test(t)) return 'porch'

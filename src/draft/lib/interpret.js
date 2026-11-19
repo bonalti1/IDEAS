@@ -3,9 +3,10 @@
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
 import { kitFor, lotOf, minSizeOf, maxSizeOf, planIdOf, isRoom, programOf, programLimits, generateRooms, floorArea } from './layout.js'
-import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply, withPlanCoords, OPEN_ASK } from './ops.js'
+import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply, withPlanCoords, OPEN_ASK, isUndoRequest, tradeOffAsk, unclearAsk } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
+import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES } from './es.js'
 
 const MIN_CONFIDENCE = 0.5
 const MAX_PARTS = 3 // parts applied from one message; one change is used however many applied (round 8, item 29)
@@ -13,7 +14,7 @@ const MAX_PARTS = 3 // parts applied from one message; one change is used howeve
 let offlineUntil = 0
 
 /** Calls the office interpreter. Throws when it cannot. */
-export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
+export async function claudeInterpreter({ text, rooms, program, kit, lot, lang }) {
   if (Date.now() < offlineUntil) throw Object.assign(new Error('interpreter not configured'), { unconfigured: true })
   let res
   try {
@@ -22,6 +23,7 @@ export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
     rooms: summarizeRooms(rooms),
     program,
     lot,
+    ...(lang ? { lang } : {}),
     kit: { id: kit.id, name: kit.name, kinds: Object.fromEntries(Object.entries(kit.rooms).map(([k, t]) => [k, { name: t.name, w: t.w, d: t.d, zone: t.zone }])), minSize: kit.rules?.minSize || {} },
     })
   } catch (e) {
@@ -33,41 +35,95 @@ export async function claudeInterpreter({ text, rooms, program, kit, lot }) {
 }
 
 /**
- * @param {object} opts  { interpreter } to override the Claude call (tests), { lot }
+ * @param {object} opts  { interpreter } to override the Claude call (tests), { lot }, { history }, { lang: 'es' | 'en' }
+ *   the language of the screen (the answer is Spanish when it is 'es' or the request is Spanish), { fixOps } the ops
+ *   of a button the client tapped
  * @returns {{ applied: boolean, rooms, reply: string, source: 'claude'|'fallback', ops, reasons? }}
  */
 export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const kit = kitFor(style)
+  // round 13: a request in Spanish is read as the English it means (the basic rules and the checks below read
+  // that), and every answer leaves in the homeowner's language: Spanish when they wrote Spanish, or when the
+  // screen is in Spanish (opts.lang 'es')
+  const asked = String(text ?? '')
+  const said = isSpanish(asked) ? fromSpanish(asked) : null
+  const lang = opts.lang === 'es' || said ? 'es' : 'en'
+  const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
+  const say = (result) => localize(result, lang)
+  // a button the client tapped (opts.fixOps): its ops are taken as given and only the rules run; the label is not read
+  if (Array.isArray(opts.fixOps) && opts.fixOps.length) return say(decide({ ops: opts.fixOps.slice(0, 8), reply: '', confidence: 1 }, rooms, program, style, kit, 'fix', lotOf(opts.lot), { history: opts.history || [] }))
+  // "undo", "go back to how it was", "deshaz eso": the Undo button's job; the screen keeps the versions, so here the
+  // answer only points to it (the office API does the undo itself for a saved plan)
+  if (isUndoRequest(asked)) return say({ applied: false, undo: true, rooms, reply: opts.history?.length ? 'Tap Undo below the chat to take the last change off; it comes back to your plan.' : 'There is nothing to undo yet. No change was used.', source: 'fallback', ops: [], reasons: ['undo'] })
+  text = said ? said.text : asked
   // a cost question never reaches the model and never uses a change: the answer points to the meeting with
   // the office (round 8, M3); beside a change ("make it 2,400 sf, how much is that?") the change still runs
   const costQ = splitCost(text)
-  if (costQ.cost && !costQ.text) return { applied: false, rooms, reply: costReply(costQ), source: 'fallback', ops: [], reasons: ['cost question'], askOffice: 'meeting' }
+  if (costQ.cost && !costQ.text) return say({ applied: false, rooms, reply: costReply(costQ), source: 'fallback', ops: [], reasons: ['cost question'], askOffice: 'meeting' })
   text = costQ.text
   // "make the kitchen bigger and then make it smaller": the two parts cancel; say so, use nothing (round 9, item 11)
   const net = netsToNothing(text, rooms, kit)
-  if (net) return { applied: false, rooms, reply: net, source: 'fallback', ops: [], reasons: ['no change'], noop: true }
+  if (net) return say({ applied: false, rooms, reply: net, source: 'fallback', ops: [], reasons: ['no change'], noop: true })
   // what this style cannot do yet, said plainly, before any model is asked: clause by clause, so "make the
   // kitchen bigger and add a pool" does the kitchen and names the pool
   const split = dropUnsupported(text, style)
-  if (!split.text) return { applied: false, rooms, reply: split.dropped.map((d) => d.why).join(' '), source: 'fallback', ops: [], unsupported: true, ...(costQ.cost ? { askOffice: 'meeting' } : {}) }
-  text = split.text
+  if (!split.text) return say({ applied: false, rooms, reply: split.dropped.map((d) => d.why).join(' '), source: 'fallback', ops: [], unsupported: true, ...(costQ.cost ? { askOffice: 'meeting' } : {}) })
+  const withCost = (result) => {
+    if (!costQ.cost) return result
+    return { ...result, reply: `${String(result.reply || '').trim()} ${costReply(costQ)}`.trim(), askOffice: 'meeting' }
+  }
+  // "make the house smaller but add 2 bedrooms": the trade-off is explained and one option that applies is offered,
+  // before any model is asked, so the answer is the same in both modes (round 13)
+  const trade = tradeOffAsk(split.text)
+  const offer = trade ? tradeOffer(trade, rooms, program, style, kit, 'fallback', lotOf(opts.lot), opts.history || []) : null
+  if (offer) return say(withCost(offer))
+  text = own(split.text)
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
   let source = 'claude'
   try {
-    diff = await interpreter({ text, rooms, program, kit, lot: opts.lot ? { spec: opts.lot.spec } : undefined })
+    diff = await interpreter({ text, rooms, program, kit, lot: opts.lot ? { spec: opts.lot.spec } : undefined, lang })
     if (diff.source === 'fallback' || diff.source === 'timeout') source = diff.source // the office answered with the basic rules
   } catch (e) {
     diff = regexOps(text, rooms, kit, lotOf(opts.lot))
     source = /abort|timed? ?out|504/i.test(String(e?.name || '') + String(e?.message || '')) ? 'timeout' : 'fallback'
   }
-  const result = decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [], unsupported: split.dropped })
-  if (costQ.cost) {
-    result.reply = `${String(result.reply || '').trim()} ${costReply(costQ)}`.trim()
-    result.askOffice = 'meeting'
-  }
+  diff = markUnclear(diff, split.text)
+  const result = withCost(decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [], unsupported: split.dropped.map((d) => ({ ...d, text: own(d.text) })) }))
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
-  return result
+  return say(result)
+}
+
+/**
+ * A diff that came back with nothing to do, for a message with nothing in it the chat acts on ("asdf", "make it
+ * nicer", "hmm"), is marked so the verdict answers with changes that work on this plan (round 13). A question the
+ * model asked about a real request ("which bedroom?") is left as it is.
+ * @param {string} text  the request as the basic rules read it (English, or Spanish: it is read either way)
+ */
+export function markUnclear(diff, text) {
+  if (!diff || !Array.isArray(diff.ops) || diff.ops.length || diff.intent === 'open' || diff.intent === 'unclear') return diff
+  return unclearAsk(text) ? { ...diff, intent: 'unclear' } : diff
+}
+
+export const ASK_LABEL = { meeting: 'Ask the office to set up my meeting', 'more-changes': 'Ask the office for more changes' }
+/**
+ * A chat answer in the homeowner's language (round 13). In Spanish the reply and every button label are
+ * translated; a sentence that has no Spanish (the model answered in English, a validator's own line) is replaced:
+ * what was done is said from the plan code's own description, a refusal falls back to one plain sentence. Either
+ * way the answer carries `askLabel`, the words for its "ask the office" button, when it has one.
+ */
+export function localize(result, lang = 'en') {
+  if (!result) return result
+  const labels = lang === 'es' ? ASK_LABEL_ES : ASK_LABEL
+  const ask = result.askOffice ? { askLabel: labels[result.askOffice] || labels.meeting } : {}
+  if (lang !== 'es') return { ...result, ...ask }
+  const reply = String(result.reply || '')
+  let es = toSpanish(reply)
+  if (untranslated(reply).length) {
+    const did = result.applied && result.did?.length ? `${result.did.join('. ')}.` : null
+    es = did && !untranslated(did).length ? toSpanish(did) : toSpanish(reply, { fallback: result.applied ? 'El cambio quedó hecho.' : result.ops?.length ? 'No pude hacer ese cambio en este plano. Dígamelo de otra manera, o intente con un paso más chico.' : 'No estoy seguro de qué cambiar. ¿Me lo puede decir de otra manera?' })
+  }
+  return { ...result, reply: es, ...(result.fixes ? { fixes: result.fixes.map((f) => ({ ...f, label: toSpanish(f.label) })) } : {}), ...ask, lang: 'es' }
 }
 
 /**
@@ -375,7 +431,7 @@ const GARAGE_WORDS = (why) => {
   const m = why.match(/(\d)-car/)
   const n = m ? m[1] : null
   if (/no free wall at the laundry/.test(why)) return `There is no room for a garage against the laundry on this plan.`
-  if (/no sound spot for a/.test(why)) return `There is no room for ${n ? `a ${n}-car` : 'that'} garage${/tandem/.test(why) ? ' with a tandem bay' : ''}${/side-load/.test(why) ? ', side-load,' : /front-load/.test(why) ? ', front-load,' : ''} on this lot.`
+  if (/no sound spot for a/.test(why) && /garage/.test(why)) return `There is no room for ${n ? `a ${n}-car` : 'that'} garage${/tandem/.test(why) ? ' with a tandem bay' : ''}${/side-load/.test(why) ? ', side-load,' : /front-load/.test(why) ? ', front-load,' : ''} on this lot.`
   return null
 }
 
@@ -402,6 +458,8 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
   diff = { ...diff, ops: growSwaps(normalizeOps(diff.ops, rooms), rooms, kit) }
   // "make it feel more open": nothing is changed on a guess; what is open already is said, and what applies is offered
   if (diff.intent === 'open' && !diff.ops?.length) return openOffer(rooms, program, style, kit, source, L)
+  // "asdf", "make it nicer", "hmm": said plainly, with changes that work on this plan as buttons (round 13)
+  if (diff.intent === 'unclear' && !diff.ops?.length) return unclearOffer(rooms, program, style, kit, source, L)
   if ((diff.confidence ?? 1) < MIN_CONFIDENCE || !diff.ops?.length) {
     return { applied: false, rooms, reply: diff.reply || 'I am not sure what to change. Can you say it another way?', source, ops: [] }
   }
@@ -902,6 +960,120 @@ function openOffer(rooms, program, style, kit, source, L) {
   }
   said.push(fixes.length ? 'What I can do now is give that space more room. Pick one below; a change is used only when you pick.' : pub.length ? 'I also tried giving those rooms more space, and none of them can grow where it sits on this lot.' : OPEN_ASK)
   return { applied: false, rooms, reply: said.join(' '), source, ops: [], reasons: ['open plan offer'], offer: 'open', fixes }
+}
+
+// ── round 13: a request nobody could read, and two wishes that pull against each other ────────────────────────
+
+/**
+ * Changes that work on this plan right now, as buttons: the same suggestions the Draft screen shows under the
+ * chat (a bigger kitchen, a porch on the back, one more car, a bedroom, an office, a bigger primary bath, a half
+ * bath), then a few more for a plan where those do not fit. Each is read the way typing it would be read, and is
+ * kept only if it applies and passes every rule; a "bigger" that does not fit becomes the growth that does.
+ * @returns {{ label: string, ops: object[] }[]}  at most `want`
+ */
+export function exampleFixes(rooms, program, style, kit, lot, want = 3) {
+  const L = lotOf(lot)
+  const list = rooms.filter(isRoom)
+  const has = (k) => list.some((r) => r.kind === k)
+  const cands = []
+  if (has('kitchen')) cands.push('Make the kitchen bigger')
+  cands.push(has('rearPorch') ? 'Remove the rear porch' : 'Add a porch on the back')
+  const garage = list.find((r) => r.kind === 'garage')
+  if (garage) {
+    const cars = garage.tandem || /tandem/i.test(garage.name || '') ? 3 : Math.max(1, Math.round(Math.max(garage.w, garage.d) / (kit.rooms.garage?.perCar || 11)))
+    if (cars < 3) cands.push(`Make the garage ${cars + 1} cars`)
+  } else cands.push('Add a 2-car garage')
+  if (list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind)).length < 5) cands.push('Add a bedroom')
+  if (!has('office')) cands.push('Add an office')
+  if (has('mbath')) cands.push('Make the primary bath bigger')
+  if (!has('halfbath')) cands.push('Add a half bath')
+  if (has('living')) cands.push('Make the living room bigger')
+  if (has('master')) cands.push('Make the primary bedroom bigger')
+  if (has('dining')) cands.push('Make the dining room bigger')
+  if (has('office')) cands.push('Remove the office')
+  if (has('halfbath')) cands.push('Remove the half bath')
+  if (!has('pantry')) cands.push('Add a pantry')
+  if (has('laundry')) cands.push('Make the laundry bigger')
+  const out = []
+  for (const label of cands) {
+    if (out.length >= want) break
+    const read = regexOps(label, rooms, kit, L, { split: false })
+    if (!read.ops?.length) continue
+    const ops = growSwaps(normalizeOps(read.ops, rooms), rooms, kit)
+    if (!validateOps(ops, rooms, kit).ok) continue
+    if (passes(ops, rooms, program, style, kit, L)) {
+      out.push({ label, ops })
+      continue
+    }
+    // "bigger" that does not fit as a whole: the most that room can grow, said as what it is
+    const o = ops.length === 1 && ops[0].op === 'resize' && ops[0].soft ? ops[0] : null
+    const r = o && rooms.find((x) => x.id === o.room)
+    const best = r && o.w >= r.w && o.d >= r.d ? closestGrow(r, o.w, o.d, rooms, program, style, kit, L) : null
+    if (best) out.push({ label: `Make ${theRoom(r.name)} ${grewWords(best.a, best.b)}`, ops: best.ops })
+  }
+  return out
+}
+
+/** "asdf", "make it nicer", "hmm": the chat says it did not catch that and shows changes that work here. Nothing is used. */
+function unclearOffer(rooms, program, style, kit, source, L) {
+  const fixes = exampleFixes(rooms, program, style, kit, L)
+  const reply = fixes.length
+    ? 'I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one.'
+    : 'I did not catch that. Tell me what you would like to change, like "make the kitchen bigger" or "add an office".'
+  return { applied: false, rooms, reply, source, ops: [], reasons: ['unclear'], offer: 'examples', fixes }
+}
+
+/**
+ * "Make the house smaller but add 2 bedrooms": the two wishes pull against each other, so nothing is guessed. The
+ * answer says why in plain words and offers ONE option that applies on this lot and passes every rule: a house a
+ * little smaller with the bedrooms asked for (or one more, when that is what fits), drawn again with the client's
+ * room edits put back; failing that, the house at the size it is with one more. null when the request is not a
+ * trade-off after all (the plan already has that many).
+ * @param {{ kind: 'bed' | 'bath', add?: number, count?: number }} ask  from tradeOffAsk()
+ */
+export function tradeOffer(ask, rooms, program, style, kit, source, lot, edits = []) {
+  const L = lotOf(lot)
+  const stories = program.stories || 1
+  const key = ask.kind === 'bed' ? 'beds' : 'baths'
+  const have = programOf(rooms, program)[key]
+  const asked = ask.count ?? have + (ask.add || 1)
+  if (asked <= have) return null
+  const [, hi] = programLimits(style)[key] || [1, 6]
+  const now = floorArea(rooms, stories)
+  const say = (n) => countWords(ask.kind, n)
+  const head = `A smaller house with more ${ask.kind === 'bed' ? 'bedrooms' : 'bathrooms'} is two wishes that pull against each other: every ${ask.kind === 'bed' ? 'bedroom' : 'bathroom'} needs floor area of its own, so the other rooms have to give some up. This plan is ${num(now)} sf with ${say(have)}.`
+  const tap = 'Tap the button to see it; a change is used only when you tap.'
+  const reasons = ['trade-off']
+  if (have >= hi) return { applied: false, rooms, reply: `${head} This plan already has ${say(have)}, the most this style is drawn with.`, source, ops: [], reasons, offer: 'trade-off', fixes: [] }
+  // a house a little smaller with the bedrooms asked for; then with one more than it has
+  const targets = [...new Set([Math.min(asked, hi), have + 1])]
+  for (const n of targets) {
+    for (const part of [0.95, 0.9]) {
+      const sqft = Math.round((now * part) / 50) * 50
+      if (now - sqft < 40) continue
+      const r = redraft(sqft, rooms, program, style, L, edits, { [key]: n })
+      if (!r.ok || programOf(r.rooms, r.program)[key] !== n) continue
+      const got = floorArea(r.rooms, stories)
+      if (got > now - 25) continue
+      const short = n < asked ? ` ${say(asked).replace(/^./, (c) => c.toUpperCase())} ${asked === 1 ? 'does' : 'do'} not fit in a smaller house on this lot.` : ''
+      const fix = { label: newDraftWords(sqft, now, say(n)), ops: [{ op: 'redraft', sqft, program: { [key]: n } }] }
+      return { applied: false, rooms, reply: `${head} What I can draw is a house a little smaller, about ${num(got)} sf, with ${say(n)}.${short} ${tap}`, source, ops: [], reasons, offer: 'trade-off', fixes: [fix] }
+    }
+  }
+  // no smaller house holds them: the house at the size it is, with one more
+  const n = have + 1
+  const same = countFix(ask.kind, n, rooms, program, style, kit, source, L, edits, 0)
+  if (same) return { applied: false, rooms, reply: `${head} A smaller house with ${say(n)} does not fit on this lot at room sizes that work. What I can do is keep the house about the size it is, with ${say(n)}. ${tap}`, source, ops: [], reasons, offer: 'trade-off', fixes: [{ label: `Keep the house about this size, with ${say(n)}`, ops: same.ops }] }
+  // more of them fit nowhere on this lot: the smaller house, with the rooms it has, is the wish that can be drawn
+  for (const part of [0.95, 0.9]) {
+    const sqft = Math.round((now * part) / 50) * 50
+    if (now - sqft < 40) continue
+    const ops = [{ op: 'scale', sqft }]
+    const d = decide({ ops, reply: '', confidence: 1 }, rooms, program, style, kit, source, L, { history: edits, depth: 1 })
+    if (!d.applied || floorArea(d.rooms, stories) > now - 25 || programOf(d.rooms, d.program || program)[key] !== have) continue
+    return { applied: false, rooms, reply: `${head} More ${ask.kind === 'bed' ? 'bedrooms' : 'bathrooms'} do not fit on this lot, in a smaller house or in this one. What I can draw is the smaller house, about ${num(floorArea(d.rooms, stories))} sf, with the ${say(have)} it has now. ${tap}`, source, ops: [], reasons, offer: 'trade-off', fixes: [{ label: `Make the house smaller, about ${num(sqft)} sf, and keep ${say(have)}`, ops }] }
+  }
+  return { applied: false, rooms, reply: `${head} I could not find a way to draw both on this lot. Tell me which matters more, the smaller house or the ${ask.kind === 'bed' ? 'bedrooms' : 'bathrooms'}, and I will draw that.`, source, ops: [], reasons, offer: 'trade-off', fixes: [] }
 }
 
 /**

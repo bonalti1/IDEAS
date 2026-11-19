@@ -73,13 +73,18 @@ test('screens: the parcel is drawn with the street on its true frontage; Curtis 
       const offer = await card.innerText()
       assert.match(offer, /Is this your lot\?/i, `${lot.slug} ${size.name}`)
       // the street side is the frontage on the named street, in feet
-      assert.ok(offer.includes(`street side (${lot.street}) ${lot.front}'`), `${lot.slug} ${size.name}: the street side is ${lot.front} ft on ${lot.street}:\n${offer}`)
+      // round 13: said in a homeowner's words, in whole feet, with no surveyor's bearing on the card
+      assert.ok(offer.includes(`Front (${lot.street}): about ${Math.round(+lot.front)} ft`), `${lot.slug} ${size.name}: the front is about ${Math.round(+lot.front)} ft on ${lot.street}:\n${offer}`)
+      assert.match(offer, /Left side[^\n]*: about \d+ ft/)
+      assert.match(offer, /Right side[^\n]*: about \d+ ft/)
+      assert.match(offer, /Back of the lot[^\n]*: about \d+ ft/)
+      assert.doesNotMatch(offer, /[NS] \d+°\d+'/, `${lot.slug} ${size.name}: a bearing on the homeowner's card:\n${offer}`)
       if (lot.corner) assert.match(offer, new RegExp(`A corner lot: the side on ${lot.corner} keeps the wider open space the city asks for along a street`))
       else assert.doesNotMatch(offer, /A corner lot/)
       assert.doesNotMatch(offer, /best guess/)
       if (lot.curve) {
-        assert.ok(offer.includes(lot.curve), `${lot.slug} ${size.name}: the curved street side is said once with its total:\n${offer}`)
-        assert.equal((offer.match(/street side/g) || []).length, 1, 'one street-side line, not six')
+        assert.match(offer, /Front \(Kiskadee Ln\): about 50 ft, curved/, `${lot.slug} ${size.name}: the curved front is said once with its total:\n${offer}`)
+        assert.equal((offer.match(/Front \(/g) || []).length, 1, 'one front line, not six')
       }
       if (lot.near) assert.match(await page.getByTestId('listed-as').innerText(), new RegExp(lot.near), `${lot.slug} ${size.name}: the county lists it under another number`)
       else assert.equal(await page.getByTestId('listed-as').count(), 0)

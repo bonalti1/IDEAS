@@ -15,9 +15,9 @@ export function historyFrom(versions = []) {
   for (const v of versions) {
     if (v.kind === 'change') {
       h.push({ who: 'you', text: v.text })
-      h.push({ who: 'house', text: v.reply || 'Done.', source: v.source, applied: true })
-    } else if (v.kind === 'rollback') h.push({ who: 'house', text: `${v.text}.`, applied: true, source: 'undo' })
-    else if (v.kind === 'program') h.push({ who: 'house', text: 'Rooms changed, here is the new draft.', applied: true, source: 'undo' })
+      h.push({ who: 'house', text: v.reply || 'Done.', ...(v.reply ? {} : { i18n: [['Done.']] }), source: v.source, applied: true })
+    } else if (v.kind === 'rollback') h.push({ who: 'house', text: `${v.text}.`, ...(/^Back to version \d+$/.test(v.text) ? { i18n: [['Back to version {n}.', { n: v.text.match(/\d+/)[0] }]] } : {}), applied: true, source: 'undo' })
+    else if (v.kind === 'program') h.push({ who: 'house', text: 'Rooms changed, here is the new draft.', i18n: [['Rooms changed, here is the new draft.']], applied: true, source: 'undo' })
   }
   return h
 }
