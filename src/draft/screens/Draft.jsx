@@ -41,6 +41,8 @@ function suggestionsFor(rooms, kit, t = (s) => s) {
 /** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
 const standingEdits = (history) => history.flatMap((m, i) => (m.who === 'you' && !m.undone && history[i + 1]?.applied && history[i + 1].ops?.length ? [{ text: m.text, ops: history[i + 1].ops }] : []))
 
+// "send my lot to the drafter", "have the drafter design it" and the same in Spanish (round 13)
+export const SEND_LOT_RE = /^\s*(please\s+)?((send|give)\s+(my|the|this)\s+lot(\s+to\s+(the|a|your)\s+drafter)?|(have|let|get)\s+(the|a|your)\s+drafter\s+(to\s+)?(design|draw)\s+(it|this|one|my house|a house|the house)(\s+for\s+(me|this lot|my lot))?|i\s+want\s+(the|a)\s+drafter\s+to\s+(design|draw)\s+(it|my house|a house)|(manda|mande|envía|envia|envíe|envie)(le|r)?\s+mi\s+lote(\s+al\s+dibujante)?|que\s+(lo|la)\s+(diseñe|disene|dibuje)\s+(el|un)\s+dibujante|quiero\s+que\s+(el|un)\s+dibujante\s+(me\s+)?(lo|la)?\s*(diseñe|disene|dibuje)(\s+(la|mi|una)\s+casa)?)\s*[.!]?\s*$/i
 const UNDO_RE = /^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i
 // the same in Spanish (round 13): "deshacer", "deshaz eso", "regresa", "quita el último cambio"
 const UNDO_ES = /^\s*(deshacer|deshaz(lo| eso| el [uú]ltimo( cambio)?)?|regr[eé]sa(lo|le)?|quita el [uú]ltimo cambio|d[eé]jalo como estaba)\s*[.!]?\s*$/i
@@ -59,7 +61,7 @@ function useNarrow() {
 
 const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + unit
 
-export default function Draft({ style, program, rooms, setRooms, changesLeft, setChangesLeft, history, setHistory, onNext, onBack, lot, project, setProject, changesAllowed }) {
+export default function Draft({ style, program, rooms, setRooms, changesLeft, setChangesLeft, history, setHistory, onNext, onBack, lot, project, setProject, changesAllowed, onSendLot = null }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
   const [big, setBig] = useState(null) // an option drawing opened full size
@@ -138,6 +140,24 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       const { options } = await optionsForAsync(topic, rooms, program, style, lot, { history: standingEdits(history) })
       const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
       setHistory((h) => [...h, { who: 'house', ...says(options.length >= 2 ? ['{n} options for {topic} that pass the checks on this lot. Pick one: that is one change; looking is free.', { n: options.length, topic: { $t: TOPIC_NAMES[topic] } }] : options.length === 1 ? ['Only one sound option for {topic} on this lot.', { topic: { $t: TOPIC_NAMES[topic] } }] : ['No sound option for {topic} on this lot: each one runs too close to an edge of the lot or breaks a plan rule.', { topic: { $t: TOPIC_NAMES[topic] } }]), applied: false, source: 'options', picker: options, others }])
+      setBusy(false)
+      return
+    }
+    // round 13: "send my lot to the drafter", "have the drafter design it": the lot goes to the drafter's queue for a
+    // house designed for it, exactly as the button on the rooms step does. Nothing is used.
+    if (!fix && SEND_LOT_RE.test(q)) {
+      setHistory((h) => [...h, { who: 'you', text: q }])
+      if (!onSendLot) {
+        setHistory((h) => [...h, { who: 'house', ...says(['Sign in first, so we can save your lot and send it to a drafter.']), applied: false, source: 'fallback' }])
+        return
+      }
+      setBusy(true)
+      try {
+        await onSendLot()
+        setHistory((h) => [...h, { who: 'house', ...says(['Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days. No change was used.']), applied: false, source: 'fallback' }])
+      } catch {
+        setHistory((h) => [...h, { who: 'house', ...says(['We could not reach the office. Try again in a minute.']), applied: false, source: 'fallback' }])
+      }
       setBusy(false)
       return
     }
@@ -297,6 +317,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         {/* round 13, item 7: what the count in the header means, in one line; the number is the plan's own allowance */}
         <p className="fine changes-note" data-testid="changes-note">
           {t("{n} free {n|change|changes}; a failed request doesn't use one", { n: changesAllowed })}
+          {/* the review of PR #12: what counts and what does not */}
+          <span className="muted"> {t('Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.')}</span>
         </p>
         <div className="stats row2">
           <Stat k={t('Living area')} v={sf(area)} />
@@ -393,7 +415,13 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
             send()
           }}
         >
-          <input placeholder={changesLeft > 0 ? t('What would you like to change?') : t('No changes left on this plan. Ask the office for more, or send it.')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label={t('Your change')} />
+          <input
+            // on a phone the keyboard covers the bottom of the page: the box is brought back into view once it is up
+            onFocus={(e) => {
+              const el = e.target
+              if (window.innerWidth <= 600) setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300)
+            }}
+            placeholder={changesLeft > 0 ? t('What would you like to change?') : t('No changes left on this plan. Ask the office for more, or send it.')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label={t('Your change')} />
           <Button primary small type="submit" disabled={!text.trim() || busy}>
             {t('Change')}
           </Button>

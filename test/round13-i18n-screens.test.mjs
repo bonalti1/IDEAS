@@ -209,7 +209,8 @@ for (const width of [1440, 390]) {
     else assert.deepEqual(await page.locator('.steps li span').allInnerTexts().then((l) => l.map((x) => x.toLowerCase())), ['lote', 'estilo', 'cuartos', 'borrador', 'enviar'])
     // round 13, item 7: one line beside the count, with the plan's own number; on the page, not under anything
     const note = page.getByTestId('changes-note')
-    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta')
+    // (the review of PR #12 added what counts and what does not)
+    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.')
     await note.scrollIntoViewIfNeeded()
     const clear = await note.evaluate((el) => {
       const r = el.getBoundingClientRect()

@@ -606,3 +606,11 @@ details.more.card > summary { font-weight: 600; }
   .summary-table td, .summary-table th, .kv > div, .stats .stat { padding-top: 8px; padding-bottom: 8px; }
   .card + .card { margin-top: 14px; }
 }
+
+/* Round 13: the drafter's queue rows keep their marks on one tidy line each, and an outline nobody checked is red */
+.inbox-side { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px 8px; max-width: 55%; }
+.inbox-side .pill, .inbox-side .muted { white-space: nowrap; }
+.pill.stop { color: #fff; background: #b3261e; border: 1px solid #b3261e; border-radius: 999px; padding: 2px 8px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+.warnline.stopline { background: #fdecea; border-color: #b3261e; color: #8c1d18; font-weight: 600; }
+.checklist label.check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+@media (max-width: 820px) { .inbox-side { max-width: none; justify-content: flex-start; } }

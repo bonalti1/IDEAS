@@ -507,6 +507,7 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             onNext={() => go(5)}
             lot={lot}
             changesAllowed={project?.changesAllowed ?? CHANGES_PER_PLAN}
+            onSendLot={user ? sendLotToDrafter : null}
           />
         )}
         {!office && step === 5 && <Send lot={lot} style={style} program={program} rooms={rooms} history={history} project={project} setProject={setProject} returnSeen={returnSeen} onBackToDraft={backToDraft} onBack={() => go(4)} onRestart={restart} />}

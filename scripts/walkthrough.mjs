@@ -42,7 +42,7 @@ const app = `http://127.0.0.1:${appPort}`
 const apiBase = `http://127.0.0.1:${apiPort}`
 start(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(appPort), '--strictPort', '--host', '127.0.0.1'], {})
 // live lookups (no fixtures), billing off, no email, its own data folder; the Claude key only in the claude run
-const api = start(process.execPath, ['server/index.mjs'], { PORT: String(apiPort), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), `dh-walk-${tag}-`)), DRAFTHOUSE_FIXTURES: '', DRAFTHOUSE_CLAUDE_KEY: mode === 'claude' ? key : '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'walk', DRAFTHOUSE_DRAFTERS: 'drafter@walk.test', REGRID_API_TOKEN: '', PARCEL_DAILY_CHECK: '0', ALLOWED_ORIGINS: '*', NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY || '' })
+const api = start(process.execPath, ['server/index.mjs'], { PORT: String(apiPort), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), `dh-walk-${tag}-`)), DRAFTHOUSE_FIXTURES: '', DRAFTHOUSE_CLAUDE_KEY: mode === 'claude' ? key : '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'walk', DRAFTHOUSE_DRAFTERS: 'drafter.test@drafthouse.local', REGRID_API_TOKEN: '', PARCEL_DAILY_CHECK: '0', ALLOWED_ORIGINS: '*', NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY || '' })
 await up(app)
 await up(apiBase + '/api/health')
 
@@ -71,6 +71,7 @@ const ENGLISH = /\b(Sign out|Bedrooms|changes left|Your lot|Pick a style|What go
 const report = { mode, at: new Date().toISOString(), runs: [], drafter: [] }
 const BAD = /setback|\bNaN\b|\bundefined\b|\$\s?\d|could not send|no se pudo enviar/i
 
+let customers = 0
 async function homeowner(lot, size, signOutMidway) {
   const run = { lot: lot.id, what: lot.what, size: size.name, steps: [], chat: [], errors: [], badWords: [], reached: 'start' }
   report.runs.push(run)
@@ -78,7 +79,8 @@ async function homeowner(lot, size, signOutMidway) {
   await ctx.addInitScript((a) => { try { localStorage.setItem('drafthouse.api', a) } catch {} }, apiBase)
   const page = await ctx.newPage()
   page.on('pageerror', (e) => run.errors.push(String(e.message).slice(0, 200)))
-  const email = `walk-${tag}-${lot.id}-${size.name}@example.com`
+  // the walkthrough's named accounts: drafthouse.test+customerN@example.com (one per session)
+  const email = `drafthouse.test+customer${++customers}@example.com`
   const name = 'Walk Tester'
   const step = async (label, t0) => {
     await page.waitForTimeout(700)
@@ -201,6 +203,17 @@ async function homeowner(lot, size, signOutMidway) {
       const left = await page.getByTestId('changes-left').innerText().catch(() => '')
       run.chat.push({ ask, reply, buttons, ms: replyMs, changesLeft: left.replace(/\s+/g, ' ') })
       await step(`10-chat-${i + 1}`, t)
+      // the review's G2: tap the first button under the "more open" answer and keep what the chat says it did
+      if (/more open|más abierta/i.test(ask) && buttons.length) {
+        const before = (await page.locator('.log .msg.house:not(.thinking)').count())
+        await last.locator('button').first().click()
+        await page.locator('.log .msg.thinking').waitFor({ timeout: 4000 }).catch(() => {})
+        await page.locator('.log .msg.thinking').waitFor({ state: 'detached', timeout: 90000 }).catch(() => {})
+        await page.waitForTimeout(600)
+        const after = page.locator('.log .msg.house:not(.thinking)')
+        if ((await after.count()) > before) run.openTap = { button: buttons[0], reply: (await after.last().innerText().catch(() => '')).replace(/\s+/g, ' ').trim(), changesLeft: (await page.getByTestId('changes-left').innerText().catch(() => '')).replace(/\s+/g, ' ') }
+        await step(`10-chat-${i + 1}b-tapped`, null)
+      }
     }
     run.note = await page.getByTestId('changes-note').innerText().catch(() => '')
     // round 13, item 2: the browser's Back goes to the rooms step, Forward comes back, and a reload opens the draft again
@@ -250,7 +263,7 @@ async function drafter() {
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 200)))
   await page.goto(`${app}/#/review`, { waitUntil: 'domcontentloaded' })
-  await page.locator('#signin-email').fill('drafter@walk.test')
+  await page.locator('#signin-email').fill('drafter.test@drafthouse.local')
   await page.getByRole('button', { name: /Continue|Email me/ }).click()
   await page.getByText('Review inbox').waitFor({ timeout: 30000 })
   await page.waitForTimeout(2500)
@@ -272,7 +285,7 @@ async function drafter() {
     await page.screenshot({ path: path.join(OUT, `walk-${tag}-drafter-card-${guard + 1}-${tag}.png`) })
     const t = Date.now()
     await page.getByTestId('check-confirm-lot').click()
-    await page.getByText(/Confirmed by drafter@walk\.test/i).first().waitFor({ timeout: 60000 }).catch(() => {})
+    await page.getByText(/Confirmed by drafter\.test@drafthouse\.local/i).first().waitFor({ timeout: 60000 }).catch(() => {})
     await page.waitForTimeout(1200)
     const after = (await list.innerText()).replace(/\s+/g, ' ')
     await page.screenshot({ path: path.join(OUT, `walk-${tag}-drafter-card-${guard + 1}-${tag}-confirmed.png`) })

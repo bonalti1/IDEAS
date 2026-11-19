@@ -8,7 +8,7 @@ import { buildLot, traverse, lotProblem } from '../lib/lot.js'
 import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
 import RulesPanel from '../RulesPanel.jsx'
-import { parcelSpec } from '../lib/parcel-spec.js'
+import { parcelSpec, lotSides } from '../lib/parcel-spec.js'
 import { plainReason } from '../lib/plain.js'
 import { useLang, placeName } from '../lib/i18n.js'
 
@@ -350,25 +350,17 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
                 {parcel.large ? t('A large tract ({acres} acres, {n} sides): the office draws this one.', { acres: parcel.acres, n: parcel.edges?.length }) : t('Not a house district: the sides are not drawn.')} {zoning?.residential === false ? say(zoning.message) : ''}
               </p>
             ) : (
-              <div className="edges">
-                {parcel.edges?.map((e, i) => {
-                  const st = (parcel.streets || []).find((s) => s.edge === i && s.role !== 'rear')
-                  // a curved frontage (round 11): its chords are one street side, said once with their total
-                  const curved = (parcel.frontChords || 1) > 1
-                  if (curved && parcel.edgeKinds?.[i] === 'front' && i !== (parcel.frontEdge ?? 0)) return null
-                  if (curved && i === (parcel.frontEdge ?? 0))
-                    return (
-                      <span key={i} className="front">
-                        {t("street side{name} {width}' along the curve, in {n} pieces", { name: st ? ` (${st.name})` : '', width: parcel.frontWidthFt, n: parcel.frontChords })}
-                      </span>
-                    )
-                  return (
-                    <span key={i} className={i === (parcel.frontEdge ?? 0) ? 'front' : ''}>
-                      {i === (parcel.frontEdge ?? 0) ? `${t('street side')}${st ? ` (${st.name})` : ''} ` : st ? `${t('side street')} (${st.name}) ` : ''}
-                      {e.lengthFt}' {e.bearing}
-                    </span>
-                  )
-                })}
+              // round 13: the sides in a homeowner's words (front, left, right, back, in whole feet); the surveyor's
+              // bearings are the drafter's, on the review card
+              <div className="edges plain" data-testid="lot-sides">
+                {lotSides(parcel).map((sd) => (
+                  <span key={sd.key} className={sd.key === 'front' ? 'front' : ''}>
+                    {sd.key === 'front' ? t('Front') : sd.key === 'left' ? t('Left side') : sd.key === 'right' ? t('Right side') : t('Back of the lot')}
+                    {sd.street ? ` (${sd.street})` : ''}: {t('about {ft} ft', { ft: sd.ft })}
+                    {sd.key === 'front' && sd.pieces > 1 ? `, ${t('curved')}` : ''}
+                  </span>
+                ))}
+                <span className="muted">{t('Left and right are as you face the lot from the street.')}</span>
               </div>
             )}
             {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">{t('The county address map puts {address} on this parcel; the appraisal district lists it as {listed}. Check that it is your lot; the drafter checks it too.', { address: String(address).split(',')[0], listed: parcel.listedAs })}</p>}

@@ -26,6 +26,13 @@ test('6: an address typed in one run, a bare street number and a spelled-out suf
   assert.deepEqual(parseAddress('118 S Cage Blvd Pharr'), { number: '118', street: 'CAGE' })
   assert.deepEqual(parseAddress('1201 Kerria Avenue Mcallen Texas'), { number: '1201', street: 'KERRIA' })
   assert.deepEqual(parseAddress('2002 kiskadee lane mission tx 78572'), { number: '2002', street: 'KISKADEE' })
+  // the review's list: "Av" for Ave, a city in two words, a direction left out
+  assert.deepEqual(parseAddress('1201 Kerria Av Mc Allen'), { number: '1201', street: 'KERRIA' })
+  assert.deepEqual(parseAddress('1201 kerria avenue, mc allen tx'), { number: '1201', street: 'KERRIA' })
+  assert.deepEqual(parseAddress('3305 27th St McAllen'), { number: '3305', street: '27TH' })
+  assert.deepEqual(parseAddress('77 S Main St San Juan'), { number: '77', street: 'MAIN' })
+  assert.equal(addressMismatch('1201 Kerria Av Mc Allen', '1201 KERRIA AVE, MCALLEN, TX, 78501'), null)
+  assert.equal(addressMismatch('3305 27th St McAllen', '3305 N 27TH ST, MCALLEN, TX, 78501'), null, 'a direction left out is not another address')
   // and what must not change: roads named by a number or a letter after the word, and saints
   for (const [typed, want] of [['100 County Rd 12', 'COUNTY RD 12'], ['200 Loop 499', 'LOOP 499'], ['5 Ave B', 'AVE B'], ['12 FM 495', 'FM 495'], ['40 Mile 7 Rd', 'MILE 7'], ['900 St Jude Ave', 'ST JUDE'], ['5435 Curtis Clark Dr', 'CURTIS CLARK'], ['344 SE 3rd St', '3RD']]) assert.equal(parseAddress(typed).street, want, typed)
 })

@@ -84,10 +84,11 @@ test('screens 2: every step has its address; Back and Forward move between the h
   await page.locator('#start-address').fill('1201 Kerria Ave, McAllen, TX 78501')
   await page.getByRole('button', { name: 'Find my lot' }).click()
   await page.getByTestId('parcel-card').waitFor({ timeout: 30000 })
-  assert.equal(await hashOf(page), '#/lot')
+  // the address typed is saved as her house at once (the review of PR #12), so the lot step's address carries it
+  const lotHash = await until(page, 'the lot step\'s address carries the house', async () => (/^#\/lot\/prj_\w+$/.test(await hashOf(page)) ? hashOf(page) : null))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByTestId('parcel-card').waitFor({ timeout: 30000 })
-  assert.equal(await hashOf(page), '#/lot', 'a reload on the lot step stays on the lot step')
+  assert.equal(await hashOf(page), lotHash, 'a reload on the lot step stays on the lot step')
   assert.match(await page.locator('main').innerText(), /1201 Kerria Ave/i)
 
   // take the lot: the style step, and the address carries the saved house

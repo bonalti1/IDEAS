@@ -154,7 +154,8 @@ function cutTail(words) {
   for (let i = 1; i < w.length - 1; i++) if (SUFFIX_SHORT.has(w[i])) at = i
   if (at < 1) return w
   const tail = w.slice(at + 1)
-  return tail.every((x) => /^[A-Z]{3,}$/.test(x) && !SUFFIX_SHORT.has(x)) ? w.slice(0, at + 1) : w
+  // a city can be two words ("Mc Allen", "San Juan", "La Joya"); a lone letter or a number after the suffix is the street's own
+  return tail.every((x) => /^[A-Z]{2,}$/.test(x) && !SUFFIX_SHORT.has(x)) ? w.slice(0, at + 1) : w
 }
 /** A numbered street typed without its ending ("27" for 27th St): the counties and the Census write "27TH". */
 function ordinal(core) {
@@ -367,7 +368,7 @@ export function interiorLonLat(ring) {
 }
 
 // ── situs normalisation and the where clause ────────────────────────────────────────────────────────
-const SUFFIX = { STREET: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD', LANE: 'LN', BOULEVARD: 'BLVD', COURT: 'CT', CIRCLE: 'CIR', PLACE: 'PL', TERRACE: 'TER', PARKWAY: 'PKWY', HIGHWAY: 'HWY', TRAIL: 'TRL', WAY: 'WAY', LOOP: 'LOOP', EXPRESSWAY: 'EXPY', CALLE: 'CLL' }
+const SUFFIX = { STREET: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD', LANE: 'LN', BOULEVARD: 'BLVD', COURT: 'CT', CIRCLE: 'CIR', PLACE: 'PL', TERRACE: 'TER', PARKWAY: 'PKWY', HIGHWAY: 'HWY', TRAIL: 'TRL', WAY: 'WAY', LOOP: 'LOOP', EXPRESSWAY: 'EXPY', CALLE: 'CLL', AV: 'AVE', AVEN: 'AVE', STR: 'ST', BLV: 'BLVD', DRV: 'DR', CRT: 'CT', CIRC: 'CIR', PKY: 'PKWY', EXPWY: 'EXPY' }
 const SUFFIX_SHORT = new Set([...Object.values(SUFFIX), 'CIR', 'LOOP', 'EXPY', 'PASS', 'RUN', 'ROW', 'PT', 'CV', 'XING'])
 /** Collapse spaces, uppercase, drop ", TX" and the ZIP, and spell suffixes the short way. */
 export function normalizeSitus(s) {

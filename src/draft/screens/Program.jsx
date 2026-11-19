@@ -278,6 +278,27 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
           )}
         </div>
       )}
+      {/* round 13: a lot our plans fit only just (the house turned, or cut down to a smaller start) also offers the
+          drafter, as a button a homeowner can see; before, that was said only when nothing fitted at all */}
+      {!checking && !check.deadEnd && (check.turn || check.suggestion || (!check.ok && check.maxSqft) || autoNote) && (
+        <div className="card thin custom-lot tight" data-testid="tight-lot">
+          {sendState === 'sent' ? (
+            <>
+              <h3>{t('Your lot is with our drafter')}</h3>
+              <p className="small">{t('We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest.')}</p>
+            </>
+          ) : (
+            <>
+              <h3>{t('A tight lot for our ready plans')}</h3>
+              <p className="small">{t('You can go on with what fits here, or have our drafter design a house for this lot with the rooms you want.')}</p>
+              <Button ghost disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot-tight">
+                {sendState === 'sending' ? t('Sending…') : t('Send my lot to the drafter')}
+              </Button>
+              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
+            </>
+          )}
+        </div>
+      )}
       <div className="actions">
         <Button ghost onClick={onBack}>
           {t('Back')}

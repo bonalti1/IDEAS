@@ -23,7 +23,7 @@ function Asks({ p }) {
   )
 }
 import RulesPanel from '../RulesPanel.jsx'
-import { lotMatchNotes } from '../lib/parcel-spec.js'
+import { lotMatchNotes, isUnchecked, UNCHECKED_LINE } from '../lib/parcel-spec.js'
 
 // the flood zone in one line for the checklist (the rules panel below has the detail)
 const floodLine = (flood) => {
@@ -53,6 +53,17 @@ function Row({ p, onOpen }) {
       <span className="inbox-side">
         <Asks p={p} />
         {p.needsCustom && <span className="pill ask">Needs a house designed</span>}
+        {isUnchecked(p.lot?.spec) && !p.lot.spec.confirmed && (
+          <span className="pill stop" data-testid="row-unchecked">
+            Outline not checked
+          </span>
+        )}
+        {p.lot?.spec?.confidence === 'near' && !p.lot.spec.confirmed && (
+          <span className="pill ask" data-testid="row-near">
+            Near match: check the address
+          </span>
+        )}
+        {p.lot?.spec?.confidence === 'pick' && !p.lot.spec.confirmed && <span className="pill ask">Parcel picked by hand</span>}
         <span className={'pill ' + s.tone}>{s.label}</span>
         <span className="muted small">
           {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
@@ -89,6 +100,9 @@ export default function Review({ user }) {
   }, [])
 
   const show = async (id) => {
+    setCountyDown(false)
+    setSelfChecked(false)
+    setLotError('')
     setOpen(await api.reviewProject(id))
     setNote('')
     setEstimate(null)
@@ -142,6 +156,10 @@ export default function Review({ user }) {
     }
   }
   const [lotNote, setLotNote] = useState('')
+  // round 13, M1: the county did not answer when Confirm asked it again; the drafter may confirm on their own check
+  const [countyDown, setCountyDown] = useState(false)
+  const [selfChecked, setSelfChecked] = useState(false)
+  const [lotError, setLotError] = useState('') // why Confirm lot did not go through, said beside its button
   const [owner, setOwner] = useState(null) // the owner of record, drafter-only, fetched on demand
   const lookupOwner = async () => {
     try {
@@ -174,10 +192,17 @@ export default function Review({ user }) {
     if (!open || busy) return
     setBusy(true)
     try {
-      const p = await api.confirmLot(open.id, { confirmed, note: lotNote })
+      const p = await api.confirmLot(open.id, { confirmed, note: lotNote, ...(confirmed && selfChecked ? { checked: true } : {}) })
       setOpen({ ...open, ...p })
+      setCountyDown(false)
+      setSelfChecked(false)
+      setLotError('')
       await refresh()
     } catch (e) {
+      // round 13, M1: the county still does not answer. The drafter may confirm on their own check of the outline,
+      // and has to say so.
+      if (e.body?.unchecked) setCountyDown(true)
+      setLotError(e.message)
       setError(e.message)
     }
     setBusy(false)
@@ -253,11 +278,29 @@ export default function Review({ user }) {
                         </Button>
                       )}
                     </div>
-                    {lotMatchNotes(open.lot.spec).map((line, i) => (
-                      <p key={i} className="small warnline" data-testid="lot-match-note">
-                        {line}
+                    {lotMatchNotes(open.lot.spec).map((line, i) =>
+                      line === UNCHECKED_LINE ? null : (
+                        <p key={i} className="small warnline" data-testid="lot-match-note">
+                          {line}
+                        </p>
+                      ),
+                    )}
+                    {/* round 13, M1: an outline the county could not check is said in red, not as one more yellow note */}
+                    {isUnchecked(open.lot.spec) && (
+                      <p className="small warnline stopline" data-testid="lot-unchecked">
+                        {UNCHECKED_LINE}
                       </p>
-                    ))}
+                    )}
+                    {own && !spec.confirmed && lotError && (
+                      <p className="small fine bad" data-testid="lot-confirm-error">
+                        {lotError}
+                      </p>
+                    )}
+                    {own && !spec.confirmed && countyDown && isUnchecked(spec) && (
+                      <label className="check small" data-testid="self-checked">
+                        <input type="checkbox" checked={selfChecked} onChange={(e) => setSelfChecked(e.target.checked)} /> The county still does not answer. I checked the outline myself against the plat or deed.
+                      </label>
+                    )}
                   </li>
                   <li className={z?.residential === false ? 'stop' : z?.confirmedBy ? 'done' : 'todo'}>
                     <div className="check-row">
