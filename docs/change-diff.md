@@ -25,6 +25,7 @@ rear wall toward the street.
 | `add` | `kind` (a key in `kit.rooms`), optional `name`, `w`, `d`, `near` (room id) | New room. Sizes default to the kit template. Placed beside `near` if there is space, otherwise below the bedroom wing. Gets a door on the shared wall and, for bedrooms and offices, a window on the outside wall. |
 | `remove` | `room` (id) | Removes the room and everything in it. |
 | `move` | `room`, `dx`, `dy` (feet) | Translates the room and its contents. |
+| `count` | `kind` (`bed` or `bath`), `count` (the total the house should have) | Round 12. "I want 4 bedrooms". More rooms are added in place when they fit; fewer, or more that do not go in place, become a new draft with the client's room edits put back. A count the lot or the style cannot take is refused in plain words and uses no change. |
 
 `reply` is one or two sentences the client reads. `confidence` is 0 to 1; below 0.5 the app asks the client to rephrase instead of applying.
 
@@ -61,3 +62,10 @@ Checked on the plan as it would be after the ops (`src/draft/lib/rules.js`). Any
 ## With an account
 
 Signed-in clients do not call `/api/interpret` from the browser. The office API runs the whole step for the saved project (`POST /api/projects/:id/change`): Claude or the basic rules, the shape check, the plan rules, and the credit, which is taken only when the change applies. The response carries the new rooms, the reply, the source label, the credits left and the version number. The browser path above remains for the no-account mode.
+
+## Round 12 additions
+
+- `resize` takes `soft: true` when the client gave no size ("bigger", "smaller"). A soft resize that does not fit is refused with the nearest step that does, offered as a button.
+- `add` with `kind: "rearPorch"` is also what a patio, a covered patio or a lanai means; it takes `w` and `d` when the client gave a size, and goes behind the dining room when the living room's back wall is taken.
+- The answer carries `intent: "open"` (no ops with it) when the client wants the house to feel more open. Nothing changes; the reply says what is already open and offers resizes of the open rooms as buttons.
+- The schema sent to Claude is one shape per op with every field written (null for "not given"); `tidy()` in `server/interpreter.mjs` drops the nulls before the plan code reads the ops. The earlier shape with optional fields was refused by the API as too complex once these fields were added.

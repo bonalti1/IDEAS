@@ -273,6 +273,32 @@ async function finish(run) {
   delete run.ctx
 }
 
+async function sheets(dir) {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, `walkthrough-${mode}.json`), JSON.stringify(report, null, 1))
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+  const sheet = async (name, title, files, each, cols) => {
+    const have = files.filter((f) => fs.existsSync(path.join(OUT, f.file)))
+    if (!have.length) return
+    const html = `<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:18px;background:#fff;font:14px/1.3 system-ui,sans-serif;color:#222;width:${cols * (each + 14)}px}h1{font-size:18px;margin:0 0 12px}.g{display:grid;grid-template-columns:repeat(${cols},${each}px);gap:14px}figure{margin:0}img{width:${each}px;display:block;border:1px solid #ccc}figcaption{padding:4px 0 0;font-size:13px}</style><h1>${esc(title)}</h1><div class="g">${have.map((f) => `<figure><img src="file://${path.resolve(OUT, f.file)}"><figcaption>${esc(f.label)}</figcaption></figure>`).join('')}</div>`
+    const tmp = path.join(os.tmpdir(), `dh-sheet-${process.pid}-${name}.html`)
+    fs.writeFileSync(tmp, html)
+    const ctx = await browser.newContext({ viewport: { width: cols * (each + 14) + 36, height: 800 }, deviceScaleFactor: 1 })
+    const page = await ctx.newPage()
+    await page.goto('file://' + tmp)
+    await page.waitForLoadState('load')
+    await page.screenshot({ path: path.join(dir, name + '.jpg'), type: 'jpeg', quality: 76, fullPage: true })
+    await ctx.close()
+    fs.rmSync(tmp, { force: true })
+  }
+  for (const run of report.runs) {
+    const phone = run.size === '390'
+    await sheet(`walk-${mode}-${run.size}-${run.lot}`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'} · ${run.size} px · ${run.what} · ${run.outcome || run.failed || run.reached}`, run.steps.map((st) => ({ file: st.file, label: st.label + (st.ms ? ` · ${(st.ms / 1000).toFixed(1)} s` : '') })), phone ? 280 : 620, phone ? 6 : 3)
+  }
+  const cards = fs.readdirSync(OUT).filter((f) => f.startsWith(`walk-${mode}-drafter-`) && f.endsWith('.png')).sort()
+  await sheet(`walk-${mode}-drafter`, `${mode === 'claude' ? 'Real Claude key' : 'Basic chat rules'} · the drafter: lots to confirm and each review card, before and after confirming`, cards.map((f) => ({ file: f, label: f.replace(`walk-${mode}-drafter-`, '').replace('.png', '') })), 620, 3)
+}
+
 try {
   for (const size of SIZES) for (const [i, lot] of LOTS.entries()) {
     // signing out and back in mid-way: the normal lot on the desktop, the curved lot on the phone
@@ -287,6 +313,15 @@ try {
   for (const run of report.runs) { delete run.page; delete run.ctx }
   report.apiLogTail = api.log().split('\n').filter((l) => /error|alert|proxy chain|flood:|parcels:|interpret/i.test(l)).slice(-40).map((l) => l.replace(/[\w.+-]+@[\w.-]+/g, '<email>').slice(0, 220))
   fs.writeFileSync(path.join(OUT, `walkthrough-${mode}.json`), JSON.stringify(report, null, 1))
+  // SHEETS=<folder>: one picture per run with every step in order (small enough to keep in the repository), the
+  // drafter's screens on one more, and a copy of the report
+  if (process.env.SHEETS) {
+    try {
+      await sheets(process.env.SHEETS)
+    } catch (e) {
+      console.error('walkthrough: the step sheets were not made: ' + String(e.message || e).split('\n')[0])
+    }
+  }
   await browser.close().catch(() => {})
   stopAll()
 }

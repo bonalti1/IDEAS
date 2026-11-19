@@ -47,7 +47,7 @@ function Row({ p, onOpen }) {
         <b>{p.client}</b>
         <span className="muted small">
           {p.address || 'no address'} ·{' '}
-          {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version - 1} version${p.version - 1 === 1 ? '' : 's'}` : 'lot saved, the homeowner has not chosen rooms yet'}
+          {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
       <span className="inbox-side">

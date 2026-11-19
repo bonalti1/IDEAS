@@ -469,6 +469,8 @@ export function jurisdictionFor({ place, county } = {}, table = JURISDICTIONS) {
   return null
 }
 
+// a homeowner reads this line: the rules are named in plain words, not by their field names (round 12 walkthrough)
+const RULE_WORDS = { front: 'the street side', side: 'the sides', rear: 'the back', streetSide: 'a side street', garageFt: 'the garage door', maxCoverage: 'how much of the lot a house may cover', maxHeightFt: 'the height', minLotSf: 'the smallest lot', minLotWidth: 'the narrowest lot' }
 /** What the lot step says about a geocoded address (item 2): the four cases. */
 export function geoMessage(geo, table = JURISDICTIONS) {
   if (!geo) return ''
@@ -477,7 +479,7 @@ export function geoMessage(geo, table = JURISDICTIONS) {
   if (j?.type === 'city') {
     const row = table[j.id]
     const unverified = RULE_FIELDS.filter((k) => row[k]?.status !== 'verified')
-    return unverified.length ? `We have the ${row.name} rules; ${unverified.length === 1 ? 'one of them is a summary' : `${unverified.length} of them are summaries`} the office confirms (${unverified.join(', ')}).` : `We have the ${row.name} rules, from the city code.`
+    return unverified.length ? `We have the ${row.name} rules; ${unverified.length === 1 ? 'one of them is a summary' : `${unverified.length} of them are summaries`} the office confirms (${unverified.map((k) => RULE_WORDS[k] || k).join(', ')}).` : `We have the ${row.name} rules, from the city code.`
   }
   if (j?.type === 'county') {
     if (geo.place) return `${geo.place} is in ${j.county}; we have no rules for that city yet, so the county row is used, unverified, and a drafter checks the city's rules.`

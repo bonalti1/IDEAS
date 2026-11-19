@@ -1,0 +1,131 @@
+# Draft House fix round 12: a lot is saved the moment it is taken, the pie lot can be drafted, and a customer walkthrough is part of acceptance
+
+Branch `claude/fix-round-12`, on top of `claude/fix-round-11` @b92aa94. Pictures in `docs/fix-round-12/`; the walkthrough's step sheets in `docs/fix-round-12/walkthrough/`.
+
+One sentence: a homeowner's lot is saved as soon as they take it and reaches the drafter at once, 2002 Kiskadee Ln drafts a 3 bed, 2 bath house (turned 15°) and no lot is a dead end any more, the chat reads the four sentences the customer test tried in both modes, and the whole flow was walked in a real browser against the live counties, twice.
+
+**Rules kept.** No money in the client app (no-money suite 7 of 7; the walkthrough scanned every screen for `$` amounts and found none). 10 free changes per plan, the office grants more; a lot saved with no rooms uses none. No owner data in fixtures, logs or tests. No token is committed or logged: the walkthrough report records only that a key was present and how long it is.
+
+**Live.** Everything marked "live" ran from this box on Nov 19, 2026. FEMA timed out on a few lookups during the walkthroughs; the app showed its plain line each time and the homeowner went on.
+
+**The addendum** (customer test of Nov 19: Spanish, browser Back, the phone flow, typed undo, vague requests, address typos, the counter line) is not in this round. It is the next round, on `claude/fix-round-13`. Two of its points are partly covered here: the project is no longer lost (item B), and the phone header, step name and chat height are fixed (item H).
+
+## Must fix
+
+| # | Item | What changed | Test (fails before, passes after) | Picture | Status |
+|---|------|--------------|-----------------------------------|---------|--------|
+| B | A homeowner's lot is lost until they reach Draft | The project is created when the lot is taken: `POST /api/projects` accepts a lot with no rooms (`version: 0`, `stage: 'style'`), and every later step updates it (style, then the rooms as they are chosen, debounced) through the same `ownerLot()` rules. A parcel or plat lot is in "Lots to confirm" at once. "Your houses" shows "Lot saved, rooms not chosen yet"; resume opens the step that was left (`stage`), with the lot drawn on the Rooms step. The first rooms make version 1 and use no change; a change or a Send on a lot with no rooms is 409. | `test/round12.test.mjs` "B": 201 with no rooms, listed for the homeowner, in the drafter overview's `lots`, 10 of 10 changes, and all of it still there after the office API is stopped and started. `test/round12-flow.test.mjs`: take the Kiskadee parcel, restart the API, sign out, sign in, "Your houses" shows it, resume lands on Rooms with the parcel drawn. | `b-your-houses-lot-saved-1440.png` | Done |
+| A | The curved pie lot (2002 Kiskadee Ln) can never be drafted | Five parts. (1) **Never a dead end:** when nothing fits, the Rooms step shows "Send my lot to the drafter: our drafter designs for this lot"; `POST /api/projects/:id/custom` saves `needsCustom` with the rooms asked for, the drafter's inbox lists it under "Lots that need a custom design", no change is used, and the homeowner can take it back. (2) **Turned house:** the fit tries the house turned up to 15° either way, in 2.5° steps, best inside rectangle first (`withTurn`, `turnsFor` in `fit.js`; `spec.turn` in the lot). (3) **A smaller start:** when the rooms asked for do not fit at any angle, a 3 bed, 2 bath starter with no garage is tried at 1,750, 1,400 and 1,200 sf and offered. (4) **The space you can build on** is the largest rectangle inside the buildable area at the house's angle (`insideRect`), never its bounding box. (5) **The curve is followed:** a strip along each front piece and a round at each corner come off, instead of one straight line behind the curve; Kiskadee's buildable area is 3,184 sf (3,026 before). On Kiskadee a 3/2 at 1,400 sf fits at 15°, and the default rooms start there. | `test/round12.test.mjs`, four "A" tests: the 3/2 fits turned and passes the rules; `need.lotWidth` and `need.lotDepth` are never larger than the inside rectangle on any recorded lot; the button saves `needsCustom` over HTTP and the drafter sees it; the buildable area keeps every lot line's distance (independent check, least slack above −0.05 ft) and a house cannot straddle the notch. `test/round12-flow.test.mjs`: Kiskadee drafted in the browser; a lot nothing fits (5435 Curtis Clark Dr) shows the button, and the drafter sees it. | `a-kiskadee-rooms-fits-turned-1440.png`, `a-kiskadee-draft-1440.png`, `a-no-plan-fits-send-lot-390.png`, `a-drafter-inbox-custom-1440.png` | Done, with one part different from the brief (no new plan was drawn; see "Not met") |
+
+## Should fix (homeowner)
+
+| # | Item | What changed | Test (fails before, passes after) | Picture | Status |
+|---|------|--------------|-----------------------------------|---------|--------|
+| C | The Send message reads like an error | On an unconfirmed lot the Send step shows a calm card: "Your plan is saved. A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can send it." The Send button appears only once the lot is confirmed (the page checks every 20 s). A 409 `lotPending` is never worded "Could not send". When the drafter confirms, the homeowner is emailed once (`alerts.emailTo`), unless Send is blocked by the zoning. | `test/round12.test.mjs` "C"; `test/lot-flow.test.mjs`: the card, no "Could not", no button until confirmed. | `send-lot-with-drafter-calm-1440.png`, `send-after-confirm-1440.png` | Done. The email needs the office's mail key to go out (see Questions) |
+| D | "Setback" on homeowner screens | `src/draft/lib/plain.js`: every "setback" phrasing becomes "the space the city keeps open along each edge" or "too close to the side of the lot (the city keeps 6 ft open there)". The rules panel's labels read "Kept open at the street", "Kept open on each side" and so on. Chat replies pass through the same rewrite on the Draft step, and the summary PDF too. Drafter and office screens keep "setback". | `test/no-money.test.mjs` scans every homeowner screen at 1440 and 390 px for "setback"; `test/round12.test.mjs` "F and D". The walkthrough scanned all 240 homeowner screens: none. | `rooms-start-fits-1440.png` | Done |
+| E | The default rooms do not fit the real lot | Rooms nobody chose start at what fits: the fit's own answer (largest size, or the smaller start) replaces the default, with "We started you with what fits this lot; you can change it." Only rooms the homeowner chose can say "does not fit". On the 14 recorded lots: 11 start trimmed, 1 fits as is, 2 offer the drafter. | `test/round12.test.mjs` "E": on every recorded lot the start passes `fitsLot` or the lot offers the drafter. | `rooms-start-fits-1440.png` | Done |
+| F | "Max coverage NaN% · NaN sf" | The Lot step shows "50% (county default, the drafter confirms)" and "height: the drafter confirms" when the city has no value. | `test/round12.test.mjs` "F and D"; `test/no-money.test.mjs` scans every homeowner screen for "NaN" and "undefined". | `lot-n-11th-near-1440.png` | Done |
+| G | The chat misses four common requests | "I want 4 bedrooms" is a count (new `count` op): added in place, or a new draft with the room edits put back; already there says so and uses nothing. A patio is the rear porch; it goes behind the dining room when the living room's wall is taken, and a refusal offers what works as a button. "Make the kitchen bigger" that does not fit gives the reason and the nearest step that does ("Make the kitchen 1 ft longer"). "Make it feel more open" changes nothing, says what is already open, and offers resizes of the open rooms as buttons. Same outcomes in both modes: the plan code writes the refusals and offers either way. The schema sent to Claude was rewritten (the API refused the old shape as too complex once the new fields were added). | `test/round12-chat.test.mjs`, 16 tests: basic rules, the office API with no key, and the Claude path with a stubbed client; every offered button is tapped and checked against the rules. `test/round12-chat-live.test.mjs` (LIVE only), 2 tests, run and passed: the four sentences through the real model, and 11 requests the chat already knew come back as the same ops. | Walkthrough sheets, steps `10-chat-1` to `10-chat-4` | Done; the "more open" buttons are resizes, not the three options named in the brief (see "Not met") |
+| H | The phone layout breaks at 390 px | The email and Sign out are behind an account icon; "Step 4 of 5 · Draft" is under the numbers; the plan is fitted to the frame's width (pinch to zoom); the suggestions wrap; the chat panel is at least 54% of the screen's height. | `test/round12-screens.test.mjs` "H" at 390 × 844: no overlap in the header, the step is named, every suggestion is whole, the plan's box is inside its frame, the chat is at least 40% of the screen. | `h-phone-draft-plan-390.png`, `h-phone-draft-chat-390.png`, `h-phone-account-menu-390.png` | Done for these five points; the addendum's wider phone list is the next round |
+| I | The style step and the first look at the 3D view | The style step shows Modern Farmhouse and, once, "More styles soon" over small marks for the other nine. Room names in the 3D view show only with the roof off, the 8 largest. The words on the ground are 0.45 of their size beside a house. The viewport opens on a line sketch of the plan with "Drawing your house…" until the first frame has drawn. | `test/round12-3d.test.mjs`, 3 tests: no room names with the roof on, at most 8 with it off, the first frame is the sketch and not blank, at 1440 and 390 px. | `r12-style-1440.png`, `r12-3d-roof-on-1440.png`, `r12-3d-roof-off-1440.png`, `r12-3d-first-paint-1440.png` | Done |
+
+## Should fix (drafter)
+
+| # | Item | What changed | Test (fails before, passes after) | Picture | Status |
+|---|------|--------------|-----------------------------------|---------|--------|
+| J | The review card buries what the drafter has to do | The card opens on "Check this plan, in order": (1) the lot matches the plat or deed, Confirm lot; (2) the zoning is a house district, Confirm or Change; (3) flood zone noted; (4) the plan passes the audit. The calls, the sources and the rules are behind "details". A lot that is not a house district says: "Confirming the lot does not unblock Send: this lot is zoned C-2. Call the homeowner about a rezoning, or change the zoning if the city map says otherwise." | `test/round12-screens.test.mjs` "J and 1": the checklist and its buttons are on the first screen at 1440 × 900; the C-2 card carries the line. | `j-drafter-card-c2-first-screen-1440.png`, `j-drafter-card-c2-confirmed-1440.png` | Done |
+
+## Review items
+
+| # | Item | What changed | Test (fails before, passes after) | Picture | Status |
+|---|------|--------------|-----------------------------------|---------|--------|
+| 1 | The drafter is never told a lot was a near match | The server stamps `confidence: 'near'` and `listedAs` on the stored lot from its own parcel record; what the browser sends for those fields is dropped. The review card shows, in yellow: "Near match: the county lists this parcel as 329 11TH, not 323 N 11th St. Check the deed or plat before confirming." | `test/round12.test.mjs` "1": the stored lot is near with `listedAs`, and a browser-sent `confidence: 'exact'` does not remove it. Browser: `round12-screens` "J and 1". | `1-drafter-card-near-match-1440.png` | Done |
+| 2 | The server trusts the outline the browser sends | For a parcel lot the server rebuilds the calls, area, street side and edge kinds from its own record for the parcel id (`countyLot`, `parcels.byId`, cached). A browser outline more than 1 ft off is replaced and a lot event is logged. The stored lot's area is worked out on the server too. | `test/round12.test.mjs` "2": Pharr's 1.65-acre outline under Kerria's parcel id is created, stored as Kerria's own outline, and the event is logged. | n/a | Done |
+| 3 | Plat lots never get a zoning read | When a drafter confirms a plat lot the server reads the zoning at the geocoded point and the card shows it with "confirm or change". A commercial district blocks Send until a drafter changes it. | `test/round12.test.mjs` "3". | n/a | Done |
+| 4 | Dev-server advisories | vite 7.3.8 and @vitejs/plugin-react 5. `npm audit`: 0 vulnerabilities. Build and all browser suites re-run. | `npm audit` | n/a | Done |
+| 5 | fitsLot got slower | The cause was not the envelope search: the roof was worked out twice for every plan the fit tried. It is now worked out once per set of masses (`roof.js` cache), and the envelope once per outline. Same 16 cases, first pass: median 80 to 102 ms, max 125 to 168 ms (round 11: 104 to 135 and 245 to 354); later passes median 25 to 31 ms. | `test/round12.test.mjs` "5": one roof per set of masses, one envelope per outline. `test/fit-speed.test.mjs` unchanged and passing. | n/a | Done |
+| 6 | The live test can go green with FEMA gone | `server/lots.mjs` tells "gone" (a 4xx, or a bad-layer answer) from an outage; gone is not retried and raises one alert. The live test skips an outage but fails on gone, and fails when more than half the addresses skip. | `test/round12.test.mjs` "6". Live acceptance run: 2 of 2 on 14 addresses. | n/a | Done |
+| 7a | The daily check counts "Check now" taps | A failed run counts again only 6 hours or more after the last one counted; the email goes out on a counted second failure. | `test/round12.test.mjs` "7": two taps a minute apart send nothing; the next day's failure does. | n/a | Done |
+| 7b | 390 px: the street name is cut off | The top view of a lot backs off until the lot and the names of its streets are in the picture, whatever its shape (`src/draft/lib/camera.js`). | `test/round12.test.mjs` "7: the top view…": the old height showed less than the name needs on 323 N 11th St; every recorded lot holds its street names at three picture shapes. | `lot-n-11th-near-390.png` | Done |
+| 7c | 3D: one main ridge with the wings tying in | The main body is one roof with one ridge, the highest and the longest; the garage, the primary suite and the porch gables meet it in valleys; the gap over the foyer is closed; a wing running in under a higher roof stops where its ridge meets it. A lean-to covers the mud room strip the plan left unroofed. | `test/round12-roof.test.mjs`, 3 tests (default, 1,800 sf, 5/4 3-car). | `r12-3d-roof-on-1440.png` | Partly: the west end (the bedroom wing and the left wing) still reads as two lower roofs beside the main one (see "Not met") |
+
+## The customer walkthrough (new acceptance rule)
+
+`scripts/walkthrough.mjs` starts the PR build (the built client and the office API, live county, FEMA and zoning lookups, billing off, no email, its own empty data folder) and drives a real Chromium like a customer. Two full runs: `basic` (no Claude key) and `claude` (the real key, model claude-opus-5-5). Each run is 10 homeowner sessions (5 lots at 1440 px and at 390 px) from sign-in to Send, then a drafter who opens every lot to confirm, reads the card and confirms, then the homeowners send. Signing out and back in mid-way is done on the normal lot at 1440 px and on the curved lot at 390 px. Every screen's text is scanned for "setback", "NaN", "undefined", a `$` amount and "could not send".
+
+| Lot | Basic rules, 1440 | Basic rules, 390 | Claude key, 1440 | Claude key, 390 |
+|---|---|---|---|---|
+| Normal: 1201 Kerria Ave, McAllen | calm card, confirmed, sent | calm card, confirmed, sent | calm card, confirmed, sent | calm card, confirmed, sent |
+| Curved: 2002 Kiskadee Ln, Mission | 3 bed, 2 bath at 1,398 sf, turned 15°, sent | same, with sign-out and back in on the Rooms step | sent | sent |
+| Near match: 323 N 11th St, Raymondville | yellow line for the homeowner and the drafter, sent | sent | sent | sent |
+| C-2: 118 S Cage Blvd, Pharr | Send blocked by the zoning before and after the drafter confirms the lot | blocked | blocked | blocked |
+| W/E mismatch: 1300 W Nolana Ave | "We found 1300 E Nolana Ave, not W" is answered No; the lot is typed in; sent | sent | sent | sent |
+
+Totals for both runs: 20 homeowner sessions, 16 lots confirmed by the drafter, 16 plans sent, 4 correctly blocked by the zoning. Page errors: 0. Words that must not appear: 0. Failed steps: 0.
+
+**The four chat sentences, as the customer saw them** (the same in both modes unless noted):
+
+| Sentence | Normal lot | Curved lot | Near match | C-2 and W/E |
+|---|---|---|---|---|
+| I want 4 bedrooms | "This plan already has 4 bedrooms. No change was used." | "4 bedrooms do not fit on this lot: the house would end up too close to the side of the lot, where the city keeps 6 ft open. This plan has 3." | already 4 | already 4 |
+| Add a covered patio in the back | added, 1 change used | added (behind the dining room) | refused for the real reason (53 percent of the lot, 50 allowed), with a button: "Draw a smaller house, about 2,200 sf, with a covered patio at the back" | added |
+| Make the kitchen bigger | refused with the reason; button "Make the kitchen 1 ft longer" | refused: the hallway would be too small, no step fits | button "Make the kitchen 1 ft longer" | made 15 percent bigger |
+| Make it feel more open | says what is already open; buttons for the rooms that can grow | the same, no button (nothing can grow there) | two buttons | three buttons |
+
+With the Claude key, a change that is applied is described in the model's own sentence ("I added a covered patio off the back of the house, next to the dining area."); refusals and offers are word for word the same as with the basic rules. Refusals and offers used no change in any session.
+
+**How long things took** (headless Chromium with software 3D, so slower than a real phone or laptop): the lot found in 3 to 6 s; the first draft on screen in about 4.5 s; a chat answer in 0.1 to 1.7 s at 390 px and 1.3 to 5.9 s at 1440 px with the basic rules, and 2 to 4 s with the Claude key (one at 9.5 s); the drafter's confirmation in 1.5 s.
+
+**Ratings.** These are mine, from reading every screen of the runs; the customer test rated the round 11 build 6.5 as a homeowner and 5.5 as a drafter.
+
+- **Homeowner, desktop: 8 of 10.** Nothing is lost on sign-out, no lot stops at "does not fit", the Send step no longer reads like an error, and the chat answered all four sentences sensibly on every lot. What holds it back: the suggestion buttons under the chat still offer "Make the kitchen bigger" right after that was refused; on Kiskadee the first fit takes a few seconds; the W/E mismatch answered No leaves the homeowner typing a lot size.
+- **Homeowner, phone: 6.5 of 10.** The header, the step name, the plan and the chat are right now, and the whole flow completes. But the lot's map is small, the page scrolls the plan out of view while chatting, and the Lot step's card slides under the map. These are the addendum's phone points and are not fixed in this round.
+- **Drafter: 8 of 10.** The card opens on what to do, in order, with the buttons; the near match and the C-2 stop are impossible to miss; lots arrive while the homeowner is still choosing rooms. What holds it back: Mission and Raymondville have no zoning layer, so the district is typed by hand; the outline still has to be compared with the plat by eye.
+
+**Pictures.** One sheet per session with every step in order, in `docs/fix-round-12/walkthrough/`: `walk-basic-1440-normal.jpg`, `walk-basic-390-curved.jpg` and so on for both modes, 5 lots and 2 sizes (20 sheets), plus `walk-basic-drafter.jpg` and `walk-claude-drafter.jpg` with every review card before and after confirming. What each screen said, every chat reply and its timing are in `walkthrough-basic.json` and `walkthrough-claude.json` beside them. The full-size frames (about 100 MB) are not committed; `NODE_USE_ENV_PROXY=1 OUT=<folder> node scripts/walkthrough.mjs basic` makes them again.
+
+## Found on the way and fixed
+
+- **A stale offer flashed on the Rooms step.** Right after the homeowner was started with what fits, the answer for the rooms that were replaced ("does not fit… Try that") showed for a moment. It no longer does (`test/round12-flow.test.mjs` watches for it).
+- **The 3D view drew sixty times a second** whether or not anything moved. It now draws when something changes. In the headless walkthrough, chat answers at 390 px went from several seconds to about one.
+- **The Lot step named rules by their field names** ("streetSide, garageFt, maxCoverage…"). It now says "a side street, the garage door, how much of the lot a house may cover" (`test/jurisdictions.test.mjs`).
+- **The drafter's inbox said "0 versions" for a first draft.** It now says "first draft".
+- **A buildable area with a notch.** Following the curve makes the buildable area non-convex, so the inside tests look at edges as well as corners (`outsidePoint`), and the fit loop asks through `boxInside`, which allocates nothing.
+- **The stored lot carried the browser's area.** It is rebuilt on the server.
+- **A patio had "no free wall"** on plans with the living room at the front. The porch now goes behind the dining room.
+- **"2 more bedrooms" added one.** It adds two. A failed "remove a bedroom" now offers "Draw the house again with N bedrooms".
+- **The Claude schema** was refused by the API as too complex once the new fields were added, which would have sent every chat answer to the basic rules. It is now one shape per op.
+- **The plan left a strip of the mud room unroofed** on the 1,800 sf plan, and a drawn garage's eaves sat below its walls. Both are corrected where the roof masses are assembled.
+- **FEMA gone for good** raises one alert for the office instead of a retry loop.
+- `docs/change-diff.md` describes the new `count` op, the soft resize, the patio and the open-feel answer. `docs/DEPLOY.md` describes the walkthrough and the homeowner's email.
+
+## Verification
+
+- `npm test` (Postgres up): 431 tests, 423 pass, 0 fail, 8 skipped. The 8 are the LIVE-only tests and the dormant billing tests.
+- The browser suites after the final build (`round12-flow`, `round12-3d`, `round12-screens`, `lot-flow`, `lot-front`, `no-money`): 18 of 18.
+- Live acceptance (`LIVE=1 node --test test/live-acceptance.test.mjs`): 2 of 2 on 14 addresses.
+- Live Claude chat (`LIVE=1 node --test test/round12-chat-live.test.mjs`): 2 of 2.
+- The walkthrough, live, in both chat modes: the table above.
+- `npx vite build`: clean. `npm audit`: 0 vulnerabilities.
+
+## Not met, or different from the brief
+
+- **A: no new plan shape was drawn.** The brief asks for a compact plan 36 to 40 ft wide. The existing compact plan is 37.5 ft wide, and with the house turned it fits a 3 bed, 2 bath house of 1,376 to 1,400 sf on Kiskadee, so I used it. A 1-car garage does not fit there. 5435 Curtis Clark Dr (31 ft wide) and 510 W Harris Ave (35 ft deep) still fit nothing and go to the drafter.
+- **A: the turn.** The brief measured the best rectangle at 7.5°; with the curve followed, the fit lands on 15°, the limit. The house reads as turned on the lot, and the Rooms and Draft steps say so.
+- **A: following the curve costs time on that one lot.** The fit for Kiskadee's default rooms takes about 1.3 times as long as with the straight line. It runs off the main thread on the Rooms step.
+- **G: "Make it feel more open".** The brief names three options (open the kitchen to the living area, taller ceilings, remove the dining wall). The plan already draws those rooms with no walls between them, and ceiling heights are fixed by the style, so none of the three is a change the plan code can make. The answer says that and offers what can be done: more room for the open space.
+- **G: with the Claude key, an applied change is described by the model.** Its sentence can carry sizes ("from 13¼ by 15¾ feet to about 15¼ by 18 feet") that the plan code did not write. I did not check those numbers against the plan in every reply.
+- **7c: the west end of the roof.** The bedroom wing still butts the main gable end and the left wing is still its own gable in front of it. Tying them in means running the main ridge over the bedroom wing, which undoes the hip that round 11's test requires. It needs a decision on which reading is wanted.
+- **C: the email.** "We'll email you" is true only when `RESEND_API_KEY` and `ALERT_EMAIL_FROM` are set. Without them the server logs that the email was not sent. No email was sent from this box.
+- **2: the outline tolerance** is 1 ft at any corner. A parcel the county has re-surveyed since the homeowner took it is replaced the same way, and logged.
+- **The walkthrough's W/E mismatch** was answered "No, that is not my address", which is the customer's honest answer. That path ends in a typed lot, which needs no drafter confirmation before Send.
+- **Not verified:** the roof on two-storey or IFC-converted kits; the lean-to after a chat edit moves the mud room; the homeowner's email arriving in a real inbox.
+
+## Questions for the office
+
+1. **The homeowner's email.** When a drafter confirms a lot, the homeowner is emailed "Draft House: your lot is confirmed". Is that wanted, and may it use the same mail key as the office alerts? It needs `RESEND_API_KEY` and `ALERT_EMAIL_FROM` on Render; I have not touched Render.
+2. **Lots that need a custom design.** They are listed in the drafter's inbox. Should the office also get an email when one arrives?
+3. **Pie lots.** Is the existing compact plan, turned, an acceptable first draft for a wedge lot, or do you want a plan drawn for wedges?
+4. **The W/E mismatch.** When the homeowner says the address we found is not theirs, should we list the parcels on the street they typed, instead of asking for the lot's size?
+5. **The west end of the roof** (7c): one long main ridge over the bedroom wing with the left wing as a cross gable, or the hips from round 11?
+6. **Cities with no zoning layer** (Mission, Raymondville): the drafter types the district. Is there a map we should read instead?
