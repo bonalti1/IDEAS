@@ -1,0 +1,145 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups in the round-7 brief and the round-9 review (ids, legals, edges, areas, the flood panels FEMA answered on Nov 19, 2026) with stand-in coordinates; the county parcel and city zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-19",
+ "slug": "cage-118-pharr",
+ "address": "118 S Cage Blvd, Pharr, TX 78577",
+ "county": "Hidalgo County",
+ "cityId": "pharr",
+ "point": {
+  "lon": -98.18373890400001,
+  "lat": 26.194353504
+ },
+ "census": {
+  "matchedAddress": "118 S CAGE BLVD, PHARR, TX, 78577",
+  "coordinates": {
+   "x": -98.18372363,
+   "y": 26.19411777
+  },
+  "addressComponents": {
+   "fromAddress": "118",
+   "toAddress": "118",
+   "preDirection": "S",
+   "streetName": "CAGE",
+   "suffixType": "BLVD",
+   "suffixDirection": "",
+   "city": "PHARR",
+   "state": "TX",
+   "zip": "78577"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Hidalgo County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": [
+    {
+     "NAME": "Pharr city"
+    }
+   ]
+  }
+ },
+ "addressPoints": [
+  {
+   "fulladdr": "118 S CAGE BLVD",
+   "municipality": "PHARR",
+   "parcel_id": "259436"
+  }
+ ],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": 259430,
+    "geo_id": "P5000-00-043-0001-00",
+    "legal_desc": "PHARR ORIGINAL TOWNSITE LOT 1 & 2 BLK 43",
+    "situs": "118 S CAGE BLVD, PHARR TX"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -98.1838,
+       26.1942
+      ],
+      [
+       -98.18364726,
+       26.1942
+      ],
+      [
+       -98.18364726,
+       26.19458376
+      ],
+      [
+       -98.1838,
+       26.19458376
+      ],
+      [
+       -98.1838,
+       26.1942
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": 259436,
+    "geo_id": "P5000-00-043-0008-00",
+    "legal_desc": "PHARR ORIGINAL TOWNSITE LOT 8 & 9 BLK 43",
+    "situs": "118 W PARK AVE, PHARR TX"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -98.1838,
+       26.1945865
+      ],
+      [
+       -98.18364726,
+       26.1945865
+      ],
+      [
+       -98.18364726,
+       26.19497026
+      ],
+      [
+       -98.1838,
+       26.19497026
+      ],
+      [
+       -98.1838,
+       26.1945865
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [],
+  "1": [],
+  "3": [],
+  "28": [],
+  "34": []
+ },
+ "zoning": {
+  "cityId": "pharr",
+  "features": [
+   {
+    "ZONE": "C-2",
+    "last_edited_date": 1700000000000
+   },
+   {
+    "ZONE": "R-1",
+    "last_edited_date": 1500000000000
+   }
+  ]
+ }
+}

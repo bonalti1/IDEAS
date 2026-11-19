@@ -3,7 +3,6 @@
 // the same SVG the plan tab shows, placed at true scale with jsPDF and svg2pdf. No pop-up, no print
 // dialog: the file downloads. The libraries load on first use so the app's bundle stays small.
 import { planSVG, sitePlanSVG, sheetFor, siteScaleFor, lotTitle, cropSVG } from './plan-svg.js'
-import { estimateLines } from './pricing.js'
 
 let libs
 async function load() {
@@ -164,10 +163,10 @@ export async function summaryPDF(design, audit, trust, info = {}) {
  * The office's "Meeting prep" sheet: the same layout with the estimate block (range, rate line, parts),
  * marked internal. Never offered to a homeowner.
  */
-export async function meetingPrepPDF(design, price, audit, trust, info = {}) {
-  return summaryDoc(design, price, audit, trust, info, { internal: true })
+export async function summaryDocWith(design, audit, trust, info = {}, money) {
+  return summaryDoc(design, null, audit, trust, info, { internal: true, money })
 }
-async function summaryDoc(design, price, audit, trust, info = {}, { internal = false } = {}) {
+async function summaryDoc(design, price, audit, trust, info = {}, { internal = false, money: block = null } = {}) {
   const { jsPDF } = await load()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter', compress: true })
   const font = await useFont(doc)
@@ -206,18 +205,15 @@ async function summaryDoc(design, price, audit, trust, info = {}, { internal = f
     doc.text(t.toUpperCase(), M, y)
     y += 0.22
   }
-  if (internal && price) {
-    h2(price.confirmed ? 'Price range (office)' : 'Estimate (office)')
+  if (internal && block) {
+    h2(block.heading)
     doc.setFontSize(20)
-    doc.text(price.needsCounty ? 'county not set' : `${k(price.low)}–${k(price.high)}`, M, y + 0.1)
+    doc.text(block.big, M, y + 0.1)
     y += 0.32
     doc.setFont(font, 'normal')
     doc.setFontSize(8.5)
     doc.setTextColor(85, 85, 85)
-    const parts = ['living', 'garage', 'porches'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`)
-    const extra = estimateLines(price).map((l) => `${l.label}: ${l.text}`)
-    const line = `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${price.county || 'county not set'}. ${parts.join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${price.note}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}`
-    const lines = doc.splitTextToSize(line, W)
+    const lines = doc.splitTextToSize(block.line, W)
     doc.text(lines, M, y)
     y += lines.length * 0.15 + 0.1
   } else {
@@ -249,6 +245,49 @@ async function summaryDoc(design, price, audit, trust, info = {}, { internal = f
     y += lines.length * 0.15 + 0.03
   })
   y += 0.12
+  // the rules this lot was drafted to (round 7, item 9): each with its source and status, the way the panel shows them
+  const used = design.lot?.rulesUsed || []
+  if (used.length) {
+    if (y > 8.6) {
+      doc.addPage()
+      y = M
+    }
+    h2('Rules used for this lot')
+    doc.setFontSize(8.5)
+    doc.setFont(font, 'normal')
+    doc.setTextColor(85, 85, 85)
+    const head = `${design.lot?.jurisdiction?.name || design.lot?.cityName || ''}${design.lot?.zoning?.district ? ` · zoned ${design.lot.zoning.district}` : ''}${design.lot?.flood?.zone ? ` · FEMA zone ${design.lot.flood.zone}` : design.lot?.flood?.status === 'no-digital-firm' ? ' · no digital FEMA map here' : ''}. A drafter confirms every line before anything is built.`
+    const hl = doc.splitTextToSize(head, W)
+    doc.text(hl, M, y)
+    y += hl.length * 0.14 + 0.06
+    const rows = used.filter((u) => ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf', 'district', 'irc', 'windstorm', 'wind'].includes(u.id))
+    rows.forEach((u) => {
+      if (y > 10.1) {
+        doc.addPage()
+        y = M
+      }
+      const status = u.status === 'verified' ? (u.stale ? 'city code, re-check due' : 'city code') : u.status === 'summary' ? 'summary, office confirms' : 'unknown, confirm with city'
+      doc.setFont(font, 'bold')
+      doc.setTextColor(26, 26, 26)
+      doc.text(String(u.label || u.id), M, y)
+      doc.setFont(font, 'normal')
+      doc.text(String(u.value ?? ''), M + 1.5, y, { maxWidth: 1.7 })
+      doc.setTextColor(85, 85, 85)
+      const src = doc.splitTextToSize(`${status}${u.source ? ` · ${u.source}` : ''}${u.checkedAt ? ` · ${u.checkedAt}` : ''}`, W - 3.4)
+      doc.text(src, M + 3.4, y)
+      y += Math.max(1, src.length) * 0.14 + 0.04
+    })
+    ;(design.lot?.ruleNotes || []).forEach((n) => {
+      const l = doc.splitTextToSize(n, W)
+      doc.text(l, M, y)
+      y += l.length * 0.14 + 0.02
+    })
+    y += 0.12
+  }
+  if (y > 9.4) {
+    doc.addPage()
+    y = M
+  }
   h2('What happens next')
   doc.setFontSize(10)
   ;(trust?.next || []).forEach((n, i) => {

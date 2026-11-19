@@ -452,3 +452,29 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 .lightbox-svg { overflow: auto; padding: 8px; }
 .lightbox-svg svg { display: block; width: min(1400px, 94vw); height: auto; }
 .picker .thumb { cursor: zoom-in; }
+
+/* round 7: the rules panel and the parcel card */
+.rules-panel summary { cursor: pointer; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rules-panel summary .pill.small { font-size: 9px; padding: 2px 7px; letter-spacing: 0.06em; text-transform: none; }
+.rules-panel .tbl.rules-used td { font-size: 12px; padding: 5px 4px 5px 0; }
+.rules-panel .tbl.rules-used td:nth-child(2) { white-space: normal; }
+.rules-panel .tbl.rules-used tr.bad td { color: #a33a2d; }
+.rules-panel .pill { font-size: 9px; padding: 2px 7px; letter-spacing: 0.04em; text-transform: none; }
+.rules-panel .list.flags li.warn { color: #9a6b12; }
+.rules-panel .linkish { background: none; border: 0; padding: 0; color: var(--brand-brown); text-decoration: underline; cursor: pointer; font: inherit; }
+.parcel-card { border-color: #2e6b3a; }
+.parcel-card.candidates { border-color: #9a6b12; }
+.parcel-card .edges { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--brand-muted); margin: 6px 0; }
+.parcel-card .row2 .btn { flex: 1; }
+.parcel-card ul.candidates { list-style: none; padding: 0; margin: 6px 0; }
+.parcel-card ul.candidates li { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid #efedea; font-size: 13px; }
+.lot-side .fine.good { color: #2e6b3a; }
+.sources .tbl td { font-size: 12px; }
+.sources .tbl td.ok { color: #2e6b3a; }
+.sources .tbl td.bad { color: #a33a2d; }
+.sources .tbl td.dormant { color: var(--brand-muted); }
+.rules-edit .cell.src { width: 100%; min-width: 180px; }
+.rules-edit details { margin-top: 6px; }
+.rules-edit details summary { cursor: pointer; font-size: 12px; color: var(--brand-brown); }
+.rules-edit .field-row { display: grid; grid-template-columns: 150px 1fr 1fr 120px; gap: 6px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #efedea; }
+@media (max-width: 700px) { .rules-edit .field-row { grid-template-columns: 1fr 1fr; } }

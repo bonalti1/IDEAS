@@ -43,6 +43,9 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const costQ = splitCost(text)
   if (costQ.cost && !costQ.text) return { applied: false, rooms, reply: costReply(costQ), source: 'fallback', ops: [], reasons: ['cost question'], askOffice: 'meeting' }
   text = costQ.text
+  // "make the kitchen bigger and then make it smaller": the two parts cancel; say so, use nothing (round 9, item 11)
+  const net = netsToNothing(text, rooms, kit)
+  if (net) return { applied: false, rooms, reply: net, source: 'fallback', ops: [], reasons: ['no change'], noop: true }
   // what this style cannot do yet, said plainly, before any model is asked: clause by clause, so "make the
   // kitchen bigger and add a pool" does the kitchen and names the pool
   const split = dropUnsupported(text, style)
@@ -247,6 +250,70 @@ export function describeOp(o, rooms, kit) {
 }
 
 /** The parts of a request: what the fallback split, or each op with the resizes a swap carries. */
+const CLAUSE_SPLIT = /\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i
+const BIGGER = /\b(bigger|larger|wider|deeper|longer)\b/i
+const SMALLER = /\b(smaller|narrower|shorter|tighter)\b/i
+/**
+ * A request whose clauses undo each other on the same room, with no sizes given ("make the kitchen bigger and
+ * then make it smaller"): the reply that says it nets out to nothing, or null.
+ */
+export function netsToNothing(text, rooms, kit) {
+  const clauses = String(text || '').split(CLAUSE_SPLIT).map((c) => c.trim()).filter(Boolean)
+  if (clauses.length < 2) return null
+  const names = rooms.filter((r) => isRoom(r)).map((r) => r.name.toLowerCase())
+  const kinds = Object.values(kit?.rooms || {}).map((r) => r.name.toLowerCase())
+  const subject = (c) => [...names, ...kinds].find((n) => c.toLowerCase().includes(n)) || null
+  for (let i = 0; i < clauses.length - 1; i++) {
+    const a = clauses[i]
+    const b = clauses[i + 1]
+    const pair = (BIGGER.test(a) && SMALLER.test(b)) || (SMALLER.test(a) && BIGGER.test(b))
+    if (!pair || /\d/.test(a) || /\d/.test(b)) continue
+    const sa = subject(a)
+    const sb = subject(b)
+    if (sa && (sb === sa || !sb)) return `That nets out to no change: making the ${sa} ${BIGGER.test(a) ? 'bigger and then smaller' : 'smaller and then bigger'} again leaves it as it is. No change was used.`
+  }
+  return null
+}
+
+/**
+ * One plain sentence for a change the plan's rules refuse (round 9, item 10), in place of the validator's list
+ * ("Jack & Jill door opens to the outside. Closet door opens to the outside. Closet has no door."). The raw list
+ * stays in `reasons` for the drafter log.
+ */
+export function plainRefusal(caused, preexisting, ops, rooms, kit) {
+  const nameOf = (id) => {
+    const n = rooms.find((r) => r.id === id)?.name || 'that room'
+    return /\d/.test(n) ? n : n.toLowerCase() // "the kitchen", but "the Bedroom 3"
+  }
+  const first = ops[0] || {}
+  const what =
+    first.op === 'remove' ? `Taking out the ${nameOf(first.room)}` :
+    first.op === 'swap' ? `Swapping the ${nameOf(first.a || first.room)} and the ${nameOf(first.b || first.with)}` :
+    first.op === 'resize' ? `Resizing the ${nameOf(first.room)}` :
+    first.op === 'move' ? `Moving the ${nameOf(first.room)}` :
+    first.op === 'add' ? `Adding ${/^[aeiou]/i.test(kit?.rooms?.[first.kind]?.name || '') ? 'an' : 'a'} ${(kit?.rooms?.[first.kind]?.name || first.kind || 'room').toLowerCase()}` :
+    first.op === 'garage' ? `A ${first.cars}-car garage` :
+    'That change'
+  // the category decides the verb; the first reason of that kind rides along in brackets, so the detail
+  // (which setback, which minimum, which street) is still there in plain words
+  const kinds = [
+    [/setback|property line|cover .*% of the lot|lot allows/i, 'runs past the setbacks on this lot'],
+    [/run into|overlap|over another|on a porch/i, 'runs rooms into each other'],
+    [/under the .* minimum|under 70 square feet|too small|longer than we can roof|cannot grow that way/i, 'makes a room a size the kit cannot build'],
+    [/window|egress/i, 'takes a bedroom\'s window away'],
+    [/plumbing|hot water/i, 'puts a wet room too far from the plumbing'],
+    [/door|opens to the outside|no door|reached|reach /i, 'leaves rooms without a door or with a door to the outside'],
+  ]
+  const hit = kinds.map(([re, words]) => [caused.find((c) => re.test(c)), words]).find(([c]) => c)
+  const because = hit ? `${hit[1]} (${hit[0].replace(/\.$/, '')})` : null
+  const suggestion =
+    first.op === 'remove' || first.op === 'swap' ? 'Try one room at a time, or tell me what the space is for and I will redraw it.' :
+    first.op === 'resize' ? 'Try a smaller step, or say how big it should be.' :
+    'Try a smaller step.'
+  const main = because ? `${what} ${because}, so the plan would not work as drawn. ${suggestion}` : `I can't do that one. ${caused[0]}${caused.length > 1 ? ` (and ${caused.length - 1} more thing${caused.length > 2 ? 's' : ''} the drafter can read)` : ''}`
+  return preexisting.length ? `${main} The plan also has a problem from before: ${preexisting[0]}` : main
+}
+
 function partsOf(diff, rooms, kit) {
   if (Array.isArray(diff.parts) && diff.parts.length > 1) return diff.parts.filter((p) => p.ops?.length).map((p) => ({ text: p.text, ops: p.ops }))
   const out = []
@@ -431,8 +498,8 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     // one bay less, a tandem bay, or a new draft with that garage come first
     if (caused.length && diff.ops.some((o) => o.op === 'garage' || (o.op === 'add' && o.kind === 'garage'))) fixes = [...garageFallbacks(diff.ops, rooms, program, style, kit, L, edits, depth), ...fixes].filter((f, i, all) => all.findIndex((g) => g.label === f.label) === i).slice(0, 3)
     const reply = caused.length
-      ? `I can't do that one. ${caused.join(' ')}${preexisting.length ? ` The plan also has a problem from before: ${preexisting.join(' ')}` : ''}`
-      : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting.join(' ')}`
+      ? plainRefusal(caused, preexisting, diff.ops, rooms, kit)
+      : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting[0]}${preexisting.length > 1 ? ` (and ${preexisting.length - 1} more the drafter can read)` : ''}`
     return { applied: false, rooms, reply, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes }
   }
   return { applied: true, rooms: next.rooms, reply: diff.reply || next.did.join('. ') + '.', source, ops: diff.ops, did: next.did }

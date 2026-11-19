@@ -1,6 +1,6 @@
 // Does a program fit a lot? The rooms step asks this before "Draft my house", so the first draft
 // a client sees always passes the rules. When it does not fit, the largest living area that does.
-import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf, planHolds, envelopeWidth, fromPlan, fitsEnvelope } from './layout.js'
+import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf, planHolds, envelopeWidth, fromPlan, fitsEnvelope, normalizeProgram } from './layout.js'
 import { checkRules } from './rules.js'
 import { DEFAULT_LOT } from './lot.js'
 
@@ -75,7 +75,8 @@ const passes = (program, style, lot) => {
  *   draft is what starterDraft returned (minSqft, clamped, fitScale); maxSqft is the largest living
  *   area with these rooms that passes on this lot, or null when none does.
  */
-export function fitsLot(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
+export function fitsLot(programIn, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
+  const program = normalizeProgram(programIn)
   if (depth === 0) {
     const key = programKey(program) + '|' + (style?.id || '') + '|' + lotKey(lot)
     const hit = RESULTS.get(key)

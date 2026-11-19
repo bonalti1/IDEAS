@@ -6,16 +6,16 @@ import { KIT as FARMHOUSE } from '../../kits/modern-farmhouse.js'
 import { GENERATED } from '../../kits/generated.js'
 
 const BASE_STYLES = [
-  { id: 'modern', name: 'Modern', blurb: 'Flat roofs, clean lines, big glass.', psf: 215, roof: 'flat', stories: 2 },
-  { id: 'farmhouse', name: 'Modern Farmhouse', blurb: 'Gables, board and batten, deep porch.', psf: 190, roof: 'gable', stories: 1, kit: FARMHOUSE, ready: true },
-  { id: 'spanish', name: 'Spanish', blurb: 'Stucco, clay tile, arches, courtyard.', psf: 205, roof: 'hip', stories: 1 },
-  { id: 'hillcountry', name: 'Hill Country', blurb: 'Limestone, standing seam, wide eaves.', psf: 200, roof: 'gable', stories: 1 },
-  { id: 'ranch', name: 'Ranch', blurb: 'Long, low, single story, easy living.', psf: 175, roof: 'hip', stories: 1 },
-  { id: 'craftsman', name: 'Craftsman', blurb: 'Tapered columns, exposed rafters.', psf: 195, roof: 'gable', stories: 1 },
-  { id: 'transitional', name: 'Transitional', blurb: 'Classic shape, modern finishes.', psf: 195, roof: 'hip', stories: 2 },
-  { id: 'tuscan', name: 'Tuscan', blurb: 'Stone, tile, warm earth tones.', psf: 210, roof: 'hip', stories: 1 },
-  { id: 'midcentury', name: 'Mid-Century', blurb: 'Low pitch, clerestories, breezeway.', psf: 205, roof: 'shed', stories: 1 },
-  { id: 'coastal', name: 'Coastal', blurb: 'Raised, airy, metal roof, shutters.', psf: 200, roof: 'hip', stories: 2 },
+  { id: 'modern', name: 'Modern', blurb: 'Flat roofs, clean lines, big glass.', roof: 'flat', stories: 2 },
+  { id: 'farmhouse', name: 'Modern Farmhouse', blurb: 'Gables, board and batten, deep porch.', roof: 'gable', stories: 1, kit: FARMHOUSE, ready: true },
+  { id: 'spanish', name: 'Spanish', blurb: 'Stucco, clay tile, arches, courtyard.', roof: 'hip', stories: 1 },
+  { id: 'hillcountry', name: 'Hill Country', blurb: 'Limestone, standing seam, wide eaves.', roof: 'gable', stories: 1 },
+  { id: 'ranch', name: 'Ranch', blurb: 'Long, low, single story, easy living.', roof: 'hip', stories: 1 },
+  { id: 'craftsman', name: 'Craftsman', blurb: 'Tapered columns, exposed rafters.', roof: 'gable', stories: 1 },
+  { id: 'transitional', name: 'Transitional', blurb: 'Classic shape, modern finishes.', roof: 'hip', stories: 2 },
+  { id: 'tuscan', name: 'Tuscan', blurb: 'Stone, tile, warm earth tones.', roof: 'hip', stories: 1 },
+  { id: 'midcentury', name: 'Mid-Century', blurb: 'Low pitch, clerestories, breezeway.', roof: 'shed', stories: 1 },
+  { id: 'coastal', name: 'Coastal', blurb: 'Raised, airy, metal roof, shutters.', roof: 'hip', stories: 2 },
 ]
 
 // a style is ready when it has a kit: the traced farmhouse, or one generated from a drafter's IFC export

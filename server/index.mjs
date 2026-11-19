@@ -16,6 +16,11 @@ import { makeInterpreter } from './interpreter.mjs'
 import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
+import { makeParcels } from './parcels.mjs'
+import { countyFromKey } from './parcel-sources.mjs'
+import { makeZoning } from './zoning.mjs'
+import { makeWind } from './wind.mjs'
+import { fixtureMode, fixtureFetch } from './fixtures.mjs'
 import { makeBilling } from './billing.mjs'
 import { regexOps } from '../src/draft/lib/ops.js'
 import { kitFor } from '../src/draft/lib/layout.js'
@@ -42,7 +47,12 @@ const alerts = makeAlerts({ store, event })
 const backup = makeBackup({ store, files, event })
 const interpreter = makeInterpreter()
 const users = makeUsers({ store, dataDir: DATA })
-const lots = makeLots({ store, files, interpreter, event })
+// parcel, flood and zoning services answer from recorded fixtures with DRAFTHOUSE_FIXTURES=1 (CI, screenshots); never the internet
+const fetchImpl = fixtureMode() ? fixtureFetch() : globalThis.fetch
+const lots = makeLots({ store, files, interpreter, event, fetchImpl })
+const parcels = makeParcels({ store, event, fetchImpl, geocode: (a) => lots.geocode(a) })
+const zoning = makeZoning({ store, fetchImpl })
+const wind = makeWind({ store, fetchImpl })
 const projects = makeProjects({ store, interpreter, event, logInterpret, lots, alerts })
 // Payments are dormant (round 8, P0b): the client app never talks about money and plan changes are free,
 // granted by the office. BILLING_ENABLED=1 registers the Stripe routes again; off, they do not exist (404).
@@ -68,6 +78,8 @@ async function health() {
     { id: 'accounts', name: 'Client accounts', ...users.describe(), at: now() },
     ...(billing ? [{ id: 'billing', name: 'Payments', ...billing.describe(), at: now() }] : []),
     { id: 'alerts', name: 'Alert email', ...alerts.describe(), at: now() },
+    { id: 'parcels', name: 'Parcel sources', ...parcels.describe(), at: now() },
+    { id: 'wind', name: 'Design wind speed', ...wind.describe(), at: now() },
     { id: 'backup', name: 'Nightly backup', ...bk, at: now() },
   ]
   workers.forEach((w) => (w.checks || []).forEach((c) => checks.push({ ...c, id: `${w.id}:${c.id}`, worker: w.name })))
@@ -188,6 +200,15 @@ route('POST', '/api/projects/:id/rollback', 'user', async (req, res, p, ctx) => 
 route('POST', '/api/projects/:id/send', 'user', async (req, res, p, ctx) => json(res, 200, await projects.send(await projects.load(ctx.user, p.id), await readJson(req, { design: 'object?', ifc: 'string?' }), saveDesign), req))
 // the homeowner asks the office for a meeting (cost is covered there), or for more changes (round 8, M4/M8)
 route('POST', '/api/projects/:id/meeting-request', 'user', async (req, res, p, ctx) => json(res, 200, await projects.requestMeeting(await projects.load(ctx.user, p.id), await readJson(req, { note: 'string?', kind: 'string?' })), req))
+// round 7, item 8: a lot zoned for something other than a house blocks Send; the client asks the office to call
+route('POST', '/api/projects/:id/call-me', 'user', async (req, res, p, ctx) => {
+  const prj = await projects.load(ctx.user, p.id)
+  const body = await readJson(req, { note: 'string?' })
+  const note = String(body?.note || '').slice(0, 300)
+  await event('request', `${prj.client}: asked the office to call about the lot${note ? ` (${note})` : ''}`, { projectId: prj.id, request: 'call-me' })
+  if (alerts.configured) await alerts.email(`Draft House: ${prj.client} asked for a call`, `${prj.client} (${ctx.user.email}) asked the office to call about ${prj.address || 'their lot'}.\n${note}\nProject ${prj.id}.`)
+  json(res, 200, { ok: true, message: 'The office will call you.' }, req)
+})
 
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
@@ -211,8 +232,70 @@ route('GET', '/api/lot/geocode', 'app', async (req, res) => {
 })
 route('GET', '/api/lot/flood', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
+  const lat = url.searchParams.get('lat')
+  const lon = url.searchParams.get('lon')
+  if (lat != null && lon != null) return json(res, 200, await lots.floodAt({ lat: +lat, lon: +lon, address: url.searchParams.get('address') || null }), req)
   json(res, 200, await lots.flood(url.searchParams.get('address')), req)
 })
+// ── parcels, zoning, the sourced rules table, the sources health page (round 7) ──
+// Owner names and mailing addresses are drafter-only: everyone else gets the parcel without them.
+const parcelView = (rec, ctx) => {
+  if (!rec || users.isDrafter(ctx.user)) return rec
+  const { owner, mailing, attributes, ...keep } = rec
+  return { ...keep, candidates: rec.candidates?.map(({ owner: o, mailing: m, ...c }) => c) }
+}
+// The parcel routes need a signed-in user and are rate-limited per user and per address (round 9, item 8): the office
+// server must not be an open proxy onto the county layers. 20 lookups that reach a county per 10 minutes; cache hits
+// are free. 429 with a plain line past that.
+const LOOKUPS_PER_WINDOW = +(process.env.PARCEL_LOOKUPS_PER_10MIN || 20) // per user
+const LOOKUPS_PER_IP = LOOKUPS_PER_WINDOW * 3 // an office or a family behind one address
+const lookupWindow = new Map() // key → [timestamps]
+const lookupsLeft = (key) => {
+  const t = Date.now()
+  const list = (lookupWindow.get(key) || []).filter((x) => t - x < 600000)
+  lookupWindow.set(key, list)
+  return (key.startsWith('ip:') ? LOOKUPS_PER_IP : LOOKUPS_PER_WINDOW) - list.length
+}
+const countLookup = (key) => lookupWindow.set(key, [...(lookupWindow.get(key) || []), Date.now()])
+const lookupKeys = (req, ctx) => [`u:${ctx.user?.id || 'anon'}`, `ip:${(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '?'}`]
+const LOOKUP_LIMIT_MESSAGE = 'Too many lot lookups for now. Try again in ten minutes, or type the lot in; the drafter can pull the parcel later.'
+route('GET', '/api/lot/parcel', 'user', async (req, res, p, ctx) => {
+  const url = new URL(req.url, 'http://x')
+  const address = url.searchParams.get('address')
+  const lat = url.searchParams.get('lat')
+  const lon = url.searchParams.get('lon')
+  if (address && address.length > 200) return json(res, 400, { error: 'the address is too long (200 characters at most)' }, req)
+  const keys = lookupKeys(req, ctx)
+  if (keys.some((k) => lookupsLeft(k) <= 0)) return json(res, 429, { error: LOOKUP_LIMIT_MESSAGE, retryAfterS: 600 }, req)
+  const rec = await parcels.lookup({ address, lat: lat != null ? +lat : undefined, lon: lon != null ? +lon : undefined, force: url.searchParams.get('force') === '1' && users.isDrafter(ctx.user) })
+  if (!rec.cached) keys.forEach(countLookup)
+  json(res, 200, parcelView(rec, ctx), req)
+})
+// :county is the county's name or its slug ("Hidalgo County", "hidalgo", "hidalgo-county"); :propId the appraisal district's id
+route('GET', '/api/lot/parcel/:county/:propId', 'user', async (req, res, p, ctx) => {
+  const county = countyFromKey(decodeURIComponent(p.county))
+  if (!county) return json(res, 404, { error: `no parcel source for "${decodeURIComponent(p.county)}"; use the county name or its slug (hidalgo, cameron, nueces, starr, willacy, jimwells, kleberg, sanpatricio)` }, req)
+  const keys = lookupKeys(req, ctx)
+  if (keys.some((k) => lookupsLeft(k) <= 0)) return json(res, 429, { error: LOOKUP_LIMIT_MESSAGE, retryAfterS: 600 }, req)
+  keys.forEach(countLookup)
+  json(res, 200, parcelView(await parcels.byId({ county, propId: safe(p.propId) }), ctx), req)
+})
+route('GET', '/api/lot/zoning', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  json(res, 200, await zoning.lookup({ cityId: safe(url.searchParams.get('city') || ''), lat: url.searchParams.get('lat'), lon: url.searchParams.get('lon') }), req)
+})
+route('GET', '/api/lot/wind', 'app', async (req, res) => {
+  const url = new URL(req.url, 'http://x')
+  const table = await lots.jurisdictions()
+  json(res, 200, await wind.lookup({ lat: url.searchParams.get('lat'), lon: url.searchParams.get('lon'), row: table[safe(url.searchParams.get('city') || '')] || null }), req)
+})
+route('GET', '/api/jurisdictions', 'app', async (req, res) => json(res, 200, await lots.jurisdictions(), req))
+route('PUT', '/api/admin/jurisdictions/:id', 'drafter', async (req, res, p, ctx) => {
+  await lots.setCity(safe(p.id), await readJson(req, { source: 'string?', verified: 'boolean?', flags: 'array?', note: 'string?', zoning: 'string?' }), ctx.user)
+  json(res, 200, (await lots.jurisdictions())[safe(p.id)], req)
+})
+route('GET', '/api/admin/sources', 'drafter', async (req, res) => json(res, 200, { ...(await parcels.health()), zoning: Object.entries(zoning.layers).map(([cityId, L]) => ({ cityId, url: L.url, field: L.field })), fixtures: fixtureMode() }, req))
+route('POST', '/api/admin/sources/check', 'drafter', async (req, res) => json(res, 200, await parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }), req))
 
 // ── billing: pricing, Stripe Checkout, the webhook, receipts (only with BILLING_ENABLED=1) ──
 if (billing) {
@@ -454,6 +537,8 @@ const server = http.createServer(async (req, res) => {
       const wantsUser = r.need === 'user' || r.need === 'drafter'
       if (!auth.allows(wantsUser ? 'app' : r.need, role)) return json(res, role ? 403 : 401, { error: role ? `this key may not ${req.method} ${url.pathname}` : 'API key required (x-api-key)' }, req)
       const ctx = { role: role === 'open' ? 'app' : role, user: null }
+      // an app route still learns who is signed in when a token is sent (drafter-only fields on shared routes, round 7)
+      if (!wantsUser && req.headers.authorization) ctx.user = await users.fromRequest(req).catch(() => null)
       if (wantsUser) {
         ctx.user = await users.fromRequest(req)
         if (!ctx.user) return json(res, 401, { error: 'sign in first', signIn: true }, req)
@@ -484,6 +569,13 @@ async function main() {
     console.log(`accounts: ${users.describe().detail}`)
     console.log(interpreter.configured ? `interpreter: key from ${interpreter.keyVar} (${interpreter.keyLength} chars), model ${interpreter.model}` : 'interpreter: no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY, clients get the basic rules')
     console.log(`alerts: ${alerts.describe().detail}`)
+    console.log(`parcels: ${parcels.describe().detail}${fixtureMode() ? ' (answering from fixtures)' : ''}`)
+    // the daily parcel-source check (round 7): PARCEL_DAILY_CHECK=1 on Render; off on laptops and in tests
+    if (process.env.PARCEL_DAILY_CHECK === '1') {
+      const run = () => parcels.dailyCheck({ email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }).catch((e) => console.error('parcel daily check:', e.message))
+      setTimeout(run, 5 * 60000).unref()
+      setInterval(run, 24 * 3600000).unref()
+    }
     interpreter.probe()
     alerts.start()
     backup.start()

@@ -1,0 +1,161 @@
+// Round 9: what the architect review found live, each with a test that failed before the fix.
+//   2  integer prop_id goes out unquoted (test/parcels.test.mjs has the where clause and the fixture server's 400)
+//   5  the address point's parcel is checked against the situs (parcels.test)
+//   6  the front edge: the Census point off a corner, a 31 x 300 sliver
+//   7  the recorder's allow-list (parcels.test)
+//   8  signed-in, rate-limited parcel routes (parcels.test)
+//  10  plan-rule refusals are one plain sentence; the raw list stays for the drafter
+//  11  "bigger and then smaller" nets to nothing; a full plan says so
+//  14  Edinburg's 60% is impervious cover: its own field and its own finding
+//  15  a large tract is flagged
+//  16  "baths": 3.5 is 3 baths and a half bath at every entry point; the audit script does not crash
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { pickFrontEdge, projectRing, cleanRing, ringToCalls } from '../server/parcels.mjs'
+import { interpretRequest, plainRefusal, netsToNothing } from '../src/draft/lib/interpret.js'
+import { generateRooms, DEFAULT_PROGRAM, kitFor, normalizeProgram, programOf } from '../src/draft/lib/layout.js'
+import { fitsLot } from '../src/draft/lib/fit.js'
+import { auditPlan, CHECK_GROUPS } from '../src/draft/lib/audit.js'
+import { buildLot } from '../src/draft/lib/lot.js'
+import { STYLES } from '../src/draft/lib/styles.js'
+import { JURISDICTIONS, resolveRules, FIELD_LABELS, ALL_FIELDS } from '../src/draft/lib/jurisdictions.js'
+import { cityTable } from '../src/draft/lib/cities.js'
+import { loadFixtures } from '../server/fixtures.mjs'
+
+const style = STYLES.find((s) => s.id === 'farmhouse')
+const kit = kitFor(style)
+const offline = async () => {
+  throw new Error('offline')
+}
+
+test('6: the front edge faces the street point: a point off the corner no longer ties the long side first; a 31 x 300 sliver fronts on its 31 ft end', () => {
+  // Kerria: 80 wide (south, on the street) by 130 deep; the Census point 25 ft out in the street, 2 ft past the corner
+  const kerria = [[0, 0], [80, 0], [80, 130], [0, 130]].reverse() // clockwise with north up: y grows north
+  const ring = cleanRing(kerria).pts
+  const lenOf = (i) => Math.hypot(ring[(i + 1) % 4][0] - ring[i][0], ring[(i + 1) % 4][1] - ring[i][1])
+  for (const ref of [[40, -25], [-2, -25], [82, -25], [0, -30]]) assert.equal(Math.round(lenOf(pickFrontEdge(ring, ref))), 80, `street point ${ref}: the 80 ft side`)
+  assert.equal(Math.round(lenOf(pickFrontEdge(ring, [-30, 65]))), 130, 'a point west of the lot: the west side')
+  // the sliver: 31.6 wide by 300 deep, the street point in front of the short end
+  const sliver = cleanRing([[0, 0], [31.6, 0], [31.6, 300], [0, 300]].reverse()).pts
+  const lenS = (i) => Math.hypot(sliver[(i + 1) % 4][0] - sliver[i][0], sliver[(i + 1) % 4][1] - sliver[i][1])
+  assert.ok(Math.abs(lenS(pickFrontEdge(sliver, [15.8, -24])) - 31.6) < 0.01, 'the 31 ft end')
+  assert.ok(Math.abs(lenS(pickFrontEdge(sliver, [-1, -24])) - 31.6) < 0.01, 'even off the corner (the old pick took the 300 ft side)')
+  // no street point: the edge facing south
+  assert.equal(Math.round(lenOf(pickFrontEdge(ring, null))), 80)
+  // through the real pipeline on the fixtures: both fronts right
+  const FIX = loadFixtures()
+  const kf = FIX.find((f) => f.slug === 'kerria-1201-mcallen')
+  const { pts, toFt } = projectRing(kf.parcels[0].geometry.coordinates[0])
+  const clean = cleanRing(pts).pts
+  const calls = ringToCalls(clean)
+  assert.ok(Math.abs(calls[pickFrontEdge(clean, toFt([kf.census.coordinates.x, kf.census.coordinates.y]))].distance - 80) < 0.5)
+  const cf = FIX.find((f) => f.slug === 'curtis-clark-5435-corpus-christi')
+  const P = projectRing(cf.parcels[0].geometry.coordinates[0])
+  const cc = cleanRing(P.pts).pts
+  assert.ok(Math.abs(ringToCalls(cc)[pickFrontEdge(cc, P.toFt([cf.census.coordinates.x, cf.census.coordinates.y]))].distance - 31.6) < 0.5)
+})
+
+test('10: a plan-rule refusal is one plain sentence with a suggestion; the validator list stays in reasons for the drafter', async () => {
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const rooms = generateRooms(DEFAULT_PROGRAM, style, lot)
+  const r = await interpretRequest('remove all the bedrooms', rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline, report: false })
+  assert.equal(r.applied, false)
+  // one plain sentence, one detail in brackets, never the validator's whole list
+  assert.match(r.reply, /^Taking out the Bedroom \d leaves rooms without a door or with a door to the outside \([^)]+\), so the plan would not work as drawn\. Try one room at a time/)
+  assert.ok((r.reply.match(/opens to the outside|has no door/g) || []).length <= 1, r.reply)
+  assert.ok(r.reasons.length >= 2 && r.reasons.some((x) => /door/.test(x)), 'the raw list is kept')
+  // the sentence builder, case by case
+  const kitchen = rooms.find((x) => x.kind === 'kitchen')
+  assert.match(plainRefusal(['Living would cross the setback at 5 ft from side.'], [], [{ op: 'resize', room: kitchen.id, w: 30, d: 20 }], rooms, kit), /^Resizing the kitchen runs past the setbacks on this lot \(Living would cross the setback at 5 ft from side\), so the plan would not work as drawn\. Try a smaller step, or say how big it should be\.$/)
+  assert.match(plainRefusal(['Kitchen would run into dining.'], [], [{ op: 'move', room: kitchen.id }], rooms, kit), /^Moving the kitchen runs rooms into each other/)
+  assert.match(plainRefusal(['Bedroom 2 has no egress window.'], ['Closet has no door.'], [{ op: 'add', kind: 'bath' }], rooms, kit), /^Adding a bath takes a bedroom's window away \(Bedroom 2 has no egress window\), so the plan would not work as drawn\. Try a smaller step\. The plan also has a problem from before: Closet has no door\.$/)
+  assert.match(plainRefusal(['Something odd.', 'Another odd thing.'], [], [{ op: 'swap' }], rooms, kit), /^I can't do that one\. Something odd\. \(and 1 more thing the drafter can read\)$/)
+})
+
+test('11: "make the kitchen bigger and then make it smaller" nets to no change and uses nothing; "add 10 bedrooms" on a full plan says the plan is full', async () => {
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const rooms = generateRooms(DEFAULT_PROGRAM, style, lot)
+  for (const q of ['make the kitchen bigger and then make it smaller', 'make the kitchen bigger, then make the kitchen smaller', 'make the living room smaller and then bigger']) {
+    const r = await interpretRequest(q, rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline, report: false })
+    assert.equal(r.applied, false, q)
+    assert.equal(r.noop, true, q)
+    assert.match(r.reply, /nets out to no change/, q)
+    assert.match(r.reply, /No change was used/)
+  }
+  assert.equal(netsToNothing('make the kitchen bigger and add a bedroom', rooms, kit), null)
+  assert.equal(netsToNothing('make the kitchen 2 feet wider and then 1 foot narrower', rooms, kit), null, 'with sizes it is a real change, applied in order')
+  assert.equal(netsToNothing('make the kitchen bigger and then make the office smaller', rooms, kit), null, 'two rooms: two changes')
+  const both = await interpretRequest('make the kitchen bigger and then make the office smaller', rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline, report: false })
+  assert.equal(both.applied, true, both.reply)
+  const full = { ...DEFAULT_PROGRAM, beds: 6 }
+  const r6 = generateRooms(full, style, lot)
+  const cap = await interpretRequest('add 10 bedrooms', r6, full, style, { lot, interpreter: offline, report: false })
+  assert.equal(cap.reply, 'This plan already has the most bedrooms this lot holds (6).')
+  assert.doesNotMatch(cap.reply, /0 more/)
+  const some = await interpretRequest('add 10 bedrooms', rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline, report: false })
+  assert.match(some.reply, /Ask for 2 more at most\.$/)
+})
+
+test('14: Edinburg carries a 60% impervious-cover cap in its own field; building coverage is marked unknown; the audit measures paving against it', () => {
+  const e = JURISDICTIONS.edinburg
+  assert.equal(e.imperviousMax.value, 0.6)
+  assert.equal(e.maxCoverage.status, 'unknown', 'the 60% was never building coverage')
+  assert.equal(e.coverageIncludesImpervious.value, false)
+  assert.ok(ALL_FIELDS.includes('imperviousMax') && FIELD_LABELS.imperviousMax === 'Max impervious cover')
+  const r = resolveRules(e, {}, { width: 100, depth: 150 })
+  assert.equal(r.imperviousMax, 0.6)
+  assert.equal(r.maxCoverage, 0.5, 'the county default stands in, flagged')
+  assert.ok(r.used.find((u) => u.id === 'imperviousMax').value.startsWith('60%'))
+  assert.equal(cityTable().edinburg.imperviousMax, 0.6)
+  const lot = buildLot({ kind: 'manual', width: 60, depth: 100, city: 'edinburg', setbacks: { front: 10, side: 3, rear: 5 } })
+  const program = { ...DEFAULT_PROGRAM, beds: 3, baths: 2, garage: 2, sqft: 2000 }
+  const rooms = generateRooms(program, style, lot)
+  const a = auditPlan(rooms, program, kit, lot)
+  assert.ok(a.measures.impervious && a.measures.impervious.maxPct === 60, JSON.stringify(a.measures.impervious))
+  assert.ok(a.measures.impervious.sf > a.measures.coverage.footprintSf, 'paving is in the impervious number')
+  const f = a.findings.find((x) => x.id === 'impervious')
+  if (a.measures.impervious.pct > 60) {
+    assert.ok(f, 'over 60%: the impervious finding')
+    assert.match(f.message, /impervious cover/)
+    assert.equal(f.rule.id, 'imperviousMax')
+  }
+  // the same house on a lot with no impervious cap has no such finding or measure
+  const mc = buildLot({ kind: 'manual', width: 60, depth: 100, city: 'mcallen', setbacks: { front: 10, side: 3, rear: 5 } })
+  const b = auditPlan(generateRooms(program, style, mc), program, kit, mc)
+  assert.equal(b.measures.impervious, undefined)
+  assert.ok(CHECK_GROUPS.find((g) => g.id === 'lot').ids.includes('impervious'))
+})
+
+test('16: "baths": 3.5 is 3 baths and a half bath everywhere; the audit script does not crash on it', () => {
+  assert.deepEqual(normalizeProgram({ beds: 4, baths: 3.5 }), { beds: 4, baths: 3, halfBath: true, garage: 0, stories: 1 })
+  assert.equal(normalizeProgram({ baths: 2.75 }).baths, 2)
+  assert.equal(normalizeProgram({ baths: '3' }).baths, 3)
+  assert.equal(normalizeProgram({ beds: -2, baths: 2 }).beds, 0)
+  assert.equal(normalizeProgram({ baths: 2, stories: 0 }).stories, 1)
+  const lot = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', setbacks: {} })
+  const rooms = generateRooms({ ...DEFAULT_PROGRAM, baths: 3.5, halfBath: false }, style, lot)
+  const drawn = programOf(rooms, DEFAULT_PROGRAM)
+  assert.equal(drawn.baths, 3)
+  assert.equal(drawn.halfBath, true)
+  assert.ok(fitsLot({ ...DEFAULT_PROGRAM, baths: 3.5 }, style, lot).ok !== undefined, 'the fit check takes it')
+  const r = spawnSync(process.execPath, ['scripts/plan-audit.mjs', '--program', '{"baths":3.5}'], { encoding: 'utf8', timeout: 120000 })
+  assert.equal(r.status, 0, (r.stderr || '').slice(-300))
+  assert.doesNotMatch(r.stderr || '', /RangeError|Invalid array length/)
+  assert.match(r.stdout, /3\.5 bath/)
+})
+
+test('15: a tract over two acres or with many edges is flagged large (the client sees the block, not 400 edges)', async () => {
+  const { makeParcels } = await import('../server/parcels.mjs')
+  const { fixtureFetch } = await import('../server/fixtures.mjs')
+  const { makeLots } = await import('../server/lots.mjs')
+  const m = new Map()
+  const store = { meta: { get: async (k) => m.get(k) ?? null, set: async (k, v) => m.set(k, v) } }
+  const fetchImpl = fixtureFetch(loadFixtures())
+  const lots = makeLots({ store, fetchImpl, files: {}, interpreter: {}, event: async () => {} })
+  const parcels = makeParcels({ store, fetchImpl, geocode: (a) => lots.geocode(a), log: () => {}, event: async () => {} })
+  const ranch = await parcels.lookup({ address: '4400 Ranch Rd, Rio Grande City, TX 78582' })
+  assert.equal(ranch.large, true, '5 acres')
+  const kerria = await parcels.lookup({ address: '1201 Kerria Ave, McAllen, TX 78501' })
+  assert.equal(kerria.large, false)
+})

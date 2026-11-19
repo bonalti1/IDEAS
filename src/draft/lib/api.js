@@ -1,7 +1,16 @@
 // Office API client. The app works without the office server; every call
 // fails soft and the UI says the office is offline.
 // VITE_API_URL='' means same origin (the Vite dev proxy, or the app served by the API itself)
-export const API = (import.meta.env?.VITE_API_URL ?? 'http://localhost:8787').replace(/\/$/, '')
+// a browser test can point a built app at its own API port without rebuilding (round 9, item 12): localStorage
+// 'drafthouse.api' set before the first load; never set by the app itself
+const apiOverride = (() => {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('drafthouse.api') : null
+  } catch {
+    return null
+  }
+})()
+export const API = (apiOverride || import.meta.env?.VITE_API_URL || 'http://localhost:8787').replace(/\/$/, '')
 // The app key gates the office API (DRAFTHOUSE_APP_KEY on the server, VITE_API_KEY at build time).
 // Anyone who opens the site can read it; it keeps strangers and bots out, not a determined person.
 // Client accounts (phase 2) are the real door. Empty when the office runs open on a laptop.
@@ -53,6 +62,18 @@ export const api = {
   readPlat: (body) => call('/api/lot/plat', { method: 'POST', body: JSON.stringify(body) }, 150000),
   flood: (address) => call(`/api/lot/flood?address=${encodeURIComponent(address)}`, {}, 30000),
   geocode: (address) => call(`/api/lot/geocode?address=${encodeURIComponent(address)}`, {}, 20000),
+  // round 7: the parcel from the appraisal district, the zoning district, the wind line, the sourced rules table, the sources page
+  parcel: (address) => call(`/api/lot/parcel?address=${encodeURIComponent(address)}`, {}, 45000),
+  parcelAt: (lat, lon) => call(`/api/lot/parcel?lat=${lat}&lon=${lon}`, {}, 45000),
+  parcelById: (county, propId) => call(`/api/lot/parcel/${encodeURIComponent(county)}/${encodeURIComponent(propId)}`, {}, 30000),
+  floodAt: (lat, lon, address) => call(`/api/lot/flood?lat=${lat}&lon=${lon}${address ? `&address=${encodeURIComponent(address)}` : ''}`, {}, 30000),
+  zoning: (city, lat, lon) => call(`/api/lot/zoning?city=${encodeURIComponent(city || '')}&lat=${lat}&lon=${lon}`, {}, 30000),
+  wind: (city, lat, lon) => call(`/api/lot/wind?city=${encodeURIComponent(city || '')}&lat=${lat}&lon=${lon}`, {}, 20000),
+  jurisdictions: () => call('/api/jurisdictions'),
+  setJurisdiction: (id, patch) => call(`/api/admin/jurisdictions/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  sources: () => call('/api/admin/sources'),
+  sourcesCheck: () => call('/api/admin/sources/check', { method: 'POST', body: '{}' }, 120000),
+  callMe: (id, note) => call(`/api/projects/${id}/call-me`, { method: 'POST', body: JSON.stringify({ note }) }),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
   // the office: a meeting (cost is covered there) or more changes; the plan's allowance is granted by the office

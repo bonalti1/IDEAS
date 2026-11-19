@@ -1,58 +1,81 @@
-// City rules for single-family lots in the Rio Grande Valley: setbacks (feet), lot coverage,
-// building height. These are the office's working defaults and are editable on the Office
-// dashboard; the table saved there wins over this file. Every row starts unverified: confirm
-// each against the city's current zoning ordinance (R-1 or equivalent) before relying on it.
-export const CITY_DEFAULTS = {
-  mission: { name: 'Mission, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  mcallen: { name: 'McAllen, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  edinburg: { name: 'Edinburg, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  pharr: { name: 'Pharr, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  palmview: { name: 'Palmview, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 6, rear: 10, garageFt: 18, streetSide: 20, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  weslaco: { name: 'Weslaco, TX', county: 'Hidalgo County', zoning: 'R-1 Single Family', front: 25, side: 5, rear: 10, garageFt: 20, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-  harlingen: { name: 'Harlingen, TX', county: 'Cameron County', zoning: 'R-1 Single Family', front: 20, side: 5, rear: 10, garageFt: 20, garageSideEntryExempt: true, streetSide: 10, maxCoverage: 0.6, maxHeightFt: 35, minLotSf: 6000, verified: false }, // §111-118: a front-facing garage door 20 ft from the street, side-entry exempt
-  hidalgo: { name: 'Hidalgo County (unincorporated)', county: 'Hidalgo County', zoning: 'County subdivision rules', front: 25, side: 5, rear: 10, garageFt: 18, streetSide: 15, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: 6000, verified: false },
-}
-export const CITY_IDS = Object.keys(CITY_DEFAULTS)
-/** The counties we price in (src/draft/lib/pricing.js has the rates); the first four are the Rio Grande Valley. */
-export const COUNTIES = ['Hidalgo County', 'Cameron County', 'Starr County', 'Willacy County', 'Jim Wells County', 'Nueces County', 'Kleberg County', 'San Patricio County']
-export const RGV = COUNTIES.slice(0, 4)
+// The city rules table, as the rest of the app reads it: flat numbers per jurisdiction, derived from the
+// sourced table in jurisdictions.js (round 7, item 5). Everything that imported cities.js keeps working;
+// new code reads jurisdictions.js for the sources, statuses and rule objects.
+import { JURISDICTIONS, JURISDICTION_IDS, RULE_FIELDS as J_FIELDS, COUNTIES as J_COUNTIES, RGV as J_RGV, jurisdictionTable, resolveRules, geoMessage as jGeoMessage, countyRowId } from './jurisdictions.js'
 
-/** What the lot step says about a geocoded address: our city rules, county defaults, or outside the Valley. */
-export function geoMessage(geo, table = CITY_DEFAULTS) {
-  if (!geo) return ''
-  if (!geo.found) return geo.note || 'The address was not found. Check it, or type the lot in.'
-  if (geo.cityId && table[geo.cityId]) return `We have the ${table[geo.cityId].name} rules.`
-  const county = geo.county || ''
-  if (RGV.includes(county)) return `We don't have rules for this address yet. ${county} is in the Valley, so the county defaults are used and a drafter checks the city's setbacks.`
-  if (COUNTIES.includes(county)) return `We don't have rules for this address yet. ${county} is outside the Rio Grande Valley; we price it, and a drafter checks the setbacks before anything is drawn.`
-  return `We don't have rules for this address yet. ${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'It'} is outside the Rio Grande Valley, where we build. You can still draft to see a plan; pick a county below for a price.`
-}
-export const RULE_FIELDS = ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf']
-// the garage door's distance from the street line it faces (front or side street): 18 ft in McAllen, Mission, Pharr,
-// Palmview and Hidalgo County; 20 in Weslaco (side-street garage, UDO §2.3.4) and Harlingen (§111-118, unless
-// side-entry). Round 8, item 30(d); the round 7 jurisdiction table carries the sources.
+export { COUNTIES, RGV } from './jurisdictions.js'
+export const RULE_FIELDS = J_FIELDS
+// the garage door's distance from the street line it faces (round 8, item 30d): the jurisdiction table carries each
+// city's number and source; 18 ft when a row has none
 export const GARAGE_FT_DEFAULT = 18
 export const garageFt = (rules) => (rules && Number.isFinite(+rules.garageFt) && +rules.garageFt > 0 ? +rules.garageFt : GARAGE_FT_DEFAULT)
 
-/** The city table with the office's edits applied. */
+/** A jurisdiction row as a flat city row: numbers (rule objects resolved for a 100 × 150 lot), the district, verified. */
+export function flatRow(row, dims = { width: 100, depth: 150 }) {
+  const r = resolveRules(row, {}, dims)
+  return {
+    id: row.id,
+    name: row.name,
+    county: row.county,
+    kind: row.kind,
+    priority: row.priority,
+    zoning: row.kind === 'county' ? 'County subdivision rules' : row.district?.value ? `${row.district.value} Single Family` : 'unknown',
+    front: r.front,
+    side: r.side,
+    rear: r.rear,
+    streetSide: r.streetSide,
+    garageFt: r.garageFt,
+    maxCoverage: r.maxCoverage ?? 0.5,
+    coverageIncludesImpervious: r.coverageIncludesImpervious,
+    imperviousMax: r.imperviousMax ?? null,
+    maxHeightFt: r.maxHeightFt ?? 35,
+    maxStories: r.maxStories,
+    minLotSf: r.minLotSf,
+    minLotWidth: r.minLotWidth,
+    minHouseSf: r.minHouseSf,
+    garageSideEntryExempt: !!r.garageSideEntryExempt,
+    verified: row.verified !== undefined ? !!row.verified : J_FIELDS.slice(0, 4).every((k) => row[k]?.status === 'verified'),
+    updatedAt: row.updatedAt || null,
+    updatedBy: row.updatedBy || null,
+    note: row.note || null,
+    flags: r.flags,
+    unknown: r.unknown,
+    recheck: r.recheck,
+    irc: r.irc,
+    windstorm: r.windstorm,
+    windText: r.windText,
+    row,
+  }
+}
+
+export const CITY_DEFAULTS = Object.fromEntries(JURISDICTION_IDS.map((id) => [id, flatRow(JURISDICTIONS[id])]))
+export const CITY_IDS = JURISDICTION_IDS
+
+/** What the lot step says about a geocoded address: our city rules, county defaults, or outside the eight counties. */
+export const geoMessage = (geo, table = JURISDICTIONS) => jGeoMessage(geo, table && table.mcallen?.row ? Object.fromEntries(Object.values(table).map((c) => [c.id, c.row])) : table)
+
+/** The city table with the office's edits applied (flat rows; each carries its sourced `row`). */
 export function cityTable(overrides = {}) {
+  const t = jurisdictionTable(overrides)
   const out = {}
-  for (const id of CITY_IDS) out[id] = { id, ...CITY_DEFAULTS[id], ...(overrides[id] || {}) }
+  for (const id of JURISDICTION_IDS) out[id] = flatRow(t[id])
   return out
 }
 
-/** One city's rules, with any per-lot setback overrides on top. */
-export function rulesFor(cityId, overrides = {}, table = cityTable()) {
-  const base = table[cityId] || table.hidalgo
-  const r = { ...base }
-  for (const k of ['front', 'side', 'rear', 'streetSide', 'garageFt']) if (overrides[k] !== undefined && overrides[k] !== null && overrides[k] !== '') r[k] = +overrides[k]
-  if (!r.garageFt) r.garageFt = 18
-  return r
+/**
+ * One jurisdiction's rules for a lot, with any per-lot setback overrides on top and the rule objects resolved
+ * against the lot's dimensions ({ width, depth, rowFt }). An unknown id falls back to the county's row ('hidalgo').
+ */
+export function rulesFor(cityId, overrides = {}, table = cityTable(), dims = {}) {
+  const base = table[cityId] || table[countyRowId(overrides.county) || 'hidalgo'] || table.hidalgo
+  const row = base.row || JURISDICTIONS[base.id] || JURISDICTIONS.hidalgo
+  const r = resolveRules(row, overrides, dims)
+  return { ...base, ...r, name: base.name, zoning: base.zoning, row }
 }
 
 /** Guess the city from free text such as an address. */
 export function guessCity(text = '') {
   const t = String(text).toLowerCase()
-  for (const id of CITY_IDS) if (id !== 'hidalgo' && t.includes(CITY_DEFAULTS[id].name.split(',')[0].toLowerCase())) return id
+  for (const id of CITY_IDS) if (CITY_DEFAULTS[id].kind === 'city' && t.includes(CITY_DEFAULTS[id].name.split(',')[0].toLowerCase())) return id
   return 'hidalgo'
 }

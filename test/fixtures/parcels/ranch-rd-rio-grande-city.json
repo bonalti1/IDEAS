@@ -1,0 +1,92 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups in the round-7 brief and the round-9 review (ids, legals, edges, areas, the flood panels FEMA answered on Nov 19, 2026) with stand-in coordinates; the county parcel and city zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-19",
+ "slug": "ranch-rd-rio-grande-city",
+ "address": "4400 Ranch Rd, Rio Grande City, TX 78582",
+ "county": "Starr County",
+ "cityId": null,
+ "point": {
+  "lon": -98.839832668,
+  "lat": 26.430996024
+ },
+ "census": {
+  "matchedAddress": "4400 RANCH RD, RIO GRANDE CITY, TX, 78582",
+  "coordinates": {
+   "x": -98.83974084,
+   "y": 26.43011777
+  },
+  "addressComponents": {
+   "fromAddress": "4400",
+   "toAddress": "4400",
+   "preDirection": "",
+   "streetName": "RANCH",
+   "suffixType": "RD",
+   "suffixDirection": "",
+   "city": "RIO GRANDE CITY",
+   "state": "TX",
+   "zip": "78582"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Starr County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": []
+  }
+ },
+ "addressPoints": [],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "34110",
+    "geo_id": "0400-0000-0091",
+    "legal_desc": "ABST 91 SHARE 22 PORCION 76 5.00 AC",
+    "situs_num": "4400",
+    "situs_street_prefx": null,
+    "situs_street": "RANCH",
+    "situs_street_sufix": "RD",
+    "situs_city": "RIO GRANDE CITY",
+    "legal_acreage": 5
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -98.8402,
+       26.4302
+      ],
+      [
+       -98.83928167,
+       26.4302
+      ],
+      [
+       -98.83928167,
+       26.43219006
+      ],
+      [
+       -98.8402,
+       26.43219006
+      ],
+      [
+       -98.8402,
+       26.4302
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [],
+  "1": [],
+  "3": [],
+  "28": [],
+  "34": []
+ },
+ "zoning": null
+}

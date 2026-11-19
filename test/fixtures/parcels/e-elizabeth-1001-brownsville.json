@@ -1,0 +1,135 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups in the round-7 brief and the round-9 review (ids, legals, edges, areas, the flood panels FEMA answered on Nov 19, 2026) with stand-in coordinates; the county parcel and city zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-19",
+ "slug": "e-elizabeth-1001-brownsville",
+ "address": "1001 E Elizabeth St, Brownsville, TX 78520",
+ "county": "Cameron County",
+ "cityId": "brownsville",
+ "point": {
+  "lon": -97.496026868,
+  "lat": 25.901331576
+ },
+ "census": {
+  "matchedAddress": "1001 E ELIZABETH ST, BROWNSVILLE, TX, 78520",
+  "coordinates": {
+   "x": -97.49600858,
+   "y": 25.90113147
+  },
+  "addressComponents": {
+   "fromAddress": "1001",
+   "toAddress": "1001",
+   "preDirection": "E",
+   "streetName": "ELIZABETH",
+   "suffixType": "ST",
+   "suffixDirection": "",
+   "city": "BROWNSVILLE",
+   "state": "TX",
+   "zip": "78520"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Cameron County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": [
+    {
+     "NAME": "Brownsville city"
+    }
+   ]
+  }
+ },
+ "addressPoints": [],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "100210",
+    "geo_id": "03-0100-0010-0010-00",
+    "legal1": "BROWNSVILLE ORIGINAL TOWNSITE LOT 1 BLK 10",
+    "situsdispl": "1001 E ELIZABETH ST",
+    "acres": 0.165
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -97.4961,
+       25.9012
+      ],
+      [
+       -97.49591717,
+       25.9012
+      ],
+      [
+       -97.49591717,
+       25.90152894
+      ],
+      [
+       -97.4961,
+       25.90152894
+      ],
+      [
+       -97.4961,
+       25.9012
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [
+   {
+    "STUDY_ID": "48061C"
+   }
+  ],
+  "1": [
+   {
+    "DFIRM_ID": "48061C",
+    "LOMR_ID": "48061C_LOMR_1",
+    "CASE_NO": "24-06-1234P",
+    "EFF_DATE": 1735689600000,
+    "STATUS": "Effective"
+   }
+  ],
+  "3": [
+   {
+    "DFIRM_ID": "48061C",
+    "PANEL": "0585",
+    "FIRM_PAN": "48061C0585F",
+    "PANEL_TYP": "Countywide, Panel Printed",
+    "EFF_DATE": 1518739200000,
+    "SCALE": "12000"
+   }
+  ],
+  "28": [
+   {
+    "DFIRM_ID": "48061C",
+    "FLD_ZONE": "AE",
+    "ZONE_SUBTY": null,
+    "SFHA_TF": "T",
+    "STATIC_BFE": 20
+   }
+  ],
+  "34": [
+   {
+    "CASENUMBER": "23-06-0456A",
+    "STATUS": "Determination Issued",
+    "DETERMINATIONTYPE": "LOMA",
+    "DATEENDED": 1690000000000
+   }
+  ]
+ },
+ "zoning": {
+  "cityId": "brownsville",
+  "features": [
+   {
+    "ZoningFNI": "DC"
+   }
+  ]
+ }
+}

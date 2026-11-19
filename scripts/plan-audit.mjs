@@ -5,7 +5,7 @@
 //   node scripts/plan-audit.mjs --program '{"beds":5,...}' [--lot 100x150:mcallen]
 import fs from 'node:fs'
 import { auditPlan, auditDesign } from '../src/draft/lib/audit.js'
-import { generateRooms, DEFAULT_PROGRAM, kitFor, isRoom, floorArea } from '../src/draft/lib/layout.js'
+import { generateRooms, DEFAULT_PROGRAM, kitFor, isRoom, floorArea, normalizeProgram } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { DEFAULT_LOT, buildLot } from '../src/draft/lib/lot.js'
 import { takeoff } from '../src/draft/lib/takeoff.js'
@@ -25,7 +25,8 @@ if (args[0] && !args[0].startsWith('--')) {
 } else {
   const lotArg = args[args.indexOf('--lot') + 1]
   const lot = args.includes('--lot') && lotArg ? (() => { const [dims, city] = lotArg.split(':'); const [w, d] = dims.split('x').map(Number); return buildLot({ kind: 'manual', width: w, depth: d, city: city || 'hidalgo', setbacks: {} }) })() : DEFAULT_LOT
-  program = args.includes('--garza') ? { ...kit.reference.program } : args.includes('--program') ? { ...DEFAULT_PROGRAM, ...JSON.parse(args[args.indexOf('--program') + 1]) } : { ...DEFAULT_PROGRAM }
+  // round 9, item 16: "baths": 3.5 is 3 baths and a half bath here too, not Array(3.5)
+  program = normalizeProgram(args.includes('--garza') ? { ...kit.reference.program } : args.includes('--program') ? { ...DEFAULT_PROGRAM, ...JSON.parse(args[args.indexOf('--program') + 1]) } : { ...DEFAULT_PROGRAM })
   rooms = generateRooms(program, style, lot)
   audit = auditPlan(rooms, program, kit, lot)
   title = `${args.includes('--garza') ? 'Garza sample' : 'first draft'}: ${program.beds} bed, ${program.baths}${program.halfBath ? '.5' : ''} bath, ${program.garage}-car, ${program.sqft} sf on ${lot.address || `${lot.spec.width}x${lot.spec.depth} ${lot.city}`}`

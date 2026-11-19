@@ -6,7 +6,6 @@
 // The frame is design.json's: x along the front, z toward the street (down the page).
 
 import { drivewaySlabs, walkSlabs, lotCoverage } from './site.js'
-import { estimateLines } from './pricing.js'
 
 const IN = 12
 const fmt = (ft) => {
@@ -662,22 +661,23 @@ export function summaryHTML(design, audit, trust, titleBlock = {}) {
   return summaryPage(design, null, audit, trust, titleBlock, { internal: false })
 }
 /** The office's printable "Meeting prep" page: the summary with the estimate block, marked internal. */
-export function meetingPrepHTML(design, price, audit, trust, titleBlock = {}) {
-  return summaryPage(design, price, audit, trust, titleBlock, { internal: true })
+/**
+ * The office's page with a money block the office module computed ({ heading, big, line }); plan-svg itself
+ * never imports the rates, so the homeowner bundle carries none (round 9, item 1). See lib/office.js.
+ */
+export function summaryPageWith(design, audit, trust, titleBlock = {}, money) {
+  return summaryPage(design, null, audit, trust, titleBlock, { internal: true, money })
 }
-function summaryPage(design, price, audit, trust, titleBlock = {}, { internal = false } = {}) {
+function summaryPage(design, price, audit, trust, titleBlock = {}, { internal = false, money: block = null } = {}) {
   const plan = planSVG(design)
   const ab = design.asBuilt || design.program || {}
   const k = (n) => '$' + Math.round(n / 1000).toLocaleString() + 'k'
   const date = new Date(design.createdAt || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const checks = (audit?.groups || []).map((g) => `<li class="${g.ok ? 'ok' : 'bad'}">${g.ok ? '✓' : '✗'} ${esc(g.name)}</li>`).join('')
   const next = (trust?.next || []).map((n) => `<li><b>${esc(n.when)}</b> ${esc(n.what)}</li>`).join('')
-  const money = internal && price
-  const parts = money ? ['living', 'garage', 'porches'].filter((x) => price.parts?.[x] && price.areas?.[x]).map((x) => `${x} $${Math.round(price.parts[x][0]).toLocaleString()}–${Math.round(price.parts[x][1]).toLocaleString()}`) : []
-  const extra = money ? estimateLines(price).map((l) => esc(`${l.label}: ${l.text}`)) : []
-  const priceLine = money ? `$${price.perSf[0]}–${price.perSf[1]}/sf living · ${esc(price.county || 'county not set')}. ${parts.map(esc).join(' · ')}${extra.length ? ' · ' + extra.join(' · ') : ''}. ${esc(price.note)}${price.confirmed ? '' : ' Rates to be confirmed by South Texas Builders.'}` : ''
+  const money = internal && block
   const costBlock = money
-    ? `<h2>${price.confirmed ? 'Price range (office)' : 'Estimate (office)'}</h2>\n  <p class="price">${price.needsCounty ? 'county not set' : `${k(price.low)}–${k(price.high)}`}</p>\n  <p class="fine">${priceLine}</p>`
+    ? `<h2>${esc(block.heading)}</h2>\n  <p class="price">${esc(block.big)}</p>\n  <p class="fine">${esc(block.line)}</p>`
     : `<h2>What it costs</h2>\n  <p>${esc(String(trust?.costLine || 'We go over cost with you at your meeting with the South Texas Builders office.'))}</p>`
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(design.client || 'Your house')} · summary</title>

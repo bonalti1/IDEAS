@@ -155,7 +155,9 @@ test('round 8: the stored program follows the drawn plan after a 5-step chat (Re
     const r = await j(await ana.post(`/api/projects/${id}/change`, { text }))
     if (r.body.applied) applied++
   }
-  assert.ok(applied >= 4, `${applied} of 5 applied`)
+  // round 9: with McAllen's sourced setbacks (20 / 5 / 10) the 2,400 sf re-draft lands on a plan where the 3-car garage and the
+  // wider kitchen are refused for the setback and the foyer; three of the five land, and the stored program must still follow
+  assert.ok(applied >= 3, `${applied} of 5 applied`)
   const detail = await j(await ana.get(`/api/projects/${id}`))
   const drawn = programOf(detail.body.rooms, detail.body.program)
   const stored = detail.body.program

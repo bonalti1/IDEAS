@@ -6,7 +6,6 @@
 import { kitFor, floorArea, isRoom, lotOf, garageFacing } from './layout.js'
 import { decide } from './interpret.js'
 import { auditPlan } from './audit.js'
-import { estimate } from './pricing.js'
 import { buildDesign } from './contract.js'
 import { planSVG } from './plan-svg.js'
 
@@ -98,28 +97,31 @@ export async function optionsForAsync(topic, rooms, program, style, lot, opts = 
   return optionsFor(topic, rooms, program, style, lot, { ...opts, tick })
 }
 
-export function optionsFor(topic, rooms, program, style, lot, { history = [], tick = null, office = false } = {}) {
+// the office passes its own estimator (lib/pricing.js) to get a cost delta per option; the homeowner bundle never
+// imports the rates (round 9, item 1), so without one there is no money on an option
+export function optionsFor(topic, rooms, program, style, lot, { history = [], tick = null, office = false, estimate = null } = {}) {
   const kit = kitFor(style)
   const L = lotOf(lot)
-  const before = { sf: floorArea(rooms, program.stories || 1), cost: office ? estimate({ rooms, program, style, lot }).mid : null }
+  const priced = office && typeof estimate === 'function'
+  const before = { sf: floorArea(rooms, program.stories || 1), cost: priced ? estimate({ rooms, program, style, lot }).mid : null }
   const options = []
   const list = candidates(topic, rooms, kit)
   if (tick) return (async () => {
     for (const c of list) {
       if (options.length >= 4) break
       await tick()
-      tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office })
+      tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office, priced, estimate })
     }
     return { topic, options }
   })()
   for (const c of list) {
     if (options.length >= 4) break
-    tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office })
+    tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office, priced, estimate })
   }
   return { topic, options }
 }
 
-function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office }) {
+function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, history, office, priced, estimate }) {
   {
     // a resize right after an add names the room the add made: give the add that id first
     const ops = c.ops.map((o) => ({ ...o }))
@@ -140,7 +142,7 @@ function tryCandidate(c, options, { rooms, program, style, lot, kit, L, before, 
     // a variant that draws the same house as one already offered is not another option
     if (options.some((o) => sameShape(o.rooms, res.rooms))) return
     const sf = floorArea(res.rooms, program.stories || 1)
-    const money = office ? { cost: Math.round(estimate({ rooms: res.rooms, program, style, lot }).mid - before.cost) } : {}
+    const money = priced ? { cost: Math.round(estimate({ rooms: res.rooms, program, style, lot }).mid - before.cost) } : {}
     options.push({ id: c.id, label: c.label, ops, rooms: res.rooms, sf: Math.round(sf - before.sf), ...money, did: res.did || [], warnings: audit.warnings.length, svg: thumbnail(res.rooms, program, style, lot) })
   }
 }

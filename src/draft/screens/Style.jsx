@@ -15,7 +15,7 @@ export default function Style({ style, onPick, onNext, onBack }) {
             <RoofIcon roof={s.roof} />
             <span className="style-name">{s.name}</span>
             <span className="style-blurb">{s.blurb}</span>
-            <span className={'style-psf' + (s.ready ? '' : ' muted')}>{s.ready ? 'from $115/sf · ready to draft' : 'coming soon'}</span>
+            <span className={'style-psf' + (s.ready ? '' : ' muted')}>{s.ready ? 'ready to draft' : 'coming soon'}</span>
           </button>
         ))}
       </div>

@@ -1,6 +1,6 @@
 // Draft House client flow. Five steps after the start screen. With an account the project is
 // saved on the office API (every version, credits, status); without one it lives in this tab.
-import React, { useEffect, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useState } from 'react'
 import App from '../App.jsx'
 import { Mark } from './ui.jsx'
 import Start from './screens/Start.jsx'
@@ -9,8 +9,9 @@ import Style from './screens/Style.jsx'
 import Program from './screens/Program.jsx'
 import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
-import Admin from './screens/Admin.jsx'
-import Review from './screens/Review.jsx'
+// the office screens are their own chunk: the homeowner app never downloads the review, the dashboard or the rates (round 9, item 1)
+const Admin = lazy(() => import('./screens/Admin.jsx'))
+const Review = lazy(() => import('./screens/Review.jsx'))
 import SignIn from './screens/SignIn.jsx'
 import { DEFAULT_PROGRAM, starterDraft } from './lib/layout.js'
 import { STYLES } from './lib/styles.js'
@@ -233,12 +234,16 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
         <StepBoundary resetKey={step} onBack={() => go(Math.max(0, step - 1))}>
         {admin && (
           <OfficeGate user={user} onUser={setUser}>
-            <Admin />
+            <Suspense fallback={<p className="muted center-text">Loading the office…</p>}>
+              <Admin />
+            </Suspense>
           </OfficeGate>
         )}
         {review && (
           <OfficeGate user={user} onUser={setUser}>
-            <Review user={user} />
+            <Suspense fallback={<p className="muted center-text">Loading the review…</p>}>
+              <Review user={user} />
+            </Suspense>
           </OfficeGate>
         )}
         {lot514 && (
