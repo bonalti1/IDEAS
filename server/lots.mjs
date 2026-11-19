@@ -6,7 +6,7 @@ import { cityTable, CITY_IDS, RULE_FIELDS } from '../src/draft/lib/cities.js'
 import { jurisdictionTable, jurisdictionFor, geoMessage, countyRowId, ALL_FIELDS } from '../src/draft/lib/jurisdictions.js'
 import { buildLot, traverse } from '../src/draft/lib/lot.js'
 
-const fail = (status, error) => Object.assign(new Error(error), { status })
+const fail = (status, error, extra = {}) => Object.assign(new Error(error), { status, ...extra })
 
 export const PLAT_SCHEMA = {
   type: 'object',
@@ -99,6 +99,7 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
   const now = () => new Date().toISOString()
   const fetch = fetchImpl
   const NFHL = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer'
+  let toldGone = false // one alert per process when FEMA's service is gone, not one per lookup
   /** One NFHL layer at a point: the features' attributes (empty when none). */
   async function nfhl(layer, lon, lat, outFields, { soft = false } = {}) {
     const q = new URLSearchParams({ geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields, returnGeometry: 'false', f: 'json' })
@@ -110,15 +111,24 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
     for (let attempt = 0; ; attempt++) {
       try {
         const r = await fetch(`${NFHL}/${layer}/query?${q}`, { signal: AbortSignal.timeout(8000) })
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        // round 12, item 6: an outage (a reset, a timeout, a 5xx) is worth another try and passes; an answer that
+        // says the address or the layer is not there (a 4xx, or ArcGIS's own error for a layer or a field) is FEMA
+        // having moved its service, which waiting does not mend
+        if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { gone: r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429 })
         body = await r.json()
-        if (body.error) throw new Error(body.error.message || 'query error')
+        if (body.error) throw Object.assign(new Error(body.error.message || 'query error'), { gone: !(+body.error.code >= 500) })
         break
       } catch (e) {
         if (e?.code === 'DH_NETWORK_GUARD') throw e
-        const last = soft || attempt >= femaBackoffMs.length // a soft layer (availability, LOMRs, LOMAs) gets one try
-        log(`flood: FEMA NFHL layer ${layer} did not answer (${String(e?.cause?.code || e?.message || e).slice(0, 80)})${last ? '' : `; trying again in ${femaBackoffMs[attempt]} ms`}`)
-        if (last) throw fail(502, FEMA_DOWN, { upstream: 'fema' })
+        const gone = e?.gone === true
+        const last = soft || gone || attempt >= femaBackoffMs.length // a soft layer (availability, LOMRs, LOMAs) gets one try
+        const detail = String(e?.cause?.code || e?.message || e).slice(0, 80)
+        log(`flood: FEMA NFHL layer ${layer} ${gone ? 'answered, but not with data' : 'did not answer'} (${detail})${last ? '' : `; trying again in ${femaBackoffMs[attempt]} ms`}`)
+        if (gone && !soft && !toldGone) {
+          toldGone = true
+          await event('alert', `FEMA's flood map service answered layer ${layer} with "${detail}": the service has moved or a layer is gone, and every flood lookup fails until server/lots.mjs is pointed at the new one`).catch(() => {})
+        }
+        if (last) throw fail(502, FEMA_DOWN, { upstream: 'fema', why: gone ? 'gone' : 'outage', detail: `layer ${layer}: ${detail}` })
         await new Promise((ok) => setTimeout(ok, femaBackoffMs[attempt]))
       }
     }

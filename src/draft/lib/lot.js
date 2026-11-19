@@ -123,7 +123,27 @@ function clipHalfPlane(poly, p0, nrm) {
  * run's deepest point. Every point past that line is at least the setback from every point of the run, so it is
  * still the safe side. The run takes whichever of the two leaves more room.
  */
+const envelopeKept = new Map()
+const envelopeWork = { made: 0, reused: 0, runsTried: 0 }
+/** How many envelopes were worked out, answered from the kept ones, and how many runs were tried (for the tests). */
+export const envelopeStats = () => ({ ...envelopeWork })
 export function envelopeOf(boundary, setbackPerEdge) {
+  // round 12, item 5: the same outline and setbacks give the same envelope, and a lot is rebuilt on every save and
+  // every keystroke of the Lot step: the last 64 are kept. Callers get their own copy of the points.
+  const key = JSON.stringify([boundary, setbackPerEdge])
+  let hit = envelopeKept.get(key)
+  if (hit) {
+    envelopeKept.delete(key)
+    envelopeWork.reused++
+  } else {
+    hit = envelopeNow(boundary, setbackPerEdge)
+    envelopeWork.made++
+    if (envelopeKept.size >= 64) envelopeKept.delete(envelopeKept.keys().next().value)
+  }
+  envelopeKept.set(key, hit)
+  return hit.map((p) => [...p])
+}
+function envelopeNow(boundary, setbackPerEdge) {
   const n = boundary.length
   const area = (poly) => (poly.length >= 3 ? Math.abs(polygonArea(poly)) : 0)
   const inwardOf = (i) => {
@@ -180,13 +200,15 @@ export function envelopeOf(boundary, setbackPerEdge) {
     const i = (start + k) % n
     run.push(i)
     if (!joins(i) || turn(run[0], (i + 1) % n) >= 120) {
-      if (run.length > 1) found.push(run)
+      // a curve is three chords or more (round 12): two edges meeting at a shallow angle are left edge by edge
+      if (run.length >= 3) found.push(run)
       run = []
     }
   }
   let kept = []
   let bestSf = area(best)
   for (const r of found) {
+    envelopeWork.runsTried++
     const cand = clip([...kept, r])
     if (area(cand) > bestSf + 1) {
       best = cand

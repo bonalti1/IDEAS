@@ -4,7 +4,8 @@
 // Money never reaches a homeowner from here (round 8, P0b): the office estimate is drafter-only and
 // ownerView strips every price-shaped field as a backstop.
 import crypto from 'node:crypto'
-import { zoningBlocksSend } from '../src/draft/lib/lot.js'
+import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
+import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
 import { decide, dropUnsupported, editsOf, netsToNothing } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply } from '../src/draft/lib/ops.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
@@ -24,6 +25,28 @@ export const MEETING_THANKS = `Thanks! The office will reach out within 1 busine
 export const MORE_CHANGES_THANKS = `Done. The office has your request and usually adds more within 1 business day. You can also call ${OFFICE_PHONE}.`
 export const OUT_OF_CHANGES = "You've used the free changes on this plan. The office will add more for you. Want me to let them know?"
 export const REQUEST_KINDS = ['meeting', 'more-changes']
+
+/**
+ * How far apart two outlines are, in feet: the largest gap between matching corners when both are walked from the
+ * same start. Infinity when the counts differ or one cannot be walked (round 12, item 2).
+ */
+export function outlineGapFt(a, b) {
+  try {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length < 3) return Infinity
+    const A = traverse(a).corners
+    const B = traverse(b).corners
+    if (A.length !== B.length) return Infinity
+    let d = 0
+    for (let i = 0; i < A.length; i++) d = Math.max(d, Math.hypot(A[i][0] - B[i][0], A[i][1] - B[i][1]))
+    return d
+  } catch {
+    return Infinity
+  }
+}
+// what a parcel lot takes from the county's record and never from a browser (round 12, items 1 and 2)
+const COUNTY_KEYS = ['calls', 'streets', 'front', 'kinds', 'cornerLot', 'frontBy', 'frontWidthFt', 'propId', 'geoId', 'legal', 'acres', 'source', 'parcelFetchedAt', 'matchedBy', 'confidence', 'interior']
+const SERVER_KEYS = [...COUNTY_KEYS, 'listedAs', 'situs', 'outlineBy', 'addressGives']
+const sameText = (a, b) => String(a || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(b || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 export function makeProjects({ env = process.env, store, interpreter, event, logInterpret, lots, alerts = null, parcels = null, zoning = null }) {
   // free changes a new plan starts with; the office changes the default on the dashboard (store.meta)
@@ -131,13 +154,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
      * an "unknown" record when it could not be read (the drafter's confirmation reads it again). mayLookup says whether
      * an outside call may be made for it now (the homeowner's lookup limit); a drafter's read always may.
      */
-    async readZoning(spec, { mayLookup = () => true } = {}) {
+    async readZoning(spec, { mayLookup = () => true, own = undefined } = {}) {
       if (!zoning || !parcels || spec?.kind !== 'parcel' || spec.propId == null || spec.propId === '') return null
       const unread = (reason) => ({ status: 'unknown', district: null, residential: null, reason, readBy: 'server', at: now() })
       let allowed
       const may = () => (allowed ??= !!mayLookup())
       try {
-        let rec = spec.address ? await parcels.cached(spec.address) : null
+        let rec = own?.rec || null
+        if (!rec) rec = spec.address ? await parcels.cached(spec.address) : null
         if (!rec || String(rec.propId) !== String(spec.propId)) {
           const county = spec.county || rec?.county
           if (!county) return unread('no county on the lot; the drafter reads the zoning')
@@ -154,6 +178,70 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
     },
     /**
+     * The zoning of a plat lot (round 12, item 3): a plat carries no parcel of its own, so the district is read at the
+     * point the Census geocoder gives for the address. That point can sit on the street, so the review card shows it
+     * for the drafter to confirm or change.
+     */
+    async readPlatZoning(spec) {
+      if (!zoning || spec?.kind !== 'plat') return null
+      const unread = (reason) => ({ status: 'unknown', district: null, residential: null, reason, readBy: 'server', readAt: 'the address point', at: now() })
+      if (!spec.address) return unread('no address on the lot; the drafter reads the zoning')
+      try {
+        const geo = (await lots.geocodeCached?.(spec.address)) || (await lots.geocode(spec.address))
+        if (!geo?.found) return unread('the address was not found on the map; the drafter reads the zoning')
+        const z = await zoning.lookup({ cityId: geo.cityId || spec.city || '', lat: geo.lat, lon: geo.lon })
+        const { raw, cached, ...keep } = z
+        return { ...keep, readBy: 'server', readAt: 'the address point' }
+      } catch (e) {
+        return unread(e?.status === 502 ? String(e.message) : 'the zoning could not be read; the drafter reads it')
+      }
+    },
+    /**
+     * The server's own record of the parcel a lot names (round 12): the cached answer to the address when it led to
+     * this parcel (byAddress, with how it matched), else the parcel by its id. null when it cannot be read now.
+     */
+    async serverParcel(spec, { mayLookup = () => true } = {}) {
+      if (!parcels || spec?.kind !== 'parcel' || spec.propId == null || spec.propId === '') return null
+      const hit = spec.address ? await parcels.cached(spec.address).catch(() => null) : null
+      if (hit && String(hit.propId) === String(spec.propId)) return { rec: hit, byAddress: true, addressGives: null }
+      const county = spec.county || hit?.county
+      if (!county) return null
+      const rec = (await parcels.byId({ county, propId: spec.propId, cachedOnly: true }).catch(() => null)) || (mayLookup() ? await parcels.byId({ county, propId: spec.propId }).catch(() => null) : null)
+      return rec?.match === 'one' ? { rec, byAddress: false, addressGives: hit ? String(hit.propId) : null } : null
+    },
+    /**
+     * A parcel lot rebuilt from the county's record (round 12, items 1 and 2): the outline, the street side, the edge
+     * kinds, the ids, the legal description, and how the address matched (a near match with the address the county
+     * lists) all come from the server's copy. Returns how far the outline that was sent sat from the county's.
+     */
+    async countyLot(spec, own) {
+      const sent = spec.calls
+      const geo = spec.address ? await lots.geocodeCached?.(spec.address) : null
+      const fresh = parcelSpec(own.rec, { address: spec.address, city: spec.city, county: spec.county || own.rec.county, geo })
+      for (const k of COUNTY_KEYS) spec[k] = fresh[k] ?? null
+      // the address did not lead the server to this parcel: it was picked, whatever the browser says
+      if (!own.byAddress) Object.assign(spec, { matchedBy: 'pick', confidence: 'pick' })
+      spec.listedAs = own.byAddress && own.rec.confidence === 'near' ? own.rec.listedAs || own.rec.situs || null : null
+      spec.situs = own.rec.situs || null
+      spec.addressGives = own.addressGives || null
+      spec.outlineBy = 'county'
+      return outlineGapFt(sent, spec.calls)
+    },
+    /**
+     * The lot as the server builds it from a spec (round 12, item 2): its area, buildable area, edges and closure are
+     * worked out here, so what a drafter reads on the review card never comes from a browser's arithmetic. A spec
+     * that cannot be built is handed back as sent; checkLot refuses it with the reason.
+     */
+    async builtLot(lot, spec) {
+      if (!spec || spec.kind === 'reference') return lot
+      try {
+        const built = await lots.lotOfProject({ lot: { spec, plat: lot.plat || null } })
+        return built?.boundary ? { ...lot, ...built, plat: lot.plat || null } : lot
+      } catch {
+        return lot
+      }
+    },
+    /**
      * A lot as a homeowner's browser may send it (rounds 10 and 11): the drafter's marks and the zoning are never
      * taken from the browser. A confirmed lot keeps its confirmation, and any lot its stored zoning, only while its
      * outline (and the parcel it names) is the one already stored. A parcel lot that is new or changed gets its zoning
@@ -161,17 +249,42 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
      */
     async ownerLot(lot, prev = null, { mayLookup } = {}) {
       if (!lot?.spec || typeof lot.spec !== 'object') return lot
-      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, ...spec } = lot.spec
+      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, listedAs, situs, outlineBy, addressGives, ...spec } = lot.spec
       const was = prev?.spec || null
+      if (spec.kind === 'parcel') {
+        // round 12: a parcel lot is the county's record, not what the browser drew. The stored lot stays while the
+        // browser sends the same parcel, address and outline (within a foot) and the stored one is the county's, a
+        // drafter's, or confirmed; anything else is rebuilt from the server's own copy of the parcel.
+        const same = !!was && was.kind === 'parcel' && String(was.propId ?? '') === String(spec.propId ?? '') && sameText(was.address, spec.address) && outlineGapFt(was.calls, spec.calls) <= 1
+        if (same && (was.confirmed || was.outlineBy === 'county' || was.outlineBy === 'drafter')) {
+          for (const k of SERVER_KEYS) spec[k] = was[k] ?? null
+          if (was.confirmed) Object.assign(spec, { confirmed: true, confirmedBy: was.confirmedBy || null, confirmedAt: was.confirmedAt || null, confirmNote: was.confirmNote || null, setbacks: was.setbacks || spec.setbacks })
+          else spec.confirmed = false
+          spec.zoning = was.zoning || (await this.readZoning(spec, { mayLookup }))
+        } else {
+          spec.confirmed = false
+          const own = await this.serverParcel(spec, { mayLookup })
+          if (own) {
+            const sides = Array.isArray(spec.calls) ? spec.calls.length : 0
+            const gap = await this.countyLot(spec, own)
+            if (gap > 1) await event('lot', `parcel ${spec.propId} (${String(spec.address || 'no address').slice(0, 80)}): the outline sent by the browser ${Number.isFinite(gap) ? `sat ${gap.toFixed(1)} ft off the county's` : `had ${sides} sides, the county's has ${spec.calls.length}`}; the county's outline was used`)
+          } else {
+            // the county could not be read now: the lot waits for the drafter, and nothing about the match is taken on trust
+            Object.assign(spec, { matchedBy: null, confidence: 'unchecked', listedAs: null, situs: null, addressGives: null, outlineBy: 'browser' })
+          }
+          spec.zoning = await this.readZoning(spec, { mayLookup, own })
+        }
+        return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
+      }
       const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null) && String(was.propId ?? '') === String(spec.propId ?? '')
-      if (spec.kind === 'plat' || spec.kind === 'parcel') {
+      if (spec.kind === 'plat') {
         if (sameOutline && was.confirmed) Object.assign(spec, { confirmed: true, confirmedBy: was.confirmedBy || null, confirmedAt: was.confirmedAt || null, confirmNote: was.confirmNote || null, setbacks: was.setbacks || spec.setbacks })
         else spec.confirmed = false
       }
       if (sameOutline && was.zoning) spec.zoning = was.zoning
       else if (was?.zoning?.confirmedBy && was.kind === spec.kind && spec.kind === 'manual') spec.zoning = was.zoning // a drafter's zoning on a typed lot stays with the plan
-      else spec.zoning = spec.kind === 'parcel' ? await this.readZoning(spec, { mayLookup }) : null
-      return { ...lot, spec, zoning: spec.zoning || null, ...(spec.kind === 'plat' || spec.kind === 'parcel' ? { confirmed: !!spec.confirmed } : {}) }
+      else spec.zoning = null
+      return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, ...(spec.kind === 'plat' ? { confirmed: !!spec.confirmed } : {}) }
     },
     /** A lot spec the office cannot build is refused at the door, not on the first change. */
     async checkLot(lot) {
@@ -500,13 +613,34 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       // round 11, item 1: the lot is confirmed with its zoning. The server reads the district again at the parcel (a
       // drafter's read is never limited); a read that fails keeps the one already stored. The zoning it confirmed
       // carries who confirmed it, so nothing a browser sends later can replace it.
-      if (confirmed) {
-        const fresh = await this.readZoning(next)
+      // round 12: a parcel lot the drafter did not correct by hand is the county's record. One stored before the server
+      // rebuilt outlines (or while the county did not answer) is rebuilt now; calls a drafter typed are the drafter's.
+      let own
+      let rebuilt = false
+      if (next.kind === 'parcel') {
+        if (spec?.calls) next.outlineBy = 'drafter'
+        else if (next.outlineBy !== 'county' && next.outlineBy !== 'drafter') {
+          own = await this.serverParcel(next)
+          if (own) {
+            const gap = await this.countyLot(next, own)
+            rebuilt = gap > 1
+            if (gap > 1) await event('lot', `${p.client}: the stored outline of parcel ${next.propId} sat ${Number.isFinite(gap) ? gap.toFixed(1) + ' ft' : 'a different number of sides'} off the county's; the county's outline was used`, { projectId: p.id })
+          }
+        }
+      }
+      if (confirmed && next.kind === 'parcel') {
+        const fresh = await this.readZoning(next, { own })
         const z = fresh && fresh.status !== 'unknown' ? fresh : next.zoning || fresh
         next.zoning = z ? { ...z, confirmedBy: drafter.email, confirmedAt: now() } : null
       }
+      // round 12, item 3: a plat lot gets its zoning read when it is confirmed, at the address's map point. It is
+      // not stamped as the drafter's: the review card shows it to confirm or change. A district a drafter entered stays.
+      if (confirmed && next.kind === 'plat' && !next.zoning?.confirmedBy) {
+        const fresh = await this.readPlatZoning(next)
+        next.zoning = fresh && fresh.status !== 'unknown' ? fresh : next.zoning || fresh
+      }
       const lot = { ...(await lots.lotOfProject({ lot: { spec: next, plat: p.lot.plat } })), plat: p.lot.plat || null }
-      const changed = spec && JSON.stringify(spec) !== '{}'
+      const changed = (spec && JSON.stringify(spec) !== '{}') || rebuilt
       p.lot = lot
       p.address = lot.address || p.address
       p.updatedAt = now()

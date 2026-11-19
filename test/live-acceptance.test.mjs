@@ -6,7 +6,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeParcels } from '../server/parcels.mjs'
-import { makeLots, FEMA_DOWN } from '../server/lots.mjs'
+import { makeLots } from '../server/lots.mjs'
+import { floodFailure, checkFloodSkips } from './live-flood.mjs'
 import { makeZoning } from '../server/zoning.mjs'
 import { TEST_ADDRESSES } from '../server/parcel-sources.mjs'
 
@@ -58,7 +59,8 @@ test('live: the acceptance addresses resolve to the right parcel, front, flood z
       if (t.expect.flood) assert.equal(flood.status, t.expect.flood, `${t.address}: flood ${flood.status} (${flood.note})`)
       if (t.expect.firm) assert.equal(flood.firm, t.expect.firm, `${t.address}: FIRM`)
     } catch (e) {
-      if (e.message !== FEMA_DOWN) throw e
+      // round 12, item 6: only an outage is a skip; FEMA gone (a 404, a bad layer) fails here
+      floodFailure(e, t.address)
       floodSkipped++
     }
     const place = (r.census?.place || '').trim()
@@ -68,7 +70,8 @@ test('live: the acceptance addresses resolve to the right parcel, front, flood z
     report.push(`${t.address}: ${r.propId} ${r.legal} ${r.areaSf} sf, front ${r.frontWidthFt} ft${r.frontChords > 1 ? ` in ${r.frontChords} pieces` : ''} on ${r.frontStreet}${r.corner ? ' (corner: ' + r.streets.filter((x) => x.role === 'side').map((x) => x.name).join(', ') + ')' : ''}, flood ${flood.status}${flood.firm ? ' ' + flood.firm : ''}, zoning ${z.district || 'n/a'}, matched by ${r.matchedBy}${r.confidence === 'near' ? ' (near: listed as ' + r.listedAs + ')' : ''}`)
   }
   console.log(report.join('\n'))
-  if (floodSkipped) t.diagnostic(`FEMA did not answer for ${floodSkipped} of ${TEST_ADDRESSES.length} addresses: the flood check was skipped for those (a FEMA outage, not a failure here)`)
+  const note = checkFloodSkips(floodSkipped, TEST_ADDRESSES.length) // throws when more than half were skipped
+  if (note) t.diagnostic(note)
 })
 
 test('live: a commercial McAllen lot and downtown Brownsville are not house districts; Mission has no layer', { skip, timeout: 120000 }, async () => {

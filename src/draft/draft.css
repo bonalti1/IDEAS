@@ -259,6 +259,8 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .lot-side details.setbacks .row2 { flex-wrap: wrap; }
 .lot-side details.setbacks .field { flex: 1 1 40%; }
 .fine.warn { color: #9a6b12; }
+/* what a drafter must check before confirming a lot (round 12): a yellow line */
+.warnline { background: #fdf5dc; border: 1px solid #e3b23c; border-radius: 8px; padding: 8px 10px; color: #7a5200; }
 .lot-view { background: #ebe9e5; overflow: auto; }
 .plat-preview { position: relative; width: 100%; height: 100%; overflow: auto; background: #d9d6d0; }
 .plat-preview canvas { display: block; max-width: 100%; height: auto; margin: 0 auto; }

@@ -23,6 +23,7 @@ function Asks({ p }) {
   )
 }
 import RulesPanel from '../RulesPanel.jsx'
+import { lotMatchNotes } from '../lib/parcel-spec.js'
 
 const ago = (iso) => {
   if (!iso) return ''
@@ -144,13 +145,16 @@ export default function Review({ user }) {
   // round 10, item 4: a typed lot carries no zoning of its own; the drafter reads the city map and says what it is
   const [zoneDistrict, setZoneDistrict] = useState('')
   const [zoneHouse, setZoneHouse] = useState(true)
+  const [zoneEdit, setZoneEdit] = useState(false)
   const confirmZoning = async (clear = false) => {
     setBusy(true)
     setError('')
     try {
-      const p = await api.confirmZoning(open.id, clear ? { clear: true } : { district: zoneDistrict, residential: zoneHouse })
+      // `as` confirms the district the server read, as it stands (round 12, item 3)
+      const p = await api.confirmZoning(open.id, clear === true ? { clear: true } : clear && clear.district ? { district: clear.district, residential: clear.residential !== false, use: clear.use || undefined } : { district: zoneDistrict, residential: zoneHouse })
       setOpen(p)
       setZoneDistrict('')
+      setZoneEdit(false)
     } catch (e) {
       setError(e.message)
     }
@@ -309,6 +313,11 @@ export default function Review({ user }) {
                 {open.lot.spec.kind === 'parcel' ? `${open.lot.spec.legal || `Parcel ${open.lot.spec.propId}`}${open.lot.spec.geoId ? ` (geo id ${open.lot.spec.geoId})` : ''}, ${open.lot.spec.source?.name || 'county appraisal district'}${open.lot.spec.parcelFetchedAt ? `, fetched ${String(open.lot.spec.parcelFetchedAt).slice(0, 10)}` : ''}, matched by ${open.lot.spec.matchedBy || 'address'}. ` : open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
                 {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind === 'plat' ? ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.` : ' The parcel map is advisory: check it against the recorded plat or the survey.'}
               </p>
+              {lotMatchNotes(open.lot.spec).map((line, i) => (
+                <p key={i} className="small warnline" data-testid="lot-match-note">
+                  {line}
+                </p>
+              ))}
               <ol className="list small">
                 {open.lot.spec.calls?.map((c, i) => (
                   <li key={i}>
@@ -340,6 +349,55 @@ export default function Review({ user }) {
                     </Button>
                   </div>
                 </>
+              )}
+            </div>
+          )}
+          {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && (
+            <div className={'card thin' + (open.lot.zoning?.residential === false ? ' pending' : '')} data-testid="zoning-read">
+              <h3>Zoning</h3>
+              {open.lot.zoning?.district ? (
+                <p className="small">
+                  <b>{open.lot.zoning.district}</b>
+                  {open.lot.zoning.use ? ` (${open.lot.zoning.use})` : ''},{' '}
+                  {open.lot.zoning.confirmedBy
+                    ? `confirmed by ${open.lot.zoning.confirmedBy}`
+                    : open.lot.spec.kind === 'plat'
+                      ? "read from the city map at the address's map point, which can sit on the street or on the lot next door: confirm or change"
+                      : 'read from the city map at the parcel; it is confirmed with the lot'}
+                  . {open.lot.zoning.residential === false ? 'Send is blocked for this plan until the office has called the client.' : 'A house district: nothing blocked.'}
+                </p>
+              ) : (
+                <p className="fine">
+                  {open.lot.spec.kind === 'plat' && !open.lot.spec.confirmed ? 'The zoning of a plat lot is read when you confirm the lot.' : `No zoning was read for this lot${open.lot.zoning?.reason ? ` (${open.lot.zoning.reason})` : ''}.`} You can read the city zoning map and enter the district here.
+                </p>
+              )}
+              {zoneEdit || !open.lot.zoning?.district ? (
+                <>
+                  <div className="row2">
+                    <label className="field">
+                      <span>District</span>
+                      <input id="zone-district" value={zoneDistrict} onChange={(e) => setZoneDistrict(e.target.value)} placeholder="R-1, C-3…" />
+                    </label>
+                    <label className="confirm">
+                      <input id="zone-house" type="checkbox" checked={zoneHouse} onChange={(e) => setZoneHouse(e.target.checked)} />
+                      <span>A house district</span>
+                    </label>
+                  </div>
+                  <Button small primary disabled={busy || !zoneDistrict.trim()} onClick={() => confirmZoning(false)}>
+                    Confirm zoning
+                  </Button>
+                </>
+              ) : (
+                <div className="row2">
+                  {!open.lot.zoning.confirmedBy && (
+                    <Button small primary disabled={busy} onClick={() => confirmZoning(open.lot.zoning)} data-testid="zoning-as-read">
+                      Confirm {open.lot.zoning.district}
+                    </Button>
+                  )}
+                  <Button small ghost disabled={busy} onClick={() => setZoneEdit(true)} data-testid="zoning-change">
+                    Change
+                  </Button>
+                </div>
               )}
             </div>
           )}

@@ -57,7 +57,35 @@ function heightOnGable(g, x, z) {
  * footprint: MultiPolygon in plan, edges: outer eave/rake lines for fascia,
  * material }. Ends: vertical gable triangles { id, mass, kind: 'end', axis, at, tri }.
  */
+// Round 12, item 5: the roof is worked out twice for every plan the fit tries (once for its faces, once for its
+// dormer walls), and again whenever a step hands on the same masses unmoved. Round 11's hips and run-ins made each
+// pass heavier, and the 16-case fit went from about 950 ms to about 1,550 ms. The same masses give the same roof, so
+// the last few answers are kept. What comes back is shared: callers read it, they do not change it.
+const KEPT = 48
+const sheetCache = new Map()
+const faceCache = new Map()
+const keyOf = (masses, k, centre, offset) => JSON.stringify([masses, k, centre, offset])
+const work = { made: 0, reused: 0 }
+/** How many roofs were worked out and how many were answered from the kept ones (for the tests). */
+export const roofWork = () => ({ ...work })
+function kept(cache, key, make) {
+  if (cache.has(key)) {
+    const hit = cache.get(key)
+    cache.delete(key)
+    cache.set(key, hit)
+    if (cache === sheetCache) work.reused++
+    return hit
+  }
+  if (cache === sheetCache) work.made++
+  const out = make()
+  cache.set(key, out)
+  if (cache.size > KEPT) cache.delete(cache.keys().next().value)
+  return out
+}
 export function roofSheets(masses, k, centre, offset = [0, 0]) {
+  return kept(sheetCache, keyOf(masses, k, centre, offset), () => roofSheetsNow(masses, k, centre, offset))
+}
+function roofSheetsNow(masses, k, centre, offset = [0, 0]) {
   const sheets = []
   const ends = []
   const cutEdges = [] // { mass, a: [x, z], b: [x, z], out: [nx, nz] } edges of cut-outs, normal pointing into the remaining roof
@@ -286,6 +314,10 @@ function clipMulti(mp, fa, fb, fc) {
  * another mass's sheet is higher. Returns faces with 3D rings.
  */
 export function roofSurfaces(masses, k, centre, offset = [0, 0]) {
+  // a fresh list each time (a caller may add to its own), over the kept faces
+  return [...kept(faceCache, keyOf(masses, k, centre, offset), () => roofSurfacesNow(masses, k, centre, offset))]
+}
+function roofSurfacesNow(masses, k, centre, offset = [0, 0]) {
   const { sheets, ends, cutEdges } = roofSheets(masses, k, centre, offset)
   const faces = []
   sheets.forEach((A) => {
@@ -449,5 +481,5 @@ function insideRing(r, x, z) {
 
 /** Dormer faces as walls: { x0, x1, face, top, base } in local feet. */
 export function dormerWalls(masses, k, centre, offset = [0, 0]) {
-  return roofSheets(masses, k, centre, offset).sheets.filter((s) => s.dormer).map((s) => s.dormer)
+  return roofSheets(masses, k, centre, offset).sheets.filter((s) => s.dormer).map((s) => ({ ...s.dormer }))
 }
