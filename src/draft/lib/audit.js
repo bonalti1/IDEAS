@@ -8,7 +8,7 @@
 // Plan feet throughout (x from the left, y toward the street). Returns readable findings.
 import { isRoom, kitFor, insideLot, lotOf } from './layout.js'
 import { withPlanCoords } from './ops.js'
-import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength, insideLotFrame } from './site.js'
+import { drivewaySlabs, drivewayProblem, frameOf, drivewayLength, insideLotFrame, walkSlabs } from './site.js'
 
 const BEDROOMS = ['bed', 'master', 'suite2']
 const BATHS = ['bath', 'mbath', 'jackjill', 'halfbath']
@@ -639,6 +639,74 @@ export function auditPlan(rooms, program, kit, lot) {
     if (!ahead) say('service-front', 'warn', home, `${home.name} has a window on the street front; keep the service rooms off the front wall.`)
   })
 
+  // n) the lot's own rules (round 7, item 8): coverage (with the driveway and walk where the city counts them),
+  //    height and stories, today's minimum lot, zoning, an unplatted tract, the garage door's distance to the
+  //    street line, and the flood zone. Each finding names the rule row and its source for the "Rules used" panel.
+  if (lot && lot.boundary && lot.rules) {
+    const rules = lot.rules
+    const used = Object.fromEntries((lot.rulesUsed || []).map((u) => [u.id, u]))
+    const cite = (id) => (used[id] ? { id, value: used[id].value, source: used[id].source, status: used[id].status } : { id })
+    const tell = (id, severity, message, rule) => findings.push({ id, severity, room: null, message, rule })
+    const solidSf = R.reduce((a, r) => a + r.w * r.d, 0)
+    const porchSf = porches.reduce((a, r) => a + r.w * r.d, 0)
+    let flatSf = 0
+    try {
+      const frame = frameOf(flat, K.plan ? [K.plan.footprint.w / 2, K.plan.footprint.d / 2] : [0, 0])
+      const drive = drivewaySlabs(frame.rooms, frame.doors, lot)
+      flatSf = [...drive, ...walkSlabs(frame.rooms, frame.doors, lot, drive)].reduce((a, s) => a + s.w * s.d, 0)
+    } catch {
+      flatSf = 0
+    }
+    const maxCov = rules.maxCoverage ?? 0.5
+    const counted = solidSf + porchSf + (rules.coverageIncludesImpervious ? flatSf : 0)
+    measures.coverage = { footprintSf: Math.round(solidSf + porchSf), flatworkSf: Math.round(flatSf), countedSf: Math.round(counted), lotSf: Math.round(lot.areaSf), pct: Math.round((counted / lot.areaSf) * 1000) / 10, maxPct: Math.round(maxCov * 100), includesImpervious: !!rules.coverageIncludesImpervious }
+    if (counted > lot.areaSf * maxCov + 1) tell('coverage', 'error', `The house${rules.coverageIncludesImpervious ? ', driveway and walk' : ' and porches'} cover ${Math.round((counted / lot.areaSf) * 100)}% of the lot (${Math.round(counted).toLocaleString()} of ${Math.round(lot.areaSf).toLocaleString()} sf); ${lot.cityName || 'the city'} allows ${Math.round(maxCov * 100)}%${rules.coverageIncludesImpervious ? ', counting paving' : ''}.`, cite('maxCoverage'))
+    // height: plates per story plus the roof rise over half the narrowest house depth; the drafter checks the real ridge
+    const stories = program?.stories || 1
+    const plate = K.plates?.default || 9
+    const xs = R.map((r) => [r.x, r.x + r.w]).flat()
+    const ys = R.map((r) => [r.y, r.y + r.d]).flat()
+    const span = R.length ? Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) : 0
+    const rise = +(String(K.roof?.pitch || '8:12').split(':')[0]) / 12
+    const ridge = stories * plate + stories * 1 + (Math.min(span, 40) / 2) * rise
+    measures.height = { ridgeFt: Math.round(ridge * 10) / 10, maxFt: rules.maxHeightFt ?? null, stories, maxStories: rules.maxStories ?? null }
+    if (rules.maxStories && stories > rules.maxStories) tell('height', 'error', `${stories} stories; ${lot.cityName || 'the city'} allows ${rules.maxStories}${rules.maxStories === 1 ? ' story' : ' stories'} here.`, cite('maxStories'))
+    else if (rules.maxHeightFt && ridge > rules.maxHeightFt + 0.5) tell('height', 'warn', `The ridge runs about ${Math.round(ridge)} ft (${stories} ${stories === 1 ? 'story' : 'stories'} at ${plate} ft plates, ${K.roof?.pitch || '8:12'} roof); the limit is ${rules.maxHeightFt} ft. The drafter checks the real ridge or flattens the roof.`, cite('maxHeightFt'))
+    ;(lot.flags || []).forEach((f) => {
+      if (/minimum lot size/.test(f)) tell('min-lot', 'warn', `The lot is ${f}`, cite('minLotSf'))
+      else if (/minimum lot width/.test(f)) tell('min-lot', 'warn', `The lot is ${f}`, cite('minLotWidth'))
+      else if (/platting needed/.test(f)) tell('unplatted', 'warn', `No recorded subdivision in the legal description${lot.parcel?.legal ? ` ("${lot.parcel.legal}")` : ''}: the tract is platted before a permit is issued. The drafter starts that with the county.`, { id: 'platting', source: 'Texas Local Government Code ch. 212 and the county subdivision rules' })
+    })
+    if (lot.zoning?.residential === false) tell('zoning', 'error', `This lot is zoned ${lot.zoning.district} (${lot.zoning.use}). A house may need a rezoning; ask the office to call you.`, { id: 'district', value: lot.zoning.district, source: lot.zoning.layer || 'the city zoning map' })
+    // the garage door's distance to the street line: a car parks outside the door without blocking the sidewalk
+    const garageFt = rules.garageFt
+    if (garageFt) {
+      R.filter((r) => r.kind === 'garage' && r.local).forEach((g) => {
+        doors.filter((d) => (d.size === 'overhead' || d.size === 'overheadSingle') && d.room === g.id).forEach((d) => {
+          const [cx, cy] = centre(d)
+          const onFront = d.axis === 'h' && Math.abs(cy - (g.y + g.d)) < 0.4
+          const onSide = d.axis === 'v'
+          if (onSide && rules.garageSideEntryExempt) return
+          const lx = g.local[0] + (cx - (g.x + g.w / 2))
+          const lz = g.local[1] + (cy - (g.y + g.d / 2))
+          let out = 0
+          if (onFront) while (out < 60 && insideLotFrame(lot, lx, lz + out + 0.25)) out += 0.25
+          else if (onSide) {
+            const east = cx > g.x + g.w / 2
+            while (out < 60 && insideLotFrame(lot, lx + (east ? 1 : -1) * (out + 0.25), lz)) out += 0.25
+          } else return
+          measures.garageDoorFt = Math.round(out * 10) / 10
+          if (out < garageFt - 0.05) tell('garage-setback', 'error', `${g.name}'s overhead door is ${Math.round(out * 10) / 10} ft from the property line; ${lot.cityName || 'the city'} asks ${garageFt} ft so a car can park outside the door.`, cite('garageFt'))
+        })
+      })
+    }
+    if (lot.flood?.status === 'no-digital-firm' || (lot.flood && lot.flood.sfha === null && lot.flood.zone === null && lot.flood.status !== 'no-address')) tell('flood', 'warn', 'FEMA has no digital flood map for this spot; the county floodplain administrator sets the slab height. The office asks before the slab is set.', { id: 'flood', source: 'FEMA National Flood Hazard Layer, availability layer 0' })
+    else if (lot.flood?.sfha === true) tell('flood', 'warn', `Inside a FEMA special flood hazard area (zone ${lot.flood.zone}${lot.flood.bfe != null ? `, base flood elevation ${lot.flood.bfe} ft` : ''}): the slab elevation and flood insurance follow the base flood elevation.`, { id: 'flood', source: 'FEMA National Flood Hazard Layer, layer 28' })
+    else if (lot.flood?.status === 'shaded-x') tell('flood', 'warn', 'Zone X (shaded), the 0.2% annual-chance flood area: lenders and the city may ask for an elevation certificate.', { id: 'flood', source: 'FEMA National Flood Hazard Layer, layer 28' })
+    if (lot.flood?.lomr) tell('flood', 'warn', `A Letter of Map Revision changed the flood map here; the drafter reads it, it wins over the panel.`, { id: 'flood', source: 'FEMA NFHL layer 3 (LOMRs)' })
+    if (lot.flood?.prelim) tell('flood', 'warn', 'FEMA has a preliminary flood map change in progress here; the zone may change before the permit.', { id: 'flood', source: 'FEMA NFHL preliminary layers' })
+  }
+
   // m) closets you can use: a reach-in 24" clear, a walk-in 5' x 5'
   R.filter((r) => CLOSETS.includes(r.kind)).forEach((r) => {
     const walkIn = r.kind === 'mwic' || /walk|primary/i.test(r.name)
@@ -827,6 +895,7 @@ export const CHECK_GROUPS = [
   { id: 'kitchen', name: 'Kitchen work triangle 15 to 22 ft (26 at most), aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },
   { id: 'west', name: 'West glass over 40 sf shaded', ids: ['west-glass'] },
+  { id: 'lot', name: 'Lot rules: coverage, height, zoning, garage door off the street line, flood zone, today\'s minimum lot, a recorded plat', ids: ['coverage', 'height', 'min-lot', 'unplatted', 'zoning', 'garage-setback', 'flood'] },
 ]
 export function auditSummary(rooms, program, kit, lot) {
   const a = auditPlan(rooms, program, kit, lot)

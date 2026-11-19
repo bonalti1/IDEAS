@@ -61,6 +61,25 @@ The Stripe code (`server/billing.mjs`) is kept dormant behind `BILLING_ENABLED`.
 
 The old account balances are not lost: the first time a plan saved before round 8 is read, any balance left on its owner's account is mapped onto that plan's allowance (logged on the plan and in the activity).
 
+## 7. Parcels, flood, zoning and the rules table (round 7)
+
+The Lot step looks the address up at the county appraisal district (free ArcGIS layers, `server/parcel-sources.mjs`),
+reads the FEMA flood zone at a point inside the parcel, and the city zoning district where the city publishes a
+layer. Nothing here needs a key:
+
+- `PARCEL_DAILY_CHECK=1` runs the three test addresses once a day and emails `ALERT_EMAIL_TO` when a source fails.
+  The office dashboard shows the same under Sources, with a "Check now" button.
+- `REGRID_API_TOKEN` (optional, paid): the Regrid fallback. Leave it empty. The office turns it on only if the free
+  sources fail more than 5% of lookups in a month or the daily check fails three days running. `REGRID_MONTHLY_CAP`
+  (default 1500) stops the calls for the month. Never commit a token, and the server never logs one.
+- `ASCE_HAZARD_API_KEY` (optional): the ASCE Hazard API for the design wind speed. Without it the app says
+  "set by the engineer of record" and a drafter enters each city's speed in the rules table once.
+- `CAD_POSTGIS=1` (off): the monthly CAD download into PostGIS, `scripts/cad-import.mjs --plan`. Not scheduled.
+- `DRAFTHOUSE_FIXTURES=1`: the server answers parcel, flood and zoning from `test/fixtures/parcels/` instead of the
+  internet. For CI and screenshots only; never on Render.
+
+Don't delete any values from Render; the office does that.
+
 ## Every setting
 
 | Where | Name | What |

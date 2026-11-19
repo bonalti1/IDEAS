@@ -10,6 +10,7 @@ import { auditSummary } from '../lib/audit.js'
 import { TRUST } from '../lib/trust.js'
 import TrustBlock from '../TrustBlock.jsx'
 import { checkRules } from '../lib/rules.js'
+import RulesPanel from '../RulesPanel.jsx'
 import { api } from '../lib/api.js'
 import { STATUS, STEPS, EDITABLE } from '../lib/status.js'
 
@@ -22,6 +23,18 @@ export default function Send({ lot, style, program, rooms, history, project, set
   const [job, setJob] = useState(null) // { id, status, steps, outputs } or { offline: true }
   const [sending, setSending] = useState(false)
   const [tab, setTab] = useState('summary')
+  const [callBusy, setCallBusy] = useState(false)
+  const [called, setCalled] = useState(false)
+  const callMe = async () => {
+    setCallBusy(true)
+    try {
+      if (project?.id) await api.callMe(project.id, `zoning ${lot?.zoning?.district || ''}: ${lot?.zoning?.use || ''}`)
+      setCalled(true)
+    } catch (e) {
+      setError(`Could not reach the office (${e.message}). Call us instead.`)
+    }
+    setCallBusy(false)
+  }
   const kit = kitFor(style)
   const t = takeoff(rooms, program, kit, lot)
   // only changes that were applied and not undone: from the saved versions, or from the chat pairs
@@ -310,9 +323,19 @@ export default function Send({ lot, style, program, rooms, history, project, set
                   <li key={r}>{r}</li>
                 ))}
               </ul>
-              <p className="fine">Go back to the draft and fix these first. The drafters only take plans that pass the rules.</p>
+              {lot?.zoning?.residential === false ? (
+                <>
+                  <p className="fine">The lot's zoning, not the plan, is the problem: a house may need a rezoning or a special permit. The office knows the process and will call you.</p>
+                  <Button small primary disabled={callBusy || called} onClick={callMe} data-testid="call-me">
+                    {called ? 'The office will call you' : callBusy ? 'Sending…' : 'Ask the office to call me'}
+                  </Button>
+                </>
+              ) : (
+                <p className="fine">Go back to the draft and fix these first. The drafters only take plans that pass the rules.</p>
+              )}
             </div>
           )}
+          {lot?.rules && <RulesPanel lot={lot} mode="homeowner" />}
         </>
       )}
 

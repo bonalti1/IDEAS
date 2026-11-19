@@ -7,6 +7,7 @@ import { api } from '../lib/api.js'
 import { buildLot, traverse, lotProblem } from '../lib/lot.js'
 import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
+import RulesPanel from '../RulesPanel.jsx'
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -110,9 +111,39 @@ function ImagePreview({ file, read }) {
   )
 }
 
+/** A parcel from the appraisal district as a lot spec: its calls, the front edge on the street, the ids the drafter needs. */
+export function parcelSpec(parcel, { address, city, county, geo, flood, zoning, confirmed = false }) {
+  const n = parcel.calls.length
+  const front = parcel.frontEdge ?? 0
+  const kinds = parcel.calls.map((_, i) => (i === front ? 'front' : i === (front + Math.floor(n / 2)) % n ? 'rear' : 'side'))
+  return {
+    kind: 'parcel',
+    address,
+    city: city || '',
+    county: county || parcel.county || '',
+    calls: parcel.calls,
+    streets: [{ edge: front, name: geo?.street ? geo.street.replace(/\b\w+/g, (w) => (/^(FM|US|TX|N|S|E|W|NE|NW|SE|SW)$/.test(w) ? w : w[0] + w.slice(1).toLowerCase())) : 'street' }],
+    front,
+    kinds,
+    setbacks: {},
+    confirmed,
+    propId: parcel.propId,
+    geoId: parcel.geoId,
+    legal: parcel.legal,
+    acres: parcel.acres,
+    source: parcel.source,
+    parcelFetchedAt: parcel.source?.fetchedAt || null,
+    matchedBy: parcel.matchedBy,
+    confidence: parcel.confidence,
+    interior: parcel.interior,
+    flood: flood || null,
+    zoning: zoning || null,
+  }
+}
+
 export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const [table, setTable] = useState(cityTable())
-  const [mode, setMode] = useState(saved?.spec?.kind === 'plat' ? 'plat' : saved?.spec?.kind === 'manual' ? 'manual' : intake?.file ? 'plat' : 'manual')
+  const [mode, setMode] = useState(saved?.spec?.kind === 'plat' ? 'plat' : saved?.spec?.kind === 'manual' ? 'manual' : saved?.spec?.kind === 'parcel' ? 'parcel' : intake?.file ? 'plat' : 'manual')
   const address = saved?.address || intake?.address || ''
   const [spec, setSpec] = useState(() => (saved?.spec && saved.spec.kind !== 'reference' ? saved.spec : { kind: 'manual', address, width: 100, depth: 150, city: guessCity(address), frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))
   const [file, setFile] = useState(intake?.file || null)
@@ -125,17 +156,67 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const [geo, setGeo] = useState(saved?.geo || null) // where the address really is
   const [geoErr, setGeoErr] = useState('')
   const [confirmed, setConfirmed] = useState(!!saved?.spec && saved.spec.kind !== 'reference') // the typed lot is an assumption until the client says it is right
+  // round 7: the parcel from the appraisal district, offered as "Is this your lot?"
+  const [parcel, setParcel] = useState(null) // { match: 'one', ... } | { match: 'none', candidates } | null
+  const [parcelErr, setParcelErr] = useState('')
+  const [parcelBusy, setParcelBusy] = useState(false)
+  const [parcelAnswer, setParcelAnswer] = useState(saved?.spec?.kind === 'parcel' ? 'yes' : null) // 'yes' | 'no' | null
+  const [zoning, setZoning] = useState(saved?.spec?.zoning || saved?.zoning || null)
 
   useEffect(() => {
     api.cities().then((t) => setTable(t)).catch(() => {})
   }, [])
+  // the flood zone is read at the parcel's interior point once the parcel is known; the street point only when it is not
   useEffect(() => {
-    if (!address || flood) return
+    if (!address || flood || saved?.spec) return
+    if (parcelBusy || parcel?.match === 'one') return
+    if (parcel && parcel.match !== 'one') api.flood(address).then(setFlood).catch((e) => setFloodErr(e.message))
+  }, [address, parcel, parcelBusy])
+  // look the parcel up as soon as there is an address (and no saved lot yet)
+  useEffect(() => {
+    if (!address || saved?.spec || parcel) return
+    setParcelBusy(true)
     api
-      .flood(address)
-      .then(setFlood)
-      .catch((e) => setFloodErr(e.message))
+      .parcel(address)
+      .then(async (p) => {
+        setParcel(p)
+        if (p.match === 'one' && p.interior) {
+          api.floodAt(p.interior.lat, p.interior.lon, address).then(setFlood).catch((e) => setFloodErr(e.message))
+        }
+      })
+      .catch((e) => {
+        setParcelErr(e.message)
+        setParcel({ match: 'error' })
+      })
+      .finally(() => setParcelBusy(false))
   }, [address])
+  // zoning at the parcel's interior point, for the city we resolved
+  useEffect(() => {
+    if (!parcel || parcel.match !== 'one' || !parcel.interior || !geo?.found || zoning) return
+    api
+      .zoning(geo.cityId || '', parcel.interior.lat, parcel.interior.lon)
+      .then(setZoning)
+      .catch(() => {})
+  }, [parcel, geo])
+  const takeParcel = (p) => {
+    // the client's yes is recorded; `confirmed` stays false until a drafter checks the parcel against the plat (like a plat read)
+    const sp = { ...parcelSpec(p, { address, city: geo?.cityId || spec.city || '', county: geo?.county || p.county || spec.county || '', geo, flood, zoning, confirmed: false }), clientConfirmed: true, clientConfirmedAt: new Date().toISOString() }
+    setSpec(sp)
+    setMode('parcel')
+    setParcelAnswer('yes')
+    setConfirmed(true)
+  }
+  const pickCandidate = async (c) => {
+    setParcelBusy(true)
+    try {
+      const p = await api.parcelById(parcel.county, c.propId)
+      setParcel(p)
+      if (p.interior) api.floodAt(p.interior.lat, p.interior.lon, address).then(setFlood).catch(() => {})
+    } catch (e) {
+      setParcelErr(e.message)
+    }
+    setParcelBusy(false)
+  }
   // geocode the address for real: the city it is in, the street, and whether we build there
   useEffect(() => {
     if (!address || geo || saved?.spec) return
@@ -170,12 +251,12 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
   const built = useMemo(() => {
     try {
-      const L = buildLot({ ...spec, address, flood }, table)
+      const L = buildLot({ ...spec, address, flood, zoning: spec.kind === 'parcel' ? zoning || spec.zoning || null : zoning || null }, table)
       return { ...L, plat: read || null, geo: geo || null }
     } catch (e) {
       return null
     }
-  }, [spec, table, address, flood, read, geo])
+  }, [spec, table, address, flood, read, geo, zoning])
   // what is wrong with the lot as typed; the last good lot stays on the screen until it is right
   const problem = lotProblem(spec, built)
   const lastGood = useRef(null)
@@ -215,13 +296,92 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         {geo && !geo.found && <p className="fine warn">{geo.note}</p>}
         {!geo && address && !geoErr && !saved?.spec && <p className="fine">Looking the address up…</p>}
         {geoErr && <p className="fine warn">Could not look the address up ({geoErr}). Pick the city yourself.</p>}
+        {/* round 7: the parcel from the county appraisal district, offered before anything is typed */}
+        {address && !saved?.spec && parcelBusy && !parcel && <p className="fine">Looking the lot up at the county appraisal district…</p>}
+        {parcel?.match === 'one' && parcelAnswer !== 'no' && (
+          <div className="card thin parcel-card" data-testid="parcel-card">
+            <h3>{parcelAnswer === 'yes' ? 'Your lot, from the county parcel map' : 'Is this your lot?'}</h3>
+            <p className="small">
+              {parcel.legal ? <b>{parcel.legal}</b> : <b>Parcel {parcel.propId}</b>}
+              {parcel.situs ? ` · ${parcel.situs}` : ''}. {parcel.edges?.length} sides, about {Math.round(parcel.areaSf).toLocaleString()} sf ({parcel.acres} acres)
+              {parcel.cleaned?.short || parcel.cleaned?.straight ? `; ${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0)} sliver corner${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0) === 1 ? '' : 's'} under a foot removed` : ''}.
+            </p>
+            <div className="edges">
+              {parcel.edges?.map((e, i) => (
+                <span key={i}>
+                  {i === (parcel.frontEdge ?? 0) ? 'street side ' : ''}
+                  {e.lengthFt}' {e.bearing}
+                </span>
+              ))}
+            </div>
+            <p className="fine">
+              From the {parcel.source?.name || 'county appraisal district'}
+              {parcel.source?.fetchedAt ? `, read ${String(parcel.source.fetchedAt).slice(0, 10)}` : ''}. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built.
+            </p>
+            {parcelAnswer !== 'yes' && (
+              <div className="row2">
+                <Button small primary onClick={() => takeParcel(parcel)} data-testid="parcel-yes">
+                  Yes, this is my lot
+                </Button>
+                <Button small ghost onClick={() => setParcelAnswer('no')} data-testid="parcel-no">
+                  Not my lot
+                </Button>
+                <Button
+                  small
+                  ghost
+                  onClick={() => {
+                    setParcelAnswer('no')
+                    setMode('manual')
+                  }}
+                >
+                  Type it in
+                </Button>
+              </div>
+            )}
+            {parcelAnswer === 'yes' && (
+              <button className="linkish" onClick={() => setParcelAnswer('no') || setMode('manual') || setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, county: spec.county, frontStreet: spec.streets?.[0]?.name || '', corner: '', sideStreet: '', setbacks: {} })}>
+                Not my lot after all
+              </button>
+            )}
+          </div>
+        )}
+        {parcel?.match === 'none' && parcel.candidates?.length > 0 && parcelAnswer !== 'no' && (
+          <div className="card thin parcel-card candidates" data-testid="parcel-candidates">
+            <h3>Which of these is your lot?</h3>
+            <p className="small">The county map has {parcel.candidates.length} parcels near this address; none carries it exactly. Tap yours, or type the lot in.</p>
+            <ul className="candidates">
+              {parcel.candidates.map((c) => (
+                <li key={c.propId}>
+                  <span>
+                    <b>{c.situs || `Parcel ${c.propId}`}</b>
+                    {c.legal ? <span className="muted small"> · {c.legal}</span> : ''}
+                    {c.distanceFt != null ? <span className="muted small"> · {c.distanceFt} ft away</span> : ''}
+                  </span>
+                  <Button small ghost disabled={parcelBusy} onClick={() => pickCandidate(c)}>
+                    This one
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <button className="linkish" onClick={() => setParcelAnswer('no')}>
+              None of these, type it in
+            </button>
+          </div>
+        )}
+        {parcel && parcel.match !== 'one' && !parcel.candidates?.length && parcel.match !== 'error' && !saved?.spec && <p className="fine warn">{parcel.reason === 'the address was not found' ? 'The county parcel map did not find this address; type the lot in or upload the plat.' : `The county parcel map has no entry we could match (${parcel.reason || 'no match'}); type the lot in or upload the plat.`}</p>}
+        {parcelErr && <p className="fine warn">Could not reach the county parcel map ({parcelErr}). Type the lot in or upload the plat; the drafter pulls the parcel later.</p>}
         <div className="tabs small">
-          <button className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual') || (spec.kind !== 'manual' && setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))}>
+          <button className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual') || (spec.kind !== 'manual' && setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, county: spec.county, frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))}>
             Type it in
           </button>
           <button className={mode === 'plat' ? 'on' : ''} onClick={() => setMode('plat')}>
             From the plat
           </button>
+          {spec.kind === 'parcel' && (
+            <button className={mode === 'parcel' ? 'on' : ''} onClick={() => setMode('parcel')}>
+              County parcel
+            </button>
+          )}
         </div>
 
         <label className="field">
@@ -344,11 +504,14 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             <Stat k="Lot area" v={sf(lot.areaSf)} />
             <Stat k="Buildable area" v={sf(lot.envelopeSf)} />
             <Stat k="Max coverage" v={`${Math.round(city.maxCoverage * 100)}% · ${sf(lot.areaSf * city.maxCoverage)}`} />
-            <Stat k="Flood zone" v={flood ? (flood.zone ? `${flood.zone}${flood.sfha ? ' · special flood hazard area' : ' · outside the 1% flood area'}` : 'not found for this address') : floodErr ? 'lookup unavailable' : address ? 'checking FEMA…' : '—'} />
+            <Stat k="Flood zone" v={flood ? (flood.status === 'no-digital-firm' ? 'no digital FEMA map here · the county decides' : flood.zone ? `${flood.zone}${flood.sfha ? ' · special flood hazard area' : flood.status === 'shaded-x' ? ' · 0.2% flood area' : ' · outside the 1% flood area'}${flood.where && /street/.test(flood.where) ? ' (at the street; the parcel point once the lot is picked)' : ''}` : flood.status === 'no-address' ? 'not found for this address' : 'no zone polygon at this point') : floodErr ? 'lookup unavailable' : address ? 'checking FEMA…' : '—'} />
+            {zoning?.status === 'found' && <Stat k="Zoning" v={`${zoning.district} · ${zoning.use}`} />}
           </div>
         )}
+        {lot && <RulesPanel lot={lot} mode="homeowner" />}
+        {lot?.zoning?.residential === false && <p className="fine bad">{lot.zoning.message}</p>}
         {problem && <p className="fine bad">{problem}</p>}
-        <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
+        <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' || spec.kind === 'parcel' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
         {mode === 'manual' && (
           <label className="confirm">
             <input id="lot-confirm" type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
@@ -361,7 +524,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           <Button ghost onClick={onBack}>
             Back
           </Button>
-          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? 'Confirm the lot size first' : ''}>
+          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? 'Confirm the lot size first' : ''} data-testid="lot-next">
             Looks right, pick a style
           </Button>
         </div>

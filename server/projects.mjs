@@ -101,6 +101,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const questions = []
       if (!RATES.confirmed) questions.push('Rates are not confirmed yet (src/draft/lib/pricing.js): the office estimate is a range, not a quote. The client sees no number.')
       if (full.lot?.spec?.kind === 'plat' && !full.lot.spec.confirmed) questions.push('The lot was read from a plat and is not confirmed.')
+      if (full.lot?.spec?.kind === 'parcel' && !full.lot.spec.confirmed) questions.push('The lot came from the appraisal district parcel map and is not confirmed against a plat or survey.')
+      if (full.lot?.flags?.length) questions.push(...full.lot.flags.map((f) => `Lot rules: ${f}`))
+      if (full.lot?.zoning?.residential === false) questions.push(`Zoning: ${full.lot.zoning.district} (${full.lot.zoning.use}); a house may need a rezoning.`)
       if (full.lot?.assumed) questions.push('The lot size was assumed, not measured.')
       const kit = kitFor(style)
       if (Object.values(kit.windows || {}).some((w) => w?.energy === 'CONFIRM')) questions.push('Window U-factor and SHGC in the kit are marked CONFIRM against the supplier.')
@@ -128,12 +131,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         // a typed lot needs a real width and depth (the builder would quietly fall back to a default otherwise)
         if (spec.kind === 'manual' && !(Number(spec.width) >= 20 && Number(spec.depth) >= 20 && Number(spec.width) <= 5000 && Number(spec.depth) <= 5000)) throw new Error('width and depth')
         // a plat needs its boundary calls, unless a drafter has already confirmed the lot by hand
-        if (spec.kind === 'plat' && !spec.confirmed && !(Array.isArray(spec.calls) && spec.calls.length >= 3) && !(Array.isArray(spec.corners) && spec.corners.length >= 3)) throw new Error('no boundary')
+        if ((spec.kind === 'plat' || spec.kind === 'parcel') && !spec.confirmed && !(Array.isArray(spec.calls) && spec.calls.length >= 3) && !(Array.isArray(spec.corners) && spec.corners.length >= 3)) throw new Error('no boundary')
+        // a parcel from the appraisal district: at least three sides, closing within 1.5 ft (round 7, item 7)
+        if (spec.kind === 'parcel' && !(Array.isArray(spec.calls) && spec.calls.length >= 3)) throw new Error('parcel needs three sides')
         const built = await lots.lotOfProject({ lot })
         // a lot that builds to no boundary or no buildable area is refused; one the office has not built
         // (a stubbed lot service hands the spec back) has nothing to check here
         const degenerate = (pts) => Array.isArray(pts) && pts.length < 3
         if (!built || degenerate(built.boundary) || degenerate(built.envelope) || (built.envelopeSf !== undefined && !(built.envelopeSf > 0))) throw new Error('no buildable area')
+        if (spec.kind === 'parcel' && built.closure > 1.5) throw new Error(`parcel does not close (${built.closure} ft)`)
       } catch (e) {
         throw fail(400, `the lot cannot be built from what was sent (${lot.spec.kind || 'no kind'}${lot.spec.width !== undefined || lot.spec.depth !== undefined ? `, ${lot.spec.width ?? '?'} x ${lot.spec.depth ?? '?'}` : ''}): give it a width and depth, or an address, or a plat with its boundary calls`)
       }
@@ -381,7 +387,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // the client hands the design to the drafters; nothing is built until a drafter approves
     async send(p, { design, ifc }, saveDesign) {
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
-      if (p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
+      if ((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
       // the plan as saved here, on the lot as the office rebuilds it, must pass the rules
       const current = await store.versions.get(p.id, p.version)
@@ -419,7 +425,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       for (const p of open) await withAllowance(p)
-      const lots = open.filter((p) => p.lot?.spec?.kind === 'plat' && !p.lot.spec.confirmed)
+      const lots = open.filter((p) => (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
       // what clients asked the office for (a meeting, more changes), newest first, and every open plan's allowance
       const requests = open.filter((p) => p.meetingRequest || p.wantsMoreChanges).sort((a, b) => Date.parse(b.meetingRequest?.at || b.updatedAt) - Date.parse(a.meetingRequest?.at || a.updatedAt))
       const plans = open.map((p) => ({ id: p.id, client: p.client, email: p.email, address: p.address, status: p.status, version: p.version, updatedAt: p.updatedAt, changesAllowed: p.changesAllowed, changesUsed: p.changesUsed, meetingRequest: p.meetingRequest || null, wantsMoreChanges: !!p.wantsMoreChanges }))
@@ -428,8 +434,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
 
     // a drafter confirms the lot read from a plat, with corrected calls or setbacks when needed
     async confirmLot(p, drafter, { confirmed = true, spec, note }) {
-      if (p.lot?.spec?.kind !== 'plat') throw fail(409, 'this lot was typed in, nothing to confirm')
-      const next = { ...p.lot.spec, ...(spec || {}), kind: 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
+      if (p.lot?.spec?.kind !== 'plat' && p.lot?.spec?.kind !== 'parcel') throw fail(409, 'this lot was typed in, nothing to confirm')
+      const next = { ...p.lot.spec, ...(spec || {}), kind: p.lot.spec.kind === 'parcel' ? 'parcel' : 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
       const lot = { ...(await lots.lotOfProject({ lot: { spec: next, plat: p.lot.plat } })), plat: p.lot.plat || null }
       const changed = spec && JSON.stringify(spec) !== '{}'
       p.lot = lot

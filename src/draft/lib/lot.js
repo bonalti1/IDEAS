@@ -162,6 +162,11 @@ export function lotProblem(spec, lot) {
     if (!(W >= 20)) return 'Enter the lot width in feet (20 ft or more).'
     if (!(D >= 20)) return 'Enter the lot depth in feet (20 ft or more).'
   }
+  // a parcel from the appraisal district (round 7, item 7): at least three calls, closing within 1.5 ft
+  if (spec?.kind === 'parcel') {
+    if (!Array.isArray(spec.calls) || spec.calls.length < 3) return 'The parcel outline needs at least three sides; a drafter can draw it from the plat.'
+    if (lot && lot.closure > 1.5) return `The parcel outline does not close (off by ${lot.closure} ft); a drafter checks it against the plat.`
+  }
   if (!lot) return 'The lot could not be built from these numbers.'
   if (!lot.envelope || lot.envelope.length < 3 || !(lot.envelopeSf > 0)) {
     const r = lot.rules || {}
@@ -174,17 +179,25 @@ export function lotProblem(spec, lot) {
 /** Build the full lot from a spec. Deterministic, so the server can repeat it. */
 export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
   if (!spec || spec.kind === 'reference') return referenceLot()
-  const rules = rulesFor(spec.city || 'hidalgo', spec.setbacks || {}, table)
-  // no city rules yet: the lot keeps its empty city (the price asks for a county); the county defaults shape the envelope
+  // no city rules yet: the lot keeps its empty city (the price asks for a county); the county's row shapes the envelope
   const city = table[spec.city] ? spec.city : spec.city === '' ? '' : 'hidalgo'
+  const countyRow = !table[spec.city] && spec.county ? Object.keys(table).find((id) => table[id].kind === 'county' && table[id].county === spec.county) : null
+  // the rules are resolved against the lot's own width and depth (round 7: Pharr's rear as a share of the depth,
+  // Weslaco's lesser-of, Hidalgo County's half right of way, McAllen's narrow lots of record), so the geometry
+  // comes first and the setbacks after
+  let rules = null
+  const rulesWith = (dims) => (rules = rulesFor(city || countyRow || 'hidalgo', { ...(spec.setbacks || {}), county: spec.county }, table, { ...dims, rowFt: spec.rowFt }))
   let boundary
   let corners
   let edges // per corner-edge: { kind, street, setback }
   let arcs = []
   let closure = 0
+  let dims = { width: null, depth: null }
   if (spec.kind === 'manual') {
     const W = Math.max(20, +spec.width || 0)
     const D = Math.max(20, +spec.depth || 0)
+    dims = { width: W, depth: D }
+    rulesWith(dims)
     corners = [
       [0, 0],
       [W, 0],
@@ -199,7 +212,8 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
       { kind: 'front', street: spec.frontStreet || 'street', setback: rules.front },
       { kind: sideKind('left'), street: spec.corner === 'left' ? spec.sideStreet : undefined, setback: spec.corner === 'left' ? rules.streetSide : rules.side },
     ]
-  } else if (spec.kind === 'plat') {
+  } else if (spec.kind === 'plat' || spec.kind === 'parcel') {
+    // a parcel from the appraisal district is a plat whose calls were computed from the polygon (round 7, item 7)
     const t = traverse(spec.calls || [])
     boundary = t.boundary
     corners = t.corners
@@ -207,6 +221,17 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     closure = t.closure
     const streets = spec.streets || []
     const frontIdx = spec.front ?? streets[0]?.edge ?? 0
+    // the lot's width (the front edge) and depth (how far the far corner sits behind the front line)
+    {
+      const a = corners[frontIdx % corners.length] || [0, 0]
+      const b = corners[(frontIdx + 1) % corners.length] || [0, 0]
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const nx = len ? (b[1] - a[1]) / len : 0
+      const nz = len ? -(b[0] - a[0]) / len : 1
+      const depth = Math.max(0, ...corners.map((c) => Math.abs((c[0] - a[0]) * nx + (c[1] - a[1]) * nz)))
+      dims = { width: Math.round(len * 10) / 10, depth: Math.round(depth * 10) / 10 }
+    }
+    rulesWith(dims)
     edges = corners.map((_, i) => {
       const st = streets.find((s) => +s.edge === i)
       const forced = spec.kinds?.[i] // 'front' | 'side' | 'rear' | 'streetSide', when the drafter says so
@@ -250,14 +275,30 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
   const streets = edges
     .map((e, i) => (e.street ? { name: e.street, pts: extendPolyline([corners[i], corners[(i + 1) % corners.length]], 50, 50), edge: i } : null))
     .filter(Boolean)
+  // what the panel says about this lot's rules (round 7, items 8 and 9): the rows with their sources, the derived
+  // values, the flags (unknown or stale rules, a lot under today's minimum, an unplatted tract)
+  const flags = [...(rules.flags || [])]
+  if (rules.minLotSf && areaSf < rules.minLotSf - 1) flags.push(`below today's minimum lot size (${Math.round(areaSf).toLocaleString()} sf, the district asks ${rules.minLotSf.toLocaleString()} sf); lots of record usually still build. The drafter confirms.`)
+  if (rules.minLotWidth && dims.width && dims.width < rules.minLotWidth - 0.05) flags.push(`below today's minimum lot width (${dims.width} ft, the district asks ${rules.minLotWidth} ft); lots of record usually still build. The drafter confirms.`)
+  const legal = spec.legal || spec.parcel?.legal || ''
+  const unplatted = !!legal && /\b(ABST|ABSTRACT|TRACT|TR|ACRES?|AC)\b/i.test(legal) && !/\b(LOT|LT|BLK|BLOCK)\b/i.test(legal)
+  if (unplatted) flags.push('no recorded subdivision in the legal description: platting needed before a permit (drafter task)')
+  const jurisdiction = spec.jurisdiction || { type: table[city]?.kind === 'county' || !city ? 'county' : 'city', id: city || countyRow || 'hidalgo', name: rules.name, county: rules.county || spec.county || null, etj: null, source: spec.kind === 'manual' ? 'picked on the lot step' : 'from the lot' }
   return {
     kind: spec.kind,
     source: spec.kind,
     spec,
     address: spec.address || '',
     city,
-    cityName: city ? rules.name : 'no city rules yet (county defaults)',
+    cityName: city ? rules.name : countyRow ? table[countyRow].name : 'no city rules yet (county defaults)',
     rules,
+    rulesUsed: rules.used || [],
+    ruleNotes: rules.derived || [],
+    flags,
+    unplatted,
+    jurisdiction,
+    dims,
+    parcel: spec.kind === 'parcel' ? { propId: spec.propId || null, geoId: spec.geoId || null, legal: legal || null, acres: spec.acres ?? null, source: spec.source || null, fetchedAt: spec.parcelFetchedAt || null, matchedBy: spec.matchedBy || null, confidence: spec.confidence || null } : null,
     boundary: boundary.map(([x, z]) => [r2(x), r2(z)]),
     corners: corners.map(([x, z]) => [r2(x), r2(z)]),
     arcs,
@@ -271,8 +312,10 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     centre: [r2(centre[0]), r2(centre[1])],
     angle,
     streets,
-    confirmed: spec.kind === 'plat' ? !!spec.confirmed : true,
+    confirmed: spec.kind === 'plat' || spec.kind === 'parcel' ? !!spec.confirmed : true,
     flood: spec.flood || null,
+    zoning: spec.zoning || null,
+    wind: spec.wind || null,
   }
 }
 

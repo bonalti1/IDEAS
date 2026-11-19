@@ -1,0 +1,165 @@
+{
+ "synthetic": true,
+ "builtFrom": "the live lookups quoted in the round-7 brief (edges, area, legal, ids) with stand-in coordinates and attributes; the parcel, flood and zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-18",
+ "slug": "melissa-36-brownsville",
+ "address": "36 Melissa Dr, Brownsville, TX 78526",
+ "county": "Cameron County",
+ "cityId": "brownsville",
+ "point": {
+  "lon": -97.46109836666668,
+  "lat": 25.970255456666667
+ },
+ "census": {
+  "matchedAddress": "36 MELISSA DR, BROWNSVILLE, TX, 78526",
+  "coordinates": {
+   "x": -97.46109328,
+   "y": 25.9700397
+  },
+  "addressComponents": {
+   "fromAddress": "36",
+   "toAddress": "36",
+   "preDirection": "",
+   "streetName": "MELISSA",
+   "suffixType": "DR",
+   "suffixDirection": "",
+   "city": "BROWNSVILLE",
+   "state": "TX",
+   "zip": "78526"
+  },
+  "geographies": {
+   "Counties": [
+    {
+     "NAME": "Cameron County",
+     "GEOID": "48"
+    }
+   ],
+   "Incorporated Places": [
+    {
+     "NAME": "Brownsville city"
+    }
+   ]
+  }
+ },
+ "addressPoints": [],
+ "parcels": [
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "7201140",
+    "geo_id": "72-0114-0160-0010-00",
+    "legal1": "MCKENZIE ESTATES LOT 16 BLK 1",
+    "situsdispl": "36 MELISSA DR",
+    "acres": 0.1865,
+    "owner": "REDACTED",
+    "owner_addr": "REDACTED"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -97.4612,
+       25.9701
+      ],
+      [
+       -97.46098657,
+       25.9701
+      ],
+      [
+       -97.46098657,
+       25.97039264
+      ],
+      [
+       -97.46101706,
+       25.97042005
+      ],
+      [
+       -97.4612,
+       25.97042005
+      ],
+      [
+       -97.4612,
+       25.9701
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "prop_id": "7201099",
+    "geo_id": "72-0114-0150-0020-00",
+    "legal1": "MCKENZIE ESTATES LOT 2 BLK 2",
+    "situsdispl": "1021 CLARISSA DR",
+    "acres": 0.0895,
+    "owner": "REDACTED",
+    "owner_addr": "REDACTED"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -97.46118475,
+       25.97001228
+      ],
+      [
+       -97.46100181,
+       25.97001228
+      ],
+      [
+       -97.46100181,
+       25.96983411
+      ],
+      [
+       -97.46118475,
+       25.96983411
+      ],
+      [
+       -97.46118475,
+       25.97001228
+      ]
+     ]
+    ]
+   }
+  }
+ ],
+ "nfhl": {
+  "0": [
+   {
+    "DFIRM_ID": "48061C",
+    "STUDY_TYP": "NP",
+    "EFF_DATE": 1392940800000
+   }
+  ],
+  "3": [
+   {
+    "CASE_NO": "24-06-1234P",
+    "EFF_DATE": 1735689600000,
+    "STATUS": "Effective"
+   }
+  ],
+  "21": [],
+  "28": [
+   {
+    "FLD_ZONE": "AE",
+    "ZONE_SUBTY": null,
+    "SFHA_TF": "T",
+    "STATIC_BFE": 20,
+    "DFIRM_ID": "48061C",
+    "FLD_AR_ID": "48061C_22"
+   }
+  ],
+  "34": []
+ },
+ "zoning": {
+  "cityId": "brownsville",
+  "features": [
+   {
+    "ZoningFNI": "R-1"
+   }
+  ]
+ }
+}
