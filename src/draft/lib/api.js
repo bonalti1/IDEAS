@@ -63,7 +63,8 @@ export const api = {
   flood: (address) => call(`/api/lot/flood?address=${encodeURIComponent(address)}`, {}, 30000),
   geocode: (address) => call(`/api/lot/geocode?address=${encodeURIComponent(address)}`, {}, 20000),
   // round 7: the parcel from the appraisal district, the zoning district, the wind line, the sourced rules table, the sources page
-  parcel: (address) => call(`/api/lot/parcel?address=${encodeURIComponent(address)}`, {}, 45000),
+  // confirmed: the homeowner said the address the geocoder found (another direction, another spelling) is theirs
+  parcel: (address, confirmed = false) => call(`/api/lot/parcel?address=${encodeURIComponent(address)}${confirmed ? '&confirmed=1' : ''}`, {}, 45000),
   parcelAt: (lat, lon) => call(`/api/lot/parcel?lat=${lat}&lon=${lon}`, {}, 45000),
   parcelById: (county, propId) => call(`/api/lot/parcel/${encodeURIComponent(county)}/${encodeURIComponent(propId)}`, {}, 30000),
   floodAt: (lat, lon, address) => call(`/api/lot/flood?lat=${lat}&lon=${lon}${address ? `&address=${encodeURIComponent(address)}` : ''}`, {}, 30000),
@@ -73,6 +74,10 @@ export const api = {
   setJurisdiction: (id, patch) => call(`/api/admin/jurisdictions/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   sources: () => call('/api/admin/sources'),
   sourcesCheck: () => call('/api/admin/sources/check', { method: 'POST', body: '{}' }, 120000),
+  // round 10, item 5: the mapped columns against each layer's own field list
+  sourcesFields: () => call('/api/admin/sources/fields', { method: 'POST', body: '{}' }, 120000),
+  // round 10, item 4: a drafter confirms the zoning of a typed lot (only then can it block Send)
+  confirmZoning: (id, body) => call(`/api/review/${id}/zoning`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   callMe: (id, note) => call(`/api/projects/${id}/call-me`, { method: 'POST', body: JSON.stringify({ note }) }),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),

@@ -11,6 +11,7 @@ import { generateRooms } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
 import { buildLot } from '../src/draft/lib/lot.js'
+import { fixtureEnv } from './server-env.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const program = { ...KIT.reference.program }
@@ -18,7 +19,7 @@ const program = { ...KIT.reference.program }
 async function startServer(t, env = {}) {
   const port = 9300 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'test-worker-key', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-r6-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'test-worker-key', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-r6-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))

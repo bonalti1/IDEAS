@@ -67,8 +67,21 @@ The Lot step looks the address up at the county appraisal district (free ArcGIS 
 reads the FEMA flood zone at a point inside the parcel, and the city zoning district where the city publishes a
 layer. Nothing here needs a key:
 
-- `PARCEL_DAILY_CHECK=1` runs the three test addresses once a day and emails `ALERT_EMAIL_TO` when a source fails.
+- `PARCEL_DAILY_CHECK=1` runs the ten acceptance addresses once a day and emails `ALERT_EMAIL_TO` when a source fails.
   The office dashboard shows the same under Sources, with a "Check now" button.
+- The mapped columns (round 10): at start, daily, and on "Check the columns" the server reads each layer's own field
+  list and compares it with the columns `server/parcel-sources.mjs` maps (ids, owner, mailing, situs, legal, acres). A
+  column a layer does not have shows red on the Sources page and raises an alert: the owner lookup or the parcel
+  match fails for that county until the mapping is fixed. `PARCEL_FIELD_CHECK=0` turns the start-up check off.
+- The street side of a lot (round 10) is read from the Census TIGERweb roads
+  (`tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer`, layers 8 and 6, then 2): the edge
+  nearest the road that carries the address's street name. When TIGERweb does not answer, the lookup still works and
+  the street side falls back to the county address point, then the Census point; the Sources page shows the row red.
+- `TRUST_PROXY_HOPS` (round 10): the per-address lookup limit reads `x-forwarded-for` only behind a known proxy. It is
+  the number of proxies in front of the API (1 in `render.yaml`); the address is the entry that many places from the
+  right. To confirm the number on Render, sign in from a phone on mobile data and look for your public address in one
+  API log line; if the limiter key shows a Render or Cloudflare address instead, raise it by one. Unset or 0, the
+  header is ignored and the socket's address is used (right for a laptop).
 - `REGRID_API_TOKEN` (optional, paid): the Regrid fallback. Leave it empty. The office turns it on only if the free
   sources fail more than 5% of lookups in a month or the daily check fails three days running. `REGRID_MONTHLY_CAP`
   (default 1500) stops the calls for the month. Never commit a token, and the server never logs one.
@@ -77,13 +90,21 @@ layer. Nothing here needs a key:
 - `CAD_POSTGIS=1` (off): the monthly CAD download into PostGIS, `scripts/cad-import.mjs --plan`. Not scheduled.
 - `DRAFTHOUSE_FIXTURES=1`: the server answers parcel, flood and zoning from `test/fixtures/parcels/` instead of the
   internet. For CI and screenshots only; never on Render.
-- The parcel routes need a signed-in user and allow `PARCEL_LOOKUPS_PER_10MIN` (default 20) lookups that reach a county
-  per user every ten minutes, three times that per address; cache hits do not count. Past that the app says to try again
+- The parcel, geocode, flood, zoning and wind routes need a signed-in user (round 10 for the last four) and allow
+  `PARCEL_LOOKUPS_PER_10MIN` (default 20) lookups of each kind that reach an outside service per user every ten
+  minutes, three times that per address; cache hits do not count. Past that the app says to try again
   in ten minutes or type the lot in. The county in `/api/lot/parcel/:county/:propId` is the name or its slug
   (`hidalgo`, `cameron`, `nueces`, `starr`, `willacy`, `jimwells`, `kleberg`, `sanpatricio`).
-- Recording the fixtures from the office: `LIVE=1 node scripts/make-parcel-fixtures.mjs` keeps only the mapped fields
-  (ids, legal, situs, acres, city limits), never an owner or mailing field, and refuses to write otherwise.
-  `LIVE=1 node --test test/live-acceptance.test.mjs` runs the acceptance addresses against the live services.
+- Recording the fixtures: `LIVE=1 node scripts/make-parcel-fixtures.mjs` records every case from the live services
+  (the Census, the county parcel and address-point layers, TIGERweb roads, FEMA, the city zoning layers) and
+  `layers.json` (each layer's field list). It keeps only the mapped columns for ids, legal, situs and acres, never an
+  owner or mailing column, cuts an owner's name out of a kept column when it sits inside a legal description, refuses
+  to write a file with a person-shaped key, and checks that the recording replays to the live answer. One word after
+  the command records only the cases whose name holds it (`... kerria`). `npm run test:live` (or
+  `LIVE=1 node --test test/live-acceptance.test.mjs`) runs the ten acceptance addresses against the live services.
+  Behind a proxy, put `NODE_USE_ENV_PROXY=1` in front of either.
+- `npm test` never reaches a real host (round 10): every test that starts the API starts it on the fixtures, and a
+  fetch to a real host throws, naming the host, unless `LIVE=1`.
 
 Don't delete any values from Render; the office does that.
 
@@ -100,7 +121,7 @@ Don't delete any values from Render; the office does that.
 | Render | `CHANGES_PER_PROJECT` (10) | free changes a new plan starts with; the office dashboard setting overrides it |
 | Render | `BILLING_ENABLED` | unset. `1` registers the dormant Stripe routes again (§6) |
 | Render | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_URL` | optional and unused while `BILLING_ENABLED` is off (§6) |
-| Render | outbound hosts | the API calls api.anthropic.com, geocoding.geo.census.gov and hazards.fema.gov; Render allows outbound traffic by default |
+| Render | outbound hosts | the API calls api.anthropic.com, geocoding.geo.census.gov, tigerweb.geo.census.gov, hazards.fema.gov, the county parcel servers (gis.rgv911.org, cobgis.brownsvilletx.gov, services, services2, services6 and services8.arcgis.com) and the city zoning servers (gismap.mcallen.net, ccpublicgis.cctexas.com, services3 and services7.arcgis.com); Render allows outbound traffic by default |
 | Render | `DRAFTHOUSE_CLAUDE_KEY` | Claude API key for the change interpreter. `ANTHROPIC_API_KEY` is read as a fallback. |
 | Render | `DRAFTHOUSE_APP_KEY` | generated; same value as Netlify `VITE_API_KEY` |
 | Render | `DRAFTHOUSE_WORKER_KEY` | generated; same value as `workerKey` in the office `config.json` |

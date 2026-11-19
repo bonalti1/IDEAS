@@ -9,6 +9,7 @@ import path from 'node:path'
 import { generateRooms } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
+import { fixtureEnv } from './server-env.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const program = { ...KIT.reference.program }
@@ -17,7 +18,7 @@ const WORKER = 'test-worker-key'
 async function startServer(t, env) {
   const port = 8900 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: WORKER, DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: WORKER, DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))

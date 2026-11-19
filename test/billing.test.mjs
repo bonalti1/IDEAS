@@ -12,6 +12,7 @@ import Stripe from 'stripe'
 import { generateRooms } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
+import { fixtureEnv } from './server-env.mjs'
 
 const BILLING = /^(1|true|yes)$/i.test(process.env.BILLING_ENABLED || '')
 const style = STYLES.find((s) => s.id === 'farmhouse')
@@ -22,7 +23,7 @@ const stripe = new Stripe('sk_test_unused', { apiVersion: '2025-09-30.clover' })
 async function startServer(t, env = {}) {
   const port = 9100 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: WHSEC, DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', BILLING_ENABLED: BILLING ? '1' : '', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: WHSEC, DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', BILLING_ENABLED: BILLING ? '1' : '', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
   t.after(() => proc.kill())
   for (let i = 0; i < 60; i++) {
     try {

@@ -176,6 +176,20 @@ export function lotProblem(spec, lot) {
   return null
 }
 
+/**
+ * Does the lot's zoning stop the design from being sent (decision B6, round 10 item 4)? Zoning never stops a homeowner
+ * from drafting: on the Rooms and Draft steps it is a warning. It blocks Send only when the zoning is known to belong
+ * to this lot: a parcel or plat lot (the district was read at the parcel the homeowner took), or a typed lot whose
+ * zoning a drafter has confirmed.
+ */
+export function zoningBlocksSend(lot) {
+  const z = lot?.zoning
+  if (!z || z.residential !== false) return false
+  const kind = lot.kind || lot.spec?.kind
+  if (kind === 'parcel' || kind === 'plat') return true
+  return !!z.confirmedBy
+}
+
 /** Build the full lot from a spec. Deterministic, so the server can repeat it. */
 export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
   if (!spec || spec.kind === 'reference') return referenceLot()
@@ -229,7 +243,9 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
       const nx = len ? (b[1] - a[1]) / len : 0
       const nz = len ? -(b[0] - a[0]) / len : 1
       const depth = Math.max(0, ...corners.map((c) => Math.abs((c[0] - a[0]) * nx + (c[1] - a[1]) * nz)))
-      dims = { width: Math.round(len * 10) / 10, depth: Math.round(depth * 10) / 10 }
+      // a curved frontage is several chords (round 10): the parcel lookup gives their total as the lot's width
+      const width = +spec.frontWidthFt > len ? +spec.frontWidthFt : len
+      dims = { width: Math.round(width * 10) / 10, depth: Math.round(depth * 10) / 10 }
     }
     rulesWith(dims)
     edges = corners.map((_, i) => {
@@ -313,6 +329,7 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     angle,
     streets,
     confirmed: spec.kind === 'plat' || spec.kind === 'parcel' ? !!spec.confirmed : true,
+    corner: spec.kind === 'manual' ? !!spec.corner : edges.some((e) => e.kind === 'streetSide'),
     flood: spec.flood || null,
     zoning: spec.zoning || null,
     wind: spec.wind || null,

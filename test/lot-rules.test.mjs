@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { auditPlan, auditSummary, CHECK_GROUPS } from '../src/draft/lib/audit.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { generateRooms, DEFAULT_PROGRAM, kitFor } from '../src/draft/lib/layout.js'
-import { buildLot } from '../src/draft/lib/lot.js'
+import { buildLot, zoningBlocksSend } from '../src/draft/lib/lot.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { cityTable } from '../src/draft/lib/cities.js'
@@ -74,7 +74,7 @@ test('height: two stories where one is allowed is an error; a tall ridge against
   assert.match(b.message, /the limit is 14 ft/)
 })
 
-test("today's minimum lot and an unplatted tract are warnings that name the rule; the zoning error blocks Send with the office's line", () => {
+test("today's minimum lot and an unplatted tract are warnings that name the rule; zoning is a warning on the plan and blocks Send only for a confirmed lot", () => {
   const narrow = buildLot({ kind: 'manual', width: 40, depth: 120, city: 'mcallen', frontStreet: 'Elm St', setbacks: {} })
   const rooms = generateRooms({ ...program, garage: 0, sqft: 1400 }, style, narrow)
   const a = auditPlan(rooms, { ...program, garage: 0, sqft: 1400 }, kit, narrow)
@@ -94,14 +94,23 @@ test("today's minimum lot and an unplatted tract are warnings that name the rule
   const commercial = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'N 10th St', setbacks: {}, zoning: { status: 'found', district: 'C-3', residential: false, use: 'commercial', layer: 'https://gismap.mcallen.net/arcgis/rest/services/DevelopmentZoning/MapServer/4' } })
   const rz = generateRooms(program, style, commercial)
   const z = byId(auditPlan(rz, program, kit, commercial), 'zoning')
-  assert.equal(z?.severity, 'error')
-  assert.equal(z.message, 'This lot is zoned C-3 (commercial). A house may need a rezoning; ask the office to call you.')
+  // decision B6 (round 10, item 4): zoning is a warning on the plan, so Rooms and Draft stay open; Send is what it blocks
+  assert.equal(z?.severity, 'warn')
+  assert.equal(z.message, 'This lot is zoned C-3 (commercial). A house may need a rezoning; you can keep drafting, and the office will call you before it is sent on.')
   assert.equal(z.rule.value, 'C-3')
   const r = checkRules(rz, program, style, commercial)
-  assert.equal(r.ok, false)
-  assert.ok(r.reasons.some((x) => /zoned C-3/.test(x)))
+  assert.equal(r.ok, true, `the plan still passes the rules with a zoning warning: ${r.reasons.join('; ')}`)
+  assert.ok(!r.reasons.some((x) => /zoned C-3/.test(x)))
+  // Send: a typed lot with a zoning nobody confirmed is not blocked; once a drafter confirms it, it is; a parcel lot is
+  assert.equal(zoningBlocksSend(commercial), false, 'a typed lot, zoning unconfirmed')
+  const confirmedZone = buildLot({ ...commercial.spec, zoning: { ...commercial.spec.zoning, confirmedBy: 'maria@drafthouse.test' } })
+  assert.equal(zoningBlocksSend(confirmedZone), true, 'a typed lot whose zoning a drafter confirmed')
+  const parcelLot = buildLot({ kind: 'parcel', city: 'mcallen', calls: [{ distance: 100, bearing: 'N 90 E' }, { distance: 150, bearing: 'S 0 E' }, { distance: 100, bearing: 'S 90 W' }, { distance: 150, bearing: 'N 0 E' }], front: 2, streets: [{ edge: 2, name: 'N 10th St' }], setbacks: {}, zoning: commercial.spec.zoning })
+  assert.equal(zoningBlocksSend(parcelLot), true, 'a parcel lot: the district was read at the parcel')
   const res = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'Elm St', setbacks: {}, zoning: { status: 'found', district: 'R-1', residential: true, use: 'single-family' } })
   assert.equal(byId(auditPlan(generateRooms(program, style, res), program, kit, res), 'zoning'), undefined)
+  assert.equal(zoningBlocksSend(res), false)
+  assert.equal(zoningBlocksSend(null), false)
 })
 
 test('the garage door sits at least the city distance back from the street line: measured on the lot, an error when it is short', () => {

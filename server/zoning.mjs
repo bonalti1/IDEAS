@@ -48,19 +48,34 @@ export function classify(cityId, district) {
 /** The plain words for a lot we cannot draft against R-1 rules. */
 export const nonResidentialMessage = (district, use) => `This lot is zoned ${district} (${use}). A house may need a rezoning; the office will call you.`
 
+export const ZONING_DOWN = 'The city zoning map did not answer; the drafter reads the zoning'
 export function makeZoning({ store, fetchImpl = globalThis.fetch, log = console.log }) {
   async function query(layer, url, lat, lon) {
     const q = new URLSearchParams({ geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: '*', returnGeometry: 'false', f: 'json' })
-    const res = await fetchImpl(`${url}/query?${q}`, { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) throw fail(502, `the zoning layer answered ${res.status}`)
-    const body = await res.json()
-    if (body.error) throw fail(502, `the zoning layer: ${body.error.message || 'query error'}`)
+    // a dropped connection, a timeout or a bad answer is a 502 with a plain line (round 10, item 6)
+    let body
+    try {
+      const res = await fetchImpl(`${url}/query?${q}`, { signal: AbortSignal.timeout(8000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      body = await res.json()
+      if (body.error) throw new Error(body.error.message || 'query error')
+    } catch (e) {
+      if (e?.code === 'DH_NETWORK_GUARD') throw e
+      log(`zoning: ${url} did not answer (${String(e?.cause?.code || e?.message || e).slice(0, 80)})`)
+      throw fail(502, ZONING_DOWN, { upstream: 'zoning' })
+    }
     return (body.features || []).map((f) => f.attributes || f.properties || {})
   }
   async function newestHarlingenLayer(base) {
-    const res = await fetchImpl(`${base}?f=json`, { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) throw fail(502, `the Harlingen service list answered ${res.status}`)
-    const body = await res.json()
+    let body
+    try {
+      const res = await fetchImpl(`${base}?f=json`, { signal: AbortSignal.timeout(8000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      body = await res.json()
+    } catch (e) {
+      if (e?.code === 'DH_NETWORK_GUARD') throw e
+      throw fail(502, ZONING_DOWN, { upstream: 'zoning' })
+    }
     const names = (body.services || []).map((s) => s.name.split('/').pop()).filter((n) => /^COH_Zoning_Map_/.test(n)).sort()
     if (!names.length) throw fail(502, 'no Harlingen zoning layer found')
     return `${base}/${names[names.length - 1]}/FeatureServer/0`
@@ -77,7 +92,7 @@ export function makeZoning({ store, fetchImpl = globalThis.fetch, log = console.
       if (lat == null || lon == null) return { status: 'unknown', district: null, reason: 'no point', at: now() }
       const key = `zoning:${cityId}:${(+lat).toFixed(5)},${(+lon).toFixed(5)}`
       const cached = await store.meta.get(key)
-      if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return cached
+      if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, cached: true }
       const L = ZONING_LAYERS[cityId]
       const url = L.newestOf ? await newestHarlingenLayer(L.url) : L.url
       let feats = await query(L, url, lat, lon)

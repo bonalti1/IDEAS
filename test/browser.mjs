@@ -6,6 +6,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
+import { fixtureEnv } from './server-env.mjs'
 
 /** CHROME, then PLAYWRIGHT_CHROMIUM, then whatever `which` finds, then the sandbox path; null when there is none. */
 export function chromePath() {
@@ -43,7 +44,8 @@ async function waitFor(url, tries = 150) {
 
 /** Spawn in its own process group so t.after kills the tree (npx → vite → esbuild), not just the first process. */
 export function spawnGroup(t, cmd, args, { env = {}, cwd } = {}) {
-  const p = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  // round 10, item 2: a server started from a browser test answers from the fixtures unless LIVE=1
+  const p = spawn(cmd, args, { cwd, env: { ...process.env, ...fixtureEnv, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   let out = ''
   p.stdout.on('data', (d) => (out += d))
   p.stderr.on('data', (d) => (out += d))

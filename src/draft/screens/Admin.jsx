@@ -182,10 +182,29 @@ function Sources() {
     }
     setBusy(false)
   }
+  const checkFields = async () => {
+    setBusy(true)
+    try {
+      await api.sourcesFields()
+      await load()
+    } catch (e) {
+      setErr(e.message)
+    }
+    setBusy(false)
+  }
   if (!h) return err ? <div className="card sources"><h3>Sources</h3><p className="fine bad">{err}</p></div> : null
+  // round 10, item 5: the columns each source is mapped to, checked against the layer's own field list
+  const fieldsOf = (s) => {
+    const f = s.fields
+    if (s.disabled || s.dormant) return ['dormant', '—']
+    if (!f) return ['dormant', 'not checked yet']
+    if (f.error) return ['bad', `could not read the layer (${f.error})`]
+    if (f.missing?.length || f.wrongType?.length) return ['bad', [...f.missing.map((m) => `no column for ${m}`), ...f.wrongType].join('; ')]
+    return ['ok', `all present${f.otherCase?.length ? ` (${f.otherCase.length} spelled in another case on a fallback layer)` : ''}`]
+  }
   return (
     <div className="card sources" data-testid="sources">
-      <h3>Sources: parcels, flood, zoning</h3>
+      <h3>Sources: parcels, roads, flood, zoning</h3>
       <p className="muted small">
         {h.lookups} parcel lookup{h.lookups === 1 ? '' : 's'} since the server started{h.failures ? `, ${h.failures} failed (${h.failureRate}%)` : ''}. Regrid {h.regrid.enabled ? `on: ${h.regrid.used} of ${h.regrid.cap} this month` : 'dormant (no token; turns on if the free sources fail over 5% of lookups or the daily check fails 3 days running)'}. ASCE wind API {h.asce.enabled ? `on: ${h.asce.used} of ${h.asce.cap}` : 'dormant (drafter lookup per city)'}.{h.fixtures ? ' Answering from recorded fixtures.' : ''}
       </p>
@@ -196,6 +215,7 @@ function Sources() {
               <th>Source</th>
               <th>County</th>
               <th>Last answer</th>
+              <th>Mapped columns</th>
               <th>State</th>
             </tr>
           </thead>
@@ -208,6 +228,7 @@ function Sources() {
                 </td>
                 <td>{s.county}</td>
                 <td className={s.last ? (s.last.ok ? 'ok' : 'bad') : 'dormant'}>{s.last ? `${s.last.ok ? 'ok' : s.last.error} · ${s.last.ms} ms · ${s.last.at.slice(11, 19)}Z` : 'not used yet'}</td>
+                <td className={fieldsOf(s)[0]} data-testid={`fields-${s.id}`}>{fieldsOf(s)[1]}</td>
                 <td className={s.disabled ? 'bad' : s.dormant ? 'dormant' : s.circuitOpen ? 'bad' : 'ok'}>{s.disabled ? `disabled: ${s.disabled}` : s.dormant ? `dormant: ${s.dormant}` : s.circuitOpen ? 'skipped 10 min after 3 failures' : 'live'}</td>
               </tr>
             ))}
@@ -218,7 +239,13 @@ function Sources() {
         Daily check: {h.daily ? `${h.daily.ok ? 'passed' : 'FAILED'} at ${h.daily.at.slice(0, 16)}Z${h.daily.failedDays ? `, ${h.daily.failedDays} day(s) running` : ''}: ${h.daily.results.map((r) => `${r.address.split(',')[0]} ${r.ok ? 'ok' : r.error || r.match || 'missing ' + (r.missing || []).join('/')}`).join('; ')}` : 'not run yet'}.{' '}
         <Button small ghost disabled={busy} onClick={check} data-testid="sources-check">
           {busy ? 'Checking…' : 'Check now'}
+        </Button>{' '}
+        <Button small ghost disabled={busy} onClick={checkFields} data-testid="sources-fields">
+          Check the columns
         </Button>
+      </p>
+      <p className="fine">
+        Mapped columns: {h.fieldCheck ? `${h.fieldCheck.ok ? 'every mapped column is on its layer' : 'a mapped column is MISSING on a layer (the owner lookup or the parcel match fails for that county until it is fixed)'}, checked ${h.fieldCheck.at.slice(0, 16)}Z` : 'not checked yet'}. The street side of a lot is read from the Census TIGERweb roads; when that service is down it falls back to the county address point, then the Census point.
       </p>
       <p className="fine">Zoning layers: {h.zoning.map((z) => z.cityId).join(', ')}; Mission, San Benito and Rio Grande City publish none (the drafter reads the map). {err && <span className="bad">{err}</span>}</p>
     </div>

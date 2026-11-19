@@ -21,7 +21,7 @@ export function makeWind({ store, env = process.env, fetchImpl = globalThis.fetc
       if (!key || lat == null || lon == null) return { mph: null, text: WIND_UNSET, source: null, status: 'unset' }
       const ck = `wind:${(+lat).toFixed(4)},${(+lon).toFixed(4)}`
       const cached = await store.meta.get(ck)
-      if (cached) return cached
+      if (cached) return { ...cached, cached: true }
       const month = now().slice(0, 7)
       const usedKey = `asce:usage:${month}`
       const used = +((await store.meta.get(usedKey)) || 0)

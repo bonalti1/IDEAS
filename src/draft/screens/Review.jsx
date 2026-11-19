@@ -141,6 +141,21 @@ export default function Review({ user }) {
     }
   }
   const [planView, setPlanView] = useState(true)
+  // round 10, item 4: a typed lot carries no zoning of its own; the drafter reads the city map and says what it is
+  const [zoneDistrict, setZoneDistrict] = useState('')
+  const [zoneHouse, setZoneHouse] = useState(true)
+  const confirmZoning = async (clear = false) => {
+    setBusy(true)
+    setError('')
+    try {
+      const p = await api.confirmZoning(open.id, clear ? { clear: true } : { district: zoneDistrict, residential: zoneHouse })
+      setOpen(p)
+      setZoneDistrict('')
+    } catch (e) {
+      setError(e.message)
+    }
+    setBusy(false)
+  }
   const confirmLot = async (confirmed) => {
     if (!open || busy) return
     setBusy(true)
@@ -324,6 +339,36 @@ export default function Review({ user }) {
                       Confirm lot
                     </Button>
                   </div>
+                </>
+              )}
+            </div>
+          )}
+          {open.lot?.spec?.kind === 'manual' && (
+            <div className="card thin" data-testid="zoning-confirm">
+              <h3>Zoning (typed lot)</h3>
+              {open.lot.zoning?.confirmedBy ? (
+                <p className="small">
+                  <b>{open.lot.zoning.district}</b> ({open.lot.zoning.use}), confirmed by {open.lot.zoning.confirmedBy}. {open.lot.zoning.residential === false ? 'Send is blocked for this plan until the office has called the client.' : 'A house district: nothing blocked.'}{' '}
+                  <button className="linkish" disabled={busy} onClick={() => confirmZoning(true)}>
+                    Clear
+                  </button>
+                </p>
+              ) : (
+                <>
+                  <p className="fine">The homeowner typed this lot in, so no zoning was read for it. Read the city zoning map and enter the district; only a district you confirm here can block Send.</p>
+                  <div className="row2">
+                    <label className="field">
+                      <span>District</span>
+                      <input id="zone-district" value={zoneDistrict} onChange={(e) => setZoneDistrict(e.target.value)} placeholder="R-1, C-3…" />
+                    </label>
+                    <label className="confirm">
+                      <input id="zone-house" type="checkbox" checked={zoneHouse} onChange={(e) => setZoneHouse(e.target.checked)} />
+                      <span>A house district</span>
+                    </label>
+                  </div>
+                  <Button small primary disabled={busy || !zoneDistrict.trim()} onClick={() => confirmZoning(false)}>
+                    Confirm zoning
+                  </Button>
                 </>
               )}
             </div>

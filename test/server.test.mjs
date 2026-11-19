@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { gunzipSync } from 'node:zlib'
+import { fixtureEnv } from './server-env.mjs'
 
 const APP = 'test-app-key'
 const WORKER = 'test-worker-key'
@@ -16,7 +17,7 @@ const ORIGIN = 'https://drafthouse.example'
 async function startServer(t, env) {
   const port = 8790 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_DRAFTERS: 'drafter@test.local', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_DRAFTERS: 'drafter@test.local', PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))

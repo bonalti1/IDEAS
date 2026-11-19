@@ -9,6 +9,7 @@ import { FlatLabel } from './labels.jsx'
 export const COLORS = {
   bg: '#dfe2e6',
   lotFill: '#f8f7f2',
+  lotBad: '#f6d5d2', // a lot the setbacks leave no room on (round 10, item 1)
   street: '#c7ccd2',
   streetEdge: '#9aa1a9',
   ink: '#1c1e21',
@@ -19,7 +20,7 @@ export const COLORS = {
 // draw-order elevations (ft) to avoid z-fighting
 const Y = { street: 0.02, lot: 0.06, setback: 0.24, property: 0.3, marker: 0.32 }
 
-function LotFill({ lot }) {
+function LotFill({ lot, bad = false }) {
   const geom = useMemo(() => {
     const B = lot.boundary
     const shape = new THREE.Shape()
@@ -32,7 +33,7 @@ function LotFill({ lot }) {
   }, [lot])
   return (
     <mesh geometry={geom} position={[0, Y.lot, 0]}>
-      <meshBasicMaterial color={COLORS.lotFill} side={THREE.DoubleSide} />
+      <meshBasicMaterial color={bad ? COLORS.lotBad : COLORS.lotFill} side={THREE.DoubleSide} />
     </mesh>
   )
 }
@@ -70,8 +71,9 @@ function nearestLabel(lot, p) {
 }
 
 function SetbackEnvelope({ lot }) {
-  const E = lot.envelope
-  const pts = useMemo(() => [...E, E[0]].map(([x, z]) => [x, Y.setback, z]), [lot])
+  const E = lot.envelope || []
+  // an empty envelope (the setbacks meet in the middle of a sliver lot) draws nothing here; the lot itself still shows
+  const pts = useMemo(() => (E.length < 3 ? [] : [...E, E[0]].map(([x, z]) => [x, Y.setback, z])), [lot])
   if (E.length < 3) return null
   const C = lot.centroid
   return (
@@ -200,7 +202,7 @@ function ScaleBar({ x0 = 20, z0 = 175 }) {
   )
 }
 
-export default function SitePlan({ lot = DEFAULT_LOT }) {
+export default function SitePlan({ lot = DEFAULT_LOT, problem = '' }) {
   const [cx, cz] = lot.centroid
   const xs = lot.boundary.map((p) => p[0])
   const zs = lot.boundary.map((p) => p[1])
@@ -208,6 +210,17 @@ export default function SitePlan({ lot = DEFAULT_LOT }) {
   const maxZ = Math.max(...zs)
   const minZ = Math.min(...zs)
   const isRef = lot.kind === 'reference'
+  // the lot's own line of text sits on the side away from the front street, so it never runs across the street's name
+  // (round 10: a parcel can front north, east or west; the label used to sit north of the lot whatever the street did)
+  const frontEdge = (lot.edges || []).find((e) => e.kind === 'front')
+  let streetNorth = false
+  if (frontEdge && lot.corners?.length > frontEdge.index) {
+    const a = lot.corners[frontEdge.index]
+    const b = lot.corners[(frontEdge.index + 1) % lot.corners.length]
+    streetNorth = (a[1] + b[1]) / 2 < cz - 1
+  }
+  const anyStreetNorth = streetNorth || (lot.streets || []).some((st) => st.pts?.some((p) => p[1] < minZ - 4))
+  const labelZ = anyStreetNorth ? maxZ + 9 : minZ - 8
   return (
     <group>
       <Grid
@@ -226,9 +239,14 @@ export default function SitePlan({ lot = DEFAULT_LOT }) {
       {(lot.streets || []).map((s) => (
         <Street key={s.name + (s.edge ?? '')} street={s} lot={lot} />
       ))}
-      <LotFill lot={lot} />
+      <LotFill lot={lot} bad={!!problem} />
       <PropertyLine lot={lot} />
       <SetbackEnvelope lot={lot} />
+      {problem && !isRef ? (
+        <FlatLabel x={cx} z={anyStreetNorth ? maxZ + 22 : maxZ + 9} angle={0} size={3.6} color={COLORS.property} bold>
+          {String(problem).toUpperCase().slice(0, 64)}
+        </FlatLabel>
+      ) : null}
 
       {isRef ? (
         <>
@@ -243,9 +261,17 @@ export default function SitePlan({ lot = DEFAULT_LOT }) {
           </FlatLabel>
         </>
       ) : (
-        <FlatLabel x={cx} z={minZ - 8} angle={0} size={3.6} color="#5a6069">
-          {lot.address ? lot.address.toUpperCase().slice(0, 40) + ' · ' : ''}±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC{lot.confirmed === false ? ' · LOT PENDING DRAFTER CONFIRMATION' : ''}
-        </FlatLabel>
+        <>
+          {/* two short lines, so the text stays inside the picture on a narrow lot (round 10) */}
+          <FlatLabel x={cx} z={labelZ} angle={0} size={3.6} color="#5a6069">
+            {lot.address ? lot.address.split(',')[0].toUpperCase().slice(0, 40) + ' · ' : ''}±{Math.round(lot.areaSf).toLocaleString()} SF · {(lot.areaSf / 43560).toFixed(2)} AC
+          </FlatLabel>
+          {lot.confirmed === false && (
+            <FlatLabel x={cx} z={labelZ + (anyStreetNorth ? 6 : -6)} angle={0} size={3} color="#5a6069">
+              LOT PENDING DRAFTER CONFIRMATION
+            </FlatLabel>
+          )}
+        </>
       )}
 
       <NorthArrow x={minX - 40} z={minZ - 10} />

@@ -60,6 +60,10 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 .viewport { flex: 1; position: relative; min-width: 0; }
 .viewport-stage { position: absolute; inset: 0; }
 .viewport canvas { display: block; }
+.viewport-tag.bad { color: #b3261e; background: rgba(253, 236, 234, 0.95); border: 1px solid #e2a09a; }
+.address-check { border: 1px solid #e0b040; background: #fff8e1; }
+.address-check .fine.warn { font-size: 14px; }
+.parcel-card .edges .front { font-weight: 600; }
 .viewport-tag { position: absolute; left: 16px; top: 14px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brand-muted); background: rgba(247,247,247,0.85); padding: 6px 10px; border-radius: 6px; }
 .viewport-views { position: absolute; right: 16px; top: 14px; display: flex; gap: 4px; background: rgba(247,247,247,0.9); padding: 4px; border-radius: 8px; border: 1px solid var(--brand-hair); }
 .viewport-views button { font: inherit; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 6px 12px; border: 0; background: transparent; color: var(--brand-muted); border-radius: 6px; cursor: pointer; }
