@@ -74,7 +74,7 @@ test('screens: the parcel is drawn with the street on its true frontage; Curtis 
       assert.match(offer, /Is this your lot\?/i, `${lot.slug} ${size.name}`)
       // the street side is the frontage on the named street, in feet
       assert.ok(offer.includes(`street side (${lot.street}) ${lot.front}'`), `${lot.slug} ${size.name}: the street side is ${lot.front} ft on ${lot.street}:\n${offer}`)
-      if (lot.corner) assert.match(offer, new RegExp(`A corner lot: the side on ${lot.corner} takes the street-side setback`))
+      if (lot.corner) assert.match(offer, new RegExp(`A corner lot: the side on ${lot.corner} keeps the wider open space the city asks for along a street`))
       else assert.doesNotMatch(offer, /A corner lot/)
       assert.doesNotMatch(offer, /best guess/)
       if (lot.curve) {
@@ -122,7 +122,8 @@ test('screens: the parcel is drawn with the street on its true frontage; Curtis 
   assert.match(tag, /5435 CURTIS CLARK DR/i, 'still the parcel')
   assert.match(tag, /no room to build/i)
   const panel = await page.locator('.lot-side').innerText()
-  assert.match(panel, /The setbacks leave no buildable area/)
+  assert.match(panel, /The space the city keeps open along the edges leaves no room to build/) // round 12, item D: plain words
+  assert.doesNotMatch(panel, /setback|NaN|undefined/i)
   assert.doesNotMatch(panel, /15,000 sf/)
   assert.equal(await page.getByTestId('lot-next').isEnabled(), false)
   await page.screenshot({ path: `${OUT}/lot-no-room-drawn-red-1440.png` })

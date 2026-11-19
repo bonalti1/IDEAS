@@ -1,6 +1,6 @@
 // Draft House client flow. Five steps after the start screen. With an account the project is
 // saved on the office API (every version, credits, status); without one it lives in this tab.
-import React, { Suspense, lazy, useEffect, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import App from '../App.jsx'
 import { Mark } from './ui.jsx'
 import Start from './screens/Start.jsx'
@@ -14,6 +14,7 @@ const Admin = lazy(() => import('./screens/Admin.jsx'))
 const Review = lazy(() => import('./screens/Review.jsx'))
 import SignIn from './screens/SignIn.jsx'
 import { DEFAULT_PROGRAM, starterDraft } from './lib/layout.js'
+import { turnLot } from './lib/lot.js'
 import { STYLES } from './lib/styles.js'
 import { api } from './lib/api.js'
 import { currentUser, onAuthChange, signOut } from './lib/auth.js'
@@ -94,6 +95,9 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   const [changesLeft, setChangesLeft] = useState(CHANGES_PER_PLAN) // free changes left on the open plan
   const [history, setHistory] = useState([])
   const [returnSeen, setReturnSeen] = useState(false) // the client read the drafter's note and went back to the draft
+  // round 12, item E: the rooms start at what fits the lot until the homeowner chooses (touched); autoNote says we did that
+  const [touched, setTouched] = useState(false)
+  const [autoNote, setAutoNote] = useState(false)
 
   const loadUser = async () => {
     const u = await currentUser()
@@ -109,6 +113,7 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   const go = (n) => setStep(n)
   const restart = () => {
     setStep(0)
+    projectRef.current = null
     setProject(null)
     setIntake(null)
     setLot(null)
@@ -118,6 +123,8 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
     setChangesLeft(CHANGES_PER_PLAN)
     setHistory([])
     setReturnSeen(false)
+    setTouched(false)
+    setAutoNote(false)
     if (user) api.projects().then(setProjects).catch(() => {})
   }
   const noteMessage = (p) => ({ who: 'house', text: `Note from ${p.review?.drafter || 'your drafter'}: ${p.review?.note}`, applied: true, source: 'undo' })
@@ -132,24 +139,78 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
     restart()
   }
 
+  // Round 12, item B: the project is saved as soon as a lot is taken, and again on every step. Before this, the
+  // address, the chosen parcel, the style and the rooms lived only in this tab until the Draft step: a homeowner
+  // who signed out lost them, and a drafter never saw the lot. `patch` is what changed; `stage` is the step to
+  // resume on. With no account, or the office unreachable, the plan keeps going in this tab as before.
+  const projectRef = useRef(null)
+  projectRef.current = project
+  const saving = useRef(Promise.resolve())
+  const saveDraft = (patch, stage) => {
+    if (!user) return Promise.resolve(null)
+    const run = async () => {
+      const cur = projectRef.current
+      try {
+        const body = { ...patch, stage, client: intake?.client || user.name }
+        const p = cur && EDITABLE.includes(cur.status) ? await api.updateProject(cur.id, body) : cur ? cur : await api.createProject(body)
+        projectRef.current = p
+        setProject(p)
+        setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
+        api.projects().then(setProjects).catch(() => {})
+        return p
+      } catch {
+        return cur // the office did not answer: nothing is lost in this tab, and the next step tries again
+      }
+    }
+    // one save at a time, in order: the lot is created before the style or the rooms are added to it
+    saving.current = saving.current.then(run, run)
+    return saving.current
+  }
+  // the rooms chosen so far are saved a moment after the last tap on the Rooms step
+  useEffect(() => {
+    if (step !== 3 || !user || !projectRef.current || projectRef.current.version) return
+    const t = setTimeout(() => saveDraft({ program }, 'rooms'), 900)
+    return () => clearTimeout(t)
+  }, [program, step])
+  // "Send my lot to the drafter" (item A): no plan of ours fits; the lot and the rooms asked for go to the drafter's queue
+  const sendLotToDrafter = async (note = '') => {
+    const p = (await saveDraft({ lot, program, ...(style ? { style: { id: style.id, name: style.name } } : {}) }, 'rooms')) || projectRef.current
+    if (!p?.id) throw new Error('Sign in so we can save your lot and send it to a drafter.')
+    const out = await api.customProject(p.id, { note, program })
+    projectRef.current = out
+    setProject(out)
+    api.projects().then(setProjects).catch(() => {})
+    return out
+  }
+
   // Rooms → Draft: a fresh layout; saved as a project (or a new free version of one) when signed in
-  const enterDraft = async () => {
-    const d = starterDraft(program, style, lot)
+  const enterDraft = async (opts = {}) => {
+    // the fit may have turned the house to sit in the widest part of a wedge-shaped lot (round 12, item A): the lot
+    // carries that turn from here on, and the office rebuilds it the same way from the spec
+    const onLot = Number.isFinite(opts?.turn) && lot?.spec ? turnLot(lot, opts.turn) : lot
+    if (onLot !== lot) setLot(onLot)
+    const d = starterDraft(program, style, onLot)
     const next = d.rooms
     // what the draft had to do to fit: said once, up front
     const notes = []
     if (d.clamped) notes.push(`With these rooms the plan does not go under ${Math.round(d.minSqft).toLocaleString()} sf, so that is the size you see.`)
-    if (d.fitScale < 0.995) notes.push(`We trimmed it about ${Math.round((1 - d.fitScale) * 100)}% to keep it inside the setbacks on this lot.`)
+    if (d.fitScale < 0.995) notes.push(`We trimmed it about ${Math.round((1 - d.fitScale) * 100)}% to keep the space the city requires along the edges of this lot.`)
+    if (onLot?.spec?.turn) notes.push(`The house is turned ${Math.abs(onLot.spec.turn)}° from square to the street, to sit in the widest part of your lot.`)
     const intro = notes.length ? [{ who: 'house', text: `Here is your first draft. ${notes.join(' ')}`, applied: true, source: 'undo' }] : []
     setRooms(next)
     setHistory(intro)
     if (user) {
       try {
-        const body = { lot, style: { id: style.id, name: style.name }, program, rooms: next, client: intake?.client || user.name }
-        const p = project && EDITABLE.includes(project.status) ? await api.updateProject(project.id, { ...body, note: 'Rooms changed' }) : await api.createProject(body)
+        await saving.current.catch(() => {}) // the lot-only save, if one is still on its way
+        const cur = projectRef.current
+        const body = { lot: onLot, style: { id: style.id, name: style.name }, program, rooms: next, client: intake?.client || user.name }
+        const p = cur && EDITABLE.includes(cur.status) ? await api.updateProject(cur.id, { ...body, note: 'Rooms changed' }) : await api.createProject(body)
+        projectRef.current = p
         setProject(p)
         setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
         setHistory([...historyFrom(p.versions), ...intro])
+        // a lot once sent for a custom design that now has a plan of ours: the request is taken back
+        if (p.needsCustom) api.customProject(p.id, { clear: true }).then((q) => ((projectRef.current = q), setProject(q))).catch(() => {})
       } catch {
         setProject(null) // office unreachable: keep drafting in this tab
       }
@@ -165,12 +226,19 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
       setIntake({ address: p.address, client: p.client })
       setLot(p.lot && p.lot.envelope ? p.lot : null)
       setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
-      setProgram(p.program || DEFAULT_PROGRAM)
-      setRooms(p.rooms)
+      setProgram(p.program && Object.keys(p.program).length ? p.program : DEFAULT_PROGRAM)
+      // rooms a homeowner chose are theirs; a saved lot still on the app's default starts at what fits
+      const same = ['beds', 'baths', 'garage', 'sqft', 'office', 'halfBath', 'suite2'].every((k) => (p.program?.[k] ?? DEFAULT_PROGRAM[k]) === DEFAULT_PROGRAM[k])
+      setTouched(!!p.version || !same)
+      setAutoNote(false)
+      setRooms(p.rooms || [])
       setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
       setHistory(p.status === 'returned' && p.review?.note ? [...historyFrom(p.versions), noteMessage(p)] : historyFrom(p.versions))
       setReturnSeen(p.status === 'returned')
-      go(EDITABLE.includes(p.status) ? 4 : 5)
+      // a lot saved on its own (round 12, item B) opens where it was left: the style step, or the rooms once a style is chosen
+      // (one ready style today: the rooms step, with the lot drawn; with more, the style step until one is chosen)
+      if (!p.rooms?.length) go(!(p.lot && p.lot.envelope) ? 1 : (p.style?.id && p.stage === 'rooms') || STYLES.filter((x) => x.ready).length === 1 ? 3 : 2)
+      else go(EDITABLE.includes(p.status) ? 4 : 5)
     } catch (e) {
       alert(`Could not open that house: ${e.message}`)
     }
@@ -199,6 +267,12 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             })}
           </ol>
         )}
+        {/* phone: the step names are hidden to fit five numbers; the current one is named under them (round 12, item H) */}
+        {!office && step > 0 && (
+          <div className="step-name" data-testid="step-name">
+            Step {step} of {STEPS.length} · {STEPS[step - 1]}
+          </div>
+        )}
         <nav className="dh-links">
           {user && (
             <span className="dh-user">
@@ -207,10 +281,25 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
                   {changesLeft} change{changesLeft === 1 ? '' : 's'} left on this plan
                 </span>
               )}
-              {user.email}
-              <button className="linkish" onClick={logout}>
+              <span className="dh-email">{user.email}</span>
+              <button className="linkish dh-signout" onClick={logout}>
                 Sign out
               </button>
+              {/* phone (round 12, item H): the email collided with "Sign out"; both sit behind an account button */}
+              <details className="dh-account" data-testid="account">
+                <summary aria-label="Your account">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M4.5 20c.8-3.8 3.9-5.6 7.5-5.6s6.7 1.8 7.5 5.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </summary>
+                <div className="dh-account-menu">
+                  <span className="dh-account-email">{user.email}</span>
+                  <button className="linkish" onClick={logout}>
+                    Sign out
+                  </button>
+                </div>
+              </details>
             </span>
           )}
           {isDrafter(user) && (
@@ -272,14 +361,33 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             intake={intake}
             lot={lot}
             onNext={(l) => {
-              setLot({ ...l, client: intake?.client })
+              const taken = { ...l, client: intake?.client }
+              setLot(taken)
+              // another lot: rooms nobody chose go back to the default and are fitted to this lot on the rooms step
+              if (!touched) {
+                setProgram(DEFAULT_PROGRAM)
+                setAutoNote(false)
+              }
               go(2)
+              // saved now, not at the Draft step: the lot is the homeowner's from here, and a parcel or plat lot is in the drafter's queue
+              saveDraft({ lot: taken, program, ...(style ? { style: { id: style.id, name: style.name } } : {}) }, 'style')
             }}
             onBack={() => go(0)}
           />
         )}
-        {!office && step === 2 && <Style style={style} onPick={setStyle} onNext={() => go(3)} onBack={() => go(1)} />}
-        {!office && step === 3 && <Program program={program} style={style} lot={lot} onChange={setProgram} onBack={() => go(2)} onNext={enterDraft} />}
+        {!office && step === 2 && (
+          <Style
+            style={style}
+            onPick={setStyle}
+            onNext={() => {
+              go(3)
+              const st = style || STYLES.find((x) => x.ready)
+              saveDraft({ lot, program, ...(st ? { style: { id: st.id, name: st.name } } : {}) }, 'rooms')
+            }}
+            onBack={() => go(1)}
+          />
+        )}
+        {!office && step === 3 && <Program program={program} style={style} lot={lot} onChange={(p) => (setTouched(true), setAutoNote(false), setProgram(p))} onBack={() => go(2)} onNext={enterDraft} project={project} onSendLot={user ? sendLotToDrafter : null} pristine={!touched && !autoNote && !project?.version} autoNote={autoNote} onAuto={(p) => (setProgram(p), setAutoNote(true))} />}
         {!office && step === 4 && (
           <Draft
             style={style}

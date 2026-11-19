@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { zoningBlocksSend } from '../lib/lot.js'
+import { plainReason } from '../lib/plain.js'
 import { Button, Stat, Mark, sf } from '../ui.jsx'
 import { kitFor, programOf, programLine } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
@@ -46,6 +47,22 @@ export default function Send({ lot, style, program, rooms, history, project, set
   // decision B6: a lot that is not a house district blocks Send (never the draft), and only when the zoning is this lot's
   const zoneBlock = zoningBlocksSend(lot)
   const zoneLine = zoneBlock ? `This lot is zoned ${lot.zoning.district} (${lot.zoning.use}). A house may need a rezoning; ask the office to call you.` : null
+  // round 12, item C: a parcel or plat lot a drafter has not confirmed yet is the normal next step, not an error. The
+  // plan is saved; the Send button comes when the lot is confirmed (the page looks every 20 seconds, and we email).
+  const ownLot = lot?.spec?.kind === 'parcel' || lot?.spec?.kind === 'plat'
+  const lotConfirmed = !!(project?.lot?.spec ? project.lot.spec.confirmed : lot?.spec?.confirmed)
+  const lotWaiting = !!project && ownLot && !lotConfirmed && ['drafting', 'returned'].includes(project.status)
+  useEffect(() => {
+    if (!lotWaiting || !project?.id) return
+    const tm = setInterval(async () => {
+      try {
+        setProject(await api.project(project.id))
+      } catch {
+        /* keep last state */
+      }
+    }, 20000)
+    return () => clearInterval(tm)
+  }, [lotWaiting, project?.id])
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
 
@@ -85,7 +102,13 @@ export default function Send({ lot, style, program, rooms, history, project, set
       else setJob((await api.sendDesign(design, ifc)).job)
     } catch (e) {
       if (project) {
-        setError(`Could not send: ${e.message}`)
+        // a lot still waiting for its drafter is not a failure: the calm card says so (the project is read again)
+        if (e.body?.lotPending) {
+          api.project(project.id).then(setProject).catch(() => {})
+          setSending(false)
+          return
+        }
+        setError(`We could not send it yet: ${plainReason(e.message)}`)
         setSending(false)
         return
       }
@@ -319,13 +342,20 @@ export default function Send({ lot, style, program, rooms, history, project, set
             )}
             <p className="fine">Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost.</p>
           </div>
+          {lotWaiting && !zoneBlock && (
+            <div className="card note calm" data-testid="lot-waiting">
+              <h3>Your plan is saved</h3>
+              <p>A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can send it.</p>
+              <p className="fine">Nothing more to do now. You can keep changing the plan in the meantime; this page shows the Send button as soon as the lot is confirmed.</p>
+            </div>
+          )}
           {(!rules.ok || zoneBlock) && (
             <div className="card note bad" data-testid="send-blocked">
               <h3>This plan cannot be sent yet</h3>
               <ul className="list">
                 {zoneLine && <li key="zoning">{zoneLine}</li>}
                 {(rules.ok ? [] : rules.reasons).map((r) => (
-                  <li key={r}>{r}</li>
+                  <li key={r}>{plainReason(r)}</li>
                 ))}
               </ul>
               {zoneBlock ? (
@@ -396,7 +426,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
           </div>
           <div className="card pdf">
             <h3>Floor plan and site plan PDF</h3>
-            <p className="muted">Two sheets with the South Texas Builders title block: the floor plan at 1/4" = 1'-0" and the site plan (lot lines, setbacks, driveway, walk, coverage) at 1" = 20', on 24 × 36. The tabloid version prints at home at 1/8" = 1'-0".</p>
+            <p className="muted">Two sheets with the South Texas Builders title block: the floor plan at 1/4" = 1'-0" and the site plan (lot lines, the space the city keeps open, driveway, walk, coverage) at 1" = 20', on 24 × 36. The tabloid version prints at home at 1/8" = 1'-0".</p>
             <div className="row gap">
               <Button onClick={() => downloadPlan('archD')} disabled={!!pdfBusy}>
                 {pdfBusy === 'archD' ? 'Building…' : 'Download PDF · 24 × 36'}
@@ -436,9 +466,11 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={onBack}>
           Keep editing
         </Button>
-        <Button primary disabled={sending || !rules.ok || zoneBlock} onClick={send} title={zoneBlock ? 'The office calls you about the zoning first' : rules.ok ? '' : 'Fix the problems listed above first'}>
-          {sending ? 'Sending…' : 'Send to drafters'}
-        </Button>
+        {!lotWaiting && (
+          <Button primary disabled={sending || !rules.ok || zoneBlock} onClick={send} title={zoneBlock ? 'The office calls you about the zoning first' : rules.ok ? '' : 'Fix the problems listed above first'}>
+            {sending ? 'Sending…' : 'Send to drafters'}
+          </Button>
+        )}
       </div>
     </div>
   )

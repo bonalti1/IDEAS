@@ -55,9 +55,89 @@ function heightOnGable(g, x, z) {
 /**
  * Sheets: { id, mass, kind, plane: {a, b, c} with h = a x + b z + c,
  * footprint: MultiPolygon in plan, edges: outer eave/rake lines for fascia,
- * material }. Ends: vertical gable triangles { id, mass, kind: 'end', axis, at, tri }.
+ * material }; the two sides of a gable also carry its ridge, and those of the main roof `main: true`.
+ * Ends: vertical gable triangles { id, mass, kind: 'end', axis, at, tri }.
  */
+// Round 12, item 5: the roof is worked out twice for every plan the fit tries (once for its faces, once for its
+// dormer walls), and again whenever a step hands on the same masses unmoved. Round 11's hips and run-ins made each
+// pass heavier, and the 16-case fit went from about 950 ms to about 1,550 ms. The same masses give the same roof, so
+// the last few answers are kept. What comes back is shared: callers read it, they do not change it.
+const KEPT = 48
+const sheetCache = new Map()
+const faceCache = new Map()
+const keyOf = (masses, k, centre, offset) => JSON.stringify([masses, k, centre, offset])
+const work = { made: 0, reused: 0 }
+/** How many roofs were worked out and how many were answered from the kept ones (for the tests). */
+export const roofWork = () => ({ ...work })
+function kept(cache, key, make) {
+  if (cache.has(key)) {
+    const hit = cache.get(key)
+    cache.delete(key)
+    cache.set(key, hit)
+    if (cache === sheetCache) work.reused++
+    return hit
+  }
+  if (cache === sheetCache) work.made++
+  const out = make()
+  cache.set(key, out)
+  if (cache.size > KEPT) cache.delete(cache.keys().next().value)
+  return out
+}
 export function roofSheets(masses, k, centre, offset = [0, 0]) {
+  return kept(sheetCache, keyOf(masses, k, centre, offset), () => roofSheetsNow(masses, k, centre, offset))
+}
+
+// Round 12, item 7c: one main roof. The masses are the kit's own (a 14 ft plate at the entry wall, cut-outs for the
+// gables in front of it, an 18 ft dormer); built as drawn they read as several separate roofs, with an open band
+// between the 10 ft walls and the 14 ft eave over the foyer. The massing model reads them as one house instead:
+//   1. the main roof (the mass called 'main', else the largest gable) is one ridge with both eaves on its lower
+//      plate. It keeps the ridge height the kit gives it, so its pitch steepens (to 12:12 at most), and it has no
+//      cut-outs: a lower gable in front of it shows where it is the higher surface and meets it in two valleys
+//   2. a shed dormer on the main roof stands on the roof at its face, and its own roof springs from the main ridge
+//   3. no other gable reaches within MAIN_OVER ft of the main ridge: a wing that would is given a lower pitch
+// The stored masses are not changed (the contract and the audit read them); this is how they are drawn.
+const MAIN_OVER = 1.5
+const WING_MIN_PITCH = 4
+const spanOf = (m) => Math.abs(m.ridge === 'ew' ? m.y1 - m.y0 : m.x1 - m.x0)
+function oneMainRoof(masses, k) {
+  const gables = masses.filter((m) => m.kind === 'gable' && m.x0 !== undefined && m.y0 !== undefined && m.pitch > 0)
+  if (!gables.length) return { masses, main: null }
+  const area = (m) => Math.abs((m.x1 - m.x0) * (m.y1 - m.y0))
+  const drawn = gables.find((m) => m.id === 'main') || gables.reduce((a, b) => (area(b) > area(a) ? b : a))
+  const ridgeOf = (m) => (m.plate + (m.plate2 ?? m.plate)) / 2 + ((spanOf(m) * k) / 2) * (m.pitch / 12)
+  const half = (spanOf(drawn) * k) / 2
+  const eave = Math.min(drawn.plate, drawn.plate2 ?? drawn.plate)
+  const { plate2, cuts, ...rest } = drawn
+  const pitch = half > 0 ? Math.min(Math.max(12, drawn.pitch), Math.max(drawn.pitch, ((ridgeOf(drawn) - eave) / half) * 12)) : drawn.pitch
+  const main = { ...rest, plate: eave, pitch }
+  const top = eave + half * (pitch / 12)
+  const out = masses.map((m) => {
+    if (m === drawn) return main
+    if (m.kind === 'gable' && gables.includes(m) && ridgeOf(m) > top - MAIN_OVER) {
+      const h = (spanOf(m) * k) / 2
+      const mid = (m.plate + (m.plate2 ?? m.plate)) / 2
+      return h > 0 ? { ...m, pitch: Math.min(m.pitch, Math.max(WING_MIN_PITCH, ((top - MAIN_OVER - mid) / h) * 12)) } : m
+    }
+    if (m.kind === 'dormer' && main.ridge === 'ew' && m.x0 >= main.x0 - 0.5 && m.x1 <= main.x1 + 0.5) {
+      // a shed dormer on the street slope of the main roof: its roof springs from the main ridge and falls to its
+      // own plate at its face, and its face stands on the main roof (the kit's stood on the 14 ft entry wall)
+      const mid = (main.y0 + main.y1) / 2
+      const run = (m.face - mid) * k // from the ridge out to the dormer's face
+      const foot = eave + Math.max(0, (main.y1 - m.face) * k) * (pitch / 12) // the main roof at the face
+      if (run > 2 && foot < top - 2) {
+        // never flatter than 2:12, never as steep as the roof it sits on
+        const plate = Math.max(foot + 1, Math.min(m.plate, top - run * (2 / 12)))
+        // (it reaches the ridge half an inch proud, so the main slope ends cleanly at its two cheeks)
+        return { ...m, plate, base: Math.min(m.base ?? foot, foot), depth: run, pitch: Math.min(((top + 0.05 - plate) / run) * 12, pitch - 1) }
+      }
+    }
+    return m
+  })
+  return { masses: out, main }
+}
+
+function roofSheetsNow(drawnMasses, k, centre, offset = [0, 0]) {
+  const { masses, main: mainMass } = oneMainRoof(drawnMasses, k)
   const sheets = []
   const ends = []
   const cutEdges = [] // { mass, a: [x, z], b: [x, z], out: [nx, nz] } edges of cut-outs, normal pointing into the remaining roof
@@ -86,12 +166,19 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
       //            a triangle at its own wall closes whatever stays exposed
       //   'hip'    nothing higher to meet: the end is closed with a hip, never left as a cut 20 ft out
       const others = geos.filter((o) => o && o.m !== m)
+      // how far a run-in goes: to where the ridge meets the higher roof (the top of the two valleys) and no further.
+      // Round 12, item 7c: it ran the full 20 ft, through the higher roof's ridge and out of its far slope, so a
+      // front gable showed again as a loose triangle on the rear slope
+      const reach = { start: RUN_INTO, end: RUN_INTO }
       const kindOf = (which) => {
         if (endsList.includes(which === 'start' ? (ew ? 'w' : 'n') : ew ? 'e' : 's')) return 'gable'
         for (let d = 0.5; d <= RUN_INTO; d += 0.5) {
           const t = which === 'start' ? w0 - d : w1 + d
           const [x, z] = ew ? [t, r] : [r, t]
-          if (others.some((o) => heightOnGable(o, x, z) >= hr - 0.05)) return 'dies'
+          if (others.some((o) => heightOnGable(o, x, z) >= hr - 0.05)) {
+            reach[which] = d
+            return 'dies'
+          }
         }
         return 'hip'
       }
@@ -135,12 +222,12 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
         }
       }
       if (kStart === 'dies') {
-        sideA = join(sideA, runIn('A', w0 - RUN_INTO, w0))
-        sideB = join(sideB, runIn('B', w0 - RUN_INTO, w0))
+        sideA = join(sideA, runIn('A', w0 - reach.start, w0))
+        sideB = join(sideB, runIn('B', w0 - reach.start, w0))
       }
       if (kEnd === 'dies') {
-        sideA = join(sideA, runIn('A', w1, w1 + RUN_INTO))
-        sideB = join(sideB, runIn('B', w1, w1 + RUN_INTO))
+        sideA = join(sideA, runIn('A', w1, w1 + reach.end))
+        sideB = join(sideB, runIn('B', w1, w1 + reach.end))
       }
       const planeA = ew ? { a: 0, b: s, c: hr - r * s } : { a: s, b: 0, c: hr - r * s }
       const planeB = ew ? { a: 0, b: -s, c: hr + r * s } : { a: -s, b: 0, c: hr + r * s }
@@ -177,8 +264,12 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
       const eaveSpan = [kStart === 'dies' ? w0 : a0, kEnd === 'dies' ? w1 : a1]
       const edgesA = [{ axis: eaveAxis, at: lo - oh, span: eaveSpan }, kStart === 'gable' && { axis: rakeAxis, at: a0 }, kEnd === 'gable' && { axis: rakeAxis, at: a1 }]
       const edgesB = [{ axis: eaveAxis, at: hi + oh, span: eaveSpan }, kStart === 'gable' && { axis: rakeAxis, at: a0 }, kEnd === 'gable' && { axis: rakeAxis, at: a1 }]
-      sheets.push({ id: m.id + '-a', mass: m.id, kind: 'slope', plane: planeA, footprint: cut(sideA), edges: edgesA.filter(Boolean), material: mat })
-      sheets.push({ id: m.id + '-b', mass: m.id, kind: 'slope', plane: planeB, footprint: cut(sideB), edges: edgesB.filter(Boolean), material: mat })
+      // the two sheets of the main roof say so: the one ridge the wings tie into (round 12, item 7c)
+      const isMain = m === mainMass ? { main: true } : {}
+      // its ridge, for whoever reads the sheets: it runs along x (an east-west ridge) or z, at this z or x, this high
+      const ridge = { along: ew ? 'x' : 'z', at: r, h: hr }
+      sheets.push({ id: m.id + '-a', mass: m.id, kind: 'slope', plane: planeA, footprint: cut(sideA), edges: edgesA.filter(Boolean), material: mat, ridge, ...isMain })
+      sheets.push({ id: m.id + '-b', mass: m.id, kind: 'slope', plane: planeB, footprint: cut(sideB), edges: edgesB.filter(Boolean), material: mat, ridge, ...isMain })
       hips.forEach((h) => sheets.push({ id: m.id + '-hip-' + h.which, mass: m.id, kind: 'slope', hip: true, plane: h.plane, footprint: cut(h.poly), edges: [{ axis: rakeAxis, at: h.eave, span: [lo - oh, hi + oh] }], material: mat }))
       // gable end triangles at listed ends; at a run-in end a triangle at the wall itself, which the roofs it runs
       // under hide, so only the part left in the open shows
@@ -217,6 +308,7 @@ export function roofSheets(masses, k, centre, offset = [0, 0]) {
         edges: [{ axis: 'z', at: L.face + oh }, { axis: 'x', at: L.x0 }, { axis: 'x', at: L.x1 }],
         material: m.material || 'metal roof',
         dormer: { x0: L.x0, x1: L.x1, face: L.face, top, base: m.base ?? 10 },
+        dormerDepth: depth,
       })
     } else {
       // shed: high side at the house wall
@@ -286,6 +378,10 @@ function clipMulti(mp, fa, fb, fc) {
  * another mass's sheet is higher. Returns faces with 3D rings.
  */
 export function roofSurfaces(masses, k, centre, offset = [0, 0]) {
+  // a fresh list each time (a caller may add to its own), over the kept faces
+  return [...kept(faceCache, keyOf(masses, k, centre, offset), () => roofSurfacesNow(masses, k, centre, offset))]
+}
+function roofSurfacesNow(masses, k, centre, offset = [0, 0]) {
   const { sheets, ends, cutEdges } = roofSheets(masses, k, centre, offset)
   const faces = []
   sheets.forEach((A) => {
@@ -388,7 +484,9 @@ export function roofSurfaces(masses, k, centre, offset = [0, 0]) {
         const xs = x + (side === 0 ? 0.05 : -0.05)
         const top = []
         const bottom = []
-        for (let z = d.face; z > d.face - 40; z -= 0.25) {
+        // a cheek ends where its roof meets the roof it sits on, and never runs past the dormer's own depth (one that
+        // springs from the ridge meets nothing behind it: the cheek ran 40 ft up into the air)
+        for (let z = d.face; z > d.face - Math.min(40, A.dormerDepth ?? 40) - 0.01; z -= 0.25) {
           const hd = hAt(A.plane, xs, z)
           const hg = ground(xs, z)
           if (hg >= hd - EPS) {
@@ -449,5 +547,5 @@ function insideRing(r, x, z) {
 
 /** Dormer faces as walls: { x0, x1, face, top, base } in local feet. */
 export function dormerWalls(masses, k, centre, offset = [0, 0]) {
-  return roofSheets(masses, k, centre, offset).sheets.filter((s) => s.dormer).map((s) => s.dormer)
+  return roofSheets(masses, k, centre, offset).sheets.filter((s) => s.dormer).map((s) => ({ ...s.dormer }))
 }

@@ -861,7 +861,16 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
      * The daily check: the three test addresses against the live sources (not from the cache); a failure or a
      * missing field is reported and emailed. Returns the results; stores them under parcels:daily.
      */
-    async dailyCheck({ email = null, requireOwner = true } = {}) {
+    async dailyCheck({ email = null, requireOwner = true, at = null } = {}) {
+      // round 12, item 7: a failed run counts as another one only 6 hours or more after the last one that counted,
+      // so two taps of "Check now" a minute apart are one failure, not "twice running" (and no email). `at` is the
+      // time of this run (a test passes its own clock).
+      const nowMs = at ? Date.parse(at) || +at : Date.now()
+      const APART_MS = 6 * 3600000
+      const counted = (was) => {
+        const again = !was?.failedDays || !was.countedAt || nowMs - Date.parse(was.countedAt) >= APART_MS
+        return again ? { failedDays: (was?.failedDays || 0) + 1, countedAt: new Date(nowMs).toISOString() } : { failedDays: was.failedDays, countedAt: was.countedAt }
+      }
       // round 11, item 5: the check covers what round 10 fixed (the street side's width within a foot of the recorded
       // one, the corner flag, and that an owner and a mailing address came back, as yes or no, never the values), and
       // it emails when the same address fails two runs in a row, so one bad minute at a county does not page the office
@@ -886,19 +895,20 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
           if (r.match === 'one' && requireOwner && !owner) why.push('no owner came back')
           if (r.match === 'one' && requireOwner && !mailing) why.push('no mailing address came back')
           const ok = !why.length
-          results.push({ address: t.address, ok, match: r.match, matchedBy: r.matchedBy || null, missing, areaSf: r.areaSf || null, frontWidthFt: width, frontBy: r.frontBy || null, corner: r.match === 'one' ? !!r.corner : null, owner, mailing, why, failedDays: ok ? 0 : (was?.failedDays || 0) + 1 })
+          results.push({ address: t.address, ok, match: r.match, matchedBy: r.matchedBy || null, missing, areaSf: r.areaSf || null, frontWidthFt: width, frontBy: r.frontBy || null, corner: r.match === 'one' ? !!r.corner : null, owner, mailing, why, ...(ok ? { failedDays: 0 } : counted(was)) })
         } catch (e) {
-          results.push({ address: t.address, ok: false, error: e.message, why: [e.message], failedDays: (was?.failedDays || 0) + 1 })
+          results.push({ address: t.address, ok: false, error: e.message, why: [e.message], ...counted(was) })
         }
       }
       const rec = { at: now(), ok: results.every((r) => r.ok), results }
-      rec.failedDays = rec.ok ? 0 : (prev.failedDays || 0) + 1
+      Object.assign(rec, rec.ok ? { failedDays: 0 } : counted(prev.ok === false ? prev : null))
       await store.meta.set('parcels:daily', rec)
       if (!rec.ok) {
         const failed = results.filter((r) => !r.ok)
         await event('alert', `parcel sources: the daily check failed (${failed.map((r) => r.address.split(',')[0]).join(', ')}), ${rec.failedDays} day${rec.failedDays === 1 ? '' : 's'} running`)
         // the email waits for a second failed run of the same address
-        const twice = failed.filter((r) => r.failedDays >= 2)
+        // the email goes out once per counted run: a run that did not count (too soon after the last) sends nothing
+        const twice = failed.filter((r) => r.failedDays >= 2 && r.countedAt === new Date(nowMs).toISOString())
         if (email && twice.length) await email('Draft House: a parcel source failed its daily check twice running', results.map((r) => `${r.ok ? 'ok  ' : 'FAIL'} ${r.address}${r.ok ? '' : `: ${(r.why || []).join('; ')} (${r.failedDays} run${r.failedDays === 1 ? '' : 's'} running)`}`).join('\n') + `\n\n${rec.failedDays} day(s) running. Regrid turns on when this fails 3 days running or the free sources fail more than 5% of lookups in a month (REGRID_API_TOKEN).`)
       }
       return rec

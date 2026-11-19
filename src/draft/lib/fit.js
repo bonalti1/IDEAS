@@ -2,7 +2,7 @@
 // a client sees always passes the rules. When it does not fit, the largest living area that does.
 import { starterDraft, isRoom, lotOf, kitFor, programWithin, planIdOf, planHolds, envelopeWidth, fromPlan, fitsEnvelope, normalizeProgram } from './layout.js'
 import { checkRules } from './rules.js'
-import { DEFAULT_LOT } from './lot.js'
+import { DEFAULT_LOT, insideRect, turnLot, lotTurn, MAX_TURN } from './lot.js'
 
 /** Width and depth of the lot's setback envelope in the house frame, feet. */
 export function envelopeSize(lot) {
@@ -81,17 +81,82 @@ export function fitsLot(programIn, style, lot = DEFAULT_LOT, { depth = 0 } = {})
     const key = programKey(program) + '|' + (style?.id || '') + '|' + lotKey(lot)
     const hit = RESULTS.get(key)
     if (hit) return hit
-    memo = new Map()
-    try {
-      const out = fitsLotNow(program, style, lot, { depth })
-      if (RESULTS.size >= RESULTS_MAX) RESULTS.delete(RESULTS.keys().next().value)
-      RESULTS.set(key, out)
-      return out
-    } finally {
-      memo = null
-    }
+    const out = withTurn(program, style, lot)
+    if (RESULTS.size >= RESULTS_MAX) RESULTS.delete(RESULTS.keys().next().value)
+    RESULTS.set(key, out)
+    return out
   }
   return fitsLotNow(program, style, lot, { depth })
+}
+// one fit, with its own memo of drafts (a turned lot is another lot: its drafts are not this one's)
+function fitOnce(program, style, lot) {
+  const outer = memo
+  memo = new Map()
+  try {
+    return fitsLotNow(program, style, lot, { depth: 0 })
+  } finally {
+    memo = outer
+  }
+}
+function passOnce(program, style, lot) {
+  const outer = memo
+  memo = new Map()
+  try {
+    return passes(program, style, lot)
+  } finally {
+    memo = outer
+  }
+}
+/** The turns worth trying on a lot, best first: where the largest rectangle inside the buildable area is biggest. */
+export function turnsFor(lot) {
+  if (!lot?.spec || lot.spec.kind === 'reference' || !(lot.envelope?.length >= 3)) return []
+  const base = lotTurn(lot.spec)
+  const here = insideRect(lot)
+  // a buildable area that is already a rectangle square to the street gains nothing from a turn
+  if (here.areaSf >= 0.97 * (lot.envelopeSf || 0)) return []
+  const out = []
+  for (let t = -MAX_TURN; t <= MAX_TURN; t += 2.5) {
+    if (Math.abs(t - base) < 0.01) continue
+    out.push({ turn: t, areaSf: insideRect(lot, t - base).areaSf })
+  }
+  // a turn has to earn its keep: at least 3% more room than the lot has as it stands
+  return out.filter((x) => x.areaSf > here.areaSf * 1.03).sort((a, b) => b.areaSf - a.areaSf || Math.abs(a.turn) - Math.abs(b.turn)).map((x) => x.turn)
+}
+/**
+ * Round 12, item A: a wedge-shaped buildable area (a pie lot on a cul-de-sac) holds a much smaller rectangle square
+ * to the street than it does a few degrees off. When the program does not fit as the lot stands, the house is tried
+ * turned, up to 15 degrees either way, best angle first. The answer then carries `turn` (degrees) and the app builds
+ * the lot with it. A lot where nothing fits at any turn says so with `deadEnd`, and what it needs is measured against
+ * the largest rectangle that fits inside the buildable area, not the area's bounding box.
+ */
+function withTurn(program, style, lot) {
+  const square = fitOnce(program, style, lot)
+  if (square.ok) return square
+  const turns = turnsFor(lot)
+  // 1. the program as asked, on the lot turned
+  for (const t of turns.slice(0, 5)) {
+    const turned = turnLot(lot, t)
+    const r = passOnce(program, style, turned)
+    if (r.ok) return { ok: true, reasons: [], draft: r.draft, maxSqft: null, suggestion: null, need: null, turn: t }
+  }
+  // 2. square to the street there is a smaller size or a smaller program: that is the offer
+  if (square.maxSqft != null || square.suggestion) return square
+  // 3. nothing at all square to the street: a small starter on the lot turned (one draft a try, not a whole search:
+  //    three whole searches took 13 s on the Kiskadee wedge)
+  const small = starterOf(program)
+  for (const t of turns.slice(0, 4)) {
+    const turned = turnLot(lot, t)
+    for (const sqft of [...new Set([Math.min(program.sqft || 1400, 1750), 1400, 1200])].sort((a, b) => b - a)) {
+      const p = { ...small, sqft }
+      if (passOnce(p, style, turned).ok) return { ...square, suggestion: { label: STARTER_LABEL, program: p }, need: null, turn: t }
+    }
+  }
+  return { ...square, deadEnd: true }
+}
+const STARTER_LABEL = 'as a 3 bed, 2 bath starter with no garage'
+/** The smallest house this app drafts from a program: 3 bedrooms at most, 2 baths, no garage, office or second suite. */
+function starterOf(program) {
+  return { ...program, beds: Math.min(program.beds || 3, 3), baths: Math.min(program.baths || 2, 2), halfBath: false, office: false, suite2: false, garage: 0, sqft: Math.min(program.sqft || 1400, 1750) }
 }
 
 /** Could any of the kit's plans that hold this program be as narrow as the lot? (The standard plan at 85% counts.) */
@@ -152,6 +217,9 @@ function fitsLotNow(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
       ...(narrowLot ? [] : otherPlans),
       program.beds > 3 && { label: `with ${program.beds - 1} bedrooms`, program: { ...program, beds: program.beds - 1, baths: Math.min(program.baths, program.beds - 1) } },
       program.office && program.garage > 0 && { label: 'without the office or the garage', program: { ...program, office: false, garage: 0 } },
+      // round 12, item E: the last offer before "nothing fits": the small starter (a default 4 bed with an office and
+      // a 2-car garage met "does not fit" on lots a 3 bed, 2 bath house sits on easily)
+      programKey(starterOf(program)) !== programKey(program) && { label: STARTER_LABEL, program: starterOf(program) },
     ].filter(Boolean)
     for (const t of tries) {
       let offered
@@ -215,8 +283,23 @@ function fitsLotNow(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
   if (!rules.ok && maxSqft == null && !suggestion) {
     const least = { ...program, garage: 0, office: false, suite2: false, beds: Math.min(program.beds, 3), baths: Math.min(program.baths, 2), sqft: draft.minSqft || program.sqft }
     const [w, d] = houseSize(draftOnce(least, style, lot).rooms)
-    const [ew, ed] = envelopeSize(lot)
-    need = { houseWidth: Math.round(w), houseDepth: Math.round(d), lotWidth: Math.round(ew), lotDepth: Math.round(ed) }
+    // round 12, item A: "the buildable area here" is the largest rectangle that fits inside it, square to the house
+    // (rounded down: never more than what is there), not its bounding box, which on a wedge looked big enough
+    const room = insideRect(lot)
+    need = { houseWidth: Math.round(w), houseDepth: Math.round(d), lotWidth: Math.floor(room.w), lotDepth: Math.floor(room.d) }
   }
   return { ok: rules.ok, reasons: rules.reasons, draft, maxSqft, suggestion, need }
+}
+
+/**
+ * Round 12, item E: the program a homeowner starts from on a lot. The app's default (4 bed, 3 bath, office, 2-car)
+ * met "does not fit" on ordinary lots before the homeowner had seen a house. From the fit's own answer for the
+ * default: the same rooms at the largest size that fits, or the smaller program it offers. null when the default
+ * fits as it is, or when nothing does (the rooms step then offers the drafter).
+ */
+export function startFrom(check, program) {
+  if (!check || check.ok) return null
+  if (check.maxSqft) return { ...program, sqft: check.maxSqft }
+  if (check.suggestion?.program) return { ...check.suggestion.program }
+  return null
 }

@@ -12,39 +12,10 @@ import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { drivewaySlabs, walkSlabs } from './lib/site.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
+import { camerasFor, topHeight } from './lib/camera.js'
+import './scene.css'
 
-/**
- * Camera presets. With rooms, the plan view frames the house (readable labels) and the 3D view
- * looks at it from the street; without rooms, both frame the lot.
- */
-export function camerasFor(lot = DEFAULT_LOT, rooms = []) {
-  const solid = rooms.filter((r) => isRoom(r) && r.center)
-  let CX, CZ, span
-  if (solid.length) {
-    const xs = solid.flatMap((r) => [r.center[0] - r.w / 2 - r.d / 2, r.center[0] + r.w / 2 + r.d / 2])
-    const zs = solid.flatMap((r) => [r.center[1] - r.w / 2 - r.d / 2, r.center[1] + r.w / 2 + r.d / 2])
-    CX = (Math.min(...xs) + Math.max(...xs)) / 2
-    CZ = (Math.min(...zs) + Math.max(...zs)) / 2
-    const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs))
-    span = Math.max(70, ext * 0.95)
-  } else {
-    ;[CX, CZ] = lot.centroid || lot.centre
-    const xs = (lot.boundary || []).map((p) => p[0])
-    const zs = (lot.boundary || []).map((p) => p[1])
-    const extent = xs.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) : 200
-    span = Math.max(140, extent * 1.35)
-  }
-  const cos = Math.cos(lot.angle || 0)
-  const sin = Math.sin(lot.angle || 0)
-  // the 3D view looks from the street side (local +z) toward the rear
-  const back = (lx, lz) => [CX + lx * cos - lz * sin, CZ + lx * sin + lz * cos]
-  const d3 = solid.length ? Math.max(120, span * 1.3) : span
-  const [px, pz] = back(-d3 * 0.55, d3 * 0.75)
-  return {
-    top: { position: [CX, span * 1.25, CZ + 0.5], target: [CX, 0, CZ] },
-    '3d': { position: [px, d3 * 0.55, pz], target: [CX, 0, CZ] },
-  }
-}
+export { camerasFor }
 export const CAMERAS = camerasFor(DEFAULT_LOT)
 const INK = '#2a2520'
 const FIX_COLOR = { bed: '#cfc4b6', sofa: '#c9bfb2', coffee: '#b9ad9c', table: '#b9ad9c', desk: '#b9ad9c', tv: '#8f8478', counter: '#e2ddd3', island: '#e2ddd3', sink: '#f7f7f7', range: '#8f8478', fridge: '#d6d3cd', washer: '#d6d3cd', dryer: '#d6d3cd', wh: '#b9b4ab', toilet: '#f7f7f7', shower: '#d9e6ea', vanity: '#e2ddd3', linen: '#d9d2c6', shelves: '#d9d2c6', bench: '#b9ad9c' }
@@ -407,6 +378,21 @@ function useCameraDistance(controlsRef) {
   return dist
 }
 
+/**
+ * Which rooms get a name tag in the 3D view (round 12, item I): the largest few, never more than MAX_TAGS. Every room
+ * had one, and with the roof on they sat on the roofs in a jumble; the tags now show with the roof off only (see
+ * HouseScene), where each sits on its own room. A room the chat is pointing at is always among them.
+ */
+export const MAX_TAGS = 8
+export function taggedRooms(rooms, highlightKind) {
+  const area = (r) => r.w * r.d
+  const fit = rooms.filter((r) => Math.min(r.w, r.d) >= 5).sort((a, b) => area(b) - area(a))
+  const picked = fit.slice(0, MAX_TAGS)
+  const lit = highlightKind && !picked.some((r) => r.kind === highlightKind) && fit.find((r) => r.kind === highlightKind)
+  if (lit) picked[picked.length - 1] = lit
+  return picked
+}
+
 function RoomTags({ rooms, highlightKind, showRoof, controlsRef }) {
   const dist = useCameraDistance(controlsRef)
   // far away the tags would pile up: they go; close in they are small labels on the rooms
@@ -420,7 +406,9 @@ function RoomTag({ r, highlight, showRoof, size = '' }) {
   const y = r.open ? 2 : showRoof ? (r.plate || 9) + 7 : (r.plate || 9) + 1.5
   return (
     <Html position={[x, y, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-      <span className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '') + size}>{r.name}</span>
+      <span data-testid="room-tag" className={'room-tag' + (highlight ? ' on' : '') + (r.open ? ' open' : '') + size}>
+        {r.name}
+      </span>
     </Html>
   )
 }
@@ -445,16 +433,65 @@ function sunPosition(lot, dist = 700) {
  * and a straight-down view turns into an oblique, rolled one. This re-aims the camera whenever the lot centre moves.
  */
 function CameraFollow({ cam, centreKey }) {
-  const { camera, controls } = useThree()
+  const { camera, controls, size, invalidate } = useThree()
+  // a picture taller than it is wide (a phone held upright) shows less from side to side; the top view of a lot
+  // backs off until the lot and its street names are all in it (round 12, item 7)
+  const shape = Math.round(((size.width || 1) / (size.height || 1)) * 10)
   useEffect(() => {
     camera.up.set(0, 1, 0)
-    camera.position.set(cam.position[0], cam.position[1], cam.position[2])
+    camera.position.set(cam.position[0], topHeight(cam, (size.width || 1) / (size.height || 1)), cam.position[2])
     if (controls && controls.target) {
       controls.target.set(cam.target[0], cam.target[1], cam.target[2])
       controls.update()
     } else camera.lookAt(cam.target[0], cam.target[1], cam.target[2])
-  }, [centreKey])
+    invalidate()
+  }, [centreKey, cam.hold ? shape : 0])
   return null
+}
+
+/** Tells the page when the canvas has drawn: the second frame starts once the first is on the screen. */
+function FirstFrame({ onDrawn }) {
+  const frames = useRef(0)
+  useFrame(({ invalidate }) => {
+    frames.current++
+    if (frames.current < 2) invalidate()
+    if (frames.current === 2) onDrawn()
+  })
+  return null
+}
+
+/**
+ * What stands in the viewport until the canvas has drawn its first frame (round 12, item I): the first paint of the
+ * 3D view was a blank panel while the scene was built. A line sketch of the plan (the rooms as they sit, or the lot's
+ * outline when there is no house yet) and one line of text, in the page, over the canvas.
+ */
+function SceneLoading({ rooms, lot, showHouse }) {
+  const shapes = useMemo(() => {
+    const solid = showHouse ? rooms.filter((r) => isRoom(r) && r.local) : []
+    if (solid.length) return { rects: solid.map((r) => ({ x: r.local[0] - r.w / 2, y: r.local[1] - r.d / 2, w: r.w, h: r.d, open: !!r.open })), outline: null }
+    return { rects: [], outline: lot.boundary || [] }
+  }, [rooms, lot, showHouse])
+  const xs = shapes.rects.length ? shapes.rects.flatMap((r) => [r.x, r.x + r.w]) : shapes.outline.map((p) => p[0])
+  const ys = shapes.rects.length ? shapes.rects.flatMap((r) => [r.y, r.y + r.h]) : shapes.outline.map((p) => p[1])
+  const has = xs.length > 0
+  const x0 = has ? Math.min(...xs) : 0
+  const y0 = has ? Math.min(...ys) : 0
+  const w = has ? Math.max(...xs) - x0 : 1
+  const h = has ? Math.max(...ys) - y0 : 1
+  const pad = Math.max(w, h) * 0.06 + 1
+  return (
+    <div className="scene-loading" data-testid="scene-loading" role="status">
+      {has && (
+        <svg viewBox={`${x0 - pad} ${y0 - pad} ${w + pad * 2} ${h + pad * 2}`} aria-hidden="true">
+          {shapes.rects.map((r, i) => (
+            <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} className={r.open ? 'open' : ''} />
+          ))}
+          {shapes.outline && shapes.outline.length > 2 && <polygon points={shapes.outline.map((p) => p.join(',')).join(' ')} />}
+        </svg>
+      )}
+      <span>{shapes.rects.length ? 'Drawing your house…' : 'Drawing your lot…'}</span>
+    </div>
+  )
 }
 
 export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false, lotProblem = '' }) {
@@ -472,6 +509,12 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
   }, [rooms, L])
   const roomList = rooms.filter(isRoom)
   const hasPlan = rooms.some((r) => r.element)
+  // round 12, item I: room names in the 3D view show with the roof off only, the largest few
+  const tagged = useMemo(() => taggedRooms(roomList, highlightKind), [rooms, highlightKind])
+  // the picture in the page until the canvas has drawn
+  const [drawn, setDrawn] = useState(false)
+  // the words on the ground are for reading the lot; beside a house in the 3D view they are kept small
+  const groundText = showHouse && roomList.length > 0 && view !== 'top' ? 0.45 : 1
   return (
     <>
       {/* the top view is always north-up: its north mark is fixed in the corner of the picture, whole at any width
@@ -482,17 +525,19 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
           <i />
         </div>
       )}
-    <Canvas shadows camera={{ position: cam.position, fov: 42, near: 1, far: 6000 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      {/* drawn when something changes, not sixty times a second: a still house costs a phone nothing, and the page's
+          own work (the chat's answer) is not held up behind the drawing (round 12, found on the walkthrough) */}
+    <Canvas frameloop="demand" shadows camera={{ position: cam.position, fov: 42, near: 1, far: 6000 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
       <color attach="background" args={[sun ? '#f3e9d6' : '#ebe9e5']} />
       <ambientLight intensity={sun ? 1.1 : 2.0} />
       <directionalLight position={sun ? sunPosition(L) : [-150, 300, -200]} intensity={sun ? 2.2 : 1.4} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-220} shadow-camera-right={220} shadow-camera-top={220} shadow-camera-bottom={-220} shadow-camera-near={10} shadow-camera-far={2000} shadow-bias={-0.0004} />
-      <SitePlan lot={L} problem={lotProblem} northArrow={view !== 'top'} />
+      <SitePlan lot={L} problem={lotProblem} northArrow={view !== 'top'} textScale={groundText} />
       <mesh rotation-x={-Math.PI / 2} position={[L.centre[0], -0.36, L.centre[1]]} receiveShadow>
         <planeGeometry args={[2000, 2000]} />
         <shadowMaterial transparent opacity={sun ? 0.35 : 0.18} />
       </mesh>
       {showHouse && roomList.map((r) => <Room key={r.id} r={r} highlight={r.kind === highlightKind} labels={view === 'top'} lot={L} />)}
-      {showHouse && tags && view !== 'top' && <RoomTags rooms={roomList.filter((r) => Math.min(r.w, r.d) >= 5)} highlightKind={highlightKind} showRoof={showRoof} controlsRef={controlsRef} />}
+      {showHouse && tags && view !== 'top' && !showRoof && <RoomTags rooms={tagged} highlightKind={highlightKind} showRoof={showRoof} controlsRef={controlsRef} />}
       {showHouse && roomList.length > 0 && <Walls rooms={rooms} kit={kit} centre={centre} lot={L} />}
       {showHouse && view !== 'top' && roomList.filter((r) => r.open && r.local).map((r) => <PorchColumns key={'col-' + r.id} r={r} rooms={rooms} lot={L} />)}
       {showHouse && hasPlan && <Driveway rooms={rooms} centre={centre} lot={L} />}
@@ -502,7 +547,9 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       {showHouse && showRoof && view !== 'top' && rooms.filter((e) => e.kind === 'roof').map((e) => <Roof key={e.id} roof={e} centre={centre} lot={L} />)}
       <OrbitControls key={L.centre.join(',')} ref={controlsRef} makeDefault target={cam.target} maxPolarAngle={Math.PI / 2 - 0.04} minDistance={15} maxDistance={1200} enableRotate={view !== 'top'} screenSpacePanning />
       <CameraFollow cam={cam} centreKey={L.centre.join(',')} />
+      <FirstFrame onDrawn={() => setDrawn(true)} />
     </Canvas>
+      {!drawn && <SceneLoading rooms={rooms} lot={L} showHouse={showHouse} />}
     </>
   )
 }

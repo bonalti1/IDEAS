@@ -8,6 +8,7 @@ import { polygonArea, polygonCentroid, tessellateArc, extendPolyline } from '../
 import { BOUNDARY, LOT_CORNERS, SETBACK_CORNERS, SETBACK_EDGE_LABELS, STREETS as REF_STREETS, ARC_RECORDED as REF_ARC } from '../../data/survey.js'
 import { LOT_ANGLE as REF_ANGLE } from '../../data/program.js'
 import { cityTable, rulesFor } from './cities.js'
+import polygonClipping from 'polygon-clipping'
 
 const r2 = (v) => Math.round(v * 100) / 100
 
@@ -123,7 +124,198 @@ function clipHalfPlane(poly, p0, nrm) {
  * run's deepest point. Every point past that line is at least the setback from every point of the run, so it is
  * still the safe side. The run takes whichever of the two leaves more room.
  */
+// ── is a room inside the buildable area? ──
+// The buildable area of nearly every lot is convex: a room (a rectangle) is inside it when its four corners are.
+// Round 12, item A: where a street side curves into the lot the area now follows the curve, so it has a notch, and a
+// rectangle with all four corners inside can still have the curve poking through one of its sides. For such an area
+// the edges are tested too. The convex case costs what it always did.
+const convexKnown = new WeakMap()
+/** Is this polygon convex (no notch)? Remembered per array. */
+export function isConvexPoly(poly) {
+  let known = convexKnown.get(poly)
+  if (known === undefined) {
+    known = true
+    const n = poly.length
+    let sign = 0
+    for (let i = 0; i < n && known; i++) {
+      const a = poly[i]
+      const b = poly[(i + 1) % n]
+      const c = poly[(i + 2) % n]
+      const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+      if (Math.abs(cross) < 1e-7) continue
+      if (!sign) sign = Math.sign(cross)
+      else if (Math.sign(cross) !== sign) known = false
+    }
+    convexKnown.set(poly, known)
+  }
+  return known
+}
+// each polygon's edges are laid out flat once (x, z, the next x, the next z), because the fit asks this question
+// about the same buildable area many thousands of times
+const flatKnown = new WeakMap()
+function flatOf(poly) {
+  let f = flatKnown.get(poly)
+  if (!f) {
+    const n = poly.length
+    f = new Float64Array(n * 4 + 4)
+    let x0 = Infinity
+    let x1 = -Infinity
+    let z0 = Infinity
+    let z1 = -Infinity
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      f[i * 4 + 4] = poly[i][0]
+      f[i * 4 + 5] = poly[i][1]
+      f[i * 4 + 6] = poly[j][0]
+      f[i * 4 + 7] = poly[j][1]
+      if (poly[i][0] < x0) x0 = poly[i][0]
+      if (poly[i][0] > x1) x1 = poly[i][0]
+      if (poly[i][1] < z0) z0 = poly[i][1]
+      if (poly[i][1] > z1) z1 = poly[i][1]
+    }
+    f[0] = x0
+    f[1] = x1
+    f[2] = z0
+    f[3] = z1
+    flatKnown.set(poly, f)
+  }
+  return f
+}
+const inFlat = (f, x, z) => {
+  if (x < f[0] || x > f[1] || z < f[2] || z > f[3]) return false
+  let c = false
+  for (let k = 4; k < f.length; k += 4) {
+    const zi = f[k + 1]
+    const zj = f[k + 3]
+    if (zi > z !== zj > z && x < ((f[k + 2] - f[k]) * (z - zi)) / (zj - zi) + f[k]) c = !c
+  }
+  return c
+}
+const pointIn = (poly, p) => inFlat(flatOf(poly), p[0], p[1])
+// a point inside a four-cornered shape; nothing is kept, because the shape is a new one every time
+const inQuad = (quad, p) => {
+  let c = false
+  for (let i = 0, j = 3; i < 4; j = i++) {
+    const zi = quad[i][1]
+    const zj = quad[j][1]
+    if (zi > p[1] !== zj > p[1] && p[0] < ((quad[j][0] - quad[i][0]) * (p[1] - zi)) / (zj - zi) + quad[i][0]) c = !c
+  }
+  return c
+}
+const crossAt = (p, q, a, b) => {
+  const d = (q[0] - p[0]) * (b[1] - a[1]) - (q[1] - p[1]) * (b[0] - a[0])
+  if (Math.abs(d) < 1e-12) return null
+  const t = ((a[0] - p[0]) * (b[1] - a[1]) - (a[1] - p[1]) * (b[0] - a[0])) / d
+  const u = ((a[0] - p[0]) * (q[1] - p[1]) - (a[1] - p[1]) * (q[0] - p[0])) / d
+  return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9 ? [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t] : null
+}
+/**
+ * Where a four-cornered shape (corners in order, same coordinates as `poly`) leaves the polygon: the first corner
+ * that is outside it, or, for a polygon with a notch, the point where an edge of the polygon cuts through the shape.
+ * null when the shape is inside.
+ */
+export function outsidePoint(poly, quad) {
+  for (const p of quad) if (!pointIn(poly, p)) return p
+  if (isConvexPoly(poly)) return null
+  // only the polygon's edges near the shape are looked at (the curve is a handful of short pieces in one corner)
+  let x0 = Infinity
+  let x1 = -Infinity
+  let z0 = Infinity
+  let z1 = -Infinity
+  for (const [x, z] of quad) {
+    if (x < x0) x0 = x
+    if (x > x1) x1 = x
+    if (z < z0) z0 = z
+    if (z > z1) z1 = z
+  }
+  for (const e of edgesOf(poly)) {
+    if (e.x1 < x0 || e.x0 > x1 || e.z1 < z0 || e.z0 > z1) continue
+    if (inQuad(quad, e.a)) return e.a
+    for (let k = 0; k < 4; k++) {
+      const hit = crossAt(quad[k], quad[(k + 1) % 4], e.a, e.b)
+      if (hit) return hit
+    }
+  }
+  return null
+}
+/**
+ * The fit's own question, asked tens of thousands of times: is this box (square to the axes, same coordinates as
+ * `poly`) wholly inside the polygon? The same answer as `!outsidePoint(poly, corners)`, with nothing allocated.
+ */
+export function boxInside(poly, x0, z0, x1, z1) {
+  const f = flatOf(poly)
+  if (x0 < f[0] || x1 > f[1] || z0 < f[2] || z1 > f[3]) return false
+  if (!inFlat(f, x0, z0) || !inFlat(f, x1, z0) || !inFlat(f, x1, z1) || !inFlat(f, x0, z1)) return false
+  if (isConvexPoly(poly)) return true
+  // a notch: no edge of the polygon may pass through the inside of the box
+  const E = 1e-7
+  const ax = x0 + E
+  const bx = x1 - E
+  const az = z0 + E
+  const bz = z1 - E
+  for (let k = 4; k < f.length; k += 4) {
+    const px = f[k]
+    const pz = f[k + 1]
+    const qx = f[k + 2]
+    const qz = f[k + 3]
+    if ((px < ax && qx < ax) || (px > bx && qx > bx) || (pz < az && qz < az) || (pz > bz && qz > bz)) continue
+    // the piece of the edge inside the box, if any (Liang and Barsky)
+    let t0 = 0
+    let t1 = 1
+    const dx = qx - px
+    const dz = qz - pz
+    let hit = true
+    for (let side = 0; side < 4 && hit; side++) {
+      const pp = side === 0 ? -dx : side === 1 ? dx : side === 2 ? -dz : dz
+      const qq = side === 0 ? px - ax : side === 1 ? bx - px : side === 2 ? pz - az : bz - pz
+      if (pp === 0) {
+        if (qq < 0) hit = false
+      } else {
+        const r = qq / pp
+        if (pp < 0) {
+          if (r > t1) hit = false
+          else if (r > t0) t0 = r
+        } else if (r < t0) hit = false
+        else if (r < t1) t1 = r
+      }
+    }
+    if (hit && t1 - t0 > 1e-9) return false
+  }
+  return true
+}
+const edgesKnown = new WeakMap()
+function edgesOf(poly) {
+  let list = edgesKnown.get(poly)
+  if (!list) {
+    list = poly.map((a, i) => {
+      const b = poly[(i + 1) % poly.length]
+      return { a, b, x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), z0: Math.min(a[1], b[1]), z1: Math.max(a[1], b[1]) }
+    })
+    edgesKnown.set(poly, list)
+  }
+  return list
+}
+
+const envelopeKept = new Map()
+const envelopeWork = { made: 0, reused: 0, runsTried: 0 }
+/** How many envelopes were worked out, answered from the kept ones, and how many runs were tried (for the tests). */
+export const envelopeStats = () => ({ ...envelopeWork })
 export function envelopeOf(boundary, setbackPerEdge) {
+  // round 12, item 5: the same outline and setbacks give the same envelope, and a lot is rebuilt on every save and
+  // every keystroke of the Lot step: the last 64 are kept. Callers get their own copy of the points.
+  const key = JSON.stringify([boundary, setbackPerEdge])
+  let hit = envelopeKept.get(key)
+  if (hit) {
+    envelopeKept.delete(key)
+    envelopeWork.reused++
+  } else {
+    hit = envelopeNow(boundary, setbackPerEdge)
+    envelopeWork.made++
+    if (envelopeKept.size >= 64) envelopeKept.delete(envelopeKept.keys().next().value)
+  }
+  envelopeKept.set(key, hit)
+  return hit.map((p) => [...p])
+}
+function envelopeNow(boundary, setbackPerEdge) {
   const n = boundary.length
   const area = (poly) => (poly.length >= 3 ? Math.abs(polygonArea(poly)) : 0)
   const inwardOf = (i) => {
@@ -180,19 +372,66 @@ export function envelopeOf(boundary, setbackPerEdge) {
     const i = (start + k) % n
     run.push(i)
     if (!joins(i) || turn(run[0], (i + 1) % n) >= 120) {
-      if (run.length > 1) found.push(run)
+      // a curve is three chords or more (round 12): two edges meeting at a shallow angle are left edge by edge
+      if (run.length >= 3) found.push(run)
       run = []
     }
   }
   let kept = []
   let bestSf = area(best)
   for (const r of found) {
+    envelopeWork.runsTried++
     const cand = clip([...kept, r])
     if (area(cand) > bestSf + 1) {
       best = cand
       bestSf = area(cand)
       kept = [...kept, r]
     }
+  }
+  if (!kept.length) return best
+  // Round 12, item A: a run that curves into the lot is followed, not cut straight. Everything within the setback of
+  // any piece of the run is taken off (a strip along each piece, a round at each corner drawn a hair large so it
+  // errs on the safe side); the other edges keep their straight lines. The result has a notch where the curve is.
+  try {
+    const inRun = new Set(kept.flat())
+    let base = boundary.map((p) => [...p])
+    for (let i = 0; i < n && base.length >= 3; i++) {
+      if (inRun.has(i)) continue
+      const off = setbackPerEdge[i] ?? 0
+      const inward = inwardOf(i)
+      const a = boundary[i]
+      base = clipHalfPlane(base, [a[0] + inward[0] * off, a[1] + inward[1] * off], inward)
+    }
+    if (base.length < 3) return best
+    const ring = (pts) => [[...pts, pts[0]]]
+    const SEG = 20
+    const off = []
+    for (const i of inRun) {
+      const s = setbackPerEdge[i] ?? 0
+      const a = boundary[i]
+      const b = boundary[(i + 1) % n]
+      const inward = inwardOf(i)
+      // the strip, a little past the edge on the outside so nothing is left along the lot line
+      off.push([ring([[a[0] - inward[0], a[1] - inward[1]], [b[0] - inward[0], b[1] - inward[1]], [b[0] + inward[0] * s, b[1] + inward[1] * s], [a[0] + inward[0] * s, a[1] + inward[1] * s]])])
+      const R = s / Math.cos(Math.PI / SEG)
+      for (const c of [a, b]) {
+        const round = []
+        for (let k = 0; k < SEG; k++) round.push([c[0] + R * Math.cos((2 * Math.PI * k) / SEG), c[1] + R * Math.sin((2 * Math.PI * k) / SEG)])
+        off.push([ring(round)])
+      }
+    }
+    const left = polygonClipping.difference([ring(base)], ...off)
+    let curved = null
+    for (const piece of left) {
+      const outer = piece[0].slice(0, -1)
+      if (!curved || area(outer) > area(curved)) curved = outer
+    }
+    if (curved && curved.length >= 3 && area(curved) > bestSf + 1) {
+      // drop points closer than half an inch (the rounds leave a few)
+      best = curved.filter((p, i) => i === 0 || Math.hypot(p[0] - curved[i - 1][0], p[1] - curved[i - 1][1]) > 0.04)
+    }
+  } catch {
+    /* the straight line stands */
   }
   return best
 }
@@ -261,6 +500,87 @@ export function zoningBlocksSend(lot) {
   const kind = lot.kind || lot.spec?.kind
   if (kind === 'parcel' || kind === 'plat') return true
   return !!z.confirmedBy
+}
+
+export const MAX_TURN = 15
+/** The turn a lot spec asks for, in degrees, held to 15 either way (0 when none). */
+export function lotTurn(spec) {
+  const t = +spec?.turn
+  return Number.isFinite(t) ? Math.max(-MAX_TURN, Math.min(MAX_TURN, t)) : 0
+}
+/** The same lot with the house turned `deg` from square to the street (replacing any turn it had). */
+export function turnLot(lot, deg) {
+  if (!lot?.spec || lot.spec.kind === 'reference') return lot
+  const was = lotTurn(lot.spec)
+  const now = lotTurn({ turn: deg })
+  return { ...lot, angle: lot.angle + ((now - was) * Math.PI) / 180, spec: { ...lot.spec, turn: now } }
+}
+/**
+ * The largest rectangle, square to the house, that fits inside the buildable area: { w, d, areaSf } in feet, w across
+ * the street side and d front to back. This is what a house plan has to fit in; the area's bounding box (90 x 56 ft
+ * on the Kiskadee wedge, where the largest rectangle is about 40 x 40) is not. `turn` looks at the lot turned that
+ * many more degrees. Columns across the area are compared, so an area with a notch (a curved street side) is measured
+ * as it is: the rectangle stops where the curve comes in.
+ */
+export function insideRect(lot, turn = 0) {
+  const env = lot?.envelope || []
+  if (env.length < 3) return { w: 0, d: 0, areaSf: 0 }
+  const a = (lot.angle || 0) + (turn * Math.PI) / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const c = lot.centre || [0, 0]
+  const pts = env.map(([X, Z]) => [(X - c[0]) * cos + (Z - c[1]) * sin, -(X - c[0]) * sin + (Z - c[1]) * cos])
+  const xs = pts.map((p) => p[0])
+  const lo = Math.min(...xs)
+  const hi = Math.max(...xs)
+  // the area's reach front to back at a given x: one stretch for a convex area, more where it has a notch
+  const spans = (x) => {
+    const hits = []
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]
+      const q = pts[(i + 1) % pts.length]
+      if (p[0] > x === q[0] > x) continue
+      hits.push(p[1] + ((x - p[0]) / (q[0] - p[0])) * (q[1] - p[1]))
+    }
+    hits.sort((u, v) => u - v)
+    const out = []
+    for (let k = 0; k + 1 < hits.length; k += 2) out.push([hits[k], hits[k + 1]])
+    return out
+  }
+  const N = 48
+  const at = []
+  // (columns a hair inside the two ends, where the area has no depth)
+  for (let i = 0; i <= N; i++) {
+    const x = lo + (hi - lo) * (0.001 + (0.998 * i) / N)
+    at.push([x, spans(x)])
+  }
+  const meet = (A, B) => {
+    const out = []
+    for (const a of A) for (const b of B) {
+      const z0 = Math.max(a[0], b[0])
+      const z1 = Math.min(a[1], b[1])
+      if (z1 > z0) out.push([z0, z1])
+    }
+    return out
+  }
+  let best = { w: 0, d: 0, areaSf: 0 }
+  for (let i = 0; i < N; i++) {
+    // what every column from i to j shares: the rectangle's reach front to back
+    let common = at[i][1]
+    for (let j = i + 1; j <= N && common.length; j++) {
+      common = meet(common, at[j][1])
+      const w = at[j][0] - at[i][0]
+      for (const [z0, z1] of common) {
+        const d = z1 - z0
+        if (w * d > best.areaSf) {
+          // its corners on the lot (world feet), for whoever wants to draw or check it
+          const world = [[at[i][0], z0], [at[j][0], z0], [at[j][0], z1], [at[i][0], z1]].map(([x, z]) => [c[0] + x * cos - z * sin, c[1] + x * sin + z * cos])
+          best = { w, d, areaSf: w * d, corners: world }
+        }
+      }
+    }
+  }
+  return best
 }
 
 /** Build the full lot from a spec. Deterministic, so the server can repeat it. */
@@ -375,7 +695,10 @@ export function buildLot(spec = { kind: 'reference' }, table = cityTable()) {
     const sl = Math.hypot(sx, sz)
     if (sl > 1e-9) nrm = [sx / sl, sz / sl]
   }
-  const angle = Math.atan2(nrm[1], nrm[0]) - Math.PI / 2 // +lz of the house frame points at the street
+  // round 12, item A: the house may be turned a little from square to the street (15 degrees at most either way)
+  // to sit in the widest part of a wedge-shaped buildable area; the fit chooses the turn and it is kept on the spec
+  const turn = lotTurn(spec)
+  const angle = Math.atan2(nrm[1], nrm[0]) - Math.PI / 2 + (turn * Math.PI) / 180 // +lz of the house frame points at the street
   const envC = polygonCentroid(envelope)
   const centre = isFinite(envC[0]) ? envC : polygonCentroid(boundary)
   const areaSf = Math.abs(polygonArea(boundary))

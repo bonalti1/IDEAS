@@ -44,7 +44,8 @@ test('plan has the traced rooms, openings, and fixtures', () => {
 })
 test('roof follows sheet 100', () => {
   const roof = rooms.find((r) => r.kind === 'roof')
-  assert.equal(roof.masses.length, KIT.plan.roof.length)
+  // round 12, item 7c: every mass of the kit, and one lean-to over the mud room's bump-out, which the kit's roof left open
+  assert.deepEqual(roof.masses.map((m) => m.id), [...KIT.plan.roof.map((m) => m.id), 'mud'])
   const top = (id) => Math.max(...roof.faces.filter((f) => f.mass === id && f.kind === 'slope').flatMap((f) => f.rings[0].map((p) => p[1])))
   assert.ok(top('main') > 21 && top('main') < 24, `main ridge ${top('main').toFixed(1)} ft`)
   assert.ok(top('leftwing') > 19, 'left wing gable peaks near 20 ft like the front elevation')

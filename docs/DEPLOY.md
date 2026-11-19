@@ -42,6 +42,7 @@ Without `SUPABASE_URL` the API runs in local sign-in mode: any email signs in at
 ## 5. Alerts and backups
 
 - Worker offline for more than 10 minutes: one email, and one more when it is back. Needs a Resend account (resend.com, free tier is enough): verify the sending domain, create an API key, set `RESEND_API_KEY`, `ALERT_EMAIL_FROM` (on the verified domain), `ALERT_EMAIL_TO` (comma separated). Without these the alert still appears in the dashboard activity and the health row says email is not set.
+- One email to the homeowner (round 12): when a drafter confirms a lot for the first time, the homeowner is told "your lot is confirmed" so they can send their plan. It uses the same `RESEND_API_KEY` and `ALERT_EMAIL_FROM`; without them nothing is sent (the Send page still shows the button on its own within 20 seconds). No email goes out when the lot is zoned for something other than a house: the office calls instead. The email carries the address the homeowner typed and no price.
 - Nightly backup at 08:00 UTC (2 am Texas): a gzip JSON dump of every table, stored in the Supabase bucket under `backups/`, last 30 kept. "Back up now" on the dashboard runs one; `node scripts/backup-db.mjs` runs one from a shell. Restore with `node scripts/migrate-json-to-pg.mjs backups/db-....json.gz`. Supabase Pro also keeps its own daily snapshots.
 
 ## 6. Payments: off. Unused while `BILLING_ENABLED` is off
@@ -141,6 +142,16 @@ Don't delete any values from Render; the office does that.
 | Netlify | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Supabase project URL and anon key, for the email sign-in link. Without them the app offers local sign-in. |
 | Office PC | `config.json` `api`, `workerKey` | Render URL, = `DRAFTHOUSE_WORKER_KEY` |
 | Tests | `TEST_DATABASE_URL` | optional; runs the server tests on a real Postgres too (a throwaway database is created and dropped) |
+
+## The customer walkthrough (every round's acceptance, from round 12)
+
+Unit and browser tests passing is not enough on its own. Before a round is reported, the build is used like a customer would use it, in a real browser on this machine, with live county, FEMA and zoning lookups, billing off and no email:
+
+    npx vite build
+    node scripts/walkthrough.mjs basic     # the chat's own rules
+    node scripts/walkthrough.mjs claude    # the real Claude interpreter; needs DRAFTHOUSE_CLAUDE_KEY in the environment
+
+(`NODE_USE_ENV_PROXY=1` in front on a machine behind a proxy; `OUT=docs/fix-round-N` for the pictures.) It walks a homeowner at 1440 px and at 390 px from sign-in to Send on a normal lot, the curved lot (2002 Kiskadee Ln), the near match (323 N 11th St, Raymondville), the C-2 lot (118 S Cage Blvd, Pharr) and the W/E mismatch (1300 W Nolana Ave), signs out and back in mid-way, and has a drafter confirm the lots and read the review card. It writes a picture per step and `walkthrough-<mode>.json` (what each screen said, every chat reply, page errors, timings). It asserts nothing: someone reads the result, and the round's report carries the pictures and a short customer and drafter rating.
 
 ## Running locally
 

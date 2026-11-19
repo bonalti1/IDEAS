@@ -36,3 +36,23 @@ export function parcelSpec(parcel, { address, city, county, geo, flood, zoning, 
     zoning: zoning || null,
   }
 }
+
+/**
+ * What the drafter must know about how a parcel lot was matched before confirming it (round 12, item 1). The
+ * fields are stamped by the server from its own parcel record, never taken from the browser. Plain lines, each a
+ * warning; an exact match has none.
+ */
+export function lotMatchNotes(spec) {
+  if (!spec || spec.kind !== 'parcel') return []
+  const typed = String(spec.address || '').split(',')[0].trim() || 'the address typed'
+  const notes = []
+  if (spec.confidence === 'near' && spec.listedAs) notes.push(`Near match: the county lists this parcel as ${spec.listedAs}, not ${typed}. Check the deed or plat before confirming.`)
+  if (spec.confidence === 'pick')
+    notes.push(
+      spec.addressGives
+        ? `The address leads to parcel ${spec.addressGives}, but this lot names parcel ${spec.propId}${spec.situs ? ` (listed as ${spec.situs})` : ''}. Check the deed or plat before confirming.`
+        : `The address alone did not settle the parcel: this one${spec.situs ? ` (listed as ${spec.situs})` : ''} was picked. Check the deed or plat before confirming.`,
+    )
+  if (spec.outlineBy === 'browser' || spec.confidence === 'unchecked') notes.push('The county did not answer when this lot was saved, so its outline has not been checked against the county yet. It is checked when you confirm.')
+  return notes
+}

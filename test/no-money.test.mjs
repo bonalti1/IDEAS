@@ -325,6 +325,9 @@ async function homeownerFlow(browser, app, api, viewport, tag) {
     seen.push([screen, text])
     const m = text.match(SCREEN_TEXT)
     assert.ok(!m, `${tag} ${screen}: "${m?.[0]}" at …${text.slice(Math.max(0, (m?.index ?? 0) - 60), (m?.index ?? 0) + 60).replace(/\s+/g, ' ')}…`)
+    // round 12, items D and F: a homeowner never reads "setback", and no screen shows NaN or "undefined"
+    const w = text.match(/setback|\bNaN\b|\bundefined\b/i)
+    assert.ok(!w, `${tag} ${screen}: "${w?.[0]}" at …${text.slice(Math.max(0, (w?.index ?? 0) - 60), (w?.index ?? 0) + 60).replace(/\s+/g, ' ')}…`)
     assert.equal(await page.locator('a[href="#/billing"]').count(), 0, `${tag} ${screen}: a billing link`)
   }
   await page.goto(app, { waitUntil: 'domcontentloaded' })
@@ -502,7 +505,7 @@ test('rooms step at 390 px with 6x CPU throttling: ten fast taps on bedrooms nev
     await page.waitForTimeout(60)
   }
   // the meter settles on a verdict
-  await page.locator('.fit-note, .fine').filter({ hasText: /Passes the setback|Does not fit|Fits once trimmed|Checking the lot/ }).first().waitFor({ timeout: 60000 })
+  await page.locator('.fit-note, .fine').filter({ hasText: /Fits this lot|Does not fit|Fits once trimmed|Checking the lot/ }).first().waitFor({ timeout: 60000 })
   await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 90000 })
   await page.waitForTimeout(500)
   const { long, checking } = await page.evaluate(() => ({ long: window.__long, checking: window.__checking }))
@@ -512,7 +515,7 @@ test('rooms step at 390 px with 6x CPU throttling: ten fast taps on bedrooms nev
   assert.ok(worst <= 200, `the main thread was blocked for ${worst} ms (${long.join(', ')})`)
   assert.ok(checking > 0, 'the meter said "Checking the lot…" while the worker ran')
   const text = await page.evaluate(() => document.body.innerText)
-  assert.match(text, /Passes the setback|Does not fit this lot|Fits once trimmed/, 'then the result')
+  assert.match(text, /Fits this lot|Does not fit this lot|Fits once trimmed/, 'then the result')
   assert.deepEqual(errors, [])
   await ctx.close()
 })

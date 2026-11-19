@@ -222,33 +222,58 @@ export function attachBeside(flat, kit, { kind, name, id, w, d, target, door = '
   return room
 }
 
-/** A porch on the rear (or front) wall of the public rooms, the kit's depth (8 ft minimum). */
-export function addPorch(flat, kit, where = 'rear') {
+/**
+ * A porch on the rear (or front) wall of the public rooms, the kit's depth (8 ft minimum). With a size
+ * ({ w, d } in feet: "a 12 by 14 patio", or the smaller patio a refusal offers) it is that wide, centred on
+ * the wall it goes on and never wider than the free wall, and that deep (8 ft at least, 16 at most).
+ */
+export function addPorch(flat, kit, where = 'rear', { w = null, d = null } = {}) {
   const kind = where === 'rear' ? 'rearPorch' : 'frontPorch'
   if (flat.some((r) => isRoom(r) && r.kind === kind)) return null
   const living = flat.find((r) => r.id === 'living') || flat.find((r) => isRoom(r) && r.kind === 'living')
   const dining = flat.find((r) => isRoom(r) && r.kind === 'dining')
   const foyer = flat.find((r) => isRoom(r) && r.kind === 'foyer')
-  const depth = Math.max(kit.porch?.minDepthFt || 8, kit.porch?.depthFt || 10)
-  const anchor = where === 'rear' ? living || dining : foyer || living
-  if (!anchor) return null
-  const span = where === 'rear' && living && dining && Math.abs(living.y - dining.y) < 0.5 ? { x: Math.min(living.x, dining.x), w: Math.max(living.x + living.w, dining.x + dining.w) - Math.min(living.x, dining.x) } : { x: anchor.x, w: anchor.w }
-  const rect = where === 'rear' ? { x: span.x, y: anchor.y - depth, w: span.w, d: depth } : { x: span.x, y: anchor.y + anchor.d, w: span.w, d: depth }
+  const minDepth = kit.porch?.minDepthFt || 8
+  const depth = d > 0 ? Math.min(16, Math.max(minDepth, d)) : Math.max(minDepth, kit.porch?.depthFt || 10)
   const rooms = flat.filter((r) => isRoom(r))
-  // trim the porch to what is free along that wall
-  let x0 = rect.x
-  let x1 = rect.x + rect.w
-  rooms.forEach((r) => {
-    if (overlap1(r.y, r.y + r.d, rect.y, rect.y + rect.d) <= 0.5) return
-    if (r.x + r.w <= x0 + 0.5 || r.x >= x1 - 0.5) return
-    if (r.x > (x0 + x1) / 2) x1 = Math.min(x1, r.x)
-    else x0 = Math.max(x0, r.x + r.w)
-  })
-  if (x1 - x0 < 8) return null
+  // the wall it goes on: the living room's back wall, or the dining room's when the living room's is taken
+  // (the narrow and the compact plans put the living room at the front, the dining room at the back)
+  const anchors = (where === 'rear' ? [living, dining] : [foyer || living]).filter(Boolean)
+  let anchor = null
+  let rect = null
+  let x0 = 0
+  let x1 = 0
+  for (const a of anchors) {
+    const span = where === 'rear' && a === living && dining && Math.abs(living.y - dining.y) < 0.5 ? { x: Math.min(living.x, dining.x), w: Math.max(living.x + living.w, dining.x + dining.w) - Math.min(living.x, dining.x) } : { x: a.x, w: a.w }
+    const r0 = where === 'rear' ? { x: span.x, y: a.y - depth, w: span.w, d: depth } : { x: span.x, y: a.y + a.d, w: span.w, d: depth }
+    // trim the porch to what is free along that wall
+    let lo = r0.x
+    let hi = r0.x + r0.w
+    rooms.forEach((r) => {
+      if (overlap1(r.y, r.y + r.d, r0.y, r0.y + r0.d) <= 0.5) return
+      if (r.x + r.w <= lo + 0.5 || r.x >= hi - 0.5) return
+      if (r.x > (lo + hi) / 2) hi = Math.min(hi, r.x)
+      else lo = Math.max(lo, r.x + r.w)
+    })
+    if (hi - lo < 8) continue
+    anchor = a
+    rect = r0
+    x0 = lo
+    x1 = hi
+    break
+  }
+  if (!anchor) return null
+  if (w > 0 && w < x1 - x0 - 0.01) {
+    // the width asked for, centred on the room it serves, kept on the free wall
+    const want = Math.max(8, w)
+    const mid = Math.min(Math.max(anchor.x + anchor.w / 2, x0 + want / 2), x1 - want / 2)
+    x0 = mid - want / 2
+    x1 = mid + want / 2
+  }
   const room = { id: kind, kind, name: kit.rooms[kind]?.name || (where === 'rear' ? 'Rear Porch' : 'Front Porch'), x: x0, y: rect.y, w: x1 - x0, d: depth, zone: where, open: true, fill: '#e6e1d8', h: 0.6 }
   flat.push(room)
   // French doors from the room it serves when that wall has no exterior door yet
-  const serves = where === 'rear' ? (dining && dining.x >= x0 && dining.x + dining.w <= x1 + 0.5 ? dining : living) : foyer || living
+  const serves = where === 'rear' ? (dining && dining.x >= x0 && dining.x + dining.w <= x1 + 0.5 ? dining : anchor === dining ? dining : living) : foyer || living
   if (serves && !flat.some((e) => e.kind === 'door' && e.exterior && e.room === serves.id && Math.abs(e.y + e.d / 2 - (where === 'rear' ? serves.y : serves.y + serves.d)) < 0.6)) {
     const cx = Math.max(serves.x, x0) + Math.min(serves.x + serves.w, x1) - (Math.max(serves.x, x0) + Math.min(serves.x + serves.w, x1)) / 2
     const cy = where === 'rear' ? serves.y : serves.y + serves.d

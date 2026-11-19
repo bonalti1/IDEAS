@@ -23,7 +23,16 @@ function Asks({ p }) {
   )
 }
 import RulesPanel from '../RulesPanel.jsx'
+import { lotMatchNotes } from '../lib/parcel-spec.js'
 
+// the flood zone in one line for the checklist (the rules panel below has the detail)
+const floodLine = (flood) => {
+  if (!flood) return 'No flood zone was read for this lot: check the FEMA map.'
+  if (flood.status === 'no-digital-firm') return 'No digital FEMA map here: the county floodplain administrator decides.'
+  if (flood.sfha) return `Zone ${flood.zone}: a special flood hazard area${flood.bfe != null ? `, base flood elevation ${flood.bfe} ft` : ''}${flood.firm ? ` (FIRM ${flood.firm})` : ''}. The slab height follows it.`
+  if (flood.zone) return `Zone ${flood.zone}${flood.firm ? ` (FIRM ${flood.firm})` : ''}: outside the 1% flood area.`
+  return flood.note || 'Not read: check the FEMA map.'
+}
 const ago = (iso) => {
   if (!iso) return ''
   const m = (Date.now() - Date.parse(iso)) / 60000
@@ -37,11 +46,13 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || 'no address'} · {p.style?.name} · {programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · {p.version - 1} version{p.version - 1 === 1 ? '' : 's'}
+          {p.address || 'no address'} ·{' '}
+          {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
       <span className="inbox-side">
         <Asks p={p} />
+        {p.needsCustom && <span className="pill ask">Needs a house designed</span>}
         <span className={'pill ' + s.tone}>{s.label}</span>
         <span className="muted small">
           {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
@@ -144,13 +155,16 @@ export default function Review({ user }) {
   // round 10, item 4: a typed lot carries no zoning of its own; the drafter reads the city map and says what it is
   const [zoneDistrict, setZoneDistrict] = useState('')
   const [zoneHouse, setZoneHouse] = useState(true)
+  const [zoneEdit, setZoneEdit] = useState(false)
   const confirmZoning = async (clear = false) => {
     setBusy(true)
     setError('')
     try {
-      const p = await api.confirmZoning(open.id, clear ? { clear: true } : { district: zoneDistrict, residential: zoneHouse })
+      // `as` confirms the district the server read, as it stands (round 12, item 3)
+      const p = await api.confirmZoning(open.id, clear === true ? { clear: true } : clear && clear.district ? { district: clear.district, residential: clear.residential !== false, use: clear.use || undefined } : { district: zoneDistrict, residential: zoneHouse })
       setOpen(p)
       setZoneDistrict('')
+      setZoneEdit(false)
     } catch (e) {
       setError(e.message)
     }
@@ -188,7 +202,7 @@ export default function Review({ user }) {
     return (
       <div className="screen split">
         <div className="viewport">
-          {planView ? <PlanDrawing rooms={open.rooms || []} program={open.program || {}} style={style} lot={open.lot} client={open.client} /> : <HouseScene rooms={open.rooms || []} style={style} view="3d" lot={open.lot} />}
+          {!(open.rooms || []).length ? <HouseScene view="top" showHouse={false} lot={open.lot || undefined} /> : planView ? <PlanDrawing rooms={open.rooms || []} program={open.program || {}} style={style} lot={open.lot} client={open.client} /> : <HouseScene rooms={open.rooms || []} style={style} view="3d" lot={open.lot} />}
           <div className="viewport-views">
             <button className={planView ? 'on' : ''} onClick={() => setPlanView(true)}>
               Plan
@@ -210,13 +224,111 @@ export default function Review({ user }) {
             <span className={'pill ' + s.tone}>{s.label}</span>
           </div>
           <p className="muted small">
-            {open.email} · sent {ago(open.sentAt)}
+            {open.email} · {open.sentAt ? `sent ${ago(open.sentAt)}` : open.version ? 'not sent yet' : 'lot saved, no rooms yet'}
           </p>
+          {(() => {
+            // round 12, item J: what to do on this plan, in order, each line with its button; the detail is below
+            const spec = open.lot?.spec
+            const own = spec && (spec.kind === 'plat' || spec.kind === 'parcel')
+            const z = open.lot?.zoning
+            const hasRooms = (open.rooms || []).length > 0
+            return (
+              <div className="card thin checklist" data-testid="review-checklist">
+                <h3>Check this plan, in order</h3>
+                {open.needsCustom && (
+                  <p className="small warnline" data-testid="needs-custom">
+                    The homeowner sent this lot for a house designed for it: none of the ready plans fits. They asked for {programLine(open.program || {})} at about {sf(open.program?.sqft || 0)}.{open.needsCustom.note ? ` Note: "${open.needsCustom.note}"` : ''}
+                  </p>
+                )}
+                <ol className="checks">
+                  <li className={!own || spec.confirmed ? 'done' : 'todo'}>
+                    <div className="check-row">
+                      <span>
+                        <b>The lot matches the plat or deed.</b>{' '}
+                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : 'Read from the plat: compare the calls with the plat.'}
+                      </span>
+                      {own && !spec.confirmed && (
+                        <Button small primary disabled={busy} onClick={() => confirmLot(true)} data-testid="check-confirm-lot">
+                          Confirm lot
+                        </Button>
+                      )}
+                    </div>
+                    {lotMatchNotes(open.lot.spec).map((line, i) => (
+                      <p key={i} className="small warnline" data-testid="lot-match-note">
+                        {line}
+                      </p>
+                    ))}
+                  </li>
+                  <li className={z?.residential === false ? 'stop' : z?.confirmedBy ? 'done' : 'todo'}>
+                    <div className="check-row">
+                      <span>
+                        <b>The zoning is a house district.</b>{' '}
+                        {z?.district ? `${z.district}${z.use ? ` (${z.use})` : ''}${z.confirmedBy ? `, confirmed by ${z.confirmedBy}.` : ', read from the city map: confirm or change.'}` : own && spec.kind === 'plat' && !spec.confirmed ? 'Read when you confirm the lot.' : 'Not read: enter the district from the city map.'}
+                      </span>
+                      <span className="check-buttons">
+                        {z?.district && !z.confirmedBy && (
+                          <Button small primary disabled={busy} onClick={() => confirmZoning(z)} data-testid="check-confirm-zoning">
+                            Confirm {z.district}
+                          </Button>
+                        )}
+                        <Button
+                          small
+                          ghost
+                          disabled={busy}
+                          data-testid="check-change-zoning"
+                          onClick={() => {
+                            setZoneEdit(true)
+                            setTimeout(() => document.getElementById('zoning-card')?.scrollIntoView({ block: 'center' }), 50)
+                          }}
+                        >
+                          {z?.district ? 'Change' : 'Enter zoning'}
+                        </Button>
+                      </span>
+                    </div>
+                    {z?.residential === false && (
+                      <p className="small warnline" data-testid="zoning-stop">
+                        Confirming the lot does not unblock Send: this lot is zoned {z.district}. Call the homeowner about a rezoning, or change the zoning if the city map says otherwise.
+                      </p>
+                    )}
+                  </li>
+                  <li className="note">
+                    <div className="check-row">
+                      <span>
+                        <b>Flood zone noted.</b> {floodLine(spec?.flood || open.lot?.flood)}
+                      </span>
+                    </div>
+                  </li>
+                  <li className={!hasRooms ? 'todo' : open.audit?.ok === false ? 'stop' : 'done'}>
+                    <div className="check-row">
+                      <span>
+                        <b>The plan passes the audit.</b>{' '}
+                        {!hasRooms
+                          ? open.needsCustom
+                            ? 'No plan yet: this lot needs one designed for it.'
+                            : 'No rooms yet: the homeowner is still choosing. You can confirm the lot meanwhile.'
+                          : !open.audit
+                            ? 'Not run.'
+                            : open.audit.ok
+                              ? `Passed${open.audit.warnings ? `, ${open.audit.warnings} warning${open.audit.warnings === 1 ? '' : 's'}` : ''}.`
+                              : `${open.audit.errors} error${open.audit.errors === 1 ? '' : 's'}: see the audit below.`}
+                      </span>
+                    </div>
+                  </li>
+                </ol>
+              </div>
+            )
+          })()}
           <div className="stats">
             <Stat k="Lot" v={open.address || '—'} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
-            <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
+            {(open.rooms || []).length > 0 ? (
+              <>
+                <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
+                <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
+              </>
+            ) : (
+              <Stat k="Rooms" v={open.program?.beds ? `asked: ${programLine(open.program)}, about ${sf(open.program.sqft || 0)} (no plan drawn yet)` : 'not chosen yet'} />
+            )}
             {open.program?.asked && <Stat k="Asked for" v={`${programLine(open.program.asked)} · ${sf(open.program.asked.sqft)} → drafted ${sf(floorArea(open.rooms || [], open.program?.stories || 1))} to fit the lot`} />}
             <Stat k="Changes" v={`${open.changesUsed || 0} of ${open.changesAllowed ?? 10} used · ${open.changesLeft ?? Math.max(0, (open.changesAllowed ?? 10) - (open.changesUsed || 0))} left`} />
           </div>
@@ -309,6 +421,8 @@ export default function Review({ user }) {
                 {open.lot.spec.kind === 'parcel' ? `${open.lot.spec.legal || `Parcel ${open.lot.spec.propId}`}${open.lot.spec.geoId ? ` (geo id ${open.lot.spec.geoId})` : ''}, ${open.lot.spec.source?.name || 'county appraisal district'}${open.lot.spec.parcelFetchedAt ? `, fetched ${String(open.lot.spec.parcelFetchedAt).slice(0, 10)}` : ''}, matched by ${open.lot.spec.matchedBy || 'address'}. ` : open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
                 {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind === 'plat' ? ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.` : ' The parcel map is advisory: check it against the recorded plat or the survey.'}
               </p>
+              <details className="more" data-testid="lot-calls">
+                <summary>The {open.lot.spec.calls?.length || 0} calls of the outline</summary>
               <ol className="list small">
                 {open.lot.spec.calls?.map((c, i) => (
                   <li key={i}>
@@ -317,6 +431,7 @@ export default function Review({ user }) {
                   </li>
                 ))}
               </ol>
+              </details>
               {open.lot.plat?.notes && <p className="fine">Reader: {open.lot.plat.notes}</p>}
               {open.lot.spec.platId && (
                 <p className="fine">
@@ -343,8 +458,57 @@ export default function Review({ user }) {
               )}
             </div>
           )}
+          {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && (
+            <div id="zoning-card" className={'card thin' + (open.lot.zoning?.residential === false ? ' pending' : '')} data-testid="zoning-read">
+              <h3>Zoning</h3>
+              {open.lot.zoning?.district ? (
+                <p className="small">
+                  <b>{open.lot.zoning.district}</b>
+                  {open.lot.zoning.use ? ` (${open.lot.zoning.use})` : ''},{' '}
+                  {open.lot.zoning.confirmedBy
+                    ? `confirmed by ${open.lot.zoning.confirmedBy}`
+                    : open.lot.spec.kind === 'plat'
+                      ? "read from the city map at the address's map point, which can sit on the street or on the lot next door: confirm or change"
+                      : 'read from the city map at the parcel; it is confirmed with the lot'}
+                  . {open.lot.zoning.residential === false ? 'Send is blocked for this plan until the office has called the client.' : 'A house district: nothing blocked.'}
+                </p>
+              ) : (
+                <p className="fine">
+                  {open.lot.spec.kind === 'plat' && !open.lot.spec.confirmed ? 'The zoning of a plat lot is read when you confirm the lot.' : `No zoning was read for this lot${open.lot.zoning?.reason ? ` (${open.lot.zoning.reason})` : ''}.`} You can read the city zoning map and enter the district here.
+                </p>
+              )}
+              {zoneEdit || !open.lot.zoning?.district ? (
+                <>
+                  <div className="row2">
+                    <label className="field">
+                      <span>District</span>
+                      <input id="zone-district" value={zoneDistrict} onChange={(e) => setZoneDistrict(e.target.value)} placeholder="R-1, C-3…" />
+                    </label>
+                    <label className="confirm">
+                      <input id="zone-house" type="checkbox" checked={zoneHouse} onChange={(e) => setZoneHouse(e.target.checked)} />
+                      <span>A house district</span>
+                    </label>
+                  </div>
+                  <Button small primary disabled={busy || !zoneDistrict.trim()} onClick={() => confirmZoning(false)}>
+                    Confirm zoning
+                  </Button>
+                </>
+              ) : (
+                <div className="row2">
+                  {!open.lot.zoning.confirmedBy && (
+                    <Button small primary disabled={busy} onClick={() => confirmZoning(open.lot.zoning)} data-testid="zoning-as-read">
+                      Confirm {open.lot.zoning.district}
+                    </Button>
+                  )}
+                  <Button small ghost disabled={busy} onClick={() => setZoneEdit(true)} data-testid="zoning-change">
+                    Change
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           {open.lot?.spec?.kind === 'manual' && (
-            <div className="card thin" data-testid="zoning-confirm">
+            <div id="zoning-card" className="card thin" data-testid="zoning-confirm">
               <h3>Zoning (typed lot)</h3>
               {open.lot.zoning?.confirmedBy ? (
                 <p className="small">
@@ -373,7 +537,12 @@ export default function Review({ user }) {
               )}
             </div>
           )}
-          {open.lot?.rules && <RulesPanel lot={open.lot} mode="drafter" open title="Rules used for this lot" onLookupOwner={open.lot.spec?.kind === 'parcel' && open.lot.spec.county && open.lot.spec.propId ? lookupOwner : null} owner={owner} />}
+          {open.lot?.rules && (
+            <details className="more card thin" data-testid="rules-details">
+              <summary>Rules and sources used for this lot</summary>
+              <RulesPanel lot={open.lot} mode="drafter" open title="Rules used for this lot" onLookupOwner={open.lot.spec?.kind === 'parcel' && open.lot.spec.county && open.lot.spec.propId ? lookupOwner : null} owner={owner} />
+            </details>
+          )}
           {open.audit && (
             <div className={'card thin audit' + (open.audit.ok ? ' pass' : ' fail')}>
               <h3>
@@ -527,6 +696,17 @@ export default function Review({ user }) {
           <p className="muted small">A meeting (cost is covered there) or more changes on the plan. Open one to add changes; the office was emailed too.</p>
           <div className="inbox-list">
             {inbox.requests.map((p) => (
+              <Row key={p.id} p={p} onOpen={show} />
+            ))}
+          </div>
+        </div>
+      )}
+      {inbox?.custom?.length > 0 && (
+        <div className="card" data-testid="inbox-custom">
+          <h3>Lots that need a house designed ({inbox.custom.length})</h3>
+          <p className="muted small">None of the ready plans fits these lots (narrow, shallow or pie-shaped). The homeowner sent the lot with the rooms they want. Open one, confirm the lot, and design for it.</p>
+          <div className="inbox-list">
+            {inbox.custom.map((p) => (
               <Row key={p.id} p={p} onOpen={show} />
             ))}
           </div>

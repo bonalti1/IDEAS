@@ -41,7 +41,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
             <figcaption>Your house on your lot, in 3D</figcaption>
           </figure>
           <figure>
-            <img src="/preview/plan.jpg" alt="The floor plan with the setbacks drawn on the lot" loading="lazy" />
+            <img src="/preview/plan.jpg" alt="The floor plan drawn on the lot, with the space the city keeps open along its edges" loading="lazy" />
             <figcaption>A real floor plan you change by chatting</figcaption>
           </figure>
         </div>
@@ -71,10 +71,17 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
               <li key={p.id}>
                 <button className="house" onClick={() => onResume(p.id)}>
                   <span className="house-main">
-                    <b>{p.style?.name}</b>
+                    <b>{p.style?.name || (p.address ? String(p.address).split(',')[0] : 'Your lot')}</b>
                     <span className="muted small">{p.address || 'lot to be set'} · {ago(p.updatedAt)}</span>
                   </span>
-                  <span className={'pill ' + STATUS[p.status]?.tone}>{STATUS[p.status]?.label}</span>
+                  {/* a lot saved before any rooms were chosen (round 12, item B), or one sent to the drafter for a custom design (item A) */}
+                  {p.needsCustom ? (
+                    <span className="pill wait" data-testid="house-custom">With a drafter: a design for your lot</span>
+                  ) : !p.version ? (
+                    <span className="pill" data-testid="house-lot-only">Lot saved, rooms not chosen yet</span>
+                  ) : (
+                    <span className={'pill ' + STATUS[p.status]?.tone}>{STATUS[p.status]?.label}</span>
+                  )}
                 </button>
               </li>
             ))}
@@ -116,7 +123,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           <Button primary disabled={!ready} onClick={() => onNext({ address: address || 'Lot 514, Villa-Rama East Phase V', file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
             Find my lot
           </Button>
-          <p className="fine">We read the plat, pull the city setbacks, and draw your buildable area. Nothing is sent to a drafter yet.{!user && ' Without an account, nothing is saved when you close this page.'}</p>
+          <p className="fine">We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet.{!user && ' Without an account, nothing is saved when you close this page.'}</p>
         </div>
       )}
     </div>
