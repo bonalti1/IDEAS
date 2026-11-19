@@ -17,6 +17,7 @@ import { DEFAULT_PROGRAM, starterDraft } from './lib/layout.js'
 import { turnLot } from './lib/lot.js'
 import { STYLES } from './lib/styles.js'
 import { api } from './lib/api.js'
+import { stepHash, readHash, reach, saveTab, loadTab } from './lib/route.js'
 import { currentUser, onAuthChange, signOut } from './lib/auth.js'
 import { EDITABLE, historyFrom } from './lib/status.js'
 import './draft.css'
@@ -65,21 +66,27 @@ function OfficeGate({ user, onUser, children }) {
     return (
       <div className="screen padded narrow center">
         <SignIn title="Office sign-in" lede="Drafters and admins only." askName={false} onSignedIn={onUser} />
+        <p className="center-text">
+          <a className="linkish" href="#/" data-testid="office-to-home">
+            Planning your own house? Start here
+          </a>
+        </p>
       </div>
     )
-  if (!isDrafter(user))
-    return (
-      <div className="screen padded narrow center">
-        <div className="card signin">
-          <h3>Not a drafter account</h3>
-          <p className="muted small">{user.email} is a client account. Ask the office to make it a drafter, or sign in with another email.</p>
-          <button className="linkish" onClick={() => signOut().then(() => onUser(null))}>
-            Sign out
-          </button>
-        </div>
-      </div>
-    )
+  // a homeowner never stays on an office page (round 13, item 2: the browser's Back left one on "Not a drafter
+  // account"): the address is replaced with their own first screen, so Back cannot return here either
+  if (!isDrafter(user)) return <HomeAgain />
   return children
+}
+function HomeAgain() {
+  useEffect(() => {
+    window.location.replace(window.location.pathname + window.location.search + '#/')
+  }, [])
+  return (
+    <div className="screen padded narrow center" data-testid="home-again">
+      <p className="muted">Taking you to your house…</p>
+    </div>
+  )
 }
 
 export default function DraftApp({ admin = false, review = false, lot514 = false }) {
@@ -111,6 +118,8 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   }, [])
 
   const go = (n) => setStep(n)
+  const stepRef = useRef(0)
+  stepRef.current = step
   const restart = () => {
     setStep(0)
     projectRef.current = null
@@ -219,9 +228,10 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   }
 
   // open a saved house where it was left
-  const resume = async (id) => {
+  const resume = async (id, want = null) => {
     try {
       const p = await api.project(id)
+      projectRef.current = p
       setProject(p)
       setIntake({ address: p.address, client: p.client })
       setLot(p.lot && p.lot.envelope ? p.lot : null)
@@ -237,12 +247,86 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
       setReturnSeen(p.status === 'returned')
       // a lot saved on its own (round 12, item B) opens where it was left: the style step, or the rooms once a style is chosen
       // (one ready style today: the rooms step, with the lot drawn; with more, the style step until one is chosen)
-      if (!p.rooms?.length) go(!(p.lot && p.lot.envelope) ? 1 : (p.style?.id && p.stage === 'rooms') || STYLES.filter((x) => x.ready).length === 1 ? 3 : 2)
-      else go(EDITABLE.includes(p.status) ? 4 : 5)
+      const hasLot = !!(p.lot && p.lot.envelope)
+      const left = !p.rooms?.length ? (!hasLot ? 1 : (p.style?.id && p.stage === 'rooms') || STYLES.filter((x) => x.ready).length === 1 ? 3 : 2) : EDITABLE.includes(p.status) ? 4 : 5
+      // opened from the address bar (a reload, or the browser's Back into another house): the step asked for, as far
+      // as this house has got
+      go(Number.isInteger(want) && want > 0 ? reach(want, { intake: true, lot: hasLot, style: true, rooms: !!p.rooms?.length, locked: !EDITABLE.includes(p.status) }) : left)
+      return true
     } catch (e) {
-      alert(`Could not open that house: ${e.message}`)
+      if (want === null) alert(`Could not open that house: ${e.message}`)
+      return false
     }
   }
+
+  // Round 13, item 2: every step has its own address. The browser's Back and Forward move between the homeowner's
+  // own steps, and a reload opens the step that was on screen: a saved house from the office, anything earlier
+  // from what this tab kept.
+  const routed = useRef(false)
+  const has = () => ({ intake: !!intake, lot: !!lot, style: !!style, rooms: rooms.length > 0, locked: !!projectRef.current && !EDITABLE.includes(projectRef.current.status) })
+  const hasRef = useRef(has)
+  hasRef.current = has
+  const userRef = useRef(user)
+  userRef.current = user
+  const fromAddress = async () => {
+    const r = readHash(window.location.hash)
+    if (r.office) return
+    const home = () => window.history.replaceState(null, '', stepHash(0))
+    if (r.id && r.id !== projectRef.current?.id) {
+      if (!userRef.current || !(await resume(r.id, r.step))) {
+        home()
+        setStep(0)
+      }
+      return
+    }
+    let n = reach(r.step, hasRef.current())
+    if (r.step > 0 && n === 0 && !projectRef.current) {
+      // nothing in memory (a reload before a house was saved): what the tab kept
+      const kept = loadTab()
+      if (kept) {
+        const st = STYLES.find((x) => x.id === kept.styleId) || null
+        setIntake(kept.intake || null)
+        setLot(kept.lot && kept.lot.envelope ? kept.lot : null)
+        setStyle(st)
+        setProgram(kept.program || DEFAULT_PROGRAM)
+        setRooms(Array.isArray(kept.rooms) ? kept.rooms : [])
+        setHistory(Array.isArray(kept.history) ? kept.history : [])
+        setTouched(!!kept.touched)
+        if (Number.isFinite(kept.changesLeft)) setChangesLeft(kept.changesLeft)
+        n = reach(r.step, { intake: !!kept.intake, lot: !!(kept.lot && kept.lot.envelope), style: !!st, rooms: Array.isArray(kept.rooms) && kept.rooms.length > 0 })
+      }
+    }
+    if (n !== r.step) window.history.replaceState(null, '', stepHash(n, projectRef.current?.id))
+    setStep(n)
+  }
+  useEffect(() => {
+    if (user === undefined || routed.current || office) return
+    routed.current = true
+    fromAddress()
+  }, [user === undefined])
+  useEffect(() => {
+    const on = () => routed.current && fromAddress()
+    window.addEventListener('popstate', on)
+    return () => window.removeEventListener('popstate', on)
+  }, [])
+  // the address follows the step: a new entry when the step changes, the same entry when only the house's id arrived
+  useEffect(() => {
+    if (office || !routed.current) return
+    const want = stepHash(step, project?.id)
+    const now = window.location.hash
+    if (now === want || (step === 0 && (now === '' || now === '#'))) return
+    const cur = readHash(now)
+    if (cur.office) return
+    if (cur.step === step) window.history.replaceState(null, '', want)
+    else window.history.pushState(null, '', want)
+  }, [step, project?.id])
+  // what this tab holds is kept for a reload until the house is saved at the office
+  useEffect(() => {
+    if (office || !routed.current) return
+    if (project?.id || step === 0) return saveTab(null)
+    // at once, not a moment later: a reload right after a step is taken must find it
+    saveTab({ intake: intake ? { address: intake.address, client: intake.client } : null, lot, styleId: style?.id || null, program, rooms, history, touched, changesLeft })
+  }, [step, intake, lot, style, program, rooms, history, project?.id])
 
   const office = admin || review || lot514
   // the Lot 514 site plan review is a real project: drafters and admins only
