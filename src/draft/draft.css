@@ -30,7 +30,11 @@ h3 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: 
 .lede { font-size: 16px; color: var(--brand-muted); max-width: 440px; margin: 0; line-height: 1.5; }
 
 /* start */
-.start { align-items: center; justify-content: center; gap: 36px; padding: 40px 24px; overflow-y: auto; }
+/* centred when there is room, and from the top when there is not: plain "center" cut the title off above the top of
+   a phone's screen, where no scrolling reaches it (round 13, item 3) */
+.start { align-items: center; justify-content: flex-start; gap: 36px; padding: 40px 24px; overflow-y: auto; }
+.start > :first-child { margin-top: auto; }
+.start > :last-child { margin-bottom: auto; }
 .hero { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
 .wordmark-text { margin: 0; display: inline-flex; flex-direction: column; align-items: center; font-weight: 400; font-size: 34px; letter-spacing: var(--brand-tracking-wordmark); text-transform: uppercase; line-height: 1.05; }
 .wordmark-text .rule { width: 100%; height: 2px; background: var(--brand-brown); margin: 4px 0; }
@@ -540,4 +544,29 @@ details.more.card > summary { font-weight: 600; }
   .chat .log { flex: 1 1 auto; min-height: 110px; max-height: 50vh; }
   .chips { flex-wrap: wrap; overflow: visible; }
   .chips button { font-size: 12px; padding: 7px 11px; white-space: normal; text-align: left; }
+}
+
+/* Round 13, item 3: the whole flow on a phone. One page that scrolls, top to bottom: the picture scrolls away with
+   the words (a panel that scrolled on its own slid its text under the lot picture), the lot picture is big enough
+   to read, and everything that is tapped is at least 40px tall with air around it. */
+@media (max-width: 600px) {
+  .screen.split > .side { flex: 0 0 auto; overflow: visible; }
+  .screen.split > .viewport.lot-view { flex: 0 0 52vh; min-height: 360px; }
+  .tabs button, .tabs.small button { min-height: 40px; padding: 10px 12px; }
+  .tabs { flex-wrap: wrap; overflow-x: visible; }
+  .viewport-views { gap: 6px; padding: 6px; }
+  .viewport-views button { min-height: 40px; padding: 8px 14px; font-size: 12px; }
+  .viewport-views .check { min-height: 40px; padding: 8px 10px; }
+  .chips { gap: 8px; }
+  .chips button { min-height: 40px; padding: 9px 13px; font-size: 13px; }
+  .rules-panel summary, .lot-side details.setbacks summary, details.more > summary { min-height: 40px; padding: 10px 0; align-items: center; }
+  .lot-side details.setbacks summary, details.more > summary { display: flex; gap: 8px; }
+  .msg .fixes button, .msg button { min-height: 40px; }
+  .chat-tools { gap: 12px; }
+  .chat-tools .linkish { min-height: 40px; padding: 8px 6px; }
+  /* the Send step: the summary's rows and the buttons each get their own line and room to breathe */
+  .actions { gap: 10px; }
+  .actions .btn { min-height: 46px; }
+  .summary-table td, .summary-table th, .kv > div, .stats .stat { padding-top: 8px; padding-bottom: 8px; }
+  .card + .card { margin-top: 14px; }
 }
