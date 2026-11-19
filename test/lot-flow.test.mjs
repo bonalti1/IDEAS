@@ -74,8 +74,9 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   await page.waitForTimeout(400)
   const pt = await panel.innerText()
   assert.match(pt, /Rules used for this lot/i)
-  assert.match(pt, /Front setback\s+20 ft\s+from the city code/)
-  assert.match(pt, /Side setback\s+5 ft/)
+  assert.match(pt, /Kept open at the street\s+20 ft\s+from the city code/) // round 12, item D: a homeowner's words, never "setback"
+  assert.match(pt, /Kept open on each side\s+5 ft/)
+  assert.doesNotMatch(pt, /setback/i)
   assert.match(pt, /Design wind speed\s+set by the engineer of record/)
   assert.match(pt, /Flood zone/)
   assert.doesNotMatch(pt, /\$|price|estimate/i)
@@ -87,12 +88,13 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   await page.getByRole('button', { name: /Modern Farmhouse/ }).click()
   await page.getByRole('button', { name: /Next, rooms/ }).click()
   // the default rooms may not fit an 80 ft lot: take the size the rooms step offers, then draft
+  // (round 12, item E: the rooms start at what fits this lot; the homeowner is told so and never meets "does not fit" first)
   const draftBtn = page.getByRole('button', { name: /Draft my house/ })
-  if (!(await draftBtn.isEnabled())) {
-    const offer = page.locator('button.linkish', { hasText: /try that|^use /i }).first()
-    await offer.click()
-    await page.waitForTimeout(800)
-  }
+  await page.getByTestId('auto-start').waitFor({ timeout: 60000 })
+  assert.match(await page.getByTestId('auto-start').innerText(), /We started you with what fits this lot; you can change it\./)
+  assert.doesNotMatch(await page.locator('main').innerText(), /Does not fit/)
+  assert.equal(await draftBtn.isEnabled(), true)
+  await shot(page, 'rooms-start-fits-1440')
   await draftBtn.click()
   await page.getByLabel('Your change').waitFor({ timeout: 60000 })
   // on to Send: the rules panel again, no block for a house district
@@ -103,11 +105,15 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   assert.match(sendText, /Rules used for this lot/i)
   assert.doesNotMatch(sendText, /cannot be sent yet/)
   await shot(page, 'send-rules-panel-1440')
-  // send it: the project saves with the parcel lot, waiting for the drafter
-  await page.getByRole('button', { name: 'Send to drafters' }).click()
-  await page.waitForTimeout(2500)
-  const after = await page.locator('.screen').innerText()
-  assert.match(after, /drafter|confirmed your lot|queue/i)
+  // round 12, item C: the lot is still with a drafter. That is the normal next step, not a failure: a calm card,
+  // no Send button to press yet, and never "Could not send"
+  const waiting = page.getByTestId('lot-waiting')
+  await waiting.waitFor({ timeout: 20000 })
+  assert.match(await waiting.innerText(), /Your plan is saved/i)
+  assert.match(await waiting.innerText(), /A drafter is checking your lot against the county records, usually within one business day\. We'll email you, and then you can send it\./)
+  assert.equal(await page.getByRole('button', { name: 'Send to drafters' }).count(), 0, 'the Send button comes when the lot is confirmed')
+  assert.doesNotMatch(await page.locator('.screen').innerText(), /Could not|could not send|cannot be sent/i)
+  await shot(page, 'send-lot-with-drafter-calm-1440')
 
   // ── a commercial lot blocks Send with the office's line ──
   const p2 = await (await appContext(browser, apiBase, { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })).newPage()
@@ -139,6 +145,9 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   assert.match(lc, /PALMS LOT 7 BLK 4 \(geo id P2500-00-004-0007-00\)/)
   assert.match(lc, /matched by address-point/)
   assert.match(lc, /advisory/)
+  // round 12, item J: the checklist comes first; the rules and sources are behind "details"
+  assert.match(await dp.getByTestId('review-checklist').innerText(), /The lot matches the plat or deed/i)
+  await dp.getByTestId('rules-details').locator('summary').first().click()
   const dpanel = dp.getByTestId('rules-panel')
   const dpt = await dpanel.innerText()
   assert.match(dpt, /Parcel 255056/)
@@ -149,11 +158,14 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   assert.match(await dpanel.innerText(), /Owner of record: (not given|REDACTED)/, 'the fixtures carry no owner field (allow-list); live it is the name')
   await shot(dp, 'review-parcel-rules-1440')
   // confirm the lot
-  await dp.getByRole('button', { name: 'Confirm lot' }).click()
+  await dp.getByTestId('check-confirm-lot').click()
   await dp.waitForTimeout(1500)
   assert.match(await dp.getByTestId('lot-card').innerText(), /confirmed by maria@drafthouse.test/i)
 
   // ── the lot confirmed, the client sends again and the summary PDF carries the "Rules used" page (item 9) ──
+  // (the Send page looks again every 20 seconds: the button appears on its own once the drafter has confirmed)
+  await page.getByRole('button', { name: 'Send to drafters' }).waitFor({ timeout: 45000 })
+  assert.equal(await page.getByTestId('lot-waiting').count(), 0)
   await page.getByRole('button', { name: 'Send to drafters' }).click()
   const dl = page.getByRole('button', { name: /Download your summary/ })
   await dl.waitFor({ timeout: 30000 })
@@ -164,7 +176,7 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   const txt = spawnSync('pdftotext', ['-layout', pdfPath, '-'], { encoding: 'utf8' })
   if (txt.status === 0) {
     assert.match(txt.stdout, /RULES USED FOR THIS LOT/)
-    assert.match(txt.stdout, /Front setback\s+20 ft\s+city code/)
+    assert.match(txt.stdout, /Kept open at the street\s+20 ft\s+city code/)
     assert.match(txt.stdout, /Design wind speed\s+set by the engineer of record/)
     assert.match(txt.stdout, /zoned R-1/)
     assert.match(txt.stdout, /A drafter confirms every line/)

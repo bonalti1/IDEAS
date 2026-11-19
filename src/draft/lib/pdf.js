@@ -3,6 +3,7 @@
 // the same SVG the plan tab shows, placed at true scale with jsPDF and svg2pdf. No pop-up, no print
 // dialog: the file downloads. The libraries load on first use so the app's bundle stays small.
 import { planSVG, sitePlanSVG, sheetFor, siteScaleFor, lotTitle, cropSVG } from './plan-svg.js'
+import { plainReason, homeLabel } from './plain.js'
 
 let libs
 async function load() {
@@ -269,16 +270,17 @@ async function summaryDoc(design, price, audit, trust, info = {}, { internal = f
       const status = u.status === 'verified' ? (u.stale ? 'city code, re-check due' : 'city code') : u.status === 'summary' ? 'summary, office confirms' : 'unknown, confirm with city'
       doc.setFont(font, 'bold')
       doc.setTextColor(26, 26, 26)
-      doc.text(String(u.label || u.id), M, y)
+      // the homeowner's summary uses a homeowner's words (round 12, item D)
+      doc.text(homeLabel(u.id, u.label), M, y, { maxWidth: 1.45 })
       doc.setFont(font, 'normal')
-      doc.text(String(u.value ?? ''), M + 1.5, y, { maxWidth: 1.7 })
+      doc.text(plainReason(String(u.value ?? '')), M + 1.5, y, { maxWidth: 1.7 })
       doc.setTextColor(85, 85, 85)
       const src = doc.splitTextToSize(`${status}${u.source ? ` · ${u.source}` : ''}${u.checkedAt ? ` · ${u.checkedAt}` : ''}`, W - 3.4)
       doc.text(src, M + 3.4, y)
       y += Math.max(1, src.length) * 0.14 + 0.04
     })
     ;(design.lot?.ruleNotes || []).forEach((n) => {
-      const l = doc.splitTextToSize(n, W)
+      const l = doc.splitTextToSize(plainReason(n), W)
       doc.text(l, M, y)
       y += l.length * 0.14 + 0.02
     })

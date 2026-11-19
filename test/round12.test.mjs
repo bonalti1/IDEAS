@@ -19,7 +19,7 @@ import { starterDraft } from '../src/draft/lib/layout.js'
 import { TEST_ADDRESSES } from '../server/parcel-sources.mjs'
 import { plainReason } from '../src/draft/lib/plain.js'
 import { roofSurfaces, dormerWalls, roofWork } from '../src/draft/lib/roof.js'
-import { fitsLot, clearFitCache } from '../src/draft/lib/fit.js'
+import { fitsLot, clearFitCache, startFrom } from '../src/draft/lib/fit.js'
 import { makeParcels } from '../server/parcels.mjs'
 import { makeLots, FEMA_DOWN } from '../server/lots.mjs'
 import { fixtureFetch, loadFixtures } from '../server/fixtures.mjs'
@@ -590,4 +590,67 @@ test('A over HTTP: "Send my lot to the drafter" saves the lot with needsCustom, 
   const dj = await drafted.json()
   assert.equal(dj.version, 1)
   assert.equal(lotTurn(dj.lot.spec), 15)
+})
+
+// ── items E, F, D ──────────────────────────────────────────────────────────────────────────
+test('E: on every recorded lot the homeowner starts from a program that fits, or is offered the drafter; never "does not fit" before a house is seen', async () => {
+  const all = await recordedLots()
+  const table = []
+  let trimmed = 0
+  for (const { address, lot } of all) {
+    clearFitCache()
+    const first = fitsLot(DEFAULT_PROGRAM, style, lot)
+    const start = startFrom(first, DEFAULT_PROGRAM)
+    if (first.ok) {
+      assert.equal(start, null, `${address}: the default fits, nothing to trim`)
+      table.push(`${address.split(',')[0]}: the default fits`)
+      continue
+    }
+    if (!start) {
+      assert.equal(first.deadEnd, true, `${address}: neither a start nor the drafter`)
+      table.push(`${address.split(',')[0]}: no plan fits, the drafter is offered`)
+      continue
+    }
+    trimmed++
+    const f = fitsLot(start, style, lot)
+    assert.equal(f.ok, true, `${address}: starts at ${start.beds} bed, ${start.baths} bath, ${start.garage}-car, ${start.sqft} sf, which does not fit (${f.reasons?.[0]})`)
+    table.push(`${address.split(',')[0]}: starts at ${start.beds} bed, ${start.baths} bath, ${start.garage ? start.garage + '-car' : 'no garage'}${start.office ? ', office' : ''}, ${start.sqft} sf${f.turn ? `, turned ${f.turn} deg` : ''}`)
+  }
+  console.log(table.join('\n'))
+  assert.ok(trimmed >= 8, 'round 11: the default 4 bed, 3 bath, office, 2-car met "does not fit" on most real lots')
+  // 3305 N 27th St, the lot of the real-customer test
+  assert.match(table.find((l) => /3305 N 27th/.test(l)), /starts at/)
+  const step = fs.readFileSync('src/draft/screens/Program.jsx', 'utf8')
+  assert.match(step, /We started you with what fits this lot; you can change it\./)
+  assert.match(step, /startFrom\(checked, program\)/)
+})
+
+test('F and D (source): no NaN for a lot with no city rules, and no "setback" in what a homeowner reads', () => {
+  const lot = fs.readFileSync('src/draft/screens/Lot.jsx', 'utf8')
+  assert.match(lot, /50% \(county default, the drafter confirms\)/)
+  assert.match(lot, /'the drafter confirms'/)
+  assert.doesNotMatch(lot, /Math\.round\(city\.maxCoverage \* 100\)/, 'the raw multiply that printed NaN% is gone')
+  // the sentences a homeowner used to read, through the plain-words filter the screens now apply
+  for (const line of [
+    'Bedroom 2 would cross the setback at 6 ft from side.',
+    'The kitchen would run past the 6 ft side setback.',
+    'That would put the garage past the 20 ft setback from Kiskadee Ln.',
+    'At 3,000 sf this plan runs past the setbacks on this lot; the largest it fits here with these rooms is about 2,400 sf.',
+    'The setbacks leave no buildable area: 25\' front and 10\' rear need a lot deeper than 35 ft, 5\' each side a lot wider than 10 ft.',
+    'The buildable area is very small. Check the dimensions and the setbacks.',
+    'A corner lot: the side on N 12th St takes the street-side setback.',
+    '+1 ft of setback per ft above 25',
+  ]) {
+    const out = plainReason(line)
+    assert.doesNotMatch(out, /setback/i, out)
+    assert.ok(out.length >= line.length * 0.6, out)
+  }
+  assert.equal(plainReason('The kitchen is 2 ft longer now.'), 'The kitchen is 2 ft longer now.', 'a line with no such word is left alone')
+  // the homeowner screens: no "setback" in their own text (comments, class names and the drafter's screens aside)
+  const strip = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/className="[^"]*"|setSetback|\.setbacks|setbacks:|setbacks\?|setbacks \|\|/g, '')
+  for (const f of ['Start.jsx', 'Lot.jsx', 'Style.jsx', 'Program.jsx', 'Draft.jsx', 'Send.jsx']) {
+    const text = strip(fs.readFileSync(`src/draft/screens/${f}`, 'utf8'))
+    assert.doesNotMatch(text, />[^<{]*setback[^<{]*</i, `${f}: "setback" in the page's own text`)
+    assert.doesNotMatch(text, /'[^'\n]*\bsetbacks?\b[^'\n]*'|`[^`\n]*\bsetbacks?\b[^`\n]*`/i, `${f}: "setback" in a string a homeowner reads`)
+  }
 })

@@ -9,6 +9,7 @@ import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
 import RulesPanel from '../RulesPanel.jsx'
 import { parcelSpec } from '../lib/parcel-spec.js'
+import { plainReason } from '../lib/plain.js'
 
 export { parcelSpec }
 
@@ -263,11 +264,15 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))
   const tooSmall = !!problem
+  // round 12, item F: a lot with no city row has no coverage figure; the rules use 50%, and the screen says so (it said "NaN% · NaN sf")
+  const hasCover = Number.isFinite(+city?.maxCoverage) && +city.maxCoverage > 0
+  const cover = hasCover ? +city.maxCoverage : 0.5
+  const coverLine = hasCover ? `${Math.round(cover * 100)}%` : '50% (county default, the drafter confirms)'
 
   return (
     <div className="screen split">
       <div className="viewport lot-view">
-        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? 'Very little room to build inside the setbacks' : 'No room to build inside the setbacks') : ''} />}
+        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? 'Very little room to build on this lot' : 'No room to build on this lot') : ''} />}
         <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag">
           {shown ? `${shown.address || 'your lot'} · ${city.name}` : 'Enter the lot'}
           {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? 'very little room to build' : 'no room to build'}` : ''}
@@ -364,7 +369,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
               </div>
             )}
             {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">The county address map puts {String(address).split(',')[0]} on this parcel; the appraisal district lists it as {parcel.listedAs}. Check that it is your lot; the drafter checks it too.</p>}
-            {!parcel.large && parcel.corner && <p className="fine">A corner lot: the side on {(parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(' and ')} takes the street-side setback.</p>}
+            {!parcel.large && parcel.corner && <p className="fine">A corner lot: the side on {(parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(' and ')} keeps the wider open space the city asks for along a street.</p>}
             {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.</p>}
             <p className="fine">
               From the {parcel.source?.name || 'county appraisal district'}
@@ -535,7 +540,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
         <details className="setbacks">
           <summary>
-            Setbacks · {city.name}
+            Space the city keeps open along each edge · {city.name}
             {city.verified ? '' : ' (office defaults, unverified)'}
           </summary>
           <div className="row2">
@@ -547,25 +552,27 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             ].map(([k, l]) => (
               <label key={k} className="field">
                 <span>{l} (ft)</span>
-                <input type="number" min="0" placeholder={String(city[k])} value={spec.setbacks?.[k] ?? ''} onChange={(e) => setSetback(k, e.target.value)} />
+                <input type="number" min="0" placeholder={city[k] != null && Number.isFinite(+city[k]) ? String(city[k]) : ''} value={spec.setbacks?.[k] ?? ''} onChange={(e) => setSetback(k, e.target.value)} />
               </label>
             ))}
           </div>
-          <p className="fine">Blank uses the city rule. Max coverage {Math.round(city.maxCoverage * 100)}%, height {city.maxHeightFt} ft.</p>
+          <p className="fine">
+            Blank uses the city rule. A house may cover {coverLine} of the lot; height: {Number.isFinite(+city.maxHeightFt) ? `${city.maxHeightFt} ft` : 'the drafter confirms'}.
+          </p>
         </details>
 
         {lot && (
           <div className="stats">
             <Stat k="Lot area" v={sf(lot.areaSf)} />
             <Stat k="Buildable area" v={sf(lot.envelopeSf)} />
-            <Stat k="Max coverage" v={`${Math.round(city.maxCoverage * 100)}% · ${sf(lot.areaSf * city.maxCoverage)}`} />
+            <Stat k="Max coverage" v={`${coverLine} · ${sf(lot.areaSf * cover)}`} />
             <Stat k="Flood zone" v={flood ? (flood.status === 'no-digital-firm' ? 'no digital FEMA map here · the county decides' : flood.zone ? `${flood.zone}${flood.sfha ? ' · special flood hazard area' : flood.status === 'shaded-x' ? ' · 0.2% flood area' : ' · outside the 1% flood area'}${flood.where && /street/.test(flood.where) ? ' (at the street; the parcel point once the lot is picked)' : ''}` : flood.status === 'no-address' ? 'not found for this address' : 'no zone polygon at this point') : floodErr ? 'FEMA did not answer · the office checks' : addressHeld ? 'after the address is settled' : address ? 'checking FEMA…' : '—'} />
             {zoning?.status === 'found' && <Stat k="Zoning" v={`${zoning.district} · ${zoning.use}`} />}
           </div>
         )}
         {lot && <RulesPanel lot={lot} mode="homeowner" />}
         {lot?.zoning?.residential === false && <p className="fine bad">{lot.zoning.message}</p>}
-        {problem && <p className="fine bad">{problem}</p>}
+        {problem && <p className="fine bad">{plainReason(problem)}</p>}
         <p className="fine">Red is your property line. Green dashed is where the house can sit. {mode === 'plat' || spec.kind === 'parcel' ? 'A drafter confirms the lot before the design is sent on.' : 'A drafter double-checks this before anything is final.'}</p>
         {mode === 'manual' && (
           <label className="confirm">

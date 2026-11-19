@@ -2,6 +2,7 @@
 // how sure we are. Homeowners see the plain version; drafters see every field, the flags, the parcel ids and the
 // raw rule objects. The same rows go into the summary PDF and design.json.
 import { statusWords } from './lib/jurisdictions.js'
+import { plainReason, homeLabel } from './lib/plain.js'
 
 const PLAIN = ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf', 'district', 'irc', 'windstorm', 'wind']
 const chipClass = (u) => (u.status === 'verified' ? (u.stale ? 'warn' : 'good') : u.status === 'summary' ? 'warn' : 'bad')
@@ -40,8 +41,8 @@ export default function RulesPanel({ lot, mode = 'homeowner', open = false, titl
         <tbody>
           {rows.map((u) => (
             <tr key={u.id} className={u.status}>
-              <td>{u.label || u.id}</td>
-              <td>{u.value}</td>
+              <td>{mode !== 'drafter' ? homeLabel(u.id, u.label) : u.label || u.id}</td>
+              <td>{mode !== 'drafter' && typeof u.value === 'string' ? plainReason(u.value) : u.value}</td>
               <td>
                 <span className={'pill ' + chipClass(u)}>{statusWords(u)}</span>
                 {mode === 'drafter' && (u.source || u.checkedAt) ? (
@@ -76,7 +77,7 @@ export default function RulesPanel({ lot, mode = 'homeowner', open = false, titl
       {(lot.ruleNotes || []).length > 0 && (
         <ul className="list small">
           {lot.ruleNotes.map((n) => (
-            <li key={n}>{n}</li>
+            <li key={n}>{mode !== 'drafter' ? plainReason(n) : n}</li>
           ))}
         </ul>
       )}
@@ -84,7 +85,7 @@ export default function RulesPanel({ lot, mode = 'homeowner', open = false, titl
         <ul className="list small flags">
           {flags.map((f) => (
             <li key={f} className="warn">
-              {f}
+              {mode !== 'drafter' ? plainReason(f) : f}
             </li>
           ))}
         </ul>
@@ -107,7 +108,7 @@ export default function RulesPanel({ lot, mode = 'homeowner', open = false, titl
           {owner ? ` Owner of record: ${owner.owner || 'not given'}${owner.mailing ? `, ${owner.mailing}` : ''}.` : ''}
         </p>
       )}
-      {mode !== 'drafter' && <p className="fine">Setbacks, coverage and height come from the city or county table; the flood zone from FEMA; the zoning from the city map. The permit set is drawn by a drafter and sealed where the city requires it.</p>}
+      {mode !== 'drafter' && <p className="fine">The open space along each edge, how much of the lot a house may cover and how tall it may be come from the city or county table; the flood zone from FEMA; the zoning from the city map. The permit set is drawn by a drafter and sealed where the city requires it.</p>}
     </details>
   )
 }

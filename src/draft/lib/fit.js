@@ -290,3 +290,16 @@ function fitsLotNow(program, style, lot = DEFAULT_LOT, { depth = 0 } = {}) {
   }
   return { ok: rules.ok, reasons: rules.reasons, draft, maxSqft, suggestion, need }
 }
+
+/**
+ * Round 12, item E: the program a homeowner starts from on a lot. The app's default (4 bed, 3 bath, office, 2-car)
+ * met "does not fit" on ordinary lots before the homeowner had seen a house. From the fit's own answer for the
+ * default: the same rooms at the largest size that fits, or the smaller program it offers. null when the default
+ * fits as it is, or when nothing does (the rooms step then offers the drafter).
+ */
+export function startFrom(check, program) {
+  if (!check || check.ok) return null
+  if (check.maxSqft) return { ...program, sqft: check.maxSqft }
+  if (check.suggestion?.program) return { ...check.suggestion.program }
+  return null
+}

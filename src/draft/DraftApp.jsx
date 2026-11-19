@@ -95,6 +95,9 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   const [changesLeft, setChangesLeft] = useState(CHANGES_PER_PLAN) // free changes left on the open plan
   const [history, setHistory] = useState([])
   const [returnSeen, setReturnSeen] = useState(false) // the client read the drafter's note and went back to the draft
+  // round 12, item E: the rooms start at what fits the lot until the homeowner chooses (touched); autoNote says we did that
+  const [touched, setTouched] = useState(false)
+  const [autoNote, setAutoNote] = useState(false)
 
   const loadUser = async () => {
     const u = await currentUser()
@@ -120,6 +123,8 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
     setChangesLeft(CHANGES_PER_PLAN)
     setHistory([])
     setReturnSeen(false)
+    setTouched(false)
+    setAutoNote(false)
     if (user) api.projects().then(setProjects).catch(() => {})
   }
   const noteMessage = (p) => ({ who: 'house', text: `Note from ${p.review?.drafter || 'your drafter'}: ${p.review?.note}`, applied: true, source: 'undo' })
@@ -222,6 +227,10 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
       setLot(p.lot && p.lot.envelope ? p.lot : null)
       setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
       setProgram(p.program && Object.keys(p.program).length ? p.program : DEFAULT_PROGRAM)
+      // rooms a homeowner chose are theirs; a saved lot still on the app's default starts at what fits
+      const same = ['beds', 'baths', 'garage', 'sqft', 'office', 'halfBath', 'suite2'].every((k) => (p.program?.[k] ?? DEFAULT_PROGRAM[k]) === DEFAULT_PROGRAM[k])
+      setTouched(!!p.version || !same)
+      setAutoNote(false)
       setRooms(p.rooms || [])
       setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
       setHistory(p.status === 'returned' && p.review?.note ? [...historyFrom(p.versions), noteMessage(p)] : historyFrom(p.versions))
@@ -258,6 +267,12 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             })}
           </ol>
         )}
+        {/* phone: the step names are hidden to fit five numbers; the current one is named under them (round 12, item H) */}
+        {!office && step > 0 && (
+          <div className="step-name" data-testid="step-name">
+            Step {step} of {STEPS.length} · {STEPS[step - 1]}
+          </div>
+        )}
         <nav className="dh-links">
           {user && (
             <span className="dh-user">
@@ -266,10 +281,25 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
                   {changesLeft} change{changesLeft === 1 ? '' : 's'} left on this plan
                 </span>
               )}
-              {user.email}
-              <button className="linkish" onClick={logout}>
+              <span className="dh-email">{user.email}</span>
+              <button className="linkish dh-signout" onClick={logout}>
                 Sign out
               </button>
+              {/* phone (round 12, item H): the email collided with "Sign out"; both sit behind an account button */}
+              <details className="dh-account" data-testid="account">
+                <summary aria-label="Your account">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M4.5 20c.8-3.8 3.9-5.6 7.5-5.6s6.7 1.8 7.5 5.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </summary>
+                <div className="dh-account-menu">
+                  <span className="dh-account-email">{user.email}</span>
+                  <button className="linkish" onClick={logout}>
+                    Sign out
+                  </button>
+                </div>
+              </details>
             </span>
           )}
           {isDrafter(user) && (
@@ -333,6 +363,11 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             onNext={(l) => {
               const taken = { ...l, client: intake?.client }
               setLot(taken)
+              // another lot: rooms nobody chose go back to the default and are fitted to this lot on the rooms step
+              if (!touched) {
+                setProgram(DEFAULT_PROGRAM)
+                setAutoNote(false)
+              }
               go(2)
               // saved now, not at the Draft step: the lot is the homeowner's from here, and a parcel or plat lot is in the drafter's queue
               saveDraft({ lot: taken, program, ...(style ? { style: { id: style.id, name: style.name } } : {}) }, 'style')
@@ -352,7 +387,7 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
             onBack={() => go(1)}
           />
         )}
-        {!office && step === 3 && <Program program={program} style={style} lot={lot} onChange={setProgram} onBack={() => go(2)} onNext={enterDraft} project={project} onSendLot={user ? sendLotToDrafter : null} />}
+        {!office && step === 3 && <Program program={program} style={style} lot={lot} onChange={(p) => (setTouched(true), setAutoNote(false), setProgram(p))} onBack={() => go(2)} onNext={enterDraft} project={project} onSendLot={user ? sendLotToDrafter : null} pristine={!touched && !autoNote && !project?.version} autoNote={autoNote} onAuto={(p) => (setProgram(p), setAutoNote(true))} />}
         {!office && step === 4 && (
           <Draft
             style={style}

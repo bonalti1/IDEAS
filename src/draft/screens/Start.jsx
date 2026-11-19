@@ -41,7 +41,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
             <figcaption>Your house on your lot, in 3D</figcaption>
           </figure>
           <figure>
-            <img src="/preview/plan.jpg" alt="The floor plan with the setbacks drawn on the lot" loading="lazy" />
+            <img src="/preview/plan.jpg" alt="The floor plan drawn on the lot, with the space the city keeps open along its edges" loading="lazy" />
             <figcaption>A real floor plan you change by chatting</figcaption>
           </figure>
         </div>
@@ -123,7 +123,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           <Button primary disabled={!ready} onClick={() => onNext({ address: address || 'Lot 514, Villa-Rama East Phase V', file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
             Find my lot
           </Button>
-          <p className="fine">We read the plat, pull the city setbacks, and draw your buildable area. Nothing is sent to a drafter yet.{!user && ' Without an account, nothing is saved when you close this page.'}</p>
+          <p className="fine">We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet.{!user && ' Without an account, nothing is saved when you close this page.'}</p>
         </div>
       )}
     </div>

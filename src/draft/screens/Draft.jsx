@@ -7,6 +7,7 @@ import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/op
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
+import { plainReason } from '../lib/plain.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = `Thanks! The office will reach out within 1 business day. You can also call ${TRUST.phone}.`
@@ -128,7 +129,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       // built one candidate a turn, so the spinner paints between them instead of the page freezing
       const { options } = await optionsForAsync(topic, rooms, program, style, lot, { history: standingEdits(history) })
       const others = Object.keys(TOPIC_NAMES).filter((k) => k !== topic)
-      setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; looking is free.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: the setbacks or the rules refuse each one.`, applied: false, source: 'options', picker: options, others }])
+      setHistory((h) => [...h, { who: 'house', text: options.length >= 2 ? `${options.length} options for ${TOPIC_NAMES[topic]} that pass the checks on this lot. Pick one: that is one change; looking is free.` : options.length === 1 ? `Only one sound option for ${TOPIC_NAMES[topic]} on this lot.` : `No sound option for ${TOPIC_NAMES[topic]} on this lot: each one runs too close to an edge of the lot or breaks a plan rule.`, applied: false, source: 'options', picker: options, others }])
       setBusy(false)
       return
     }
@@ -249,7 +250,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           <div className="viewport-tag">
             {style.name} · {programLine(programOf(rooms, program))}
           </div>
-          <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, setbacks, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
+          <div className="viewport-hint">{view === 'top' ? 'Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan' : view === 'site' ? 'Site plan · lot lines, the space kept open, driveway, walk' : 'Drag to turn · scroll to zoom · right-drag to pan'}</div>
         </div>
         <div className="viewport-views">
           <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
@@ -296,7 +297,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           )}
           {history.map((m, i) => (
             <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '') + (m.undone ? ' undone' : '')}>
-              {m.text}
+              {m.who === 'house' ? plainReason(m.text) : m.text}
               {m.meta && (
                 <span className="meta">
                   {Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ' sf')}</b> : 'same size'} · {m.meta.used ?? 1} change used

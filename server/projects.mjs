@@ -649,6 +649,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // a drafter confirms the lot read from a plat, with corrected calls or setbacks when needed
     async confirmLot(p, drafter, { confirmed = true, spec, note }) {
       if (p.lot?.spec?.kind !== 'plat' && p.lot?.spec?.kind !== 'parcel') throw fail(409, 'this lot was typed in, nothing to confirm')
+      const wasConfirmed = !!p.lot.spec.confirmed
       const next = { ...p.lot.spec, ...(spec || {}), kind: p.lot.spec.kind === 'parcel' ? 'parcel' : 'plat', confirmed: !!confirmed, confirmedBy: confirmed ? drafter.email : null, confirmedAt: confirmed ? now() : null, confirmNote: note || null }
       // round 11, item 1: the lot is confirmed with its zoning. The server reads the district again at the parcel (a
       // drafter's read is never limited); a read that fails keeps the one already stored. The zoning it confirmed
@@ -692,8 +693,17 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         p.version += 1
         await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: 'lot', text: 'Lot corrected by the drafter', used: 0, rooms: placed })
       }
+      const firstConfirm = confirmed && !wasConfirmed
       await store.projects.put(p)
       await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
+      // round 12, item C: the homeowner was told "we'll email you" while the lot waited. One email, the first time it
+      // is confirmed, and only when Send is open (a lot zoned for something else gets the office's call instead).
+      if (firstConfirm && alerts?.emailTo && p.email && !zoningBlocksSend(lot)) {
+        const first = String(p.client || '').split(' ')[0] || 'Hello'
+        alerts
+          .emailTo(p.email, 'Draft House: your lot is confirmed', `${first},\n\nA drafter checked your lot${p.address ? ` at ${p.address}` : ''} against the county records, and it is confirmed.\n\n${p.version ? 'Open Draft House, look over your plan, and press "Send to drafters" when you are ready.' : 'Open Draft House to choose your rooms and see your first draft.'}\n\nSouth Texas Builders`)
+          .catch(() => {})
+      }
       return this.detail(p, { drafter: true })
     },
 

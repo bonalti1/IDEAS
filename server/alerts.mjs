@@ -32,6 +32,33 @@ export function makeAlerts({ env = process.env, store, event, log = console.log,
     }
   }
 
+  /**
+   * One plain email to a homeowner (round 12, item C: "we'll email you when your lot is confirmed"). Needs the
+   * Resend key and the from-address; nothing is sent, and nothing fails, without them. Never a price, never an
+   * owner-of-record name: the caller writes the text.
+   */
+  async function emailTo(address, subject, text) {
+    const rcpt = String(address || '').trim()
+    if (!apiKey || !from || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rcpt)) {
+      log(`client email not sent (${!apiKey || !from ? 'email not configured' : 'no address'}): ${subject}`)
+      return { ok: false, detail: 'email not configured' }
+    }
+    try {
+      const r = await fetchImpl('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ from, to: [rcpt], subject, text }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(body.message || `HTTP ${r.status}`)
+      return { ok: true, id: body.id }
+    } catch (e) {
+      log(`client email failed: ${e.message}`)
+      return { ok: false, detail: e.message }
+    }
+  }
+
   // Every minute: a worker silent for more than OFFLINE_MIN minutes gets one email, and one
   // more when it is back. The flag lives on the worker record so a restart does not resend.
   async function checkWorkers(nowMs = Date.now()) {
@@ -58,6 +85,7 @@ export function makeAlerts({ env = process.env, store, event, log = console.log,
   return {
     configured,
     email,
+    emailTo,
     checkWorkers,
     start() {
       timer = setInterval(() => checkWorkers().catch((e) => log(`alert check failed: ${e.message}`)), 60000)

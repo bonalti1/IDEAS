@@ -413,8 +413,8 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 /* phone: the view bar wraps instead of covering the drawing's title; the drawing sits below it */
 @media (max-width: 520px) {
   .plan-drawing-inner { top: 0; }
-  /* the plan fits the phone's width; pinch to zoom in */
-  .plan-drawing-inner svg { max-width: 100%; width: 100%; max-height: none; height: auto; }
+  /* the whole plan fits the frame, width and height (round 12, item H: at full width its bottom was cut off); pinch to zoom in */
+  .plan-drawing-inner svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
 }
 
 .checks li.warn .mark { color: #b8860b; }
@@ -512,3 +512,31 @@ details.more.card > summary { font-weight: 600; }
 .lot-strip { display: flex; gap: 14px; align-items: center; margin: 0 0 14px; padding: 10px 12px; border: 1px solid #e3ddd0; border-radius: 10px; background: #fbfaf7; }
 .lot-strip .lot-thumb { width: 84px; height: 84px; flex: none; }
 .lot-strip p { margin: 2px 0 0; }
+
+/* round 12, item C: the lot is with a drafter, the plan is saved: a calm card, not an error */
+.card.note.calm { border-color: #b9d3c0; background: #f3faf5; }
+.card.note.calm h3 { color: #1f6a3a; margin-top: 0; }
+
+/* round 12, item H: the phone layout at 390 px */
+.dh-account { display: none; position: relative; }
+.dh-account > summary { list-style: none; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--brand-hair); display: grid; place-items: center; color: var(--brand-ink); background: #fff; }
+.dh-account > summary::-webkit-details-marker { display: none; }
+.dh-account-menu { position: absolute; right: 0; top: 40px; z-index: 30; background: #fff; border: 1px solid var(--brand-hair); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 200px; max-width: 86vw; }
+.dh-account-email { font-size: 12px; color: var(--brand-muted); word-break: break-all; }
+.step-name { display: none; }
+@media (max-width: 600px) {
+  .dh-email, .dh-signout { display: none; }
+  .dh-account { display: inline-block; }
+  .dh-user { flex-wrap: nowrap; gap: 8px; }
+  .dh-links { flex-wrap: nowrap; }
+  .dh-credits { font-size: 10px; padding: 3px 8px; white-space: nowrap; }
+  .step-name { display: block; order: 4; width: 100%; text-align: center; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand-ink); margin-top: -2px; }
+  /* the Draft step scrolls as a page: the picture, then a chat tall enough to read (at least 40% of the screen) */
+  .screen.split { overflow-y: auto; }
+  .screen.split > .viewport { flex: 0 0 40vh; min-height: 300px; }
+  /* the chat panel (replies, suggestions, the box to type in) takes at least half the screen; the replies scroll inside it */
+  .screen.split > .side.chat { flex: 0 0 auto; min-height: 54vh; overflow: visible; }
+  .chat .log { flex: 1 1 auto; min-height: 110px; max-height: 50vh; }
+  .chips { flex-wrap: wrap; overflow: visible; }
+  .chips button { font-size: 12px; padding: 7px 11px; white-space: normal; text-align: left; }
+}

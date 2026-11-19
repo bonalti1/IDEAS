@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Stepper, Stat, sf } from '../ui.jsx'
 import { kitFor, lotOf, programLimits } from '../lib/layout.js'
-import { fitsLot } from '../lib/fit.js'
+import { fitsLot, startFrom } from '../lib/fit.js'
 import { turnLot, insideRect } from '../lib/lot.js'
 import { plainReason } from '../lib/plain.js'
 import { floorArea } from '../lib/layout.js'
@@ -102,7 +102,7 @@ function LotThumb({ lot }) {
   )
 }
 
-export default function Program({ program, style, lot, onChange, onNext, onBack, project = null, onSendLot = null }) {
+export default function Program({ program, style, lot, onChange, onNext, onBack, project = null, onSendLot = null, pristine = false, onAuto = null, autoNote = false }) {
   // the fit always starts from the lot square to the street and says what turn (if any) makes the plan fit (round 12, item A)
   const L = useMemo(() => turnLot(lotOf(lot), 0), [lot])
   const [sendState, setSendState] = useState(project?.needsCustom ? 'sent' : 'idle') // idle | sending | sent | an error line
@@ -131,6 +131,13 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
   const check = checked || { ok: false, checking: true, reasons: [], draft: { minSqft: 0, clamped: false, fitScale: 1, rooms: [] }, maxSqft: null, suggestion: null, need: null }
   // the sample card shows what its draft comes out to, not the sheet's number
   const sample = useMemo(() => (ref ? fitsLot({ ...ref.program }, style, L) : null), [ref, style, L])
+  // round 12, item E: the rooms nobody has chosen yet start at what fits this lot. Until the homeowner changes
+  // something, a default that does not fit is replaced by the fit's own answer, and never shown as "does not fit".
+  const startWith = pristine && checked && !checking ? startFrom(checked, program) : null
+  useEffect(() => {
+    if (startWith && onAuto) onAuto(startWith)
+  }, [startWith && JSON.stringify(startWith)])
+  const settling = pristine && (!checked || checking || !!startWith)
   const minSqft = check.draft.minSqft || limits.sqft[0]
   const trimmed = check.ok && check.draft.fitScale < 0.995 ? Math.round((1 - check.draft.fitScale) * 100) : 0
   const oneStory = limits.stories[1] === 1
@@ -207,12 +214,13 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
         <div className="meter" aria-label="Lot fit">
           <div className={'meter-fill' + (!check.ok ? ' over' : fit > 0.85 || trimmed ? ' tight' : '')} style={{ width: Math.min(100, fit * 100) + '%' }} />
         </div>
-        {checking && !checked ? (
+        {(checking && !checked) || (settling && !check.ok && !check.deadEnd) ? (
           <p className="muted fit-note">Checking the lot…</p>
         ) : check.ok ? (
           <p className="fine">
             {trimmed ? `Fits once trimmed about ${trimmed}% to keep the space the city requires along the edges of this lot.` : "Fits this lot and the city's rules for it."}
             {check.turn ? ` The house is turned ${Math.abs(check.turn)}° from square to the street, to sit in the widest part of your lot.` : ''}
+            {autoNote && <span data-testid="auto-start"> We started you with what fits this lot; you can change it.</span>}
             {checking && <span className="muted fit-note"> Checking the lot…</span>}
           </p>
         ) : (

@@ -480,7 +480,7 @@ export function geoMessage(geo, table = JURISDICTIONS) {
     return unverified.length ? `We have the ${row.name} rules; ${unverified.length === 1 ? 'one of them is a summary' : `${unverified.length} of them are summaries`} the office confirms (${unverified.join(', ')}).` : `We have the ${row.name} rules, from the city code.`
   }
   if (j?.type === 'county') {
-    if (geo.place) return `${geo.place} is in ${j.county}; we have no rules for that city yet, so the county row is used, unverified, and a drafter checks the city's setbacks.`
+    if (geo.place) return `${geo.place} is in ${j.county}; we have no rules for that city yet, so the county row is used, unverified, and a drafter checks the city's rules.`
     return `Unincorporated ${j.county}: the county subdivision rules are used${j.id === 'hidalgo' ? '' : ' (office defaults until they are read)'}, and a drafter checks them.`
   }
   return `${geo.place ? `${geo.place}${geo.state ? ', ' + geo.state : ''}` : 'This address'} is outside the eight counties we build in (${COUNTIES.map((c) => c.replace(' County', '')).join(', ')}). You can still draft to see a plan; the setbacks shown are office defaults.`
