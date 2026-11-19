@@ -4,7 +4,8 @@
 // Money never reaches a homeowner from here (round 8, P0b): the office estimate is drafter-only and
 // ownerView strips every price-shaped field as a backstop.
 import crypto from 'node:crypto'
-import { decide, dropUnsupported, editsOf } from '../src/draft/lib/interpret.js'
+import { zoningBlocksSend } from '../src/draft/lib/lot.js'
+import { decide, dropUnsupported, editsOf, netsToNothing } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply } from '../src/draft/lib/ops.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
@@ -122,6 +123,27 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       await store.meta.set('allowance:default', { value: n, by: by?.email || 'office', at: now() })
       await event('project', `${by?.email || 'the office'} set the free changes for new plans to ${n}`)
       return { default: n }
+    },
+    /**
+     * A lot as a homeowner's browser may send it (round 10): the drafter's marks are never taken from the browser. A
+     * confirmed lot keeps its confirmation only while its outline is the one the drafter confirmed; a zoning carries
+     * `confirmedBy` only when the stored lot's does. Anything else arrives unconfirmed.
+     */
+    ownerLot(lot, prev = null) {
+      if (!lot?.spec || typeof lot.spec !== 'object') return lot
+      const { confirmedBy, confirmedAt, confirmNote, ...spec } = lot.spec
+      const was = prev?.spec || null
+      const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null)
+      if (spec.kind === 'plat' || spec.kind === 'parcel') {
+        if (sameOutline && was.confirmed) Object.assign(spec, { confirmed: true, confirmedBy: was.confirmedBy || null, confirmedAt: was.confirmedAt || null, confirmNote: was.confirmNote || null, setbacks: was.setbacks || spec.setbacks })
+        else spec.confirmed = false
+      }
+      if (was?.zoning?.confirmedBy && was.kind === spec.kind) spec.zoning = was.zoning
+      else if (spec.zoning && typeof spec.zoning === 'object') {
+        const { confirmedBy: zb, confirmedAt: za, ...z } = spec.zoning
+        spec.zoning = spec.kind === 'parcel' || spec.kind === 'plat' ? z : null // a typed lot has no zoning until a drafter confirms one
+      }
+      return { ...lot, spec }
     },
     /** A lot spec the office cannot build is refused at the door, not on the first change. */
     async checkLot(lot) {
@@ -311,6 +333,13 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply: back.reply, ops: [] })
         return { applied: true, undo: true, reply: `Back to version ${before - 1}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, project: back, ops: [] }
       }
+      // "make the kitchen bigger and then make it smaller": the two parts cancel; said so, and no change is used
+      // (round 10, item 8: the app's own chat goes through here, and this check was only on the offline path)
+      const net = Array.isArray(fixOps) && fixOps.length ? null : netsToNothing(costQ.text, rooms, kit)
+      if (net) {
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'no change', reply: net, ops: [] })
+        return { applied: false, noop: true, reply: net, source: 'fallback', reasons: ['no change'], fixes: [], ...counts(), version: p.version }
+      }
       // what this style cannot take is set aside clause by clause: the rest goes through, the dropped part is named
       const split = dropUnsupported(costQ.text, style)
       if (!split.text) {
@@ -389,6 +418,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
       if ((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
+      // decision B6 (round 10, item 4): a lot that is not a house district blocks Send, never the draft, and only when
+      // the zoning is this lot's own (a parcel or plat lot, or a typed lot whose zoning a drafter confirmed)
+      const lotNow = await lots.lotOfProject(p)
+      if (zoningBlocksSend(lotNow)) throw fail(409, `this lot is zoned ${lotNow.zoning.district} (${lotNow.zoning.use}); a house may need a rezoning, and the office calls you before the design is sent on`, { zoning: true })
       // the plan as saved here, on the lot as the office rebuilds it, must pass the rules
       const current = await store.versions.get(p.id, p.version)
       const rules = checkRules(current?.rooms || [], p.program || {}, styleOf(p), await lots.lotOfProject(p))
@@ -451,6 +484,26 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       }
       await store.projects.put(p)
       await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
+      return this.detail(p, { drafter: true })
+    },
+
+    /**
+     * A drafter confirms the zoning of a typed lot (round 10, item 4): a typed lot carries no zoning of its own, so a
+     * district read at an address nobody confirmed can never block it. Once a drafter has read the city map and says
+     * the lot is not a house district, Send is blocked for it; `clear` removes the note.
+     */
+    async confirmZoning(p, drafter, { district, residential, use, note, clear = false }) {
+      if (!p.lot?.spec || p.lot.spec.kind === 'reference') throw fail(409, 'this plan has no lot of its own')
+      const d = String(district || '').trim().slice(0, 20)
+      if (!clear && !d) throw fail(400, 'district required (the code on the city zoning map, such as R-1 or C-3)')
+      const isRes = residential !== false
+      const useLine = String(use || (isRes ? 'single-family' : 'not a house district')).slice(0, 60)
+      const zoning = clear ? null : { status: 'found', district: d, residential: isRes, use: useLine, message: isRes ? null : `This lot is zoned ${d} (${useLine}). A house may need a rezoning; the office will call you.`, layer: 'read from the city zoning map by the drafter', confirmedBy: drafter.email, confirmedAt: now(), note: note ? String(note).slice(0, 300) : null }
+      const next = { ...p.lot.spec, zoning }
+      p.lot = { ...(await lots.lotOfProject({ lot: { spec: next, plat: p.lot.plat } })), plat: p.lot.plat || null }
+      p.updatedAt = now()
+      await store.projects.put(p)
+      await event('project', `${p.client}: zoning ${clear ? 'note cleared' : `${d} confirmed`} by ${drafter.name || drafter.email}`, { projectId: p.id })
       return this.detail(p, { drafter: true })
     },
 

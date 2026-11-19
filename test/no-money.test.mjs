@@ -21,6 +21,7 @@ import { buildDesign } from '../src/draft/lib/contract.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
 import { estimate } from '../src/draft/lib/pricing.js'
 import { TRUST } from '../src/draft/lib/trust.js'
+import { fixtureEnv } from './server-env.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const kit = kitFor(style)
@@ -30,7 +31,7 @@ const j = async (r) => ({ status: r.status, body: await r.json() })
 async function startServer(t, env = {}) {
   const port = env.PORT ? +env.PORT : 9500 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'test-worker-key', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-nm-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', BILLING_ENABLED: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'test-worker-key', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-nm-')), ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))

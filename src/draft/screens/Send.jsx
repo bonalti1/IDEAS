@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { zoningBlocksSend } from '../lib/lot.js'
 import { Button, Stat, Mark, sf } from '../ui.jsx'
 import { kitFor, programOf, programLine } from '../lib/layout.js'
 import { takeoff } from '../lib/takeoff.js'
@@ -42,6 +43,9 @@ export default function Send({ lot, style, program, rooms, history, project, set
     ? project.versions.filter((v) => v.kind === 'change' && !v.refunded && v.n <= project.version).map((v) => ({ text: v.text }))
     : history.filter((m, i) => m.who === 'you' && history[i + 1]?.who === 'house' && history[i + 1].applied && !m.undone)
   const rules = checkRules(rooms, program, style, lot)
+  // decision B6: a lot that is not a house district blocks Send (never the draft), and only when the zoning is this lot's
+  const zoneBlock = zoningBlocksSend(lot)
+  const zoneLine = zoneBlock ? `This lot is zoned ${lot.zoning.district} (${lot.zoning.use}). A house may need a rezoning; ask the office to call you.` : null
   const ref = kit.reference
   const isRef = ref && JSON.stringify(ref.program) === JSON.stringify(program) && changes.length === 0
 
@@ -315,15 +319,16 @@ export default function Send({ lot, style, program, rooms, history, project, set
             )}
             <p className="fine">Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost.</p>
           </div>
-          {!rules.ok && (
-            <div className="card note bad">
+          {(!rules.ok || zoneBlock) && (
+            <div className="card note bad" data-testid="send-blocked">
               <h3>This plan cannot be sent yet</h3>
               <ul className="list">
-                {rules.reasons.map((r) => (
+                {zoneLine && <li key="zoning">{zoneLine}</li>}
+                {(rules.ok ? [] : rules.reasons).map((r) => (
                   <li key={r}>{r}</li>
                 ))}
               </ul>
-              {lot?.zoning?.residential === false ? (
+              {zoneBlock ? (
                 <>
                   <p className="fine">The lot's zoning, not the plan, is the problem: a house may need a rezoning or a special permit. The office knows the process and will call you.</p>
                   <Button small primary disabled={callBusy || called} onClick={callMe} data-testid="call-me">
@@ -431,7 +436,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={onBack}>
           Keep editing
         </Button>
-        <Button primary disabled={sending || !rules.ok} onClick={send} title={rules.ok ? '' : 'Fix the problems listed above first'}>
+        <Button primary disabled={sending || !rules.ok || zoneBlock} onClick={send} title={zoneBlock ? 'The office calls you about the zoning first' : rules.ok ? '' : 'Fix the problems listed above first'}>
           {sending ? 'Sending…' : 'Send to drafters'}
         </Button>
       </div>

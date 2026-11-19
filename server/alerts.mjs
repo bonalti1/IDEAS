@@ -1,7 +1,7 @@
 // Alert email through Resend (plain HTTPS, no SDK). Needs RESEND_API_KEY, ALERT_EMAIL_TO,
 // ALERT_EMAIL_FROM (an address on a domain verified in Resend). Without them alerts only
 // show in the dashboard activity and in the health check.
-export function makeAlerts({ env = process.env, store, event, log = console.log }) {
+export function makeAlerts({ env = process.env, store, event, log = console.log, fetchImpl = (...a) => globalThis.fetch(...a) }) {
   const apiKey = (env.RESEND_API_KEY || '').trim()
   const to = (env.ALERT_EMAIL_TO || '').split(',').map((s) => s.trim()).filter(Boolean)
   const from = (env.ALERT_EMAIL_FROM || '').trim()
@@ -15,7 +15,7 @@ export function makeAlerts({ env = process.env, store, event, log = console.log 
       return { ok: false, detail: 'email not configured' }
     }
     try {
-      const r = await fetch('https://api.resend.com/emails', {
+      const r = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
         body: JSON.stringify({ from, to, subject, text }),

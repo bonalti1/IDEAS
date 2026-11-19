@@ -683,7 +683,8 @@ export function auditPlan(rooms, program, kit, lot) {
       else if (/minimum lot width/.test(f)) tell('min-lot', 'warn', `The lot is ${f}`, cite('minLotWidth'))
       else if (/platting needed/.test(f)) tell('unplatted', 'warn', `No recorded subdivision in the legal description${lot.parcel?.legal ? ` ("${lot.parcel.legal}")` : ''}: the tract is platted before a permit is issued. The drafter starts that with the county.`, { id: 'platting', source: 'Texas Local Government Code ch. 212 and the county subdivision rules' })
     })
-    if (lot.zoning?.residential === false) tell('zoning', 'error', `This lot is zoned ${lot.zoning.district} (${lot.zoning.use}). A house may need a rezoning; ask the office to call you.`, { id: 'district', value: lot.zoning.district, source: lot.zoning.layer || 'the city zoning map' })
+    // decision B6 (round 10, item 4): a warning here, so the homeowner can still draft; Send is what the zoning blocks (lot.js zoningBlocksSend)
+    if (lot.zoning?.residential === false) tell('zoning', 'warn', `This lot is zoned ${lot.zoning.district} (${lot.zoning.use}). A house may need a rezoning; you can keep drafting, and the office will call you before it is sent on.`, { id: 'district', value: lot.zoning.district, source: lot.zoning.layer || 'the city zoning map' })
     // the garage door's distance to the street line: a car parks outside the door without blocking the sidewalk
     const garageFt = rules.garageFt
     if (garageFt) {

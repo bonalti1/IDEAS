@@ -281,37 +281,79 @@ export function netsToNothing(text, rooms, kit) {
  * stays in `reasons` for the drafter log.
  */
 export function plainRefusal(caused, preexisting, ops, rooms, kit) {
-  const nameOf = (id) => {
-    const n = rooms.find((r) => r.id === id)?.name || 'that room'
-    return /\d/.test(n) ? n : n.toLowerCase() // "the kitchen", but "the Bedroom 3"
-  }
   const first = ops[0] || {}
+  const nameOf = (id) => roomWords(id, rooms, kit)
   const what =
     first.op === 'remove' ? `Taking out the ${nameOf(first.room)}` :
-    first.op === 'swap' ? `Swapping the ${nameOf(first.a || first.room)} and the ${nameOf(first.b || first.with)}` :
+    first.op === 'swap' ? `Swapping the ${nameOf(first.a || first.room)} and the ${nameOf(first.target || first.b || first.with)}` :
     first.op === 'resize' ? `Resizing the ${nameOf(first.room)}` :
     first.op === 'move' ? `Moving the ${nameOf(first.room)}` :
     first.op === 'add' ? `Adding ${/^[aeiou]/i.test(kit?.rooms?.[first.kind]?.name || '') ? 'an' : 'a'} ${(kit?.rooms?.[first.kind]?.name || first.kind || 'room').toLowerCase()}` :
     first.op === 'garage' ? `A ${first.cars}-car garage` :
     'That change'
-  // the category decides the verb; the first reason of that kind rides along in brackets, so the detail
-  // (which setback, which minimum, which street) is still there in plain words
-  const kinds = [
-    [/setback|property line|cover .*% of the lot|lot allows/i, 'runs past the setbacks on this lot'],
-    [/run into|overlap|over another|on a porch/i, 'runs rooms into each other'],
-    [/under the .* minimum|under 70 square feet|too small|longer than we can roof|cannot grow that way/i, 'makes a room a size the kit cannot build'],
-    [/window|egress/i, 'takes a bedroom\'s window away'],
-    [/plumbing|hot water/i, 'puts a wet room too far from the plumbing'],
-    [/door|opens to the outside|no door|reached|reach /i, 'leaves rooms without a door or with a door to the outside'],
-  ]
-  const hit = kinds.map(([re, words]) => [caused.find((c) => re.test(c)), words]).find(([c]) => c)
-  const because = hit ? `${hit[1]} (${hit[0].replace(/\.$/, '')})` : null
+  // round 10, item 8: the homeowner reads what went wrong in plain words, with the room it happens to when the rule
+  // names one; the validator's own sentence ("Jack & Jill door opens to the outside") stays in `reasons`, which is
+  // what the drafter log keeps, and is never put in the reply
+  // a house needs a kitchen, a bedroom, a front door: that rule is already a plain sentence about the house
+  const needs = caused.find((c) => /^(a|the|every) (house|home|plan) needs /i.test(c))
+  if (needs) return `${needs.replace(/\.$/, '')}, so that one stays. Tell me what you would like changed about it instead.`
+  const because = problemWords(caused, rooms, 'verb')
   const suggestion =
-    first.op === 'remove' || first.op === 'swap' ? 'Try one room at a time, or tell me what the space is for and I will redraw it.' :
+    first.op === 'swap' ? 'Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.' :
+    first.op === 'remove' ? 'Try one room at a time, or tell me what the space is for and I will redraw it.' :
     first.op === 'resize' ? 'Try a smaller step, or say how big it should be.' :
     'Try a smaller step.'
-  const main = because ? `${what} ${because}, so the plan would not work as drawn. ${suggestion}` : `I can't do that one. ${caused[0]}${caused.length > 1 ? ` (and ${caused.length - 1} more thing${caused.length > 2 ? 's' : ''} the drafter can read)` : ''}`
-  return preexisting.length ? `${main} The plan also has a problem from before: ${preexisting[0]}` : main
+  const main = because ? `${what} ${because}, so the plan would not work as drawn. ${suggestion}` : `${what} does not work on this plan as it is drawn. ${suggestion}`
+  const old = preexisting.length ? problemWords(preexisting, rooms, 'noun') : null
+  return preexisting.length ? `${main} The plan also has a problem from before${old ? `: ${old}` : ''}. The drafter sees the details.` : main
+}
+
+/** A room for a sentence: "the kitchen", "the Bedroom 3"; an id nobody drew falls back to the kit's name for it, never to "that room". */
+function roomWords(id, rooms, kit) {
+  const r = rooms.find((x) => x.id === id) || rooms.find((x) => isRoom(x) && x.kind === id)
+  const n = r?.name || kit?.rooms?.[id]?.name || (id ? String(id).replace(/\d+$/, '') : 'room')
+  // "the kitchen", "the 2-car garage", but "the Bedroom 3" (a numbered room keeps its name as it is on the plan)
+  return /\s\d+$/.test(n) ? n : n.toLowerCase()
+}
+/** The room a validator sentence is about: the last room of the plan it names (the one the problem lands on). */
+function roomIn(reason, rooms) {
+  const names = [...new Set(rooms.filter((r) => isRoom(r) && r.name).map((r) => r.name))].sort((a, b) => b.length - a.length)
+  const text = String(reason || '')
+  let best = null
+  for (const n of names) {
+    const at = text.toLowerCase().lastIndexOf(n.toLowerCase())
+    if (at >= 0 && (!best || at > best.at)) best = { at, n }
+  }
+  if (!best) return null
+  return /\s\d+$/.test(best.n) ? best.n : best.n.toLowerCase()
+}
+/**
+ * What a list of validator reasons means, in plain words and without quoting them. 'verb' continues a sentence
+ * ("Resizing the kitchen leaves the dining under its minimum size"); 'noun' names a problem the plan already had.
+ * null when no reason is of a kind we have words for.
+ */
+export function problemWords(reasons, rooms, form = 'verb') {
+  const kinds = [
+    // which setback: "the 20 ft setback from Elm St", "the 5 ft side setback"
+    [/would cross the setback at/i, (room, hit) => {
+      const m = hit.match(/setback at (\d+(?:\.\d+)?) ft from (.+?)\.?$/i)
+      const line = !m ? 'the setbacks on this lot' : /^(side|rear|front|street side)$/i.test(m[2]) ? `the ${m[1]} ft ${m[2].toLowerCase()} setback` : `the ${m[1]} ft setback from ${m[2].replace(/\b[a-z]/g, (c) => c.toUpperCase())}`
+      return [`runs past ${line}`, `part of the house is past ${line}`]
+    }],
+    [/cover .*% of the lot|lot allows|would cover/i, () => ['covers more of the lot than the city allows', 'the house covers more of the lot than the city allows']],
+    [/setback|property line/i, () => ['runs past the setbacks on this lot', 'part of the house is past the setbacks']],
+    [/run into|overlap|over another|on a porch/i, () => ['runs rooms into each other', 'two rooms run into each other']],
+    [/under the .* minimum|under 70 square feet|too small|longer than we can roof|cannot grow that way|at its largest|at its smallest/i, (room) => [room ? `leaves the ${room} under its minimum size` : 'leaves a room under its minimum size', room ? `the ${room} is under its minimum size` : 'a room is under its minimum size']],
+    [/egress/i, (room) => [room ? `takes the escape window away from the ${room}` : "takes a bedroom's escape window away", room ? `the ${room} has no escape window` : 'a bedroom has no escape window']],
+    [/window/i, (room) => [room ? `leaves the ${room} without a window` : 'leaves a room without a window', room ? `the ${room} has no window` : 'a room has no window']],
+    [/plumbing|hot water/i, (room) => [room ? `puts the ${room} too far from the plumbing` : 'puts a wet room too far from the plumbing', 'a wet room is too far from the plumbing']],
+    [/door|opens to the outside|no door|reached|reach /i, () => ['leaves rooms without a door or with a door to the outside', 'a room has no door, or a door that opens to the outside']],
+  ]
+  for (const [re, words] of kinds) {
+    const hit = (reasons || []).find((c) => re.test(c))
+    if (hit) return words(roomIn(hit, rooms), hit)[form === 'noun' ? 1 : 0]
+  }
+  return null
 }
 
 function partsOf(diff, rooms, kit) {
@@ -451,10 +493,12 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
         kept.push(part.text)
         ops.push(...part.ops)
         did.push(...(d.did || []))
-      } else dropped.push({ text: part.text, why: d.reply.replace(/^I can't do that one\. /, '').replace(/\.$/, '') })
+      } else dropped.push({ text: part.text, why: String(d.reply || '').trim() })
     }
     if (!kept.length) return null
-    const reply = `Done: ${kept.join('; ')}.${dropped.length ? ` Not done: ${dropped.map((d) => `${d.text} (${d.why})`).join('; ')}. This counts as one change, for what was done.` : ''}`
+    // what was not done is named, and why follows in its own plain sentence, never in brackets (round 10, item 8)
+    const whys = [...new Set(dropped.map((d) => d.why).filter(Boolean))]
+    const reply = `Done: ${kept.join('; ')}.${dropped.length ? ` Not done: ${dropped.map((d) => d.text).join('; ')}. ${whys.map((w) => (/[.!?]$/.test(w) ? w : w + '.')).join(' ')} This counts as one change, for what was done.` : ''}`
     return { applied: true, rooms: running, reply, source, ops, did, partial: dropped.length > 0, kept, dropped }
   }
 
@@ -465,11 +509,15 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     // the reason is written for the client: it is the reply
     const why = String(e.message || e)
     const plain = /^[A-Za-z0-9]/.test(why) && !/at .*\.js|undefined|null|TypeError|ReferenceError/.test(why)
-    if (scaleOp && plain && !/already about/.test(why)) return rescale(`would not work (${why.replace(/\.$/, '')})`)
+    if (scaleOp && plain && !/already about/.test(why)) return rescale('would not work')
     const parts = inParts()
     if (parts) return parts
     let fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
     let reply = plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.'
+    // a swap that cannot be drawn (round 10, item 8): the reason is about the two rooms trading places, never about a
+    // third room that could not grow to make it fit ("2-Car Garage cannot grow that way: Dining would be too small")
+    const swap = diff.ops.find((o) => o.op === 'swap')
+    if (swap && plain && !/^There is no |is not in this plan|already/i.test(why)) reply = `Swapping the ${roomWords(swap.room, rooms, kit)} and the ${roomWords(swap.target, rooms, kit)} does not work on this plan: the two rooms are too different in size to trade places. Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.`
     // a garage that has no spot: plain words, then the next best thing (one bay less, a tandem bay, a new draft)
     const gWords = plain && GARAGE_WORDS(why)
     if (gWords) {
@@ -490,7 +538,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     const before = checkRules(rooms, program, style, L).reasons
     const preexisting = rules.reasons.filter((r) => before.includes(r))
     const caused = rules.reasons.filter((r) => !before.includes(r))
-    if (scaleOp && caused.length) return rescale(caused.some((r) => /setback|cover|lot/i.test(r)) ? 'would run past the setbacks' : `would not pass (${caused[0].replace(/\.$/, '')})`)
+    if (scaleOp && caused.length) return rescale(caused.some((r) => /setback|cover|lot/i.test(r)) ? 'would run past the setbacks' : 'would not pass the plan rules')
     const parts = inParts()
     if (parts) return parts
     let fixes = suggestFixes(diff.ops, caused.length ? caused : preexisting, rooms, next.rooms, program, style, kit, L, caused.length > 0)
@@ -499,7 +547,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     if (caused.length && diff.ops.some((o) => o.op === 'garage' || (o.op === 'add' && o.kind === 'garage'))) fixes = [...garageFallbacks(diff.ops, rooms, program, style, kit, L, edits, depth), ...fixes].filter((f, i, all) => all.findIndex((g) => g.label === f.label) === i).slice(0, 3)
     const reply = caused.length
       ? plainRefusal(caused, preexisting, diff.ops, rooms, kit)
-      : `The change itself is fine, but this plan already has a problem that has to go first: ${preexisting[0]}${preexisting.length > 1 ? ` (and ${preexisting.length - 1} more the drafter can read)` : ''}`
+      : `The change itself is fine, but this plan already has a problem that has to go first${problemWords(preexisting, rooms, 'noun') ? `: ${problemWords(preexisting, rooms, 'noun')}` : ''}. Ask me to fix that, or go back one version; the drafter sees the details.`
     return { applied: false, rooms, reply, source, ops: diff.ops, reasons: rules.reasons, caused, preexisting, fixes }
   }
   return { applied: true, rooms: next.rooms, reply: diff.reply || next.did.join('. ') + '.', source, ops: diff.ops, did: next.did }

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --import ./test/guard.mjs --test test/*.test.mjs",
+    "test:live": "LIVE=1 node --test test/live-acceptance.test.mjs",
     "office": "node server/index.mjs",
     "office:demo-worker": "node scripts/fake-worker.mjs",
     "launch-check": "node scripts/launch-check.mjs"

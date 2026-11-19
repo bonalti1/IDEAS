@@ -164,11 +164,19 @@ test('item 5: zoning districts normalise to the codes the table knows; Weslaco o
   assert.equal(bad.residential, false)
   assert.equal(bad.message, 'This lot is zoned C-2 (commercial). A house may need a rezoning; the office will call you.')
   assert.match(bad.layer, /gismap\.mcallen\.net\/publication\//, 'round 9, item 4: the McAllen layer lives under /publication/')
-  // Pharr's layer overlaps: the newest polygon wins (C-2 over an older R-1)
+  // Pharr's layer overlaps: the recording has three polygons at 118 S Cage, all C2 on the layer, read as C-2
   const cage = FIX.find((f) => f.slug === 'cage-118-pharr')
   const ph = await z.lookup({ cityId: 'pharr', lat: cage.point.lat, lon: cage.point.lon })
   assert.equal(ph.district, 'C-2')
-  assert.deepEqual(ph.overlapping.map((o) => o.district), ['C-2', 'R-1'])
+  assert.equal(ph.rawDistrict, 'C2')
+  assert.deepEqual(ph.overlapping.map((o) => o.district), ['C-2', 'C-2', 'C-2'])
+  assert.ok(ph.overlapping[0].edited >= ph.overlapping[1].edited && ph.overlapping[1].edited >= ph.overlapping[2].edited, 'newest first')
+  // the newest polygon wins: the same spot with an older R-1 polygon under a newer C-2 (a variant built here, not a recording)
+  const mixed = { ...structuredClone(cage), synthetic: true, zoning: { cityId: 'pharr', features: [{ ZONE: 'R-1', last_edited_date: 1500000000000 }, { ZONE: 'C2', last_edited_date: 1700000000000 }] } }
+  const zm = makeZoning({ store: memStore(), fetchImpl: fixtureFetch([mixed]) })
+  const pm = await zm.lookup({ cityId: 'pharr', lat: cage.point.lat, lon: cage.point.lon })
+  assert.equal(pm.district, 'C-2')
+  assert.deepEqual(pm.overlapping.map((o) => o.district), ['C-2', 'R-1'])
   // downtown Brownsville: DC is not a house district
   const dt = FIX.find((f) => f.slug === 'e-elizabeth-1001-brownsville')
   const dc = await z.lookup({ cityId: 'brownsville', lat: dt.point.lat, lon: dt.point.lon })
@@ -242,8 +250,15 @@ test('item 4: the flood zone is read at a point, first whether a digital FIRM ex
   assert.equal(c.prelim, null, 'preliminary data is not in the public NFHL; not queried')
   assert.match(c.prelimNote, /not in the public NFHL/)
   assert.match(c.source, /FIRM panels layer 3, zones 28, LOMRs 1, LOMAs 34/)
-  // downtown Brownsville (synthetic): AE with a BFE, a LOMR (layer 1) and a LOMA (layer 34), each read and labelled
-  const e = await lots.floodAt(by('e-elizabeth-1001-brownsville'))
+  // downtown Brownsville, recorded live: zone X on the same countywide panel series
+  const live = await lots.floodAt(by('e-elizabeth-1001-brownsville'))
+  assert.equal(live.status, 'x')
+  assert.equal(live.firm, '48061C')
+  // the readers for a special flood hazard area, a LOMR (layer 1) and a LOMA (layer 34): a variant built here, not a
+  // recording (no recorded lot has all three)
+  const wet = { ...structuredClone(FIX.find((f) => f.slug === 'e-elizabeth-1001-brownsville')), synthetic: true, nfhl: { 0: [{ STUDY_ID: '48061C' }], 1: [{ DFIRM_ID: '48061C', LOMR_ID: '48061C_LOMR_1', CASE_NO: '24-06-1234P', EFF_DATE: 1735689600000, STATUS: 'Effective' }], 3: [{ DFIRM_ID: '48061C', PANEL: '0585', FIRM_PAN: '48061C0585F', PANEL_TYP: 'Countywide, Panel Printed', EFF_DATE: 1518739200000, SCALE: '12000' }], 28: [{ DFIRM_ID: '48061C', FLD_AR_ID: null, FLD_ZONE: 'AE', ZONE_SUBTY: null, SFHA_TF: 'T', STATIC_BFE: 20, DEPTH: null }], 34: [{ CASENUMBER: '23-06-0456A', STATUS: 'Determination Issued', DETERMINATIONTYPE: 'LOMA', DATEENDED: 1690000000000 }] } }
+  const wetLots = makeLots({ store: memStore(), fetchImpl: fixtureFetch([wet]), files: {}, interpreter: {}, event: async () => {} })
+  const e = await wetLots.floodAt(wet.point)
   assert.equal(e.status, 'sfha')
   assert.equal(e.zone, 'AE')
   assert.equal(e.bfe, 20)

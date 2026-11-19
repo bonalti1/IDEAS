@@ -43,17 +43,17 @@ test('6: the front edge faces the street point: a point off the corner no longer
   assert.ok(Math.abs(lenS(pickFrontEdge(sliver, [-1, -24])) - 31.6) < 0.01, 'even off the corner (the old pick took the 300 ft side)')
   // no street point: the edge facing south
   assert.equal(Math.round(lenOf(pickFrontEdge(ring, null))), 80)
-  // through the real pipeline on the fixtures: both fronts right
+  // on the live recordings (round 10, item 1) the Census point alone is not enough: for 5435 Curtis Clark Dr it sits
+  // hundreds of feet down the street and this rule picks the 300 ft side. The pipeline reads the named road instead
+  // (test/round10.test.mjs); this rule is only the fallback when the road map does not answer.
   const FIX = loadFixtures()
-  const kf = FIX.find((f) => f.slug === 'kerria-1201-mcallen')
-  const { pts, toFt } = projectRing(kf.parcels[0].geometry.coordinates[0])
-  const clean = cleanRing(pts).pts
-  const calls = ringToCalls(clean)
-  assert.ok(Math.abs(calls[pickFrontEdge(clean, toFt([kf.census.coordinates.x, kf.census.coordinates.y]))].distance - 80) < 0.5)
   const cf = FIX.find((f) => f.slug === 'curtis-clark-5435-corpus-christi')
-  const P = projectRing(cf.parcels[0].geometry.coordinates[0])
+  const lotOf = (fx) => fx.parcels.find((p) => String(p.properties.prop_id) === String(fx.expect.propId))
+  const P = projectRing(lotOf(cf).geometry.coordinates[0])
   const cc = cleanRing(P.pts).pts
-  assert.ok(Math.abs(ringToCalls(cc)[pickFrontEdge(cc, P.toFt([cf.census.coordinates.x, cf.census.coordinates.y]))].distance - 31.6) < 0.5)
+  const byCensus = ringToCalls(cc)[pickFrontEdge(cc, P.toFt([cf.census.coordinates.x, cf.census.coordinates.y]))].distance
+  assert.ok(byCensus > 290, `the Census point alone gives the ${byCensus} ft side on the recorded lot`)
+  assert.ok(Math.abs(cf.expect.frontFt - 31.15) < 0.5, 'the recorded pipeline answer is the 31 ft end')
 })
 
 test('10: a plan-rule refusal is one plain sentence with a suggestion; the validator list stays in reasons for the drafter', async () => {
@@ -61,16 +61,23 @@ test('10: a plan-rule refusal is one plain sentence with a suggestion; the valid
   const rooms = generateRooms(DEFAULT_PROGRAM, style, lot)
   const r = await interpretRequest('remove all the bedrooms', rooms, DEFAULT_PROGRAM, style, { lot, interpreter: offline, report: false })
   assert.equal(r.applied, false)
-  // one plain sentence, one detail in brackets, never the validator's whole list
-  assert.match(r.reply, /^Taking out the Bedroom \d leaves rooms without a door or with a door to the outside \([^)]+\), so the plan would not work as drawn\. Try one room at a time/)
-  assert.ok((r.reply.match(/opens to the outside|has no door/g) || []).length <= 1, r.reply)
-  assert.ok(r.reasons.length >= 2 && r.reasons.some((x) => /door/.test(x)), 'the raw list is kept')
+  // one plain sentence and a suggestion; since round 10 (item 8) nothing of the validator's text, not even in brackets
+  assert.equal(r.reply, `Taking out the ${r.reply.match(/Bedroom \d/)[0]} leaves rooms without a door or with a door to the outside, so the plan would not work as drawn. Try one room at a time, or tell me what the space is for and I will redraw it.`)
+  assert.doesNotMatch(r.reply, /[()]/, 'no parenthetical')
+  for (const raw of r.reasons) assert.ok(!r.reply.includes(raw.replace(/\.$/, '')), `the validator sentence is not in the reply: ${raw}`)
+  assert.ok(r.reasons.length >= 2 && r.reasons.some((x) => /door/.test(x)), 'the raw list is kept for the drafter log')
   // the sentence builder, case by case
   const kitchen = rooms.find((x) => x.kind === 'kitchen')
-  assert.match(plainRefusal(['Living would cross the setback at 5 ft from side.'], [], [{ op: 'resize', room: kitchen.id, w: 30, d: 20 }], rooms, kit), /^Resizing the kitchen runs past the setbacks on this lot \(Living would cross the setback at 5 ft from side\), so the plan would not work as drawn\. Try a smaller step, or say how big it should be\.$/)
+  assert.equal(plainRefusal(['Living would cross the setback at 5 ft from side.'], [], [{ op: 'resize', room: kitchen.id, w: 30, d: 20 }], rooms, kit), 'Resizing the kitchen runs past the 5 ft side setback, so the plan would not work as drawn. Try a smaller step, or say how big it should be.')
+  assert.match(plainRefusal(['Kitchen would cross the setback at 20 ft from elm st.'], [], [{ op: 'move', room: kitchen.id }], rooms, kit), /^Moving the kitchen runs past the 20 ft setback from Elm St, so/)
   assert.match(plainRefusal(['Kitchen would run into dining.'], [], [{ op: 'move', room: kitchen.id }], rooms, kit), /^Moving the kitchen runs rooms into each other/)
-  assert.match(plainRefusal(['Bedroom 2 has no egress window.'], ['Closet has no door.'], [{ op: 'add', kind: 'bath' }], rooms, kit), /^Adding a bath takes a bedroom's window away \(Bedroom 2 has no egress window\), so the plan would not work as drawn\. Try a smaller step\. The plan also has a problem from before: Closet has no door\.$/)
-  assert.match(plainRefusal(['Something odd.', 'Another odd thing.'], [], [{ op: 'swap' }], rooms, kit), /^I can't do that one\. Something odd\. \(and 1 more thing the drafter can read\)$/)
+  assert.equal(plainRefusal(['Bedroom 2 has no egress window.'], ['Closet has no door.'], [{ op: 'add', kind: 'bath' }], rooms, kit), 'Adding a bath takes the escape window away from the Bedroom 2, so the plan would not work as drawn. Try a smaller step. The plan also has a problem from before: a room has no door, or a door that opens to the outside. The drafter sees the details.')
+  assert.equal(plainRefusal(['Kitchen has no window.'], [], [{ op: 'swap', room: kitchen.id, target: 'dining' }], rooms, kit), 'Swapping the kitchen and the dining leaves the kitchen without a window, so the plan would not work as drawn. Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.')
+  assert.equal(plainRefusal(['Every house needs a kitchen.'], [], [{ op: 'remove', room: kitchen.id }], rooms, kit), 'Every house needs a kitchen, so that one stays. Tell me what you would like changed about it instead.')
+  // a reason of no known kind: still plain, the validator sentence is not quoted and nothing sits in brackets
+  const odd = plainRefusal(['Something odd.', 'Another odd thing.'], [], [{ op: 'swap', room: kitchen.id, target: 'garage' }], rooms, kit)
+  assert.match(odd, /^Swapping the kitchen and the (2-car )?garage does not work on this plan as it is drawn\. Try two rooms/)
+  assert.doesNotMatch(odd, /Something odd|[()]|that room/)
 })
 
 test('11: "make the kitchen bigger and then make it smaller" nets to no change and uses nothing; "add 10 bedrooms" on a full plan says the plan is full', async () => {

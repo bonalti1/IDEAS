@@ -457,7 +457,7 @@ function CameraFollow({ cam, centreKey }) {
   return null
 }
 
-export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false }) {
+export default function HouseScene({ rooms = [], style, view = '3d', highlightKind, controlsRef, showHouse = true, showRoof = true, lot = DEFAULT_LOT, tags = true, sun = false, lotProblem = '' }) {
   const L = lot && lot.envelope ? lot : DEFAULT_LOT
   const cams = useMemo(() => camerasFor(L, rooms), [L, rooms.length])
   const cam = cams[view] || cams['3d']
@@ -477,7 +477,7 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
       <color attach="background" args={[sun ? '#f3e9d6' : '#ebe9e5']} />
       <ambientLight intensity={sun ? 1.1 : 2.0} />
       <directionalLight position={sun ? sunPosition(L) : [-150, 300, -200]} intensity={sun ? 2.2 : 1.4} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-220} shadow-camera-right={220} shadow-camera-top={220} shadow-camera-bottom={-220} shadow-camera-near={10} shadow-camera-far={2000} shadow-bias={-0.0004} />
-      <SitePlan lot={L} />
+      <SitePlan lot={L} problem={lotProblem} />
       <mesh rotation-x={-Math.PI / 2} position={[L.centre[0], -0.36, L.centre[1]]} receiveShadow>
         <planeGeometry args={[2000, 2000]} />
         <shadowMaterial transparent opacity={sun ? 0.35 : 0.18} />

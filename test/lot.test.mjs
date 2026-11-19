@@ -15,6 +15,7 @@ import { interpretRequest } from '../src/draft/lib/interpret.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { KIT } from '../src/kits/modern-farmhouse.js'
 import { LOT_AREA_SF, LOT_CORNERS, ARC_RECORDED } from '../src/data/survey.js'
+import { fixtureEnv } from './server-env.mjs'
 
 const style = STYLES.find((s) => s.id === 'farmhouse')
 const program = { ...KIT.reference.program }
@@ -159,7 +160,7 @@ test('the Garza plan drafts and changes on a 100 by 150 McAllen lot, and refuses
 async function startServer(t, env = {}) {
   const port = 9000 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-')), ...env }, stdio: 'ignore' })
   t.after(() => proc.kill())
   for (let i = 0; i < 60; i++) {
     try {

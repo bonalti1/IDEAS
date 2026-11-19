@@ -16,8 +16,13 @@ test('a worker silent for more than 10 minutes gets one alert, and one more when
   const store = jsonStore(tmp())
   const events = []
   const sent = []
-  const alerts = makeAlerts({ env: { RESEND_API_KEY: 'x', ALERT_EMAIL_TO: 'rolando@example.com', ALERT_EMAIL_FROM: 'alerts@example.com' }, store, event: async (kind, message) => events.push({ kind, message }), log: () => {} })
-  alerts.email = async (subject) => sent.push(subject) // no network in tests
+  // round 10, item 2: the module's email goes through a fetch handed in here, so the test never reaches Resend (the
+  // network guard caught this test posting to api.resend.com with its made-up key)
+  const fetchImpl = async (url, init) => {
+    sent.push({ url: String(url), subject: JSON.parse(init.body).subject, auth: init.headers.authorization })
+    return new Response(JSON.stringify({ id: 'em_test' }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  const alerts = makeAlerts({ env: { RESEND_API_KEY: 'x', ALERT_EMAIL_TO: 'rolando@example.com', ALERT_EMAIL_FROM: 'alerts@example.com' }, store, event: async (kind, message) => events.push({ kind, message }), log: () => {}, fetchImpl })
   const t0 = Date.parse('2026-11-03T12:00:00Z')
   await store.workers.put({ id: 'office-1', name: 'Office Revit', firstSeen: new Date(t0).toISOString(), lastSeen: new Date(t0).toISOString() })
 
@@ -42,6 +47,10 @@ test('a worker silent for more than 10 minutes gets one alert, and one more when
   assert.match(back[0].message, /is back after about 39 minutes/)
   assert.equal((await store.workers.get('office-1')).offlineAlertAt, undefined)
   assert.equal(alerts.describe().ok, true)
+  // one email when it went quiet, one when it came back, both to Resend's endpoint through the stub
+  assert.equal(sent.length, 2)
+  assert.ok(sent.every((m) => m.url === 'https://api.resend.com/emails' && m.auth === 'Bearer x'))
+  assert.match(sent[0].subject, /Office Revit|worker|not reported/i)
 })
 
 test('alerts without email settings still land in activity and say so in health', async () => {

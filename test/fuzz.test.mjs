@@ -6,11 +6,12 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fixtureEnv } from './server-env.mjs'
 
 async function startServer(t) {
   const port = 9400 + Math.floor(Math.random() * 100)
   const base = `http://127.0.0.1:${port}`
-  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'wk', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-fuzz-')) }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const proc = spawn(process.execPath, ['server/index.mjs'], { env: { ...process.env, ...fixtureEnv, DRAFTHOUSE_CLAUDE_KEY: '', ANTHROPIC_API_KEY: '', DATABASE_URL: '', SUPABASE_URL: '', RESEND_API_KEY: '', DRAFTHOUSE_APP_KEY: '', DRAFTHOUSE_WORKER_KEY: 'wk', DRAFTHOUSE_DRAFTERS: 'maria@drafthouse.test', DRAFTHOUSE_ADMINS: 'rolando@drafthouse.test', PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'dh-fuzz-')) }, stdio: ['ignore', 'pipe', 'pipe'] })
   let out = ''
   proc.stdout.on('data', (c) => (out += c))
   proc.stderr.on('data', (c) => (out += c))
@@ -67,7 +68,10 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
       results.push({ method, route, body, status: r.status, text: text.slice(0, 160) })
     }
   // the geocode: a long address, and a plain answer
-  const long = await fetch(base + '/api/lot/geocode?address=' + encodeURIComponent('x'.repeat(300)), { headers: heads.app })
+  // round 10, item 9: the geocode route needs a signed-in user; the app key alone is a 401
+  const anon = await fetch(base + '/api/lot/geocode?address=' + encodeURIComponent('1201 Kerria Ave, McAllen, TX'), { headers: heads.app })
+  assert.equal(anon.status, 401, 'the geocode route is not open to the app key alone')
+  const long = await fetch(base + '/api/lot/geocode?address=' + encodeURIComponent('x'.repeat(300)), { headers: heads.user })
   results.push({ method: 'GET', route: '/api/lot/geocode', body: '300 chars', status: long.status, text: (await long.text()).slice(0, 160) })
   const faults = results.filter((r) => r.status >= 500 && !(r.status === 503 && /payments are not set up|plat reader needs the office Claude key/.test(r.text)))
   assert.deepEqual(faults, [], `office faults from client input:\n${faults.map((f) => `${f.method} ${f.route} ${f.body} → ${f.status} ${f.text}`).join('\n')}`)

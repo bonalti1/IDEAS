@@ -2,7 +2,7 @@
 // LIVE=1 (needs the internet; the fixtures cover CI). Owner and mailing values are never printed: the assertions
 // only touch ids, legals, geometry, flood and zoning.
 //
-//   LIVE=1 node --test test/live-acceptance.test.mjs
+//   LIVE=1 node --test test/live-acceptance.test.mjs      (NODE_USE_ENV_PROXY=1 in front on a machine behind a proxy)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { makeParcels } from '../server/parcels.mjs'
@@ -32,8 +32,13 @@ test('live: the acceptance addresses resolve to the right parcel, front, flood z
     if (t.expect.areaSf) assert.ok(r.areaSf >= t.expect.areaSf[0] && r.areaSf <= t.expect.areaSf[1], `${t.address}: area ${r.areaSf}`)
     if (t.expect.frontFt) {
       const f = r.edges[r.frontEdge].lengthFt
-      assert.ok(f >= t.expect.frontFt[0] && f <= t.expect.frontFt[1], `${t.address}: front edge ${f} ft`)
+      assert.ok(f >= t.expect.frontFt[0] && f <= t.expect.frontFt[1], `${t.address}: front edge ${f} ft (by ${r.frontBy})`)
+      assert.equal(r.frontBy, 'named-road', `${t.address}: the front comes from the named road`)
     }
+    if (t.expect.frontStreet) assert.match(r.frontStreet || '', t.expect.frontStreet, `${t.address}: front street`)
+    // drafter-only fields are present on the raw record (never printed here): the mapped columns exist on the layer
+    assert.ok(r.owner, `${t.address}: the owner column is mapped`)
+    assert.ok(r.mailing, `${t.address}: the mailing columns are mapped`)
     if (t.expect.notThis) assert.ok(!r.situs.startsWith(t.expect.notThis), `${t.address}: ${r.situs}`)
     assert.ok(r.closure <= 0.5, `${t.address}: closure ${r.closure}`)
     const flood = await lots.floodAt({ lat: r.interior.lat, lon: r.interior.lon })
@@ -43,7 +48,7 @@ test('live: the acceptance addresses resolve to the right parcel, front, flood z
     const cityId = CITY[place] || null
     const z = cityId ? await zoning.lookup({ cityId, lat: r.interior.lat, lon: r.interior.lon }) : { district: null }
     if (t.expect.zoning) assert.equal(z.district, t.expect.zoning, `${t.address}: zoning ${JSON.stringify(z)}`)
-    report.push(`${t.address}: ${r.propId} ${r.legal} ${r.areaSf} sf, front ${r.edges[r.frontEdge].lengthFt} ft, flood ${flood.status}${flood.firm ? ' ' + flood.firm : ''}, zoning ${z.district || 'n/a'}, matched by ${r.matchedBy}`)
+    report.push(`${t.address}: ${r.propId} ${r.legal} ${r.areaSf} sf, front ${r.edges[r.frontEdge].lengthFt} ft on ${r.frontStreet}${r.corner ? ' (corner: ' + r.streets.filter((x) => x.role === 'side').map((x) => x.name).join(', ') + ')' : ''}, flood ${flood.status}${flood.firm ? ' ' + flood.firm : ''}, zoning ${z.district || 'n/a'}, matched by ${r.matchedBy}`)
   }
   console.log(report.join('\n'))
 })

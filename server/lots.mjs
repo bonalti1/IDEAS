@@ -1,6 +1,7 @@
 // Lots on the server: the city rules table (editable on the dashboard), reading a plat PDF with
 // Claude into calls, and the FEMA flood zone for an address.
 import crypto from 'node:crypto'
+import { streetCore } from './parcels.mjs'
 import { cityTable, CITY_IDS, RULE_FIELDS } from '../src/draft/lib/cities.js'
 import { jurisdictionTable, jurisdictionFor, geoMessage, countyRowId, ALL_FIELDS } from '../src/draft/lib/jurisdictions.js'
 import { buildLot, traverse } from '../src/draft/lib/lot.js'
@@ -62,6 +63,37 @@ export const PLAT_SYSTEM = `You read recorded plats, surveys and site plans of r
 - pageBox is the box on the page that holds the lot drawing, as fractions from the top-left corner. northAngleDeg is the north arrow's direction, clockwise from straight up.
 - Confidence below 0.6 when bearings were inferred, text was hard to read, or the calls do not close.`
 
+export const FEMA_DOWN = 'FEMA did not answer; the office checks the flood zone'
+const FEMA_RETRY_MS = 400
+export const CENSUS_DOWN = "the address service didn't answer; try again in a moment or type the lot in"
+const DIRS = { N: 'N', S: 'S', E: 'E', W: 'W', NE: 'NE', NW: 'NW', SE: 'SE', SW: 'SW', NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', NORTHEAST: 'NE', NORTHWEST: 'NW', SOUTHEAST: 'SE', SOUTHWEST: 'SW' }
+/** The number, the direction before the street, and the street's core name from the first line of an address. */
+export function addressParts(line) {
+  const words = String(line || '').split(',')[0].toUpperCase().replace(/[.#]/g, ' ').split(/\s+/).filter(Boolean)
+  const number = /^\d+[A-Z]?$/.test(words[0] || '') ? words.shift() : null
+  const pre = words.length > 1 && DIRS[words[0]] ? DIRS[words.shift()] : null
+  return { number, pre, street: streetCore(words.join(' ')) }
+}
+const titleCase = (t) => String(t || '').toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(/\b(Ne|Nw|Se|Sw|Fm|Us|Tx)\b/g, (w) => w.toUpperCase())
+/**
+ * Round 10, item 3: did the geocoder match the address that was typed? Compares the house number, the direction
+ * before the street name (only when both have one) and the street's name. null when they agree; else what differs
+ * and the yellow line the Lot step shows: "We found 1300 E Nolana Ave, not W. Is that right?"
+ */
+export function addressMismatch(typed, matched) {
+  const a = addressParts(typed)
+  const b = addressParts(matched)
+  if (!a.number && !a.street) return null
+  const what = []
+  if (a.number && b.number && a.number !== b.number) what.push('number')
+  if (a.pre && b.pre && a.pre !== b.pre) what.push('direction')
+  if (a.street && b.street && a.street !== b.street) what.push('street')
+  if (!what.length) return null
+  const found = titleCase(String(matched || '').split(',')[0])
+  const not = what.includes('street') || what.includes('number') ? titleCase(String(typed || '').split(',')[0]) : a.pre
+  return { what, typed: titleCase(String(typed || '').split(',')[0]), found, typedDirection: a.pre, foundDirection: b.pre, message: `We found ${found}, not ${not}. Is that right?` }
+}
+
 export function makeLots({ env = process.env, store, files, interpreter, event, log = console.log, fetchImpl = globalThis.fetch }) {
   const now = () => new Date().toISOString()
   const fetch = fetchImpl
@@ -69,10 +101,24 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
   /** One NFHL layer at a point: the features' attributes (empty when none). */
   async function nfhl(layer, lon, lat, outFields) {
     const q = new URLSearchParams({ geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields, returnGeometry: 'false', f: 'json' })
-    const r = await fetch(`${NFHL}/${layer}/query?${q}`, { signal: AbortSignal.timeout(15000) })
-    if (!r.ok) throw fail(502, `FEMA answered ${r.status}`)
-    const body = await r.json()
-    if (body.error) throw fail(502, `FEMA: ${body.error.message || 'query error'}`)
+    // a dropped connection, a timeout or a bad answer from FEMA is a 502 with a plain line, never a 500 (round 10, item 6)
+    // FEMA drops a connection now and then (the review saw it; so did the live run of this round): one more try
+    // after a short wait, then the plain line
+    let body
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const r = await fetch(`${NFHL}/${layer}/query?${q}`, { signal: AbortSignal.timeout(15000) })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        body = await r.json()
+        if (body.error) throw new Error(body.error.message || 'query error')
+        break
+      } catch (e) {
+        if (e?.code === 'DH_NETWORK_GUARD') throw e
+        log(`flood: FEMA NFHL layer ${layer} did not answer (${String(e?.cause?.code || e?.message || e).slice(0, 80)})${attempt < 2 ? '; trying once more' : ''}`)
+        if (attempt >= 2) throw fail(502, FEMA_DOWN, { upstream: 'fema' })
+        await new Promise((ok) => setTimeout(ok, FEMA_RETRY_MS))
+      }
+    }
     return (body.features || []).map((f) => f.attributes || {})
   }
 
@@ -169,18 +215,24 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       if (a.length > 200) throw fail(400, 'the address is too long (200 characters at most)')
       const key = 'geo:' + a.toLowerCase().replace(/\s+/g, ' ')
       const cached = await store.meta.get(key)
-      if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return cached
+      if (cached && cached.v === 2 && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, cached: true }
       let geo
       try {
         geo = await fetch(`https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(a)}&benchmark=Public_AR_Current&vintage=Current_Current&layers=Counties,Incorporated%20Places&format=json`, { signal: AbortSignal.timeout(12000) })
       } catch (e) {
-        throw fail(502, "the address service didn't answer; try again in a moment or type the lot in")
+        if (e?.code === 'DH_NETWORK_GUARD') throw e
+        throw fail(502, CENSUS_DOWN, { upstream: 'census' })
       }
-      if (!geo.ok) throw fail(502, `geocoder answered ${geo.status}`)
-      const match = (await geo.json()).result?.addressMatches?.[0]
+      if (!geo.ok) throw fail(502, CENSUS_DOWN, { upstream: 'census' })
+      let match
+      try {
+        match = (await geo.json()).result?.addressMatches?.[0]
+      } catch (e) {
+        throw fail(502, CENSUS_DOWN, { upstream: 'census' })
+      }
       const table = await this.table()
       let rec
-      if (!match) rec = { address: a, found: false, note: 'The Census geocoder did not find this address. Check the street number and the city, or type the lot in.', at: now() }
+      if (!match) rec = { v: 2, address: a, found: false, note: 'The Census geocoder did not find this address. Check the street number and the city, or type the lot in.', at: now() }
       else {
         const c = match.addressComponents || {}
         const title = (t) => String(t || '').replace(/\b\w+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
@@ -192,7 +244,9 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
         const j = jurisdictionFor({ place, county })
         const cityId = j?.type === 'city' ? j.id : null
         const placeName = cityId ? table[cityId].name.split(',')[0] : place
-        const geo = { address: a, found: true, matched: match.matchedAddress, lat: match.coordinates.y, lon: match.coordinates.x, place: placeName || null, county: county || null, state: c.state || null, zip: c.zip || null, street: street || null, cityId, countyRow: j?.type === 'county' ? j.id : cityId ? null : countyRowId(county), jurisdiction: j, supported: !!j }
+        // round 10, item 3: 1300 W Nolana typed, 1300 E NOLANA matched: say so, and offer no parcel until the homeowner agrees
+        const mismatch = addressMismatch(a, match.matchedAddress)
+        const geo = { v: 2, address: a, found: true, mismatch, matched: match.matchedAddress, lat: match.coordinates.y, lon: match.coordinates.x, place: placeName || null, county: county || null, state: c.state || null, zip: c.zip || null, street: street || null, cityId, countyRow: j?.type === 'county' ? j.id : cityId ? null : countyRowId(county), jurisdiction: j, supported: !!j }
         rec = { ...geo, note: geoMessage(geo), at: now() }
       }
       await store.meta.set(key, rec)
@@ -209,7 +263,7 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       if (!(Number.isFinite(+lat) && Number.isFinite(+lon))) throw fail(400, 'lat and lon required')
       const key = `flood:@${(+lat).toFixed(5)},${(+lon).toFixed(5)}`
       const cached = await store.meta.get(key)
-      if (cached && cached.v === 2 && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, address, matched }
+      if (cached && cached.v === 2 && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, address, matched, cached: true }
       // NFHL layers as the service publishes them (round 9, item 3): 3 FIRM Panels (DFIRM_ID, FIRM_PAN, EFF_DATE), 28 Flood
       // Hazard Zones, 1 LOMRs, 34 LOMAs. Layer 0 (NFHL Availability) only has STUDY_ID. Preliminary data is not in the
       // public NFHL MapServer: not queried, and the record says so.
