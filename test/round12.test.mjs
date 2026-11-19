@@ -28,6 +28,7 @@ import { generateRooms, DEFAULT_PROGRAM } from '../src/draft/lib/layout.js'
 import { STYLES } from '../src/draft/lib/styles.js'
 import { fixtureEnv } from './server-env.mjs'
 import { floodFailure, checkFloodSkips } from './live-flood.mjs'
+import { makeAlerts } from '../server/alerts.mjs'
 
 const style = STYLES.find((s) => s.ready) || STYLES[0]
 const enc = encodeURIComponent
@@ -653,4 +654,58 @@ test('F and D (source): no NaN for a lot with no city rules, and no "setback" in
     assert.doesNotMatch(text, />[^<{]*setback[^<{]*</i, `${f}: "setback" in the page's own text`)
     assert.doesNotMatch(text, /'[^'\n]*\bsetbacks?\b[^'\n]*'|`[^`\n]*\bsetbacks?\b[^`\n]*`/i, `${f}: "setback" in a string a homeowner reads`)
   }
+})
+
+// ── item C ─────────────────────────────────────────────────────────────────────────────────
+test('C: the homeowner is emailed once when a drafter confirms the lot (never for a lot Send is blocked on); the Send step shows a calm card, not an error', async (t) => {
+  // the email itself: to the homeowner only, plain text, through Resend; nothing without a key or an address
+  const sent = []
+  const fetchImpl = async (url, opts) => (sent.push({ url, body: JSON.parse(opts.body), auth: opts.headers.authorization }), new Response(JSON.stringify({ id: 'e1' }), { status: 200 }))
+  const quiet = []
+  const alerts = makeAlerts({ env: { RESEND_API_KEY: 're_test', ALERT_EMAIL_FROM: 'office@example.test', ALERT_EMAIL_TO: 'boss@example.test' }, store: {}, event: async () => {}, log: (l) => quiet.push(l), fetchImpl })
+  assert.equal((await alerts.emailTo('ana@example.com', 'Draft House: your lot is confirmed', 'text')).ok, true)
+  assert.deepEqual(sent[0].body.to, ['ana@example.com'], 'the homeowner, not the office list')
+  assert.equal(sent[0].body.from, 'office@example.test')
+  assert.equal((await alerts.emailTo('not an address', 's', 't')).ok, false)
+  assert.equal(sent.length, 1)
+  const none = makeAlerts({ env: {}, store: {}, event: async () => {}, log: (l) => quiet.push(l), fetchImpl })
+  assert.equal((await none.emailTo('ana@example.com', 's', 't')).ok, false, 'no key: nothing is sent and nothing fails')
+  assert.equal(sent.length, 1)
+  // over HTTP (no email key on a test server: the log line shows the email was asked for, once)
+  const { base, log } = await startServer(t)
+  const ana = await who(base, 'ana@example.com')
+  const maria = await who(base, 'maria@drafthouse.test')
+  const mk = async (address, city, county = 'Hidalgo County') => {
+    const parcel = await (await ana.get(`/api/lot/parcel?address=${enc(address)}`)).json()
+    const lot = buildLot(parcelSpec(parcel, { address, city, county }))
+    return (await ana.post('/api/projects', { lot, program: small, client: 'Ana Garza' })).json()
+  }
+  const lines = () => log().split('\n').filter((l) => /client email not sent \(email not configured\): Draft House: your lot is confirmed/.test(l)).length
+  const house = await mk('1201 Kerria Ave, McAllen, TX 78501', 'mcallen')
+  assert.equal(lines(), 0)
+  // before: Send answers 409 with lotPending (the screen turns that into the calm card, never "Could not send")
+  const rooms = generateRooms(small, style, buildLot(house.lot.spec))
+  await ana.put(`/api/projects/${house.id}`, { style: { id: style.id, name: style.name }, program: small, rooms })
+  const early = await ana.post(`/api/projects/${house.id}/send`, { design })
+  assert.equal(early.status, 409)
+  assert.equal((await early.json()).lotPending, true)
+  await maria.post(`/api/review/${house.id}/lot`, { confirmed: true })
+  await new Promise((ok) => setTimeout(ok, 150))
+  assert.equal(lines(), 1, 'one email when the lot is confirmed')
+  await maria.post(`/api/review/${house.id}/lot`, { confirmed: true, note: 'again' })
+  await new Promise((ok) => setTimeout(ok, 150))
+  assert.equal(lines(), 1, 'not again on a second confirmation')
+  // a C-2 lot: confirming it does not open Send, so no "you can send it" email; the office calls
+  const shop = await mk('118 S Cage Blvd, Pharr, TX 78577', 'pharr')
+  await maria.post(`/api/review/${shop.id}/lot`, { confirmed: true })
+  await new Promise((ok) => setTimeout(ok, 150))
+  assert.equal(lines(), 1)
+  assert.doesNotMatch(log(), /ana@example\.com.*your lot is confirmed/, 'the address is not written to the log')
+  // the screen
+  const send = fs.readFileSync('src/draft/screens/Send.jsx', 'utf8')
+  assert.match(send, /Your plan is saved/)
+  assert.match(send, /A drafter is checking your lot against the county records, usually within one business day\. We'll email you, and then you can send it\./)
+  assert.match(send, /\{!lotWaiting && \(\s*<Button primary/)
+  assert.doesNotMatch(send, /Could not send/)
+  assert.match(send, /e\.body\?\.lotPending/)
 })

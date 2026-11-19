@@ -499,8 +499,9 @@ input[type='email'], input[type='number'], input[type='search'], input[type='tel
 .checklist .checks > li::before { content: counter(chk); position: absolute; left: 0; top: 7px; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #efe9dc; color: #5b4a3a; }
 .checklist .checks > li.done::before { content: '✓'; background: #dcefe0; color: #1f7a3a; }
 .checklist .checks > li.stop::before { content: '!'; background: #fbe3e0; color: #b3261e; }
-.checklist .check-row { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
-.checklist .check-buttons { display: flex; gap: 6px; flex: none; }
+/* the line, then its buttons under it: beside it they squeezed the words into a column and ran off the card */
+.checklist .check-row { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.checklist .check-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
 .checklist .warnline { margin: 6px 0 0; }
 details.more > summary { cursor: pointer; font-size: 13px; color: #5b4a3a; padding: 4px 0; }
 details.more.card > summary { font-weight: 600; }

@@ -224,7 +224,7 @@ export default function Review({ user }) {
             <span className={'pill ' + s.tone}>{s.label}</span>
           </div>
           <p className="muted small">
-            {open.email} · sent {ago(open.sentAt)}
+            {open.email} · {open.sentAt ? `sent ${ago(open.sentAt)}` : open.version ? 'not sent yet' : 'lot saved, no rooms yet'}
           </p>
           {(() => {
             // round 12, item J: what to do on this plan, in order, each line with its button; the detail is below
@@ -321,8 +321,14 @@ export default function Review({ user }) {
           <div className="stats">
             <Stat k="Lot" v={open.address || '—'} />
             <Stat k="Style" v={style.name} />
-            <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
-            <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
+            {(open.rooms || []).length > 0 ? (
+              <>
+                <Stat k="Rooms" v={programLine(programOf(open.rooms || [], open.program || {}))} />
+                <Stat k="Living area" v={sf(floorArea(open.rooms || [], open.program?.stories || 1))} />
+              </>
+            ) : (
+              <Stat k="Rooms" v={open.program?.beds ? `asked: ${programLine(open.program)}, about ${sf(open.program.sqft || 0)} (no plan drawn yet)` : 'not chosen yet'} />
+            )}
             {open.program?.asked && <Stat k="Asked for" v={`${programLine(open.program.asked)} · ${sf(open.program.asked.sqft)} → drafted ${sf(floorArea(open.rooms || [], open.program?.stories || 1))} to fit the lot`} />}
             <Stat k="Changes" v={`${open.changesUsed || 0} of ${open.changesAllowed ?? 10} used · ${open.changesLeft ?? Math.max(0, (open.changesAllowed ?? 10) - (open.changesUsed || 0))} left`} />
           </div>
