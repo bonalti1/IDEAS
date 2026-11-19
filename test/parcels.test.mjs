@@ -10,7 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { projectRing, cleanRing, ringToCalls, signedArea, interiorLonLat, whereClause, parseAddress, normalizeSitus, makeParcels } from '../server/parcels.mjs'
-import { fixtureFetch, loadFixtures, parseWhere } from '../server/fixtures.mjs'
+import { fixtureFetch, loadFixtures, parseWhere, assertNoPersonKeys, FORBIDDEN_KEY, LAYERS, layerRefusal } from '../server/fixtures.mjs'
 import { PARCEL_SOURCES, TEST_ADDRESSES, sourcesFor } from '../server/parcel-sources.mjs'
 import { makeLots } from '../server/lots.mjs'
 import { traverse, buildLot } from '../src/draft/lib/lot.js'
@@ -32,14 +32,42 @@ const services = (opts = {}) => {
   return { store, lots, parcels, log }
 }
 
-test('fixtures: committed recordings carry no owner names or mailing addresses', () => {
-  assert.ok(FIX.length >= 5)
+test('fixtures: committed recordings carry no owner, mailing or any other person key (round 9, item 7: an allow-list, checked file by file)', () => {
+  assert.ok(FIX.length >= 7)
   for (const f of FIX) {
-    const text = JSON.stringify(f)
-    for (const m of text.matchAll(/"(owner_name|owner_addr|owner|file_as_name|file_as_na|name|ownerAddre)":\s*"([^"]*)"/g)) assert.equal(m[2], 'REDACTED', `${f.slug}: ${m[1]} is not redacted`)
+    assert.doesNotThrow(() => assertNoPersonKeys(f), f.slug)
+    for (const p of f.parcels) for (const k of Object.keys(p.properties)) assert.ok(!FORBIDDEN_KEY.test(k) || /situs|legal/i.test(k), `${f.slug}: ${k}`)
     assert.ok(f.synthetic === true || f.synthetic === false, 'each fixture says whether it is a recording')
-    if (f.synthetic) assert.match(f.builtFrom, /round-7 brief/)
+    if (f.synthetic) assert.match(f.builtFrom, /round-7 brief and the round-9 review/)
   }
+  // the keys the live layers carry for the owner's mailing address are on the forbidden list
+  for (const k of ['owner_name', 'owner_addr', 'addr_line1', 'addr_line2', 'addr_line3', 'addr_city', 'zip', 'addr1', 'addr2', 'addr3', 'addrcity', 'addrzip', 'file_as_name', 'file_as_na', 'name', 'ownerAddre']) assert.ok(FORBIDDEN_KEY.test(k), k)
+  for (const k of ['prop_id', 'geo_id', 'legal_desc', 'legal1', 'situs', 'situsdispl', 'situs_num', 'situs_street', 'acres', 'legal_acreage', 'CITY_LIMITS']) assert.ok(!FORBIDDEN_KEY.test(k) || /situs|legal/i.test(k), k)
+  assert.throws(() => assertNoPersonKeys({ slug: 'x', parcels: [{ properties: { prop_id: 1, addr_line1: 'PO BOX 1' } }] }), /forbidden key addr_line1/)
+})
+
+test('the fixture server answers like the live layers (round 9, item 9): unknown fields, quoted integers and missing layers are refused', async () => {
+  const fetchImpl = fixtureFetch(FIX)
+  const NF = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer'
+  const at = (layer, params) => fetchImpl(`${NF}/${layer}/query?${new URLSearchParams({ geometry: `${kerria.point.lon},${kerria.point.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', returnGeometry: 'false', f: 'json', ...params })}`)
+  // layer 0 only has STUDY_ID: asking it for DFIRM_ID is "Failed to execute query." (what round 7 did, and why every live flood lookup failed)
+  assert.equal((await (await at(0, { outFields: 'DFIRM_ID,ST_FIPS,STUDY_TYP' })).json()).error.message, 'Failed to execute query.')
+  assert.ok(!(await (await at(0, { outFields: 'STUDY_ID' })).json()).error)
+  // layer 21 does not exist
+  assert.equal((await (await at(21, { outFields: '*' })).json()).error.message, 'Invalid URL')
+  // layer 3 is FIRM Panels, layer 1 LOMRs, 34 LOMAs
+  assert.equal(LAYERS[`${NF}/3`].name, 'FIRM Panels')
+  assert.equal(LAYERS[`${NF}/1`].name, 'LOMRs')
+  assert.equal(LAYERS[`${NF}/34`].name, 'LOMAs')
+  // Hidalgo's prop_id is an integer: a quoted value is "Unable to complete operation." (round 9, item 2)
+  const H = 'https://gis.rgv911.org/server/rest/services/RGV911_Web_Apps_MIL1/MapServer/7'
+  const hq = (where) => fetchImpl(`${H}/query?${new URLSearchParams({ where, outFields: '*', f: 'geojson' })}`)
+  assert.equal((await (await hq("prop_id = '255056'")).json()).error.message, 'Unable to complete operation.')
+  const ok = await (await hq('prop_id = 255056')).json()
+  assert.equal(ok.features.length, 1)
+  assert.equal(ok.features[0].properties.legal_desc, 'PALMS LOT 7 BLK 4')
+  assert.equal((await (await hq("nosuchfield = '1'")).json()).error.message, 'Failed to execute query.')
+  assert.equal(layerRefusal('https://example.com/unknown/0', new URLSearchParams()), null, 'a service nobody described is not judged')
 })
 
 test('geometry: a WGS84 ring projects to feet, cleans, becomes calls that traverse back to the same area and close', () => {
@@ -74,7 +102,13 @@ test('the where clause only takes whitelisted field names and doubles quotes, so
   assert.equal(whereClause([['prop_id', '=', "1' OR 1=1; DROP TABLE x --"]]), "prop_id = '1'' OR 1=1 DROP TABLE x --'")
   assert.throws(() => whereClause([['situs; DROP', '=', 'x']]), /field name not allowed/)
   assert.throws(() => whereClause([['situs', '>', 'x']]), /operator not allowed/)
-  assert.deepEqual(parseWhere("UPPER(fulladdr) LIKE '1201 %KERRIA%' AND UPPER(municipality) LIKE '%MCALLEN%'"), [['fulladdr', 'LIKE', '1201 %KERRIA%'], ['municipality', 'LIKE', '%MCALLEN%']])
+  assert.deepEqual(parseWhere("UPPER(fulladdr) LIKE '1201 %KERRIA%' AND UPPER(municipality) LIKE '%MCALLEN%'"), [['fulladdr', 'LIKE', '1201 %KERRIA%', true], ['municipality', 'LIKE', '%MCALLEN%', true]])
+  // integer fields (round 9, item 2): unquoted, digits only
+  assert.equal(whereClause([['prop_id', '=', '255056']], { prop_id: 'integer' }), 'prop_id = 255056')
+  assert.equal(whereClause([['prop_id', '=', 255056]], { prop_id: 'integer' }), 'prop_id = 255056')
+  assert.throws(() => whereClause([['prop_id', '=', "255056 OR 1=1"]], { prop_id: 'integer' }), /whole number/)
+  assert.throws(() => whereClause([['prop_id', 'LIKE', '2550%']], { prop_id: 'integer' }), /integer field/)
+  assert.deepEqual(parseWhere('prop_id = 255056'), [['prop_id', '=', '255056', false]])
 })
 
 test('addresses: the number and the street core in every common spelling', () => {
@@ -91,11 +125,15 @@ test('the three acceptance addresses resolve to one parcel each with the legal, 
   const want = Object.fromEntries(TEST_ADDRESSES.map((t) => [t.address, t]))
   const k = await parcels.lookup({ address: '1201 Kerria Ave, McAllen, TX 78501' })
   assert.equal(k.match, 'one')
-  assert.equal(k.matchedBy, 'address-point', 'Hidalgo: fulladdr + municipality → parcel_id')
+  assert.equal(k.matchedBy, 'address-point', 'Hidalgo: fulladdr + municipality → parcel_id, the situs agreeing')
+  assert.equal(k.confidence, 'exact')
   assert.equal(k.propId, '255056')
+  assert.equal(k.stepErrors, undefined, 'no step failed: the integer prop_id went out unquoted')
   assert.equal(k.geoId, 'P2500-00-004-0007-00')
   assert.match(k.legal, want[k.address].expect.legal)
   assert.equal(k.edges.length, 4)
+  // the front is the 80 ft side on Kerria Ave, not the 130 ft side the old nearest-segment pick gave (round 9, item 6)
+  assert.ok(Math.abs(k.edges[k.frontEdge].lengthFt - 80) < 1, `front edge ${k.edges[k.frontEdge].lengthFt} ft`)
   assert.ok(k.areaSf >= 10324 && k.areaSf <= 10532, `area ${k.areaSf}`)
   assert.ok(k.closure <= 0.1)
   assert.equal(k.county, 'Hidalgo County')
@@ -104,6 +142,7 @@ test('the three acceptance addresses resolve to one parcel each with the legal, 
   assert.ok(k.interior && Math.abs(k.interior.lat - kerria.point.lat) < 1e-4)
   const m = await parcels.lookup({ address: '36 Melissa Dr, Brownsville, TX 78526' })
   assert.equal(m.match, 'one')
+  assert.equal(m.propId, '144311')
   assert.equal(m.matchedBy, 'situs', 'Cameron: no address points; situsdispl LIKE')
   assert.match(m.legal, /MCKENZIE ESTATES LOT 16 BLK 1/)
   assert.equal(m.edges.length, 5)
@@ -116,10 +155,26 @@ test('the three acceptance addresses resolve to one parcel each with the legal, 
   assert.ok(c.areaSf >= 9384 && c.areaSf <= 9574, `area ${c.areaSf}`)
   assert.equal(c.cleaned.short, 1, 'the 0.6 ft edge was removed')
   assert.equal(c.edges.length, 4)
+  assert.equal(c.propId, '236866')
+  // a 31 x 300 ft sliver: the front is the 31 ft end on the street, never the 300 ft side (round 9, item 6)
+  assert.ok(Math.abs(c.edges[c.frontEdge].lengthFt - 31.6) < 1, `front edge ${c.edges[c.frontEdge].lengthFt} ft`)
   assert.notEqual(c.situs.slice(0, 4), '5402')
   assert.equal(c.cityLimits, 'CORPUS CHRISTI')
-  // owner and mailing come back from the service (redacted in the fixture) and are stripped by the route, not here
-  assert.equal(m.owner, 'REDACTED')
+  // the fixtures carry no owner fields at all (allow-list); live, the service's owner and mailing come back here and
+  // the route strips them for everyone but a drafter
+  assert.equal(m.owner, null)
+  // round 9, item 5: the address point for 118 S Cage Blvd names the neighbour (259436, 118 W Park Ave); the situs
+  // check refuses it, the situs query finds 259430, and the disagreement is logged for the sources page
+  const pharr = await parcels.lookup({ address: '118 S Cage Blvd, Pharr, TX 78577' })
+  assert.equal(pharr.match, 'one')
+  assert.equal(pharr.propId, '259430')
+  assert.notEqual(pharr.propId, '259436')
+  assert.equal(pharr.matchedBy, 'situs')
+  assert.notEqual(pharr.confidence, 'exact', 'exact is only for an address point whose situs agrees')
+  assert.equal(pharr.disagreements[0].parcelId, '259436')
+  assert.match(pharr.disagreements[0].situs, /118 W PARK AVE/)
+  const h = await parcels.health()
+  assert.equal(h.disagreements[0].parcelId, '259436')
   // the parcel as a lot: kind parcel, the rules resolved on its own dims, the drafter's checks
   const lot = buildLot({ kind: 'parcel', calls: k.calls, front: k.frontEdge, streets: [{ edge: k.frontEdge, name: 'Kerria Ave' }], city: 'mcallen', setbacks: {}, legal: k.legal, propId: k.propId })
   assert.equal(lot.kind, 'parcel')
@@ -223,8 +278,8 @@ test('the daily check runs the three addresses against the sources (not the cach
   const emails = []
   const rec = await parcels.dailyCheck({ email: async (s, t) => emails.push({ s, t }) })
   assert.equal(rec.ok, true)
-  assert.equal(rec.results.length, 3)
-  assert.deepEqual(rec.results.map((r) => r.ok), [true, true, true])
+  assert.equal(rec.results.length, 4, 'Pharr 118 S Cage is the fourth acceptance address (round 9, item 5)')
+  assert.deepEqual(rec.results.map((r) => r.ok), [true, true, true, true])
   assert.equal(emails.length, 0)
   assert.equal((await store.meta.get('parcels:daily')).failedDays, 0)
   // a dead county: the check fails, counts the day and emails the office
@@ -284,19 +339,37 @@ test('HTTP: owner names and mailing addresses are drafter-only; the sources page
   const ana = await who(base, 'ana@example.com')
   const maria = await who(base, 'maria@drafthouse.test')
   const q = '/api/lot/parcel?address=' + encodeURIComponent('36 Melissa Dr, Brownsville, TX 78526')
-  const anon = await (await fetch(base + q)).json()
-  assert.equal(anon.match, 'one')
-  assert.ok(!('owner' in anon) && !('mailing' in anon) && !('attributes' in anon), 'anonymous: stripped')
+  // round 9, item 8: the parcel routes need a signed-in user (the Lot step is signed in); anonymous is 401
+  assert.equal((await fetch(base + q)).status, 401)
+  assert.equal((await fetch(base + '/api/lot/parcel/hidalgo/255056')).status, 401)
   const client = await (await ana.get(q)).json()
   assert.ok(!('owner' in client) && !('mailing' in client) && !('attributes' in client), 'signed-in client: stripped')
   assert.equal(client.legal, 'MCKENZIE ESTATES LOT 16 BLK 1')
   const drafter = await (await maria.get(q)).json()
-  assert.equal(drafter.owner, 'REDACTED', 'drafter: the owner of record is there (redacted in the fixture)')
-  assert.equal(drafter.mailing, 'REDACTED')
-  const byId = await (await ana.get('/api/lot/parcel/Cameron%20County/7201140')).json()
-  assert.ok(!('owner' in byId))
-  const byIdD = await (await maria.get('/api/lot/parcel/Cameron%20County/7201140')).json()
-  assert.equal(byIdD.owner, 'REDACTED')
+  assert.ok('owner' in drafter && 'mailing' in drafter, 'drafter: the owner fields are there (empty in a fixture, filled live)')
+  // the county key: the name, the slug or the hyphenated slug (round 9, item 8)
+  for (const key of ['Cameron%20County', 'cameron', 'cameron-county']) {
+    const byId = await (await ana.get(`/api/lot/parcel/${key}/144311`)).json()
+    assert.equal(byId.legal, 'MCKENZIE ESTATES LOT 16 BLK 1', key)
+    assert.ok(!('owner' in byId))
+  }
+  const hid = await (await ana.get('/api/lot/parcel/hidalgo/255056')).json()
+  assert.equal(hid.legal, 'PALMS LOT 7 BLK 4', 'the integer prop_id route works with the slug')
+  assert.equal((await ana.get('/api/lot/parcel/travis/1')).status, 404)
+  const byIdD = await (await maria.get('/api/lot/parcel/Cameron%20County/144311')).json()
+  assert.ok('owner' in byIdD)
+  // the rate limit: 20 lookups that reach a county per 10 minutes per user; cache hits are free; then 429 with a plain line
+  const beto = await who(base, 'beto@example.com')
+  for (let i = 0; i < 25; i++) {
+    const r = await beto.get(`/api/lot/parcel?lat=${(25.93 + i * 0.001).toFixed(4)}&lon=-97.4378`)
+    if (i < 20) assert.equal(r.status, 200, `lookup ${i + 1}`)
+    else {
+      assert.equal(r.status, 429, `lookup ${i + 1} is over the limit`)
+      assert.match((await r.json()).error, /Too many lot lookups/)
+    }
+  }
+  assert.equal((await beto.get(q)).status, 429, 'the same user, a fresh address: still limited')
+  assert.equal((await ana.get(q)).status, 200, 'another user (same IP, under its own count) is not')
   // the candidates list is stripped too
   const cands = await (await ana.get(`/api/lot/parcel?lat=${melissa.census.coordinates.y}&lon=${melissa.census.coordinates.x}`)).json()
   assert.equal(cands.match, 'none')
@@ -309,7 +382,7 @@ test('HTTP: owner names and mailing addresses are drafter-only; the sources page
   const chk = await (await maria.post('/api/admin/sources/check')).json()
   assert.equal(chk.ok, true)
   assert.equal((await ana.post('/api/admin/sources/check')).status, 403)
-  assert.equal((await fetch(base + '/api/lot/parcel?address=' + 'x'.repeat(201))).status, 400)
+  assert.equal((await ana.get('/api/lot/parcel?address=' + 'x'.repeat(201))).status, 400)
   assert.ok(!/token=/.test(log()), 'no token in the server log')
   assert.ok(!/REDACTED/.test(log()), 'no owner field in the server log')
 })

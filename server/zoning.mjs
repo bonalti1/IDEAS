@@ -5,13 +5,13 @@ const fail = (status, error) => Object.assign(new Error(error), { status })
 const now = () => new Date().toISOString()
 
 export const ZONING_LAYERS = {
-  mcallen: { url: 'https://gismap.mcallen.net/arcgis/rest/services/DevelopmentZoning/MapServer/4', field: 'ZONE' },
+  mcallen: { url: 'https://gismap.mcallen.net/publication/rest/services/DevelopmentZoning/MapServer/4', field: 'ZONE' }, // round 9, item 4: /publication/, not /arcgis/ (404)
   edinburg: { url: 'https://services7.arcgis.com/z3I4HxFCWafiHSiG/arcgis/rest/services/COE_ZONING_DISTRICTS/FeatureServer/0', field: 'CODE', nameField: 'DISTRICT' },
   pharr: { url: 'https://services.arcgis.com/Uj8MycSVzMEzm7ey/arcgis/rest/services/Pharr_Published/FeatureServer/37', field: 'ZONE', overlaps: true, newest: 'last_edited_date' },
   weslaco: { url: 'https://services7.arcgis.com/9yzEIJbAp0HzkDjg/arcgis/rest/services/WESLACO_ZONING_DISTRICTS/FeatureServer/106', field: 'CODE' },
   harlingen: { url: 'https://services3.arcgis.com/gSCPzHZGMdbiljnH/arcgis/rest/services', newestOf: /^COH_Zoning_Map_/, field: 'Zone' },
   brownsville: { url: 'https://services2.arcgis.com/6oaLMZEZlktbQpyi/arcgis/rest/services/Zoning_District_Boundaries_view/FeatureServer/0', field: 'ZoningFNI' },
-  corpuschristi: { url: 'https://ccpublicgis.cctexas.com/arcgis/rest/services/CC_GENERAL_SERVICES/MapServer/4', field: 'TAG2023' },
+  corpuschristi: { url: 'https://ccpublicgis.cctexas.com/server01/rest/services/CC_GENERAL_SERVICES/CC_GENERAL_SERVICES/MapServer/4', field: 'TAG2023' }, // round 9, item 4: /server01/.../CC_GENERAL_SERVICES/CC_GENERAL_SERVICES/
 }
 export const NO_LAYER = ['mission', 'sanbenito', 'riograndecity']
 // Weslaco's new UDO renames the old districts (UDO Ch. 2 conversion table)

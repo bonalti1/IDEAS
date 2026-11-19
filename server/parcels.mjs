@@ -91,6 +91,38 @@ const segDist = (p, a, b) => {
   const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2)) : 0
   return Math.hypot(p[0] - (a[0] + (b[0] - a[0]) * t), p[1] - (a[1] + (b[1] - a[1]) * t))
 }
+/** See normalize(): the edge facing the street point. Exported for the geometry tests. */
+export function pickFrontEdge(pts, ref) {
+  const n = pts.length
+  const c = interiorPoint(pts)
+  const edges = pts.map((p, i) => {
+    const q = pts[(i + 1) % n]
+    const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]
+    const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+    let nx = -(q[1] - p[1]) / (len || 1)
+    let ny = (q[0] - p[0]) / (len || 1)
+    // outward: away from the interior point
+    if ((mid[0] - c[0]) * nx + (mid[1] - c[1]) * ny < 0) {
+      nx = -nx
+      ny = -ny
+    }
+    return { i, mid, len, nx, ny }
+  })
+  if (!ref) {
+    // no street point: the edge whose outward normal points most to the south (the street is drawn below)
+    return edges.slice().sort((a, b) => a.ny - b.ny || a.len - b.len)[0].i
+  }
+  const scored = edges.map((e) => {
+    const vx = ref[0] - e.mid[0]
+    const vy = ref[1] - e.mid[1]
+    const along = vx * e.nx + vy * e.ny // positive when the point lies outside this edge
+    const perp = Math.hypot(vx - along * e.nx, vy - along * e.ny) // how far the point sits off the midpoint's ray
+    const score = perp + Math.max(0, -along) * 4 + (perp > e.len / 2 + 15 ? 40 : 0)
+    return { ...e, score }
+  })
+  scored.sort((a, b) => a.score - b.score || a.len - b.len || a.i - b.i)
+  return scored[0].i
+}
 const pointInRing = (pt, ring) => {
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -142,11 +174,21 @@ export function parseAddress(address) {
   return { number: m[1], street: words.join(' ') }
 }
 const FIELD_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
-/** A where clause from whitelisted field names and escaped values: a quote in a value is doubled, never a break-out. */
-export function whereClause(parts) {
+/**
+ * A where clause from whitelisted field names and escaped values: a quote in a value is doubled, never a break-out.
+ * `types` names the layer's integer fields (round 9, item 2): those are emitted unquoted and must be digits only,
+ * because ArcGIS answers 400 to `prop_id = '255056'` on an esriFieldTypeInteger field.
+ */
+export function whereClause(parts, types = {}) {
   return parts
     .map(([field, op, value]) => {
       if (!FIELD_RE.test(field)) throw new Error(`field name not allowed: ${field}`)
+      if (types[field] === 'integer') {
+        if (op !== '=') throw new Error(`operator not allowed on an integer field: ${op}`)
+        const n = String(value).trim()
+        if (!/^\d{1,18}$/.test(n)) throw Object.assign(new Error(`${field} must be a whole number`), { status: 400 })
+        return `${field} = ${n}`
+      }
       const v = String(value).replace(/'/g, "''").replace(/[;\\]/g, '')
       if (op === 'LIKE') return `UPPER(${field}) LIKE '${v}'`
       if (op === '=') return `${field} = '${v}'`
@@ -230,20 +272,10 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
     const inside = censusPoint ? pointInRing(toFt([censusPoint.lon, censusPoint.lat]), clean) : null
     const situs = situsOf(src, a)
     const legal = String(a[F.legal] || '').trim()
-    // the front: the edge nearest the Census point (which sits on the street centreline), else the southern edge
-    let frontEdge = 0
-    {
-      const ref = censusPoint ? toFt([censusPoint.lon, censusPoint.lat]) : [interiorPoint(clean)[0], Math.min(...clean.map((p) => p[1])) - 50]
-      let best = Infinity
-      clean.forEach((p, i) => {
-        const qn = clean[(i + 1) % clean.length]
-        const d = segDist(ref, p, qn)
-        if (d < best) {
-          best = d
-          frontEdge = i
-        }
-      })
-    }
+    // the front (round 9, item 6): the edge whose outward normal points at the street point (the Census point sits on
+    // the street centreline), judged from the edge's midpoint, never by raw segment distance (a point off a corner
+    // ties the two edges there and index order used to win); on a tie the shorter edge; no point: the southern edge
+    const frontEdge = pickFrontEdge(clean, censusPoint ? toFt([censusPoint.lon, censusPoint.lat]) : null)
     const acresCad = F.acres && a[F.acres] != null && a[F.acres] !== '' ? +a[F.acres] : null
     return {
       match: 'one',
@@ -263,6 +295,9 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
       censusInside: inside,
       areaSf: Math.round(areaSf),
       acres: Math.round((areaSf / 43560) * 1000) / 1000,
+      // round 9, item 15: a tract over two acres or with hundreds of edges (La Plaza: 400+ edges, 2,090,836 sf) is not drawn edge by
+      // edge on the client; the card says so and the drafter takes it from here
+      large: areaSf > 2 * 43560 || calls.length > 60,
       edges: calls.map((c) => ({ lengthFt: c.distance, bearing: c.bearing })),
       calls,
       frontEdge,
@@ -280,41 +315,76 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
     return { propId: a[src.fields.propId] != null ? String(a[src.fields.propId]) : null, situs: situsOf(src, a), legal: String(a[src.fields.legal] || ''), distanceFt: dist == null ? null : Math.round(dist), feature }
   }
 
-  /** The pipeline on one source. Returns a normalized parcel, { match: 'none', candidates }, or throws. */
+  /**
+   * The pipeline on one source. Returns a normalized parcel or { match: 'none', candidates }. A step that fails
+   * (a 400 from the layer, a timeout) is noted and the next step runs (round 9, item 2); only when every step
+   * failed and nothing matched does the error come out, so the breaker counts a dead source, not one odd query.
+   */
   async function lookupOn(src, { address, number, street, censusPoint, place }) {
     const F = src.fields
-    // 2. address points
-    if (src.addressPoints && number && street) {
-      const ap = src.addressPoints
-      const where = whereClause([[ap.fields.fulladdr, 'LIKE', `${number} %${street}%`], ...(place ? [[ap.fields.municipality, 'LIKE', `%${normalizeSitus(place)}%`]] : [])])
-      const points = await arcgis(src, ap.url, { where, returnGeometry: 'false' })
-      const ids = [...new Set(points.map((p) => (p.properties || p.attributes)?.[ap.fields.parcelId]).filter((v) => v != null))]
-      if (ids.length === 1) {
-        const parcels = await arcgis(src, src.url, { where: whereClause([[ap.parcelKey, '=', ids[0]]]) })
-        if (parcels.length === 1) return normalize(src, parcels[0], { matchedBy: 'address-point', confidence: 'exact', censusPoint })
+    const T = src.types || {}
+    const errors = []
+    const disagreements = []
+    const step = async (name, fn) => {
+      try {
+        return await fn()
+      } catch (e) {
+        errors.push({ step: name, error: e.message })
+        return undefined
       }
+    }
+    const tag = (rec) => (rec && rec.match === 'one' ? { ...rec, stepErrors: errors.length ? errors : undefined, disagreements: disagreements.length ? disagreements : undefined } : rec)
+    // 2. address points: the parcel they name is taken only when its situs agrees with the typed number and street
+    //    (round 9, item 5: for 118 S Cage Blvd the point carries the neighbour, 118 W Park Ave)
+    if (src.addressPoints && number && street) {
+      const hit = await step('address-point', async () => {
+        const ap = src.addressPoints
+        const where = whereClause([[ap.fields.fulladdr, 'LIKE', `${number} %${street}%`], ...(place ? [[ap.fields.municipality, 'LIKE', `%${normalizeSitus(place)}%`]] : [])], ap.types || {})
+        const points = await arcgis(src, ap.url, { where, returnGeometry: 'false' })
+        const ids = [...new Set(points.map((p) => (p.properties || p.attributes)?.[ap.fields.parcelId]).filter((v) => v != null))]
+        if (ids.length !== 1) return null
+        const parcels = await arcgis(src, src.url, { where: whereClause([[ap.parcelKey, '=', ids[0]]], T) })
+        if (parcels.length !== 1) return null
+        const situs = situsOf(src, parcels[0].properties || parcels[0].attributes || {})
+        if (!situsMatches(situs, { number, street })) {
+          disagreements.push({ parcelId: String(ids[0]), situs, asked: `${number} ${street}` })
+          log(`parcels: ${src.id} address point ${ids[0]} is "${situs}", not ${number} ${street}; falling through`)
+          return null
+        }
+        return normalize(src, parcels[0], { matchedBy: 'address-point', confidence: 'exact', censusPoint })
+      })
+      if (hit) return tag(hit)
     }
     // 3. attribute query on the number and the street
     if (number && street) {
-      let where
-      if (F.situs) where = whereClause([[F.situs, 'LIKE', `${number} %${street}%`]])
-      else if (F.situsNum && F.situsStreet) where = whereClause([[F.situsNum, '=', number], [F.situsStreet, 'LIKE', `${street}%`]])
-      if (where) {
+      const hit = await step('situs', async () => {
+        let where
+        if (F.situs) where = whereClause([[F.situs, 'LIKE', `${number} %${street}%`]], T)
+        else if (F.situsNum && F.situsStreet) where = whereClause([[F.situsNum, '=', number], [F.situsStreet, 'LIKE', `${street}%`]], T)
+        if (!where) return null
         const feats = await arcgis(src, src.url, { where })
         const good = feats.filter((f) => situsMatches(situsOf(src, f.properties || f.attributes || {}), { number, street }))
-        if (good.length === 1) return normalize(src, good[0], { matchedBy: 'situs', confidence: 'situs', censusPoint })
-      }
+        return good.length === 1 ? normalize(src, good[0], { matchedBy: 'situs', confidence: 'situs', censusPoint }) : null
+      })
+      if (hit) return tag(hit)
     }
-    // 4. a 40 m buffer around the Census point, filtered on the situs
+    // 4. a 40 m buffer around the Census point, filtered on the situs; 5. else the nearest candidates to tap
     if (censusPoint) {
-      const feats = await arcgis(src, src.url, { geometry: `${censusPoint.lon},${censusPoint.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', distance: '40', units: 'esriSRUnit_Meter' })
-      const cands = feats.map((f) => candidateOf(src, f, censusPoint)).sort((a, b) => (a.distanceFt ?? 1e9) - (b.distanceFt ?? 1e9))
-      const good = cands.filter((c) => situsMatches(c.situs, { number, street }))
-      if (good.length === 1) return normalize(src, good[0].feature, { matchedBy: 'buffer-situs', confidence: 'situs', censusPoint })
-      // 5. no single match: the nearest candidates for the client to pick from
-      return { match: 'none', candidates: cands.slice(0, 6).map(({ feature, ...c }) => c), source: { id: src.id, name: src.name, url: src.url, fetchedAt: now(), checkedAt: src.checkedAt }, county: src.county }
+      const out = await step('buffer', async () => {
+        const feats = await arcgis(src, src.url, { geometry: `${censusPoint.lon},${censusPoint.lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', distance: '40', units: 'esriSRUnit_Meter' })
+        const cands = feats.map((f) => candidateOf(src, f, censusPoint)).sort((a, b) => (a.distanceFt ?? 1e9) - (b.distanceFt ?? 1e9))
+        const good = cands.filter((c) => situsMatches(c.situs, { number, street }))
+        if (good.length === 1) return normalize(src, good[0].feature, { matchedBy: 'buffer-situs', confidence: 'situs', censusPoint })
+        return { match: 'none', candidates: cands.slice(0, 6).map(({ feature, ...c }) => c), source: { id: src.id, name: src.name, url: src.url, fetchedAt: now(), checkedAt: src.checkedAt }, county: src.county, stepErrors: errors.length ? errors : undefined, disagreements: disagreements.length ? disagreements : undefined }
+      })
+      if (out) return tag(out)
     }
-    return { match: 'none', candidates: [], source: { id: src.id, name: src.name, url: src.url, fetchedAt: now(), checkedAt: src.checkedAt }, county: src.county }
+    if (errors.length) {
+      const e = new Error(errors.map((x) => `${x.step}: ${x.error}`).join('; '))
+      e.status = 502
+      throw e
+    }
+    return { match: 'none', candidates: [], source: { id: src.id, name: src.name, url: src.url, fetchedAt: now(), checkedAt: src.checkedAt }, county: src.county, disagreements: disagreements.length ? disagreements : undefined }
   }
 
   /** Regrid, only with a token: address first, then the point; counted against the monthly cap; never logged. */
@@ -422,6 +492,10 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
         if (!county) return { match: 'none', reason: geo && !geo.found ? 'the address was not found' : 'the county is not one we have a parcel source for', geo: geo && { found: geo.found, county: geo.county, place: geo.place }, candidates: [], tried, cachedAt: now() }
         throw fail(502, `the county appraisal district did not answer (${lastError || 'no source'}); type the lot in or try again in a moment`, { tried })
       }
+      if (out.disagreements?.length) {
+        const prev = (await store.meta.get('parcels:disagreements')) || []
+        await store.meta.set('parcels:disagreements', [{ at: now(), address: a || null, ...out.disagreements[0] }, ...prev].slice(0, 50))
+      }
       const rec = { ...out, address: a || null, census: censusPoint ? { ...censusPoint, matched: geo?.matched || null, county, place } : null, jurisdictionHint: geo ? { county, place } : null, tried, cachedAt: now() }
       if (out.match === 'one' || out.match === 'none') await store.meta.set(key, rec)
       return rec
@@ -430,7 +504,7 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
     async byId({ county, propId }) {
       const src = liveSources(county)[0]
       if (!src) throw fail(404, 'no parcel source for that county')
-      const feats = await arcgis(src, src.url, { where: whereClause([[src.fields.propId, '=', String(propId)]]) })
+      const feats = await arcgis(src, src.url, { where: whereClause([[src.fields.propId, '=', String(propId)]], src.types || {}) })
       if (feats.length !== 1) throw fail(404, 'parcel not found')
       const out = normalize(src, feats[0], { matchedBy: 'pick', confidence: 'pick', censusPoint: null })
       return { ...out, cachedAt: now() }
@@ -449,6 +523,7 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
         regrid: { enabled: !!regridToken, used: regridUsed, cap: regridCap, month },
         asce: { enabled: !!(env.ASCE_HAZARD_API_KEY || '').trim(), used: asceUsed, cap: 1000, month },
         daily,
+        disagreements: (await store.meta.get('parcels:disagreements')) || [],
       }
     },
     /**

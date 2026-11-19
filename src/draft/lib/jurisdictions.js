@@ -105,7 +105,8 @@ export const JURISDICTIONS = {
     district: f('RP', EDINBURG_SRC, L),
     front: f(20, EDINBURG_SRC, L, CHECKED, '15 on a cul-de-sac or irregular lot'), side: f(6, EDINBURG_SRC, L), rear: f(20, EDINBURG_SRC, L), streetSide: f(10, EDINBURG_SRC, L),
     garageFt: unknown(EDINBURG_SRC), easement: unknown(EDINBURG_SRC),
-    maxCoverage: f(0.6, EDINBURG_SRC, L), coverageIncludesImpervious: f(true, EDINBURG_SRC, L),
+    // round 9, item 14: the UDC's 60% is impervious cover (building plus paving), not building coverage; building coverage is not read yet
+    maxCoverage: unknown(EDINBURG_SRC), coverageIncludesImpervious: f(false, EDINBURG_SRC, L), imperviousMax: f(0.6, EDINBURG_SRC, L, 'impervious cover: house, porches, driveway and walks together'),
     maxHeightFt: f(35, EDINBURG_SRC, L), maxStories: unknown(EDINBURG_SRC),
     minLotSf: f(5000, EDINBURG_SRC, L), minLotWidth: f(50, EDINBURG_SRC, L), minHouseSf: unknown(EDINBURG_SRC),
     irc: f('2018 IRC, 2018 IECC', EDINBURG_SRC, V, '2026-11-17'), energyCode: f('2018 IECC', EDINBURG_SRC, V, '2026-11-17'),
@@ -309,10 +310,10 @@ export const countyRowId = (countyName) => (countyName === 'Hidalgo County' ? 'h
 
 // the rule fields the engine reads, the labels the panel prints, and the office defaults for an unknown value
 export const RULE_FIELDS = ['front', 'side', 'rear', 'streetSide', 'garageFt', 'maxCoverage', 'maxHeightFt', 'minLotSf', 'minLotWidth']
-export const ALL_FIELDS = ['district', 'front', 'side', 'rear', 'streetSide', 'garageFt', 'easement', 'maxCoverage', 'coverageIncludesImpervious', 'maxHeightFt', 'maxStories', 'minLotSf', 'minLotWidth', 'minHouseSf', 'irc', 'energyCode', 'windstorm', 'wind', 'driveway', 'permitChecklist']
+export const ALL_FIELDS = ['district', 'front', 'side', 'rear', 'streetSide', 'garageFt', 'easement', 'maxCoverage', 'coverageIncludesImpervious', 'imperviousMax', 'maxHeightFt', 'maxStories', 'minLotSf', 'minLotWidth', 'minHouseSf', 'irc', 'energyCode', 'windstorm', 'wind', 'driveway', 'permitChecklist']
 export const FIELD_LABELS = {
   district: 'Single-family district', front: 'Front setback', side: 'Side setback', rear: 'Rear setback', streetSide: 'Street-side setback', garageFt: 'Garage door from the street', easement: 'Easements',
-  maxCoverage: 'Max lot coverage', coverageIncludesImpervious: 'Coverage counts driveways and walks', maxHeightFt: 'Max height', maxStories: 'Max stories', minLotSf: 'Min lot area', minLotWidth: 'Min lot width', minHouseSf: 'Min house size',
+  maxCoverage: 'Max lot coverage', coverageIncludesImpervious: 'Coverage counts driveways and walks', imperviousMax: 'Max impervious cover', maxHeightFt: 'Max height', maxStories: 'Max stories', minLotSf: 'Min lot area', minLotWidth: 'Min lot width', minHouseSf: 'Min house size',
   irc: 'Building code', energyCode: 'Energy code', windstorm: 'TDI windstorm county', wind: 'Design wind speed', driveway: 'Driveway and curb cut', permitChecklist: 'Permit checklist',
 }
 export const COUNTY_DEFAULTS = { front: 25, side: 5, rear: 10, streetSide: 15, garageFt: 18, maxCoverage: 0.5, maxHeightFt: 35, minLotSf: null, minLotWidth: null }
@@ -401,6 +402,7 @@ export function resolveRules(row, overrides = {}, dims = {}, now = Date.now()) {
     out.used.push({ id: k, label: FIELD_LABELS[k], value: unknown && o === undefined ? `${formatValue(k, value, null)} (county default; unknown, confirm with city)` : formatValue(k, value, field), text, source: field?.source || null, checkedAt: field?.checkedAt || null, status: field?.status || 'unknown', stale: stale === 're-check due' })
   }
   out.coverageIncludesImpervious = !!row.coverageIncludesImpervious?.value
+  out.imperviousMax = row.imperviousMax?.value ?? null
   out.maxStories = row.maxStories?.value ?? null
   out.minHouseSf = row.minHouseSf?.value ?? null
   out.garageSideEntryExempt = !!row.garageSideEntryExempt?.value
@@ -412,7 +414,7 @@ export function resolveRules(row, overrides = {}, dims = {}, now = Date.now()) {
   out.permitChecklist = row.permitChecklist?.value || null
   out.easement = row.easement?.value || null
   out.driveway = row.driveway?.value || null
-  for (const k of ['district', 'maxStories', 'minHouseSf', 'irc', 'energyCode', 'windstorm', 'wind', 'coverageIncludesImpervious', 'easement', 'driveway']) {
+  for (const k of ['district', 'maxStories', 'minHouseSf', 'irc', 'energyCode', 'windstorm', 'wind', 'coverageIncludesImpervious', 'imperviousMax', 'easement', 'driveway']) {
     const field = row[k]
     const stale = staleness(field, now)
     out.used.push({ id: k, label: FIELD_LABELS[k], value: k === 'wind' ? out.windText : formatValue(k, field?.value, field), text: null, source: field?.source || null, checkedAt: field?.checkedAt || null, status: field?.status || 'unknown', stale: stale === 're-check due' })
@@ -425,7 +427,7 @@ export function resolveRules(row, overrides = {}, dims = {}, now = Date.now()) {
 
 export function formatValue(k, v, field) {
   if (v === null || v === undefined) return k === 'wind' ? WIND_UNSET : 'unknown, confirm with city'
-  if (k === 'maxCoverage') return `${Math.round(v * 100)}%${field?.note ? ` (${field.note})` : ''}`
+  if (k === 'maxCoverage' || k === 'imperviousMax') return `${Math.round(v * 100)}%${field?.note ? ` (${field.note})` : ''}`
   if (k === 'windstorm') return v ? 'yes (TDI catastrophe area)' : 'no'
   if (k === 'coverageIncludesImpervious') return v ? 'yes' : 'no'
   if (typeof v === 'boolean') return v ? 'yes' : 'no'

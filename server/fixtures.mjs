@@ -13,13 +13,30 @@ import { ZONING_LAYERS } from './zoning.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const FIXTURE_DIR = path.join(__dirname, '..', 'test', 'fixtures', 'parcels')
+/** Per-layer field lists and types (round 9, item 9): what a query may ask for, as the live layer would allow. */
+export const LAYERS = (() => {
+  const p = path.join(FIXTURE_DIR, 'layers.json')
+  if (!fs.existsSync(p)) return {}
+  const j = JSON.parse(fs.readFileSync(p, 'utf8'))
+  delete j._about
+  return j
+})()
+const arcError = (message, code = 400) => json({ error: { code, message, details: [] } }, 400)
 export const fixtureMode = (env = process.env) => env.DRAFTHOUSE_FIXTURES === '1'
+// any key that could carry a person: the recorder refuses to write a fixture that has one, and a test reads every
+// committed fixture against it (round 9, item 7)
+export const FORBIDDEN_KEY = /owner|mail|addr|zip|name$|file_as|^name$|taxpayer|deed/i
+/** Every parcel property key in a fixture, against the forbidden list. Throws naming the first. */
+export function assertNoPersonKeys(rec) {
+  for (const p of rec.parcels || []) for (const k of Object.keys(p.properties || {})) if (FORBIDDEN_KEY.test(k) && !/situs|legal/i.test(k)) throw new Error(`${rec.slug}: forbidden key ${k} in a parcel record`)
+  for (const a of rec.addressPoints || []) for (const k of Object.keys(a)) if (!/^(fulladdr|municipality|parcel_id)$/.test(k)) throw new Error(`${rec.slug}: unexpected address-point key ${k}`)
+}
 
 export function loadFixtures(dir = FIXTURE_DIR) {
   if (!fs.existsSync(dir)) return []
   return fs
     .readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
+    .filter((f) => f.endsWith('.json') && f !== 'layers.json')
     .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))
 }
 
@@ -32,11 +49,33 @@ const likeToRe = (pat) => new RegExp('^' + pat.replace(/[.*+?^${}()|[\]\\]/g, '\
 const distM = (a, b) => Math.hypot((a.lon - b.lon) * 111320 * Math.cos((a.lat * Math.PI) / 180), (a.lat - b.lat) * 110540)
 const centroid = (ring) => ({ lon: ring.reduce((s, p) => s + p[0], 0) / ring.length, lat: ring.reduce((s, p) => s + p[1], 0) / ring.length })
 
-/** The where clause's conditions: [[field, op, value]]; LIKE values keep their wildcards. */
+/** The where clause's conditions: [[field, op, value, quoted]]; LIKE values keep their wildcards; a bare number is unquoted. */
 export function parseWhere(where) {
   const out = []
-  for (const m of String(where || '').matchAll(/(?:UPPER\()?([A-Za-z_][A-Za-z0-9_]*)\)?\s*(=|LIKE)\s*'((?:[^']|'')*)'/g)) out.push([m[1], m[2], m[3].replace(/''/g, "'")])
+  for (const m of String(where || '').matchAll(/(?:UPPER\()?([A-Za-z_][A-Za-z0-9_]*)\)?\s*(=|LIKE)\s*(?:'((?:[^']|'')*)'|(\d+))/g)) out.push([m[1], m[2], m[3] !== undefined ? m[3].replace(/''/g, "'") : m[4], m[3] !== undefined])
   return out
+}
+/**
+ * What the live layer would say to this query, before any data: an unknown layer is "Invalid URL"; a field in
+ * outFields or where that the layer lacks is "Failed to execute query."; a quoted value on an integer field is
+ * "Unable to complete operation." (the exact answers RGV911 and FEMA gave on Nov 19, 2026). null when the query is fine.
+ */
+export function layerRefusal(base, q) {
+  const L = LAYERS[base]
+  if (!L) {
+    // a layer number nobody described under a service we do describe (NFHL/21) does not exist
+    const service = base.replace(/\/\d+$/, '')
+    if (Object.keys(LAYERS).some((k) => k.startsWith(service + '/'))) return arcError('Invalid URL', 400)
+    return null
+  }
+  const fields = L.fields || {}
+  const outFields = (q.get('outFields') || '*').trim()
+  if (outFields !== '*') for (const f of outFields.split(',').map((x) => x.trim()).filter(Boolean)) if (!(f in fields)) return arcError('Failed to execute query.')
+  for (const [field, , , quoted] of parseWhere(q.get('where'))) {
+    if (!(field in fields)) return arcError('Failed to execute query.')
+    if (fields[field] === 'integer' && quoted) return arcError('Unable to complete operation.')
+  }
+  return null
 }
 const matches = (attrs, conds) =>
   conds.every(([field, op, value]) => {
@@ -57,6 +96,12 @@ export function fixtureFetch(fixtures = loadFixtures(), { log = () => {}, failUr
     const q = u.searchParams
     log(`fixture fetch ${base}`)
     if (failUrls.some((f) => base.includes(f))) return json({ error: { code: 500, message: 'fixture: this URL is set to fail' } }, 500)
+    // a layer's own description (?f=json), for code that reads field types before it queries
+    if (LAYERS[base] && u.pathname.endsWith('/query') === false && q.get('f') === 'json') return json({ name: LAYERS[base].name, fields: Object.entries(LAYERS[base].fields).map(([name, type]) => ({ name, type: 'esriFieldType' + type[0].toUpperCase() + type.slice(1) })) })
+    if (u.pathname.endsWith('/query')) {
+      const refusal = layerRefusal(base, q)
+      if (refusal) return refusal
+    }
     // the Census geocoder
     if (u.hostname === 'geocoding.geo.census.gov') {
       const want = parseAddress(q.get('address') || '')

@@ -16,6 +16,8 @@ export const PARCEL_SOURCES = [
     url: 'https://gis.rgv911.org/server/rest/services/RGV911_Web_Apps_MIL1/MapServer/7',
     kind: 'arcgis',
     fields: { propId: 'prop_id', geoId: 'geo_id', owner: 'owner_name', mailing: 'owner_addr', situs: 'situs', situsNum: null, situsStreet: null, legal: 'legal_desc', acres: null },
+    // the layer's own field types (round 9, item 2): prop_id is esriFieldTypeInteger here, so a quoted value is a 400
+    types: { prop_id: 'integer' },
     addressPoints: { url: 'https://gis.rgv911.org/server/rest/services/RGV911_Web_Apps_MIL1/MapServer/0', fields: { fulladdr: 'fulladdr', municipality: 'municipality', parcelId: 'parcel_id' }, parcelKey: 'prop_id' },
     headers: {},
     notes: 'situs is one string ("1201 KERRIA AVE, MCALLEN TX"); land_acres is empty, so acreage comes from the polygon; address points are layer 0 of the same service (fulladdr, municipality, parcel_id = prop_id)',
@@ -102,7 +104,16 @@ export const sourceById = (id) => PARCEL_SOURCES.find((s) => s.id === id) || nul
 
 // the three addresses that are the round's acceptance set (and the daily health check's)
 export const TEST_ADDRESSES = [
-  { address: '1201 Kerria Ave, McAllen, TX 78501', county: 'Hidalgo County', expect: { propId: '255056', geoId: 'P2500-00-004-0007-00', legal: /PALMS LOT 7 BLK 4/, edges: 4, areaSf: [10324, 10532] } },
-  { address: '36 Melissa Dr, Brownsville, TX 78526', county: 'Cameron County', expect: { legal: /MCKENZIE ESTATES LOT 16 BLK 1/, edges: 5, areaSf: [8042, 8204], notThis: '1021 CLARISSA DR' } },
-  { address: '5435 Curtis Clark Dr, Corpus Christi, TX 78412', county: 'Nueces County', expect: { legal: /GARDENDALE 2 SE\/2 OF LT 8 BK 5/, areaSf: [9384, 9574], notThis: '5402 BURTON' } },
+  { address: '1201 Kerria Ave, McAllen, TX 78501', county: 'Hidalgo County', expect: { propId: '255056', geoId: 'P2500-00-004-0007-00', legal: /PALMS LOT 7 BLK 4/, edges: 4, areaSf: [10300, 10550], frontFt: [79, 81], flood: 'no-digital-firm', zoning: 'R-1' } },
+  { address: '36 Melissa Dr, Brownsville, TX 78526', county: 'Cameron County', expect: { propId: '144311', legal: /MCKENZIE ESTATES LOT 16 BLK 1/, edges: 5, areaSf: [8042, 8204], notThis: '1021 CLARISSA DR', flood: 'x', firm: '48061C', zoning: 'R-1' } },
+  { address: '5435 Curtis Clark Dr, Corpus Christi, TX 78412', county: 'Nueces County', expect: { propId: '236866', legal: /GARDENDALE 2 SE\/2 OF LT 8 BK 5/, areaSf: [9384, 9574], notThis: '5402 BURTON', frontFt: [29, 33], flood: 'x', firm: '48355C', zoning: 'SF-6' } },
+  // round 9, item 5: the RGV911 address point carries the neighbour's parcel (259436, 118 W Park Ave); the situs check must refuse it
+  { address: '118 S Cage Blvd, Pharr, TX 78577', county: 'Hidalgo County', expect: { propId: '259430', never: '259436', zoning: 'C-2' } },
 ]
+
+/** A county from a route key: "Hidalgo County", "hidalgo", "hidalgo-county" and "Hidalgo%20County" all name the same one (round 9, item 8). */
+export const COUNTY_NAMES = [...new Set(PARCEL_SOURCES.map((s) => s.county).filter((c) => c && c !== '*'))]
+export function countyFromKey(key) {
+  const k = String(key || '').toLowerCase().replace(/[^a-z]/g, '').replace(/county$/, '')
+  return COUNTY_NAMES.find((c) => c.toLowerCase().replace(/[^a-z]/g, '').replace(/county$/, '') === k) || null
+}

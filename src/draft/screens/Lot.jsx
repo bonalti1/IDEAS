@@ -306,14 +306,20 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
               {parcel.situs ? ` · ${parcel.situs}` : ''}. {parcel.edges?.length} sides, about {Math.round(parcel.areaSf).toLocaleString()} sf ({parcel.acres} acres)
               {parcel.cleaned?.short || parcel.cleaned?.straight ? `; ${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0)} sliver corner${(parcel.cleaned.short || 0) + (parcel.cleaned.straight || 0) === 1 ? '' : 's'} under a foot removed` : ''}.
             </p>
-            <div className="edges">
-              {parcel.edges?.map((e, i) => (
-                <span key={i}>
-                  {i === (parcel.frontEdge ?? 0) ? 'street side ' : ''}
-                  {e.lengthFt}' {e.bearing}
-                </span>
-              ))}
-            </div>
+            {parcel.large || zoning?.residential === false ? (
+              <p className="fine warn">
+                {parcel.large ? `A large tract (${parcel.acres} acres, ${parcel.edges?.length} sides): the office draws this one.` : 'Not a house district: the sides are not drawn.'} {zoning?.residential === false ? zoning.message : ''}
+              </p>
+            ) : (
+              <div className="edges">
+                {parcel.edges?.map((e, i) => (
+                  <span key={i}>
+                    {i === (parcel.frontEdge ?? 0) ? 'street side ' : ''}
+                    {e.lengthFt}' {e.bearing}
+                  </span>
+                ))}
+              </div>
+            )}
             <p className="fine">
               From the {parcel.source?.name || 'county appraisal district'}
               {parcel.source?.fetchedAt ? `, read ${String(parcel.source.fetchedAt).slice(0, 10)}` : ''}. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built.

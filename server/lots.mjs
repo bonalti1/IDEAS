@@ -3,7 +3,6 @@
 import crypto from 'node:crypto'
 import { cityTable, CITY_IDS, RULE_FIELDS } from '../src/draft/lib/cities.js'
 import { jurisdictionTable, jurisdictionFor, geoMessage, countyRowId, ALL_FIELDS } from '../src/draft/lib/jurisdictions.js'
-const pick = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => /^(CASE_NO|EFF_DATE|STATUS|FLD_ZONE|ZONE_SUBTY|SFHA_TF|STATIC_BFE|FIRM_PAN|PANEL|DFIRM_ID|PRELIM_DATE|PRE_DATE)$/i.test(k)))
 import { buildLot, traverse } from '../src/draft/lib/lot.js'
 
 const fail = (status, error) => Object.assign(new Error(error), { status })
@@ -210,20 +209,24 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       if (!(Number.isFinite(+lat) && Number.isFinite(+lon))) throw fail(400, 'lat and lon required')
       const key = `flood:@${(+lat).toFixed(5)},${(+lon).toFixed(5)}`
       const cached = await store.meta.get(key)
-      if (cached && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, address, matched }
-      const base = { address, matched, lat: +lat, lon: +lon, where, source: 'FEMA National Flood Hazard Layer (layers 0, 28, 3, 21, 34) at the parcel interior point', at: now() }
-      const avail = await nfhl(0, lon, lat, 'DFIRM_ID,ST_FIPS,CO_FIPS,STUDY_TYP,EFF_DATE')
-      if (!avail.length) {
-        const rec = { ...base, status: 'no-digital-firm', zone: null, subtype: null, sfha: null, bfe: null, firm: null, lomr: null, prelim: null, note: 'FEMA has no digital flood map (FIRM) for this spot, so no zone can be read here. The county floodplain administrator and the paper map decide; the office checks before the slab height is set.' }
+      if (cached && cached.v === 2 && Date.now() - Date.parse(cached.at) < 30 * 86400000) return { ...cached, address, matched }
+      // NFHL layers as the service publishes them (round 9, item 3): 3 FIRM Panels (DFIRM_ID, FIRM_PAN, EFF_DATE), 28 Flood
+      // Hazard Zones, 1 LOMRs, 34 LOMAs. Layer 0 (NFHL Availability) only has STUDY_ID. Preliminary data is not in the
+      // public NFHL MapServer: not queried, and the record says so.
+      const base = { v: 2, address, matched, lat: +lat, lon: +lon, where, source: 'FEMA National Flood Hazard Layer (FIRM panels layer 3, zones 28, LOMRs 1, LOMAs 34) at the parcel interior point', prelim: null, prelimNote: 'Preliminary maps are not in the public NFHL service; the drafter checks FEMA\'s preliminary viewer before the permit set.', at: now() }
+      const [panels, avail] = await Promise.all([nfhl(3, lon, lat, 'DFIRM_ID,FIRM_PAN,EFF_DATE,PANEL_TYP'), nfhl(0, lon, lat, 'STUDY_ID').catch(() => [])])
+      if (!panels.length && !avail.length) {
+        const rec = { ...base, status: 'no-digital-firm', zone: null, subtype: null, sfha: null, bfe: null, firm: null, panel: null, lomr: null, loma: null, note: 'FEMA has no digital flood map (FIRM) for this spot, so no zone can be read here. The county floodplain administrator and the paper map decide; the office checks before the slab height is set.' }
         await store.meta.set(key, rec)
         return rec
       }
-      const [zones, lomrs, prelimA, prelimB] = await Promise.all([nfhl(28, lon, lat, 'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,DFIRM_ID,FLD_AR_ID,DEPTH'), nfhl(3, lon, lat, 'CASE_NO,EFF_DATE,STATUS,SCALE').catch(() => []), nfhl(21, lon, lat, '*').catch(() => []), nfhl(34, lon, lat, '*').catch(() => [])])
+      const [zones, lomrs, lomas] = await Promise.all([nfhl(28, lon, lat, 'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,DFIRM_ID,FLD_AR_ID,DEPTH'), nfhl(1, lon, lat, 'CASE_NO,EFF_DATE,STATUS,LOMR_ID').catch(() => []), nfhl(34, lon, lat, 'CASENUMBER,STATUS,DETERMINATIONTYPE,DATEENDED').catch(() => [])])
       const f = zones[0] || null
       const sfha = f ? f.SFHA_TF === 'T' : null
       const shadedX = !!f && f.FLD_ZONE === 'X' && /0\.2 PCT|LEVEE|FLOODWAY/i.test(f.ZONE_SUBTY || '')
-      const lomr = lomrs.filter((l) => !l.STATUS || /effective/i.test(l.STATUS)).map((l) => ({ caseNo: l.CASE_NO || null, effective: l.EFF_DATE ? new Date(+l.EFF_DATE || l.EFF_DATE).toISOString().slice(0, 10) : null }))
-      const prelim = [...prelimA.map((p) => ({ layer: 21, ...pick(p) })), ...prelimB.map((p) => ({ layer: 34, ...pick(p) }))]
+      const date = (d) => (d ? new Date(+d || d).toISOString().slice(0, 10) : null)
+      const lomr = lomrs.filter((l) => !l.STATUS || /effective/i.test(l.STATUS)).map((l) => ({ caseNo: l.CASE_NO || null, effective: date(l.EFF_DATE), id: l.LOMR_ID || null }))
+      const loma = lomas.map((l) => ({ caseNo: l.CASENUMBER || null, status: l.STATUS || null, determination: l.DETERMINATIONTYPE || null, ended: date(l.DATEENDED) }))
       const status = !f ? 'unmapped' : sfha ? 'sfha' : shadedX ? 'shaded-x' : 'x'
       const notes = []
       if (!f) notes.push('A digital map covers this area but no flood zone polygon sits on this point; the drafter reads the FIRM panel.')
@@ -231,8 +234,8 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       else if (shadedX) notes.push('Zone X (shaded): the 0.2% annual-chance flood area. Outside the 1% area, but lenders and the city may still ask for an elevation certificate.')
       else notes.push('Zone X: outside the 1% annual-chance flood area on the current FEMA map.')
       if (lomr.length) notes.push(`A Letter of Map Revision changed the map here (case ${lomr.map((l) => l.caseNo).filter(Boolean).join(', ') || 'on file'}${lomr[0].effective ? `, effective ${lomr[0].effective}` : ''}); the drafter reads the LOMR, which wins over the panel.`)
-      if (prelim.length) notes.push('FEMA has a preliminary map change in progress for this area; the zone may change before the permit. The drafter checks the preliminary panel.')
-      const rec = { ...base, status, zone: f?.FLD_ZONE || null, subtype: f?.ZONE_SUBTY || null, sfha, bfe: f?.STATIC_BFE != null && f.STATIC_BFE > -9000 ? f.STATIC_BFE : null, firm: f?.DFIRM_ID || avail[0]?.DFIRM_ID || null, firmEffective: avail[0]?.EFF_DATE ? new Date(+avail[0].EFF_DATE || avail[0].EFF_DATE).toISOString().slice(0, 10) : null, lomr: lomr.length ? lomr : null, prelim: prelim.length ? prelim : null, note: notes.join(' ') }
+      if (loma.length) notes.push(`A Letter of Map Amendment is on file at this spot (LOMA case ${loma.map((l) => l.caseNo).filter(Boolean).join(', ') || 'on file'}${loma[0].determination ? `, ${loma[0].determination}` : ''}); it removes a structure or lot from the flood zone on paper, and the drafter reads it.`)
+      const rec = { ...base, status, zone: f?.FLD_ZONE || null, subtype: f?.ZONE_SUBTY || null, sfha, bfe: f?.STATIC_BFE != null && f.STATIC_BFE > -9000 ? f.STATIC_BFE : null, firm: f?.DFIRM_ID || panels[0]?.DFIRM_ID || avail[0]?.STUDY_ID || null, panel: panels[0]?.FIRM_PAN || null, firmEffective: date(panels[0]?.EFF_DATE), lomr: lomr.length ? lomr : null, loma: loma.length ? loma : null, note: notes.join(' ') }
       await store.meta.set(key, rec)
       return rec
     },

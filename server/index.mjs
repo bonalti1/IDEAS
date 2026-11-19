@@ -17,6 +17,7 @@ import { makeUsers } from './users.mjs'
 import { makeProjects } from './projects.mjs'
 import { makeLots } from './lots.mjs'
 import { makeParcels } from './parcels.mjs'
+import { countyFromKey } from './parcel-sources.mjs'
 import { makeZoning } from './zoning.mjs'
 import { makeWind } from './wind.mjs'
 import { fixtureMode, fixtureFetch } from './fixtures.mjs'
@@ -243,15 +244,42 @@ const parcelView = (rec, ctx) => {
   const { owner, mailing, attributes, ...keep } = rec
   return { ...keep, candidates: rec.candidates?.map(({ owner: o, mailing: m, ...c }) => c) }
 }
-route('GET', '/api/lot/parcel', 'app', async (req, res, p, ctx) => {
+// The parcel routes need a signed-in user and are rate-limited per user and per address (round 9, item 8): the office
+// server must not be an open proxy onto the county layers. 20 lookups that reach a county per 10 minutes; cache hits
+// are free. 429 with a plain line past that.
+const LOOKUPS_PER_WINDOW = +(process.env.PARCEL_LOOKUPS_PER_10MIN || 20) // per user
+const LOOKUPS_PER_IP = LOOKUPS_PER_WINDOW * 3 // an office or a family behind one address
+const lookupWindow = new Map() // key → [timestamps]
+const lookupsLeft = (key) => {
+  const t = Date.now()
+  const list = (lookupWindow.get(key) || []).filter((x) => t - x < 600000)
+  lookupWindow.set(key, list)
+  return (key.startsWith('ip:') ? LOOKUPS_PER_IP : LOOKUPS_PER_WINDOW) - list.length
+}
+const countLookup = (key) => lookupWindow.set(key, [...(lookupWindow.get(key) || []), Date.now()])
+const lookupKeys = (req, ctx) => [`u:${ctx.user?.id || 'anon'}`, `ip:${(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '?'}`]
+const LOOKUP_LIMIT_MESSAGE = 'Too many lot lookups for now. Try again in ten minutes, or type the lot in; the drafter can pull the parcel later.'
+route('GET', '/api/lot/parcel', 'user', async (req, res, p, ctx) => {
   const url = new URL(req.url, 'http://x')
   const address = url.searchParams.get('address')
   const lat = url.searchParams.get('lat')
   const lon = url.searchParams.get('lon')
   if (address && address.length > 200) return json(res, 400, { error: 'the address is too long (200 characters at most)' }, req)
-  json(res, 200, parcelView(await parcels.lookup({ address, lat: lat != null ? +lat : undefined, lon: lon != null ? +lon : undefined, force: url.searchParams.get('force') === '1' && users.isDrafter(ctx.user) }), ctx), req)
+  const keys = lookupKeys(req, ctx)
+  if (keys.some((k) => lookupsLeft(k) <= 0)) return json(res, 429, { error: LOOKUP_LIMIT_MESSAGE, retryAfterS: 600 }, req)
+  const rec = await parcels.lookup({ address, lat: lat != null ? +lat : undefined, lon: lon != null ? +lon : undefined, force: url.searchParams.get('force') === '1' && users.isDrafter(ctx.user) })
+  if (!rec.cached) keys.forEach(countLookup)
+  json(res, 200, parcelView(rec, ctx), req)
 })
-route('GET', '/api/lot/parcel/:county/:propId', 'app', async (req, res, p, ctx) => json(res, 200, parcelView(await parcels.byId({ county: decodeURIComponent(p.county), propId: safe(p.propId) }), ctx), req))
+// :county is the county's name or its slug ("Hidalgo County", "hidalgo", "hidalgo-county"); :propId the appraisal district's id
+route('GET', '/api/lot/parcel/:county/:propId', 'user', async (req, res, p, ctx) => {
+  const county = countyFromKey(decodeURIComponent(p.county))
+  if (!county) return json(res, 404, { error: `no parcel source for "${decodeURIComponent(p.county)}"; use the county name or its slug (hidalgo, cameron, nueces, starr, willacy, jimwells, kleberg, sanpatricio)` }, req)
+  const keys = lookupKeys(req, ctx)
+  if (keys.some((k) => lookupsLeft(k) <= 0)) return json(res, 429, { error: LOOKUP_LIMIT_MESSAGE, retryAfterS: 600 }, req)
+  keys.forEach(countLookup)
+  json(res, 200, parcelView(await parcels.byId({ county, propId: safe(p.propId) }), ctx), req)
+})
 route('GET', '/api/lot/zoning', 'app', async (req, res) => {
   const url = new URL(req.url, 'http://x')
   json(res, 200, await zoning.lookup({ cityId: safe(url.searchParams.get('city') || ''), lat: url.searchParams.get('lat'), lon: url.searchParams.get('lon') }), req)

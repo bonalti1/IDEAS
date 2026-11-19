@@ -1,7 +1,7 @@
 {
  "synthetic": true,
- "builtFrom": "the live lookups quoted in the round-7 brief (edges, area, legal, ids) with stand-in coordinates and attributes; the parcel, flood and zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
- "recordedAt": "2026-11-18",
+ "builtFrom": "the live lookups in the round-7 brief and the round-9 review (ids, legals, edges, areas, the flood panels FEMA answered on Nov 19, 2026) with stand-in coordinates; the county parcel and city zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-19",
  "slug": "ranch-rd-rio-grande-city",
  "address": "4400 Ranch Rd, Rio Grande City, TX 78582",
  "county": "Starr County",
@@ -50,8 +50,7 @@
     "situs_street": "RANCH",
     "situs_street_sufix": "RD",
     "situs_city": "RIO GRANDE CITY",
-    "legal_acreage": 5,
-    "file_as_name": "REDACTED"
+    "legal_acreage": 5
    },
    "geometry": {
     "type": "Polygon",
@@ -84,8 +83,8 @@
  ],
  "nfhl": {
   "0": [],
+  "1": [],
   "3": [],
-  "21": [],
   "28": [],
   "34": []
  },

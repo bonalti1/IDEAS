@@ -86,11 +86,34 @@ export function generateRooms(program, style, lot = DEFAULT_LOT) {
 }
 
 /**
+ * A program as the engine needs it (round 9, item 16): whole counts, a fractional bath count folded into halfBath
+ * ("baths": 3.5 → baths 3, halfBath true; 2.75 → 2 and a half), nothing negative, a story count of at least 1.
+ * Every entry point (the first draft, the fit check, the API, the audit script) runs it, so a half bath written
+ * the way people write it never reaches Array(3.5).
+ */
+export function normalizeProgram(program = {}) {
+  const p = { ...program }
+  const whole = (v, d) => (Number.isFinite(+v) ? Math.max(0, Math.floor(+v)) : d)
+  const baths = Number.isFinite(+p.baths) ? +p.baths : DEFAULT_PROGRAM.baths
+  if (baths % 1 !== 0) {
+    p.baths = Math.floor(baths)
+    p.halfBath = true
+  } else p.baths = whole(baths, DEFAULT_PROGRAM.baths)
+  p.beds = whole(p.beds, DEFAULT_PROGRAM.beds)
+  p.garage = whole(p.garage, 0)
+  p.stories = Math.max(1, whole(p.stories, 1))
+  if (p.sqft !== undefined) p.sqft = Math.max(0, Math.round(+p.sqft || 0))
+  for (const k of ['halfBath', 'office', 'suite2', 'frontPorch', 'rearPorch']) if (k in p && typeof p[k] !== 'boolean') p[k] = !!p[k]
+  return p
+}
+
+/**
  * The first draft with what was done to make it fit: { rooms, planScale (the plan scaled to the
  * square footage), minSqft (the smallest this plan goes before a room falls under the kit's
  * minimum), clamped (the request was under that), fitScale and fitShift (what the lot needed) }.
  */
-export function starterDraft(program, style, lot = DEFAULT_LOT) {
+export function starterDraft(programIn, style, lot = DEFAULT_LOT) {
+  const program = normalizeProgram(programIn)
   const kit = kitFor(style)
   if (kit.plan) return fromPlan(program, kit, lotOf(lot))
   const rooms = roomsFor(program, kit)

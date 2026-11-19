@@ -5,6 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
+import { chromePath, startPreview, appContext, freePort } from './browser.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,7 +15,8 @@ import { KIT } from '../src/kits/modern-farmhouse.js'
 import { buildLot, DEFAULT_LOT } from '../src/draft/lib/lot.js'
 import { interpretRequest } from '../src/draft/lib/interpret.js'
 import { regexOps, isCostQuestion, COST_REPLY, COST_REPLY_ES } from '../src/draft/lib/ops.js'
-import { summaryHTML, meetingPrepHTML } from '../src/draft/lib/plan-svg.js'
+import { summaryHTML } from '../src/draft/lib/plan-svg.js'
+import { meetingPrepHTML } from '../src/draft/lib/office.js'
 import { buildDesign } from '../src/draft/lib/contract.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
 import { estimate } from '../src/draft/lib/pricing.js'
@@ -290,33 +292,26 @@ test('the office keeps the numbers: the estimate route answers a drafter with th
 })
 
 // ── the screens, as a homeowner, at 1440 and 390 px ─────────────────────────────────────────────
-const APP_PORT = 4188
-const API_PORT = 8787 // what the built bundle calls (VITE_API_URL defaults to http://localhost:8787)
+// free ports every run (round 9, item 12): never the developer's :8787 or :4188; the built app is pointed at the
+// test's API through localStorage before its first script runs (test/browser.mjs)
 const SCREEN_TEXT = /\$|Estimate|Price range|\b(buy|pay|credit|credits|checkout)\b/i
 const SHOTS = process.env.SHOTS || ''
+const CHROME = chromePath()
+const skipBrowser = !CHROME && 'no Chrome found (set CHROME=/path/to/chrome)'
+const preview = (t) => startPreview(t)
 
-async function preview(t) {
-  if (!fs.existsSync('dist/index.html')) {
-    const b = spawnSync('npx', ['vite', 'build'], { encoding: 'utf8', timeout: 240000 })
-    if (b.status !== 0) throw new Error('vite build failed: ' + b.stderr.slice(-400))
-  }
-  const proc = spawn('npx', ['vite', 'preview', '--port', String(APP_PORT), '--strictPort'], { stdio: 'ignore' })
-  t.after(() => proc.kill())
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(`http://localhost:${APP_PORT}/`)).ok) return `http://localhost:${APP_PORT}`
-    } catch {
-      await new Promise((r) => setTimeout(r, 100))
-    }
-  }
-  throw new Error('preview did not start')
-}
-
-async function homeownerFlow(browser, app, viewport, tag) {
-  const ctx = await browser.newContext({ viewport, acceptDownloads: true })
+async function homeownerFlow(browser, app, api, viewport, tag) {
+  const ctx = await appContext(browser, api, { viewport, acceptDownloads: true })
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
+  const apiLog = [] // every office API answer, for the message when a step hangs
+  page.on('response', (r) => {
+    if (r.url().includes('/api/')) apiLog.push(`${r.status()} ${r.request().method()} ${r.url().replace(/^https?:\/\/[^/]+/, '').slice(0, 80)}`)
+  })
+  page.on('requestfailed', (r) => {
+    if (r.url().includes('/api/')) apiLog.push(`FAILED ${r.request().method()} ${r.url().replace(/^https?:\/\/[^/]+/, '').slice(0, 80)} ${r.failure()?.errorText || ''}`)
+  })
   const seen = []
   const shot = async (name) => {
     if (!SHOTS) return
@@ -350,6 +345,9 @@ async function homeownerFlow(browser, app, viewport, tag) {
   const confirm = page.locator('#lot-confirm')
   if (await confirm.count()) await confirm.check()
   await page.getByRole('button', { name: /pick a style/ }).click()
+  await page.waitForTimeout(600)
+  await check('style') // round 9, item 1: the Style step said "from $115/sf"
+  await shot('02b-style')
   await page.getByRole('button', { name: /Modern Farmhouse/ }).click()
   await page.getByRole('button', { name: /Next, rooms/ }).click()
   await page.waitForTimeout(1500)
@@ -363,7 +361,11 @@ async function homeownerFlow(browser, app, viewport, tag) {
   const ask = async (text) => {
     await page.getByPlaceholder(/change|Move the laundry|No changes left/).fill(text)
     await page.getByRole('button', { name: 'Change', exact: true }).click()
-    await page.locator('.msg.thinking').waitFor({ state: 'hidden', timeout: 60000 })
+    try {
+      await page.locator('.msg.thinking').waitFor({ state: 'hidden', timeout: 60000 })
+    } catch (e) {
+      throw new Error(`${tag}: "${text}" did not finish in 60 s. API answers: ${apiLog.slice(-8).join(' | ')}. Messages: ${(await page.locator('.msg').allInnerTexts()).slice(-3).join(' // ').slice(0, 400)}`)
+    }
     return (await page.locator('.msg.house').last().textContent()).trim()
   }
   const applied = await ask('make the kitchen bigger')
@@ -416,15 +418,15 @@ async function homeownerFlow(browser, app, viewport, tag) {
   return { errors, seen, pdfText }
 }
 
-test('screens: Lot, rooms, Draft, options and Send as a homeowner at 1440 and 390 px carry no $, Estimate, Price range, buy, pay, credit or checkout; the cost question gets the meeting button; #/billing is gone; the summary PDF has no money; the bundle has no Stripe', { timeout: 400000 }, async (t) => {
+test('screens: Lot, rooms, Draft, options and Send as a homeowner at 1440 and 390 px carry no $, Estimate, Price range, buy, pay, credit or checkout; the cost question gets the meeting button; #/billing is gone; the summary PDF has no money; the bundle has no Stripe', { skip: skipBrowser, timeout: 400000 }, async (t) => {
   const { chromium } = await import('playwright-core')
   const app = await preview(t)
-  await startServer(t, { PORT: String(API_PORT), DRAFTHOUSE_APP_ORIGIN: app })
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' })
+  const { base: api } = await startServer(t, { PORT: String(await freePort()), DRAFTHOUSE_APP_ORIGIN: app })
+  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] })
   t.after(() => browser.close())
   let pdfChecked = false
   for (const [viewport, tag] of [[{ width: 1440, height: 900 }, 'desktop'], [{ width: 390, height: 844 }, 'phone']]) {
-    const r = await homeownerFlow(browser, app, viewport, tag)
+    const r = await homeownerFlow(browser, app, api, viewport, tag)
     assert.deepEqual(r.errors, [], `${tag} page errors`)
     if (r.pdfText) {
       pdfChecked = true
@@ -438,16 +440,25 @@ test('screens: Lot, rooms, Draft, options and Send as a homeowner at 1440 and 39
   assert.ok(!js.includes('checkout.stripe.com'), 'no checkout.stripe.com in dist')
   assert.ok(!/Buy changes|Credits on your account|billing=success/.test(js), 'no Billing screen chunk in dist')
   assert.ok(!fs.readdirSync('dist/assets').some((f) => /^Billing-/.test(f)), 'no Billing chunk file')
+  // round 9, item 1: the homeowner entry chunk carries no rates at all; the office printables are their own lazy chunk
+  const entry = fs.readdirSync('dist/assets').filter((f) => /^index-.*\.js$/.test(f)).map((f) => fs.readFileSync(path.join('dist/assets', f), 'utf8')).join('\n')
+  assert.ok(entry.length > 100000, 'the entry chunk was found')
+  assert.ok(!/\bRATES\b|drivewayAllowanceSf|estimateLines|windstormCounties/.test(entry), 'no rates table in the homeowner entry chunk')
+  assert.ok(!/\$\d+(?:–|-)\d+\/sf|\/sf living|\$\d+\/sf/.test(entry), 'no $/sf line in the homeowner entry chunk (the cost-question detector may name the phrase, never a rate)')
+  assert.ok(!/\b115\b[^\n]{0,12}\b120\b|\b120\b[^\n]{0,12}\b130\b/.test(entry), 'no 115/120 or 120/130 rate pair in the homeowner entry chunk')
+  assert.ok(!/from \$\d+\/sf/.test(entry), 'the Style step rate line is gone')
+  const chunks = fs.readdirSync('dist/assets').filter((f) => f.endsWith('.js'))
+  assert.ok(chunks.some((f) => /^(office|Review|Admin)-/.test(f)), `the office code is a separate chunk (${chunks.join(', ')})`)
 })
 
 // ── round 8, item 1: the rooms step on a slow phone ─────────────────────────────────────────────
-test('rooms step at 390 px with 6x CPU throttling: ten fast taps on bedrooms never block the main thread over 200 ms, and the meter says "Checking the lot…" then the result', { timeout: 400000 }, async (t) => {
+test('rooms step at 390 px with 6x CPU throttling: ten fast taps on bedrooms never block the main thread over 200 ms, and the meter says "Checking the lot…" then the result', { skip: skipBrowser, timeout: 400000 }, async (t) => {
   const { chromium } = await import('playwright-core')
   const app = await preview(t)
-  await startServer(t, { PORT: String(API_PORT), DRAFTHOUSE_APP_ORIGIN: app })
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' })
+  const { base: api } = await startServer(t, { PORT: String(await freePort()), DRAFTHOUSE_APP_ORIGIN: app })
+  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] })
   t.after(() => browser.close())
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const ctx = await appContext(browser, api, { viewport: { width: 390, height: 844 } })
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))

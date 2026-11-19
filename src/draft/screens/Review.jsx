@@ -9,8 +9,7 @@ import { floorArea, programOf, programLine, kitFor } from '../lib/layout.js'
 import { STATUS } from '../lib/status.js'
 import { buildDesign } from '../lib/contract.js'
 import { auditSummary } from '../lib/audit.js'
-import { meetingPrepPDF, pdfName } from '../lib/pdf.js'
-import { meetingPrepHTML } from '../lib/plan-svg.js'
+import { pdfName } from '../lib/pdf.js'
 import { TRUST } from '../lib/trust.js'
 
 const money = (n) => '$' + Math.round(n).toLocaleString()
@@ -118,6 +117,8 @@ export default function Review({ user }) {
     const kit = kitFor(style)
     const design = buildDesign({ rooms: open.rooms || [], program: open.program || {}, style, lot: open.lot, client: open.client })
     const audit = auditSummary(open.rooms || [], open.program || {}, kit, open.lot)
+    // the office printables and the rates load on demand (their own chunk); the homeowner app never asks for them
+    const { meetingPrepPDF, meetingPrepHTML } = await import('../lib/office.js')
     try {
       const doc = await meetingPrepPDF(design, estimate, audit, TRUST, kit.titleBlock)
       doc.save(pdfName(design, 'meeting prep (internal)'))

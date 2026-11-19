@@ -1035,7 +1035,10 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
     const have = kind === 'bed' ? roomsOnly.filter((r) => bedKinds.includes(r.kind)).length : kind === 'bath' ? roomsOnly.filter((r) => ['bath', 'mbath', 'jackjill'].includes(r.kind)).length : roomsOnly.filter((r) => r.kind === kind).length
     if (count > 1 && have + count > cap) {
       const room = kit.rooms[kind].name.toLowerCase()
-      return { ops: [], reply: `This plan holds up to ${cap} ${room}s${kind === 'bed' || kind === 'bath' ? ' on this lot' : ''}; it has ${have}. Ask for ${Math.max(0, cap - have)} more at most.`, confidence: 0.6 }
+      const left = Math.max(0, cap - have)
+      // round 9, item 11: a full plan says so, not "ask for 0 more"
+      const reply = left === 0 ? `This plan already has the most ${room}s this lot holds (${cap}).` : `This plan holds up to ${cap} ${room}s${kind === 'bed' || kind === 'bath' ? ' on this lot' : ''}; it has ${have}. Ask for ${left} more at most${left === 1 ? ' (one)' : ''}.`
+      return { ops: [], reply, confidence: 0.6 }
     }
     const ops = Array.from({ length: Math.max(1, Math.min(count, 4)) }, () => ({ op: 'add', kind, ...(near ? { near } : {}) }))
     return { ops, reply: `Adding ${count > 1 ? `${count} ${kit.rooms[kind].name.toLowerCase()}s` : `${/^[aeiou]/i.test(kit.rooms[kind].name) ? 'an' : 'a'} ${kit.rooms[kind].name.toLowerCase()}`}${near ? ' next to the ' + roomsOnly.find((r) => r.id === near).name.toLowerCase() : ''}.`, confidence: 0.7 }

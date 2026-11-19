@@ -661,6 +661,12 @@ export function auditPlan(rooms, program, kit, lot) {
     const counted = solidSf + porchSf + (rules.coverageIncludesImpervious ? flatSf : 0)
     measures.coverage = { footprintSf: Math.round(solidSf + porchSf), flatworkSf: Math.round(flatSf), countedSf: Math.round(counted), lotSf: Math.round(lot.areaSf), pct: Math.round((counted / lot.areaSf) * 1000) / 10, maxPct: Math.round(maxCov * 100), includesImpervious: !!rules.coverageIncludesImpervious }
     if (counted > lot.areaSf * maxCov + 1) tell('coverage', 'error', `The house${rules.coverageIncludesImpervious ? ', driveway and walk' : ' and porches'} cover ${Math.round((counted / lot.areaSf) * 100)}% of the lot (${Math.round(counted).toLocaleString()} of ${Math.round(lot.areaSf).toLocaleString()} sf); ${lot.cityName || 'the city'} allows ${Math.round(maxCov * 100)}%${rules.coverageIncludesImpervious ? ', counting paving' : ''}.`, cite('maxCoverage'))
+    // a separate impervious-cover cap where the city has one (Edinburg's 60%, round 9, item 14): house, porches, driveway and walks
+    if (rules.imperviousMax) {
+      const imp = solidSf + porchSf + flatSf
+      measures.impervious = { sf: Math.round(imp), pct: Math.round((imp / lot.areaSf) * 1000) / 10, maxPct: Math.round(rules.imperviousMax * 100) }
+      if (imp > lot.areaSf * rules.imperviousMax + 1) tell('impervious', 'error', `The house, porches, driveway and walk pave ${Math.round((imp / lot.areaSf) * 100)}% of the lot (${Math.round(imp).toLocaleString()} of ${Math.round(lot.areaSf).toLocaleString()} sf); ${lot.cityName || 'the city'} allows ${Math.round(rules.imperviousMax * 100)}% impervious cover.`, cite('imperviousMax'))
+    }
     // height: plates per story plus the roof rise over half the narrowest house depth; the drafter checks the real ridge
     const stories = program?.stories || 1
     const plate = K.plates?.default || 9
@@ -895,7 +901,7 @@ export const CHECK_GROUPS = [
   { id: 'kitchen', name: 'Kitchen work triangle 15 to 22 ft (26 at most), aisles 42"', ids: ['triangle', 'aisle'] },
   { id: 'area', name: 'Living area within 3% of the request', ids: ['area'] },
   { id: 'west', name: 'West glass over 40 sf shaded', ids: ['west-glass'] },
-  { id: 'lot', name: 'Lot rules: coverage, height, zoning, garage door off the street line, flood zone, today\'s minimum lot, a recorded plat', ids: ['coverage', 'height', 'min-lot', 'unplatted', 'zoning', 'garage-setback', 'flood'] },
+  { id: 'lot', name: 'Lot rules: coverage, impervious cover, height, zoning, garage door off the street line, flood zone, today\'s minimum lot, a recorded plat', ids: ['coverage', 'impervious', 'height', 'min-lot', 'unplatted', 'zoning', 'garage-setback', 'flood'] },
 ]
 export function auditSummary(rooms, program, kit, lot) {
   const a = auditPlan(rooms, program, kit, lot)

@@ -1,7 +1,7 @@
 {
  "synthetic": true,
- "builtFrom": "the live lookups quoted in the round-7 brief (edges, area, legal, ids) with stand-in coordinates and attributes; the parcel, flood and zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
- "recordedAt": "2026-11-18",
+ "builtFrom": "the live lookups in the round-7 brief and the round-9 review (ids, legals, edges, areas, the flood panels FEMA answered on Nov 19, 2026) with stand-in coordinates; the county parcel and city zoning services are not reachable from the build machine. Re-record with LIVE=1 node scripts/make-parcel-fixtures.mjs.",
+ "recordedAt": "2026-11-19",
  "slug": "kerria-1201-mcallen",
  "address": "1201 Kerria Ave, McAllen, TX 78501",
  "county": "Hidalgo County",
@@ -57,12 +57,10 @@
   {
    "type": "Feature",
    "properties": {
-    "prop_id": "255056",
+    "prop_id": 255056,
     "geo_id": "P2500-00-004-0007-00",
     "legal_desc": "PALMS LOT 7 BLK 4",
-    "situs": "1201 KERRIA AVE, MCALLEN TX",
-    "owner_name": "REDACTED",
-    "owner_addr": "REDACTED"
+    "situs": "1201 KERRIA AVE, MCALLEN TX"
    },
    "geometry": {
     "type": "Polygon",
@@ -95,12 +93,10 @@
   {
    "type": "Feature",
    "properties": {
-    "prop_id": "255057",
+    "prop_id": 255057,
     "geo_id": "P2500-00-004-0008-00",
     "legal_desc": "PALMS LOT 8 BLK 4",
-    "situs": "1205 KERRIA AVE, MCALLEN TX",
-    "owner_name": "REDACTED",
-    "owner_addr": "REDACTED"
+    "situs": "1205 KERRIA AVE, MCALLEN TX"
    },
    "geometry": {
     "type": "Polygon",
@@ -132,25 +128,10 @@
   }
  ],
  "nfhl": {
-  "0": [
-   {
-    "DFIRM_ID": "48215C",
-    "STUDY_TYP": "NP",
-    "EFF_DATE": 1552953600000
-   }
-  ],
+  "0": [],
+  "1": [],
   "3": [],
-  "21": [],
-  "28": [
-   {
-    "FLD_ZONE": "X",
-    "ZONE_SUBTY": "AREA OF MINIMAL FLOOD HAZARD",
-    "SFHA_TF": "F",
-    "STATIC_BFE": -9999,
-    "DFIRM_ID": "48215C",
-    "FLD_AR_ID": "48215C_1"
-   }
-  ],
+  "28": [],
   "34": []
  },
  "zoning": {
