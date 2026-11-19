@@ -62,6 +62,8 @@ services:
         sync: false
       - key: REGRID_MONTHLY_CAP
         value: "1500"
+      - key: PARCEL_LOOKUPS_PER_10MIN  # round 9: per signed-in user; three times that per address; cache hits are free
+        value: "20"
       - key: ASCE_HAZARD_API_KEY     # round 7: dormant; the wind speed is a drafter lookup per city until this is set. Never commit a key.
         sync: false
       - key: CAD_POSTGIS             # round 7, item 12: "1" only once the monthly CAD import is agreed and loaded
