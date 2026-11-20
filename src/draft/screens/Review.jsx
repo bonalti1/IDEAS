@@ -46,7 +46,7 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || 'no address'} ·{' '}
+          {p.address || (p.lot?.plat?.name ? `no address, plat "${String(p.lot.plat.name).slice(0, 60)}"` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
@@ -64,6 +64,11 @@ function Row({ p, onOpen }) {
           </span>
         )}
         {p.lot?.spec?.confidence === 'pick' && !p.lot.spec.confirmed && <span className="pill ask">Parcel picked by hand</span>}
+        {(p.lot?.spec?.typedBy === 'homeowner' || p.lot?.plat?.unread) && !p.lot.spec.confirmed && (
+          <span className="pill stop" data-testid="row-plat-unread">
+            Plat not read
+          </span>
+        )}
         <span className={'pill ' + s.tone}>{s.label}</span>
         <span className="muted small">
           {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
@@ -462,8 +467,19 @@ export default function Review({ user }) {
               </h3>
               <p className="small">
                 {open.lot.spec.kind === 'parcel' ? `${open.lot.spec.legal || `Parcel ${open.lot.spec.propId}`}${open.lot.spec.geoId ? ` (geo id ${open.lot.spec.geoId})` : ''}, ${open.lot.spec.source?.name || 'county appraisal district'}${open.lot.spec.parcelFetchedAt ? `, fetched ${String(open.lot.spec.parcelFetchedAt).slice(0, 10)}` : ''}, matched by ${open.lot.spec.matchedBy || 'address'}. ` : open.lot.plat?.lotNumber ? `${open.lot.plat.lotNumber}${open.lot.plat.subdivision ? ', ' + open.lot.plat.subdivision : ''}. ` : ''}
-                {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind === 'plat' ? ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.` : ' The parcel map is advisory: check it against the recorded plat or the survey.'}
+                {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind !== 'plat' ? ' The parcel map is advisory: check it against the recorded plat or the survey.' : open.lot.spec.typedBy === 'homeowner' ? '' : ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.`}
               </p>
+              {/* round 14: a plat the office could not read. The outline is only what the homeowner typed off it. */}
+              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && (
+                <p className="warnline stopline" data-testid="plat-unread">
+                  Plat not read by the office. The homeowner typed {open.lot.spec.typed?.width} by {open.lot.spec.typed?.depth} ft from it: open the plat and check the outline before confirming.
+                </p>
+              )}
+              {open.lot.spec.kind === 'parcel' && open.lot.plat?.unread && (
+                <p className="fine warn" data-testid="plat-unread">
+                  The homeowner also sent a plat the office could not read: check the county outline against it.
+                </p>
+              )}
               <details className="more" data-testid="lot-calls">
                 <summary>The {open.lot.spec.calls?.length || 0} calls of the outline</summary>
               <ol className="list small">
@@ -479,7 +495,7 @@ export default function Review({ user }) {
               {open.lot.spec.platId && (
                 <p className="fine">
                   <a href={api.platUrl(open.lot.spec.platId)} target="_blank" rel="noreferrer">
-                    Open the plat PDF
+                    {open.lot.plat?.ext && open.lot.plat.ext !== 'pdf' ? 'Open the plat photo' : 'Open the plat PDF'}
                   </a>
                 </p>
               )}

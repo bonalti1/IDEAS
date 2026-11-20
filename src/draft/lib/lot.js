@@ -467,6 +467,43 @@ const labelFor = (edge, frontName) => {
  * setbacks that leave no buildable area, or a lot under the city's minimum. The Lot step shows the
  * last good lot while this is set, so a half-typed depth never blanks the page.
  */
+/**
+ * Round 14: a plat is on file but the office could not read it, so the homeowner typed the width and depth it shows.
+ * The lot is a plat lot, so a drafter confirms it against the file like any other plat, and its four calls are that
+ * rectangle (rear, right side, front, left side: the same corners as a typed lot, the street to the south). `typed`
+ * keeps what was typed so the lot step can show it again.
+ */
+export function platFromTyped(spec, plat) {
+  const W = +spec.width
+  const D = +spec.depth
+  const streets = []
+  if (spec.frontStreet) streets.push({ edge: 2, name: String(spec.frontStreet) })
+  if (spec.corner === 'left' || spec.corner === 'right') streets.push({ edge: spec.corner === 'right' ? 1 : 3, name: String(spec.sideStreet || ''), role: 'side' })
+  return {
+    kind: 'plat',
+    address: spec.address || '',
+    city: spec.city,
+    county: spec.county,
+    calls: [
+      { bearing: `N 90°00'00" E`, distance: W },
+      { bearing: `S 00°00'00" E`, distance: D },
+      { bearing: `N 90°00'00" W`, distance: W },
+      { bearing: `N 00°00'00" E`, distance: D },
+    ],
+    front: 2,
+    rear: 0,
+    streets,
+    frontStreet: spec.frontStreet || '',
+    setbacks: spec.setbacks || {},
+    ...(spec.noStreetGarage ? { noStreetGarage: true } : {}),
+    platId: plat?.platId || spec.platId || null,
+    confirmed: false,
+    readConfidence: 0,
+    typedBy: 'homeowner',
+    typed: { width: W, depth: D, frontStreet: spec.frontStreet || '', corner: spec.corner || '', sideStreet: spec.sideStreet || '' },
+  }
+}
+
 export function lotProblem(spec, lot, lang = 'en') {
   // round 13: the same sentences in Spanish for a homeowner who reads Spanish (the English ones are unchanged)
   if (lang === 'es') return lotProblemEs(spec, lot)

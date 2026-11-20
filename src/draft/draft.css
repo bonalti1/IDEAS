@@ -266,6 +266,14 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 /* what a drafter must check before confirming a lot (round 12): a yellow line */
 .warnline { background: #fdf5dc; border: 1px solid #e3b23c; border-radius: 8px; padding: 8px 10px; color: #7a5200; }
 .lot-view { background: #ebe9e5; overflow: auto; }
+/* round 14: nothing is drawn as the homeowner's lot before there is one */
+.lot-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.lot-wait p { max-width: 30ch; margin: 0; font-size: 15px; line-height: 1.5; color: var(--brand-muted); border: 1.5px dashed var(--brand-hair); border-radius: 12px; padding: 22px 20px; background: rgba(255, 255, 255, 0.5); }
+.add-address { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: end; margin: 2px 0 10px; }
+.add-address .field { margin: 0; }
+.add-address small { grid-column: 1 / -1; }
+.plat-saved { border-left: 3px solid var(--brand-brown); }
+.plat-saved h3 { margin-bottom: 4px; }
 .plat-preview { position: relative; width: 100%; height: 100%; overflow: auto; background: #d9d6d0; }
 .plat-preview canvas { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .plat-preview .plat-overlay { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 100%; max-width: 100%; height: auto; pointer-events: none; }

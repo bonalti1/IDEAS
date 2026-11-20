@@ -63,6 +63,9 @@ export const PLAT_SYSTEM = `You read recorded plats, surveys and site plans of r
 - pageBox is the box on the page that holds the lot drawing, as fractions from the top-left corner. northAngleDeg is the north arrow's direction, clockwise from straight up.
 - Confidence below 0.6 when bearings were inferred, text was hard to read, or the calls do not close.`
 
+/** A plat record as the browser gets it: what the reader cost the office, its token counts and the office's reason stay on the server. */
+const forClient = ({ usage, cost, ms, why, traverseError, ...rec }) => (rec.unread ? { platId: rec.platId, name: rec.name, ext: rec.ext, unread: true, at: rec.at } : rec)
+
 export const FEMA_DOWN = 'FEMA did not answer; the office checks the flood zone'
 export const CENSUS_DOWN = "the address service didn't answer; try again in a moment or type the lot in"
 const DIRS = { N: 'N', S: 'S', E: 'E', W: 'W', NE: 'NE', NW: 'NW', SE: 'SE', SW: 'SW', NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', NORTHEAST: 'NE', NORTHWEST: 'NW', SOUTHEAST: 'SE', SOUTHWEST: 'SW' }
@@ -182,26 +185,42 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
 
     /** A plat PDF → calls, streets, front, confidence; the PDF is kept for the drafter. */
     async readPlat({ name, data, page, mediaType }) {
-      if (!interpreter.configured) throw fail(503, 'the plat reader needs the office Claude key')
       if (!data) throw fail(400, 'file data required')
       const buf = Buffer.from(data, 'base64')
-      if (buf.length > 12 * 1024 * 1024) throw fail(413, 'file over 12 MB; export just the plat page')
+      if (buf.length > 12 * 1024 * 1024) throw fail(413, 'That file is over 12 MB. Send just the plat page, or a photo of it.')
       const isPdf = buf.subarray(0, 4).toString() === '%PDF'
       const isPng = buf[0] === 0x89 && buf.subarray(1, 4).toString() === 'PNG'
       const isJpg = buf[0] === 0xff && buf[1] === 0xd8
-      if (!isPdf && !isPng && !isJpg) throw fail(400, 'upload a PDF, PNG or JPEG')
+      if (!isPdf && !isPng && !isJpg) throw fail(400, 'That file is not a PDF or a photo. Upload a PDF, PNG or JPEG.')
       const type = isPdf ? 'application/pdf' : isPng ? 'image/png' : 'image/jpeg'
       const ext = isPdf ? 'pdf' : isPng ? 'png' : 'jpg'
       const platId = 'plat_' + crypto.randomBytes(5).toString('hex')
+      const label = String(name || platId).slice(0, 120)
       await files.putRaw(`plats/${platId}.${ext}`, buf, type)
-      const out = await interpreter.parseDocument({
-        data,
-        mediaType: type,
-        system: PLAT_SYSTEM,
-        prompt: `Read the lot boundary from this ${name || 'plat'}${page ? `, page ${page}` : ''}. Return the calls, streets, front side, setbacks printed on it, the page box and north direction.`,
-        schema: PLAT_SCHEMA,
-        maxTokens: 3000,
-      })
+      // round 14: a plat the office cannot read right now (no reader key on this server, the reader failed, or it
+      // found no outline) is KEPT for the drafter and the homeowner keeps going; the homeowner never sees why in
+      // office words. `why` is for the office: 'no-reader' | 'reader-failed' | 'no-outline'.
+      const keep = async (why, detail, extra = {}) => {
+        const rec = { platId, name: label, ext, ...extra, unread: true, why, at: now() }
+        await store.meta.set(`plat:${platId}`, rec)
+        await event('design', `plat "${label}" saved, not read (${detail}): the homeowner finds the lot by address or types its size, and the drafter draws it from the file`)
+        return forClient(rec)
+      }
+      if (!interpreter.configured) return keep('no-reader', 'the plat reader has no Claude key on this server: set DRAFTHOUSE_CLAUDE_KEY')
+      let out
+      try {
+        out = await interpreter.parseDocument({
+          data,
+          mediaType: type,
+          system: PLAT_SYSTEM,
+          prompt: `Read the lot boundary from this ${name || 'plat'}${page ? `, page ${page}` : ''}. Return the calls, streets, front side, setbacks printed on it, the page box and north direction.`,
+          schema: PLAT_SCHEMA,
+          maxTokens: 3000,
+        })
+      } catch (e) {
+        if (e?.code === 'DH_NETWORK_GUARD') throw e
+        return keep('reader-failed', `the reader did not answer: ${String(e?.message || e).slice(0, 120)}`)
+      }
       let closure = null
       let areaSf = null
       let error = null
@@ -212,10 +231,15 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       } catch (e) {
         error = e.message
       }
-      const rec = { platId, name, ext, ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms, at: now() }
+      // what the reader found is kept for the drafter even when it is no outline (fewer than three sides, or sides
+      // that do not join up): the homeowner is not shown a lot that cannot be drawn
+      if (!(Array.isArray(out.calls) && out.calls.length >= 3) || error || !(areaSf > 0)) {
+        return keep('no-outline', `the reader found ${out.calls?.length || 0} sides${error ? ` that do not join up (${String(error).slice(0, 80)})` : ''}, $${(out.cost || 0).toFixed(3)}`, { ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms })
+      }
+      const rec = { platId, name: label, ext, ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms, at: now() }
       await store.meta.set(`plat:${platId}`, rec)
-      await event('design', `plat "${name || platId}" read: ${out.calls?.length || 0} calls, ${areaSf ? `${areaSf.toLocaleString()} sf` : 'does not traverse'}, confidence ${Math.round((out.confidence || 0) * 100)}%, $${(out.cost || 0).toFixed(3)}`)
-      return rec
+      await event('design', `plat "${label}" read: ${out.calls?.length || 0} calls, ${areaSf ? `${areaSf.toLocaleString()} sf` : 'does not traverse'}, confidence ${Math.round((out.confidence || 0) * 100)}%, $${(out.cost || 0).toFixed(3)}`)
+      return forClient(rec)
     },
     async plat(platId) {
       return store.meta.get(`plat:${platId}`)
@@ -252,7 +276,7 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       }
       const table = await this.table()
       let rec
-      if (!match) rec = { v: 2, address: a, found: false, note: 'The Census geocoder did not find this address. Check the street number and the city, or type the lot in.', at: now() }
+      if (!match) rec = { v: 2, address: a, found: false, note: 'We could not find this address. Check the street number and the city, or type the lot in.', at: now() }
       else {
         const c = match.addressComponents || {}
         const title = (t) => String(t || '').replace(/\b\w+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
@@ -321,7 +345,7 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       const a = String(address || '').trim()
       if (a.length < 6) throw fail(400, 'address required')
       const geo = await this.geocode(a)
-      if (!geo.found) return { address: a, matched: null, status: 'no-address', zone: null, sfha: null, note: 'The Census geocoder did not find this address. Try the full street address with the city.', at: now() }
+      if (!geo.found) return { address: a, matched: null, status: 'no-address', zone: null, sfha: null, note: 'We could not find this address. Try the full street address with the city.', at: now() }
       return this.floodAt({ lat: geo.lat, lon: geo.lon, address: a, matched: geo.matched, where: 'the street point in front of the lot (no parcel yet)' })
     },
 
