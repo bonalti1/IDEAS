@@ -92,8 +92,11 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
   const checkout = await fetch(base + '/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json', ...heads.user }, body: JSON.stringify({ pack: 'pack5' }) })
   assert.equal(checkout.status, 404)
   const plat = await fetch(base + '/api/lot/plat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') }) })
-  assert.equal(plat.status, 503)
-  assert.match((await plat.json()).error, /the plat reader needs the office Claude key/)
+  // round 14: a plat the office cannot read is kept for the drafter, not refused with the office's reason
+  assert.equal(plat.status, 200)
+  const kept = await plat.json()
+  assert.equal(kept.unread, true)
+  assert.doesNotMatch(JSON.stringify(kept), /Claude|key/i)
   assert.equal(long.status, 400)
   assert.match(results[results.length - 1].text, /too long/)
 })

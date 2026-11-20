@@ -237,8 +237,10 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
   const m = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen' })
   const prj2 = await (await ana.post('/api/projects', { lot: m, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, m) })).json()
   assert.equal((await maria.post(`/api/review/${prj2.id}/lot`, { confirmed: true })).status, 409)
-  // without the Claude key the plat reader says so
-  assert.equal((await ana.post('/api/lot/plat', { name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') })).status, 503)
+  // without the Claude key the plat is kept for the drafter and the homeowner goes on (round 14; it was a 503 naming the key)
+  const kept = await ana.post('/api/lot/plat', { name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') })
+  assert.equal(kept.status, 200)
+  assert.equal((await kept.json()).unread, true)
 })
 
 test('live: Claude reads the Garza site plan and FEMA answers for its address', { skip: !process.env.LIVE && 'set LIVE=1 (needs the Claude key and the internet)' }, async (t) => {

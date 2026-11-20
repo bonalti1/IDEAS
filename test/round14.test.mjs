@@ -17,6 +17,7 @@ import path from 'node:path'
 import { chromePath, startPreview, appContext, spawnGroup, freePort, shotDir } from './browser.mjs'
 import { buildLot, platFromTyped, lotProblem } from '../src/draft/lib/lot.js'
 import { makeLots } from '../server/lots.mjs'
+import { edgeLabelOffset } from '../src/draft/lib/camera.js'
 import { fixtureEnv } from './server-env.mjs'
 
 const CHROME = chromePath()
@@ -71,6 +72,24 @@ test('1 and 3 (unit): a rectangle typed off an unread plat is a plat lot the dra
   assert.deepEqual(corner.edges.map((e) => e.kind), buildLot({ ...typed, corner: 'right', sideStreet: 'Mile 2 Rd' }).edges.map((e) => e.kind))
 })
 
+test('6 (unit): the words on a narrow side yard no longer sit on the property line', () => {
+  for (const text of [4, 5.2, 8]) {
+    // a strip wide enough holds its words between the two lines, clear of both by a quarter of the letters at least
+    for (const strip of [20, 25, 40].filter((st) => st >= text * 1.7)) {
+      const off = edgeLabelOffset(strip, text)
+      assert.ok(off - text / 2 >= 0 && off + text / 2 <= strip, `${strip} ft strip, ${text} ft letters: inside the strip (${off})`)
+    }
+    // a 5 or 6 ft side yard cannot: the words go outside the lot, clear of the red line (they used to straddle it)
+    for (const strip of [5, 6]) {
+      const off = edgeLabelOffset(strip, text)
+      assert.ok(off - text / 2 >= strip + text * 0.3, `${strip} ft strip, ${text} ft letters: outside the property line (${off})`)
+      const before = Math.max(2, text) // round 13: always this far out, whatever the strip
+      assert.ok(before - text / 2 < strip && before + text / 2 >= strip, 'before: the words reached or crossed the property line')
+    }
+  }
+  assert.ok(Number.isFinite(edgeLabelOffset(undefined, 4)))
+})
+
 test('2 and 5 (unit): the reader off, failing or finding no outline keeps the file and says so to the office only; a good read carries no cost to the browser', async () => {
   const run = async (interpreter) => {
     const store = memStore()
@@ -122,7 +141,7 @@ test('5 (unit): an address that is not found is said in plain words', async () =
 })
 
 test('2 and 4 (HTTP): with no reader key the upload is 200 and kept; the typed-off-the-plat lot is saved as a plat lot, waits in the drafter queue with its file, and the drafter confirms it', async (t) => {
-  const base = await startApi(t)
+  const base = await startApi(t, { PLAT_UPLOADS_PER_10MIN: '3' })
   const ana = await who(base, 'ana.r14@example.com', 'Ana Plat')
   const maria = await who(base, 'maria@drafthouse.test', 'Maria Drafter')
   const up = await ana.post('/api/lot/plat', { name: 'HLG20-099 SurveyPlat Lot 539.png', data: png() })
@@ -164,6 +183,14 @@ test('2 and 4 (HTTP): with no reader key the upload is 200 and kept; the typed-o
   assert.ok((over.events || []).some((e) => /saved, not read .*no Claude key/.test(e.text || e.message || JSON.stringify(e))), 'the office sees the reason')
   const again = await (await ana.get(`/api/projects/${prj.id}`)).json()
   assert.doesNotMatch(JSON.stringify(again), /no-reader|Claude key/)
+  // uploads are counted (found on the way: they were neither counted nor behind a sign-in): the fourth in ten
+  // minutes from one account waits, in a sentence; a refused file was not counted, and another account is not held up
+  for (let i = 0; i < 2; i++) assert.equal((await ana.post('/api/lot/plat', { name: `again-${i}.png`, data: png() })).status, 200)
+  const fourth = await ana.post('/api/lot/plat', { name: 'fourth.png', data: png() })
+  assert.equal(fourth.status, 429)
+  assert.match((await fourth.json()).error, /^Too many files at once\. Wait a few minutes and try again, or type the lot in\.$/)
+  const bea = await who(base, 'bea.r14@example.com', 'Bea Plat')
+  assert.equal((await bea.post('/api/lot/plat', { name: 'bea.png', data: png() })).status, 200)
 })
 
 const signIn = async (page, name, email) => {
@@ -333,4 +360,43 @@ test('screens at 1440 px: a plat with no reader, then the address typed on the l
   assert.ok(await p2.getByTestId('lot-next').isDisabled())
   await p2.locator('#lot-confirm').check()
   assert.ok(await p2.getByTestId('lot-next').isEnabled())
+})
+
+test('screens at 1440 px: a visitor without an account who types an address is told once, calmly, why nothing is looked up, with the way to sign in; no "(sign in first)" errors', { skip, timeout: 300000 }, async (t) => {
+  const appBase = await startPreview(t)
+  const apiBase = await startApi(t)
+  const { chromium } = await import('playwright-core')
+  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] })
+  t.after(() => browser.close())
+  const ctx = await appContext(browser, apiBase, { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
+  const page = await ctx.newPage()
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  const refused = []
+  page.on('response', (r) => {
+    if (r.url().includes('/api/lot/') && r.status() >= 400) refused.push(`${r.status()} ${new URL(r.url()).pathname}`)
+  })
+  await page.goto(appBase, { waitUntil: 'domcontentloaded' })
+  await page.locator('#signin-email').waitFor({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Try it without an account' }).click()
+  await page.locator('#start-address').waitFor({ timeout: 20000 })
+  const name = page.getByPlaceholder('First and last name')
+  if (await name.count()) await name.fill('Gil Guest')
+  await page.locator('#start-address').fill('1201 Kerria Ave, McAllen, TX 78501')
+  await page.getByRole('button', { name: 'Find my lot' }).click()
+  const line = page.getByTestId('guest-lookup')
+  await line.waitFor({ timeout: 30000 })
+  await page.waitForTimeout(2500)
+  const text = await page.locator('#root').innerText()
+  assert.doesNotMatch(text, /sign in first|Could not look the address up|Could not reach the county parcel map|could not be read/i)
+  assert.match(await line.innerText(), /Without an account we cannot find your lot on the county map or check the flood map\. Type the lot in or upload the plat\. Or sign in with your email, and we find it for you\./)
+  assert.deepEqual(refused, [], 'nothing is asked that the office would refuse')
+  await page.screenshot({ path: `${OUT}/8-no-account-one-calm-line-1440.png` })
+  // typing the lot in still works without an account
+  await page.locator('#lot-confirm').check()
+  assert.ok(await page.getByTestId('lot-next').isEnabled())
+  // and the way in is one tap: back to the first screen, where the sign-in is
+  await page.getByTestId('guest-sign-in').click()
+  await page.locator('#signin-email').waitFor({ timeout: 20000 })
+  assert.deepEqual(errors, [], 'no page errors')
 })

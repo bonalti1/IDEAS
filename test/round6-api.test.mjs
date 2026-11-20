@@ -74,14 +74,18 @@ test('a lot spec the office cannot build is refused at the door: 400 with a plai
 })
 
 test('a 5xx the code meant for the client keeps its words (round 8), is logged, and the server stays up (before round 6 any 5xx crashed it)', async (t) => {
-  const { base, log, alive } = await startServer(t)
+  const { base, log, alive } = await startServer(t, { DRAFTHOUSE_TEST_ROUTES: '1' })
   const ana = await who(base, 'ana@example.com', 'Ana Garza')
-  // the plat reader without a model is a 503 with a plain line of its own (billing is gone from the client, round 8)
-  const r = await j(await ana.post('/api/lot/plat', { name: 'plat.pdf', data: 'data:application/pdf;base64,JVBERi0xLjQK' }))
+  // a 503 the code meant keeps its plain line (billing is gone from the client, round 8)
+  const r = await j(await fetch(base + '/api/_test/boom?mode=own'))
   assert.equal(r.status, 503, JSON.stringify(r))
-  assert.match(r.body.error, /plat|interpreter|not set up|key/i)
+  assert.match(r.body.error, /the plat reader is resting/i)
   assert.ok(alive(), 'the server did not crash')
-  assert.match(log(), /\[api\] POST \/api\/lot\/plat → 503/, 'the detail is in the log')
+  assert.match(log(), /\[api\] GET \/api\/_test\/boom\?mode=own → 503/, 'the detail is in the log')
+  // round 14: the plat reader without a model is no longer one of them. The file is kept and the homeowner goes on
+  const p = await j(await ana.post('/api/lot/plat', { name: 'plat.pdf', data: 'JVBERi0xLjQK' }))
+  assert.equal(p.status, 200, JSON.stringify(p))
+  assert.equal(p.body.unread, true)
   const h = await fetch(base + '/api/health')
   assert.equal(h.status, 200)
 })

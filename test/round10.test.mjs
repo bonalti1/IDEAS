@@ -237,7 +237,7 @@ test('1: Armagoza and Curtis Clark as lots: the house faces the street, and the 
 
 test('1: the Lot view draws the parcel even when the setbacks leave no room, marks it red and says why (source check)', () => {
   const lotJsx = fs.readFileSync('src/draft/screens/Lot.jsx', 'utf8')
-  assert.match(lotJsx, /const drawAnyway = built && \(spec\.kind === 'parcel' \|\| spec\.kind === 'plat'\)/)
+  assert.match(lotJsx, /const drawAnyway = built && \(built\.kind === 'parcel' \|\| built\.kind === 'plat'\)/)
   assert.match(lotJsx, /const shown = lot \|\| \(drawAnyway \? built : lastGood\.current\)/, 'a parcel never falls back to the previous lot')
   assert.match(lotJsx, /lotProblem=\{problem && drawAnyway/)
   const site = fs.readFileSync('src/components/SitePlan.jsx', 'utf8')

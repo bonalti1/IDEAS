@@ -124,7 +124,10 @@ const plain = (err, wrap, say = (s) => s) => {
   return s[0].toUpperCase() + s.slice(1) + '.'
 }
 
-export default function Lot({ intake, lot: saved, onNext, onBack }) {
+export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
+  // round 14: the county map, the address service and the flood map answer only for an account. A visitor trying
+  // the app without one is told so once, in a line with the way in; they got "(sign in first)" three times.
+  const guest = !user
   const [table, setTable] = useState(cityTable())
   const [mode, setMode] = useState(saved?.spec?.kind === 'plat' ? 'plat' : saved?.spec?.kind === 'manual' ? 'manual' : saved?.spec?.kind === 'parcel' ? 'parcel' : intake?.file ? 'plat' : 'manual')
   // round 14: a homeowner who came with only a plat has no address yet (it used to be given another lot's name); it
@@ -227,7 +230,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   }
   // geocode the address for real: the city it is in, the street, and whether we build there
   useEffect(() => {
-    if (!address || geo || saved?.spec) return
+    if (!address || geo || saved?.spec || guest) return
     api
       .geocode(address)
       .then((g) => {
@@ -262,7 +265,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       }
     } catch (e) {
       // the server's own sentence when it gave one (too big, not a PDF or a photo); never a browser error like "Failed to fetch"
-      setReadErr(e.status === 400 || e.status === 413 ? e.message : e.status === 429 ? 'Too many files at once. Wait a minute and try again.' : 'We could not send the file just now. Check your connection and try again, or type the lot in.')
+      setReadErr(e.status === 400 || e.status === 413 || e.status === 429 ? e.message : t('We could not send the file just now. Check your connection and try again, or type the lot in.'))
     }
     setReading(false)
   }
@@ -308,7 +311,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
   return (
     <div className="screen split">
-      <div className="viewport lot-view">
+      <div className={'viewport lot-view' + (noLotYet ? ' waiting' : '')}>
         {noLotYet ? (
           <div className="lot-wait" data-testid="lot-wait">
             <p>{reading ? t('Reading your plat…') : fromPlat ? t('Type the width and depth from your plat, and your lot is drawn here.') : t('Your lot is drawn here once we have your plat.')}</p>
@@ -333,8 +336,8 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       </div>
       <aside className="side lot-side">
         <h2>{t('Your lot')}</h2>
-        {address ? (
-          <p className="muted small">{address}</p>
+        {address || guest ? (
+          <p className="muted small">{address || t('No address yet.')}</p>
         ) : (
           <form
             className="add-address"
@@ -347,7 +350,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           >
             <label className="field">
               <span>{t('Street address, if the lot has one')}</span>
-              <input id="lot-address" placeholder="1300 W Nolana Ave, McAllen, TX" value={addressDraft} onChange={(e) => setAddressDraft(e.target.value)} />
+              <input id="lot-address" placeholder={t('Number, street and city')} value={addressDraft} onChange={(e) => setAddressDraft(e.target.value)} />
             </label>
             <Button small ghost type="submit" disabled={!(addressDraft.trim().length >= 8 && /\d/.test(addressDraft) && /\s/.test(addressDraft.trim()))} data-testid="add-address-go">
               {t('Look it up')}
@@ -394,7 +397,15 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           </div>
         )}
         {geo && !geo.found && <p className="fine warn">{say(geo.note)}</p>}
-        {!geo && address && !geoErr && !saved?.spec && <p className="fine">{t('Looking the address up…')}</p>}
+        {!geo && address && !geoErr && !saved?.spec && !guest && <p className="fine">{t('Looking the address up…')}</p>}
+        {guest && address && !saved?.spec && (
+          <p className="fine warn" data-testid="guest-lookup">
+            {t('Without an account we cannot find your lot on the county map or check the flood map. Type the lot in or upload the plat. Or sign in with your email, and we find it for you.')}{' '}
+            <button className="linkish" onClick={onBack} data-testid="guest-sign-in">
+              {t('Sign in')}
+            </button>
+          </p>
+        )}
         {geoErr && <p className="fine warn">{t('Could not look the address up ({error}). Pick the city yourself.', { error: say(geoErr) })}</p>}
         {/* round 7: the parcel from the county appraisal district, offered before anything is typed */}
         {address && !saved?.spec && parcelBusy && !parcel && <p className="fine">{t('Looking the lot up at the county appraisal district…')}</p>}
@@ -492,7 +503,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             <p className="small">
               {spec.kind === 'parcel'
                 ? t('We could not read it automatically this time. Your lot from the county map is used for now, and the drafter checks it against your plat.')
-                : address
+                : address || guest
                   ? t('We could not read it automatically this time, so a drafter draws your exact lot from it. To keep going now, type the width and depth printed on the plat.')
                   : t('We could not read it automatically this time, so a drafter draws your exact lot from it. To keep going now, add your street address above so we can find the lot on the county map, or type the width and depth printed on the plat.')}
             </p>
@@ -636,7 +647,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
             <Stat k={t('Lot area')} v={sf(lot.areaSf)} />
             <Stat k={t('Buildable area')} v={sf(lot.envelopeSf)} />
             <Stat k={t('Max coverage')} v={`${coverLine} · ${sf(lot.areaSf * cover)}`} />
-            <Stat k={t('Flood zone')} v={flood ? (flood.status === 'no-digital-firm' ? t('no digital FEMA map here · the county decides') : flood.zone ? `${flood.zone}${flood.sfha ? ` · ${t('special flood hazard area')}` : flood.status === 'shaded-x' ? ` · ${t('0.2% flood area')}` : ` · ${t('outside the 1% flood area')}`}${flood.where && /street/.test(flood.where) ? ` ${t('(at the street; the parcel point once the lot is picked)')}` : ''}` : flood.status === 'no-address' ? t('not found for this address') : t('no zone polygon at this point')) : floodErr ? t('FEMA did not answer · the office checks') : addressHeld ? t('after the address is settled') : address ? t('checking FEMA…') : '—'} />
+            <Stat k={t('Flood zone')} v={flood ? (flood.status === 'no-digital-firm' ? t('no digital FEMA map here · the county decides') : flood.zone ? `${flood.zone}${flood.sfha ? ` · ${t('special flood hazard area')}` : flood.status === 'shaded-x' ? ` · ${t('0.2% flood area')}` : ` · ${t('outside the 1% flood area')}`}${flood.where && /street/.test(flood.where) ? ` ${t('(at the street; the parcel point once the lot is picked)')}` : ''}` : flood.status === 'no-address' ? t('not found for this address') : t('no zone polygon at this point')) : floodErr ? t('FEMA did not answer · the office checks') : addressHeld ? t('after the address is settled') : guest ? t('the drafter checks') : address ? t('checking FEMA…') : '—'} />
             {zoning?.status === 'found' && <Stat k={t('Zoning')} v={`${zoning.district} · ${say(zoning.use)}`} />}
           </div>
         )}

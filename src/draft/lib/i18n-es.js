@@ -192,6 +192,8 @@ export const es = {
   '(a drafter checks these)': '(un dibujante los revisa)',
   // round 14: a plat on file that could not be read, and a lot that came with no address
   'Reading your plat…': 'Leyendo tu plat…',
+  'Without an account we cannot find your lot on the county map or check the flood map. Type the lot in or upload the plat. Or sign in with your email, and we find it for you.': 'Sin una cuenta no podemos buscar tu lote en el mapa del condado ni revisar el mapa de inundación. Escribe las medidas del lote o sube el plat. O entra con tu correo, y lo buscamos por ti.',
+  'the drafter checks': 'lo revisa el dibujante',
   'Type the width and depth from your plat, and your lot is drawn here.': 'Escribe el ancho y el fondo que marca tu plat, y aquí se dibuja tu lote.',
   'Your lot is drawn here once we have your plat.': 'Aquí se dibuja tu lote en cuanto tengamos tu plat.',
   'Street address, if the lot has one': 'Dirección, si el lote tiene una',
@@ -205,7 +207,8 @@ export const es = {
   'Type the width and depth from your plat first': 'Primero escribe el ancho y el fondo de tu plat',
   'Upload the plat first, or type the lot in': 'Primero sube el plat, o escribe el lote',
   'Add the address too if the lot has one. With it we find the lot on the county map and check the flood map.': 'Agrega también la dirección si el lote tiene una. Con ella encontramos el lote en el mapa del condado y revisamos el mapa de inundación.',
-  'Too many files at once. Wait a minute and try again.': 'Demasiados archivos a la vez. Espera un minuto e inténtalo de nuevo.',
+  'Too many files at once. Wait a few minutes and try again, or type the lot in.': 'Demasiados archivos a la vez. Espera unos minutos e inténtalo de nuevo, o escribe el lote.',
+  'Number, street and city': 'Número, calle y ciudad',
   'We could not send the file just now. Check your connection and try again, or type the lot in.': 'No pudimos enviar el archivo en este momento. Revisa tu conexión e inténtalo de nuevo, o escribe el lote.',
   'That file is over 12 MB. Send just the plat page, or a photo of it.': 'Ese archivo pesa más de 12 MB. Envía solo la página del plat, o una foto.',
   'That file is not a PDF or a photo. Upload a PDF, PNG or JPEG.': 'Ese archivo no es un PDF ni una foto. Sube un PDF, PNG o JPEG.',

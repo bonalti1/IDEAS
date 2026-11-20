@@ -5,6 +5,7 @@ import { STREET_WIDTH_ILLUSTRATIVE } from '../data/survey.js'
 import { DEFAULT_LOT } from '../draft/lib/lot.js'
 import { offsetPolyline, stripPositions, polylinePoint } from '../lib/geometry.js'
 import { FlatLabel } from './labels.jsx'
+import { edgeLabelOffset } from '../draft/lib/camera.js'
 
 export const COLORS = {
   bg: '#dfe2e6',
@@ -54,8 +55,10 @@ function PropertyLine({ lot }) {
 }
 
 // the label of the lot edge nearest a point (arcs make more envelope edges than lot edges)
-function nearestLabel(lot, p) {
+// with how wide that edge's open strip is
+function nearestEdge(lot, p) {
   let best = ''
+  let setback = null
   let bd = Infinity
   lot.corners.forEach((a, i) => {
     const b = lot.corners[(i + 1) % lot.corners.length]
@@ -65,9 +68,10 @@ function nearestLabel(lot, p) {
     if (d < bd) {
       bd = d
       best = lot.edges?.[i]?.label || lot.envelopeLabels?.[i] || ''
+      setback = lot.edges?.[i]?.setback ?? null
     }
   })
-  return best
+  return { label: best, setback }
 }
 
 function SetbackEnvelope({ lot, textScale = 1 }) {
@@ -89,7 +93,10 @@ function SetbackEnvelope({ lot, textScale = 1 }) {
         const nz = bx - ax
         const l = Math.hypot(nx, nz)
         const toC = (C[0] - (ax + bx) / 2) * nx + (C[1] - (az + bz) / 2) * nz
-        const s = (toC > 0 ? -1 : 1) * Math.max(2, 4 * textScale)
+        // round 14: in a strip narrower than the words (a 5 ft side yard) they sat on the red property line; there
+        // the label goes just outside the lot
+        const edge = nearestEdge(lot, [(ax + bx) / 2, (az + bz) / 2])
+        const s = (toC > 0 ? -1 : 1) * edgeLabelOffset(edge.setback, 4 * textScale)
         return (
           <FlatLabel
             key={i}
@@ -99,7 +106,7 @@ function SetbackEnvelope({ lot, textScale = 1 }) {
             size={4 * textScale}
             color={COLORS.setback}
           >
-            {nearestLabel(lot, [(ax + bx) / 2, (az + bz) / 2])}
+            {edge.label}
           </FlatLabel>
         )
       })}

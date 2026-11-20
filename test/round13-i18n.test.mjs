@@ -236,7 +236,6 @@ const ALLOWED = [
   ['src/draft/TrustBlock.jsx', 'STB', 'the builder\'s initials'],
   // data, not words
   ['src/draft/DraftApp.jsx', 'Rooms changed', 'the note saved with a version at the office (data, English); the history shows it through the plan\'s sentences'],
-  ['src/draft/screens/Start.jsx', 'Lot 514, Villa-Rama East Phase V', 'the legal name of the demo lot, used as an address when only a plat is uploaded'],
   ['src/draft/screens/SignIn.jsx', 'Sign in', 'the default title; every homeowner caller passes its own through t(...), the office gate passes "Office sign-in"'],
   ['src/draft/screens/Lot.jsx', /^\$\{\} R \$\{\}' \$\{\}$|^L \$\{\}'$/, 'a curve as the plat writes it: R 50\' L 31.4\''],
   ['src/draft/screens/Program.jsx', /^(no Worker|worker failed|no worker)$/, 'reasons the fit check falls back to the page; caught, never shown'],

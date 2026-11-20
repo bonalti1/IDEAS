@@ -461,6 +461,7 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
         )}
         {!office && step === 1 && (
           <Lot
+            user={user}
             intake={intake}
             lot={lot}
             onNext={(l) => {

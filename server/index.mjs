@@ -75,7 +75,7 @@ async function health() {
     { id: 'db', name: 'Database', ok: db.ok, detail: db.detail, at: now() },
     { id: 'store', name: 'File store', ok: fstore.ok, detail: fstore.detail, at: now() },
     { id: 'queue', name: 'Job queue', ok: q.stuck === 0, detail: `${q.queued} queued, ${q.running} running${q.stuck ? `, ${q.stuck} stuck` : ''}`, at: now() },
-    { id: 'interpreter', name: 'Change interpreter', ...interpreter.describe(), at: now() },
+    { id: 'interpreter', name: 'Chat and plat reader', ...interpreter.describe(), at: now() },
     { id: 'worker', name: 'Revit worker', ok: workers.some((w) => w.online), detail: workers.length ? workers.map((w) => `${w.name}: ${w.online ? 'online' : 'offline'}`).join(', ') : 'none registered', at: now() },
     { id: 'auth', name: 'API keys', ...auth.describe(), at: now() },
     { id: 'accounts', name: 'Client accounts', ...users.describe(), at: now() },
@@ -230,7 +230,20 @@ route('POST', '/api/projects/:id/call-me', 'user', async (req, res, p, ctx) => {
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
 route('PUT', '/api/admin/cities/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await lots.setCity(p.id, await readJson(req, {}), ctx.user), req))
-route('POST', '/api/lot/plat', 'app', async (req, res) => json(res, 200, await lots.readPlat(await readJson(req, { name: 'string?', data: 'string' })), req))
+// round 14: a plat upload is kept (and read, when the reader is on) for anyone with the app, signed in or not, so
+// it is counted: 8 per ten minutes for an account, 20 for one address, 30 for everyone without an account together.
+// PLAT_UPLOADS_PER_10MIN moves the per-account number (the others follow it).
+const PLATS_PER_WINDOW = Math.max(1, +(process.env.PLAT_UPLOADS_PER_10MIN || 8))
+const platUploads = makeWindow({ windowMs: 600000, limitFor: (key) => (key.includes(':u:anon') ? PLATS_PER_WINDOW * 4 : key.includes(':ip:') ? Math.ceil(PLATS_PER_WINDOW * 2.5) : PLATS_PER_WINDOW) })
+setInterval(() => platUploads.prune(), 600000).unref()
+route('POST', '/api/lot/plat', 'app', async (req, res, p, ctx) => {
+  const keys = lookupKeys(req, ctx, 'plat')
+  if (keys.some((k) => platUploads.left(k) <= 0)) return json(res, 429, { error: 'Too many files at once. Wait a few minutes and try again, or type the lot in.', retryAfterS: 600 }, req)
+  const body = await readJson(req, { name: 'string?', data: 'string' })
+  const rec = await lots.readPlat(body)
+  keys.forEach((k) => platUploads.count(k))
+  json(res, 200, rec, req)
+})
 route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
   const rec = await lots.plat(safe(p.id))
   const ext = rec?.ext || 'pdf'

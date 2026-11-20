@@ -596,6 +596,10 @@ details.more.card > summary { font-weight: 600; }
 @media (max-width: 600px) {
   .screen.split > .side { flex: 0 0 auto; overflow: visible; }
   .screen.split > .viewport.lot-view { flex: 0 0 52vh; min-height: 360px; }
+  /* round 14: with no lot to draw yet, the empty drawing does not push the fields off a phone's first screen */
+  .screen.split > .viewport.lot-view.waiting { flex: 0 0 150px; min-height: 150px; }
+  .lot-wait { padding: 12px 16px; }
+  .lot-wait p { padding: 14px 16px; font-size: 14px; max-width: none; }
   .tabs button, .tabs.small button { min-height: 40px; padding: 10px 12px; }
   .tabs { flex-wrap: wrap; overflow-x: visible; }
   .viewport-views { gap: 6px; padding: 6px; }
