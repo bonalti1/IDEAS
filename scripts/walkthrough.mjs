@@ -134,7 +134,7 @@ async function homeowner(lot, size, signOutMidway) {
         await page.waitForTimeout(2500)
       }
       const first = await step('02-lot-found', t)
-      run.note = [run.note, run.platRead ? 'the plat was read: ' + (first.match(/\d+ (calls|llamadas)[^.]*\./)?.[0] || '') : run.platSaved ? 'the plat was saved for the drafter, not read' : 'the plat was neither read nor saved'].filter(Boolean).join(' | ')
+      run.plat = [run.plat, run.platRead ? 'the plat was read: ' + (first.match(/\d+ (calls|llamadas)[^.]*\./)?.[0] || '') : run.platSaved ? 'the plat was saved for the drafter, not read' : 'the plat was neither read nor saved'].filter(Boolean).join(' | ')
       if (/Lot 514|Villa-Rama|Claude|Census geocoder/i.test(first)) run.badWords.push('02-lot-found: office words or another lot on the lot step')
       if (run.platSaved) {
         run.nextOffBeforeNumbers = await page.getByTestId('lot-next').isDisabled()

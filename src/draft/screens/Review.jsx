@@ -46,7 +46,7 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || (p.lot?.plat?.name ? `no address, plat "${String(p.lot.plat.name).slice(0, 60)}"` : 'no address')} ·{' '}
+          {p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat?.name ? `no address, plat "${String(p.lot.plat.name).slice(0, 60)}"` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
@@ -275,7 +275,7 @@ export default function Review({ user }) {
                     <div className="check-row">
                       <span>
                         <b>The lot matches the plat or deed.</b>{' '}
-                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : 'Read from the plat: compare the calls with the plat.'}
+                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : spec.typedBy === 'homeowner' ? `Plat not read by the office: the homeowner typed ${spec.typed?.width} by ${spec.typed?.depth} ft from it. Open the plat and check the outline.` : 'Read from the plat: compare the calls with the plat.'}
                       </span>
                       {own && !spec.confirmed && (
                         <Button small primary disabled={busy} onClick={() => confirmLot(true)} data-testid="check-confirm-lot">

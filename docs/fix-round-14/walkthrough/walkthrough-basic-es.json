@@ -1,0 +1,876 @@
+{
+ "mode": "basic",
+ "at": "2026-11-20T03:56:17.745Z",
+ "runs": [
+  {
+   "lot": "normal",
+   "what": "a normal lot",
+   "size": "1440",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1206,
+     "file": "walk-basic-es-1440-normal-01-start.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer1@example.com SALIR DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → ¿DÓNDE ESTÁ EL LOTE? DIRECCIÓN O Sube el deslinde (survey) o el plat · PDF o foto BUSCAR MI LOTE Leemos el plat, buscamos las reglas de la ciudad y dibujamos el espacio donde puedes construir. Todavía no se envía nada a un dibujante."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 6971,
+     "file": "walk-basic-es-1440-normal-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. ¿ESTE ES TU LOTE? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: Hidalgo County Appraisal District via RGV911, consultado el 2026-11-20. El mapa de lotes es solo una guía: un dibujante lo compar"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-basic-es-1440-normal-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: Hidalgo County Appraisal District via RGV911, consultado el 2026-11-20. El mapa de lotes es solo una gu"
+    },
+    {
+     "label": "04-style",
+     "ms": 859,
+     "file": "walk-basic-es-1440-normal-04-style.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. FARMHOUSE MODERNO Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL HILL COUNTRY RANCHO CRAFTSMAN TRANSICIONAL TOSCANO MID-CENTURY COSTERO Farmhouse moderno ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 2530,
+     "file": "walk-basic-es-1440-normal-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 2 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pie"
+    },
+    {
+     "label": "06-signed-back-in-your-houses",
+     "ms": 1031,
+     "file": "walk-basic-es-1440-normal-06-signed-back-in-your-houses.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer1@example.com SALIR DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → TUS CASAS Farmhouse moderno 1201 Kerria Ave, McAllen, TX 78501 · hace 1 min LOTE GUARDADO, FALTA ELEGIR LOS CUARTOS EMPEZAR OTRA CASA DIRECCIÓN O Sube el deslinde (survey) o el plat · PDF o foto BUSCAR MI LOTE Leemos el plat, buscamos la"
+    },
+    {
+     "label": "07-resumed",
+     "ms": 1271,
+     "file": "walk-basic-es-1440-normal-07-resumed.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 2 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pie"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4574,
+     "file": "walk-basic-es-1440-normal-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIB"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-basic-es-1440-normal-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR W D REF 2-CAR GARAGE20'-6\" × 22'-0\" LIVING22'-3\" × 16'-6\" PRIMARY BEDROOM17'-9\" × 17'-9\" HALLWAY4'-9\" × 60'-3\" DINING20'-6\" × 13'-0\" BEDROOM 217'-9\" × 14'-3\" BEDROOM 320'-6\" × 12'-3\" BEDROOM 417'-9\" × 13'-0\" KITCHEN14'-0\" × 15'-3\" FRONT PORCH22'-3\" × 9'-6\" PRIMARY BATH10'-6\" × 11'-3\" LAUNDRY10'-6\" × 9'-6\" CLOSET12'-0\" × 6'-6\" PRIMARY CLOSET7'-3\" × 8'-3\" BATH 28'-6\" × 6'-6\" STORAGE6'-6\" × 8'-3\" CLOSET17'-9\" × 2'-9\" PANTRY6'-6\" × 7'-0\" DROP ZONE7'-3\" × 5'-0\" HALL7'-3\" × 4'-6\" CLOSET7'-3\" × 3'-0\" 22'-3\" 20'-6\" 42'-10\" 17'-8\" 4'-7\" 20'-5\" 42'-10\" 13'-0\" 2'-9\" 17'-8\" 11'-1\" 14'-1\" 9'-5\" 16'-6\" 84'-10\" 13'-0\" 8'-2\" 6'-11\" 12'-3\" 6'-6\" 22'-0\" 84'-10\" N 0' 5' 10' 20' graphic scale, feet WALK TESTER · 1201 KERRIA AVE, MCALLEN, TX 78501 FLOOR PLAN · MODERN FARMHOUSE · 4 "
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 3957,
+     "file": "walk-basic-es-1440-normal-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 3561,
+     "file": "walk-basic-es-1440-normal-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado Haz la cocina más grande Quita el porche de atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIA"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 2934,
+     "file": "walk-basic-es-1440-normal-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agreg"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 3114,
+     "file": "walk-basic-es-1440-normal-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal q"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 3087,
+     "file": "walk-basic-es-1440-normal-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal q"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-basic-es-1440-normal-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal qu"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 4083,
+     "file": "walk-basic-es-1440-normal-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal qu"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 3683,
+     "file": "walk-basic-es-1440-normal-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal qu"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-basic-es-1440-normal-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer1@example.com SALIR ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 2 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pie"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 5033,
+     "file": "walk-basic-es-1440-normal-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 2 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás. De vuelta a la versión 1. Hacer la cocina 1 pie más de largo La cocina ahora mide 14 por 16.25 pies (antes 14 por 15.25). Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAM"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2459,
+     "file": "walk-basic-es-1440-normal-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 1201 Kerria Ave, McAllen, TX 78501 Estilo Farmhouse moderno Cuartos 4 recámaras · 2 baños · cochera para 2 carros · 1 piso Área habitable 2,833 pies² Lo que pediste 4 recámaras · 2 baños · cochera para 2 carros · 1 piso · 2,800 pies² → se dibujó de 2,833 pies² para que quepa en el lote Porches 211 pies² Entrada de carros y banqueta 738 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS Hacer la cocina 1 pie más de largo Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, "
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 5626,
+     "file": "walk-basic-es-1440-normal-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer1@example.com SALIR Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocin"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero 4 recámaras",
+     "reply": "Este plano ya tiene 4 recámaras. No se usó ningún cambio.",
+     "buttons": [],
+     "ms": 2219,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Agregué un porche atrás. mismo tamaño · 1 cambio usado",
+     "buttons": [],
+     "ms": 1891,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "De vuelta a la versión 1. Se te devolvió 1 cambio.",
+     "buttons": [],
+     "ms": 1272,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo",
+     "buttons": [
+      "Hacer la cocina 1 pie más de largo"
+     ],
+     "ms": 1612,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "que se sienta más abierta",
+     "reply": "La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Quitar otras paredes o subir un techo no es algo que yo pueda dibujar desde aquí; coméntelo con la oficina. Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoja una opción abajo; solo se usa un cambio cuando usted escoge. Hacer la cocina 1 pie más de largo Hacer la sala más grande",
+     "buttons": [
+      "Hacer la cocina 1 pie más de largo",
+      "Hacer la sala más grande"
+     ],
+     "ms": 1543,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "haz la casa más chica pero agrega 2 recámaras",
+     "reply": "Una casa más chica y con más recámaras son dos deseos que jalan cada uno para su lado: cada recámara necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco. Este plano tiene 2,833 pies² con 4 recámaras. Una casa más chica con 5 recámaras no cabe en este lote con habitaciones de un tamaño que funcione. Lo que sí puedo hacer es dejar la casa más o menos del tamaño que tiene, con 5 recámaras. Toque el botón para verla; solo se usa un cambio cuando usted lo toca. Dejar la casa más o menos de este tamaño, con 5 recámaras",
+     "buttons": [
+      "Dejar la casa más o menos de este tamaño, con 5 recámaras"
+     ],
+     "ms": 2582,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "asdf",
+     "reply": "No le entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno. Agregar un porche atrás Dejar la cochera para 3 carros Agregar una recámara",
+     "buttons": [
+      "Agregar un porche atrás",
+      "Dejar la cochera para 3 carros",
+      "Agregar una recámara"
+     ],
+     "ms": 2175,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "askedAddress": false,
+   "houseListed": true,
+   "openTap": {
+    "button": "Hacer la cocina 1 pie más de largo",
+    "reply": "La cocina ahora mide 14 por 16.25 pies (antes 14 por 15.25). mismo tamaño · 1 cambio usado",
+    "changesLeft": "TE QUEDAN 9 CAMBIOS"
+   },
+   "note": "10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.",
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer1@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "plat",
+   "what": "a plat with no address typed",
+   "size": "1440",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1541,
+     "file": "walk-basic-es-1440-plat-01-start.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer2@example.com SALIR DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → ¿DÓNDE ESTÁ EL LOTE? DIRECCIÓN O Sube el deslinde (survey) o el plat · PDF o foto BUSCAR MI LOTE Leemos el plat, buscamos las reglas de la ciudad y dibujamos el espacio donde puedes construir. Todavía no se envía nada a un dibujante."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 2586,
+     "file": "walk-basic-es-1440-plat-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer2@example.com SALIR Escribe el ancho y el fondo que marca tu plat, y aquí se dibuja tu lote. Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. TU PLAT QUEDÓ GUARDADO PARA EL DIBUJANTE Esta vez no pudimos leerlo automáticamente, así que un dibujante dibuja tu lote exacto a partir de él. Para seguir ahora, agrega arriba tu dirección para encontrar el lote en el mapa del condado, o escribe el ancho y el fondo que marca el plat. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsvil"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-basic-es-1440-plat-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer2@example.com SALIR N TU LOTE · CONDADO DE HIDALGO (FUERA DE LOS LÍMITES DE LA CIUDAD) Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. TU PLAT QUEDÓ GUARDADO PARA EL DIBUJANTE Esta vez no pudimos leerlo automáticamente, así que un dibujante dibuja tu lote exacto a partir de él. Para seguir ahora, agrega arriba tu dirección para encontrar el lote en el mapa del condado, o escribe el ancho y el fondo que marca el plat. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX"
+    },
+    {
+     "label": "04-style",
+     "ms": 884,
+     "file": "walk-basic-es-1440-plat-04-style.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer2@example.com SALIR Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. FARMHOUSE MODERNO Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL HILL COUNTRY RANCHO CRAFTSMAN TRANSICIONAL TOSCANO MID-CENTURY COSTERO Farmhouse moderno ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 1201,
+     "file": "walk-basic-es-1440-plat-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer2@example.com SALIR ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. Tu lote Lote de 39,000 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 137 por 220 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,556 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cab"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4603,
+     "file": "walk-basic-es-1440-plat-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-basic-es-1440-plat-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer2@example.com SALIR REF W D LIVING26'-9\" × 19'-9\" 2-CAR GARAGE22'-0\" × 22'-0\" FRONT PORCH30'-0\" × 10'-9\" PRIMARY BEDROOM16'-3\" × 17'-6\" KITCHEN13'-3\" × 15'-9\" BEDROOM 314'-0\" × 13'-6\" BEDROOM 213'-3\" × 13'-9\" BEDROOM 113'-3\" × 13'-3\" DINING13'-3\" × 11'-9\" LAUNDRY8'-3\" × 15'-9\" HALLWAY4'-3\" × 29'-9\" JACK & JILL13'-3\" × 8'-9\" PRIMARY BATH11'-9\" × 8'-3\" OFFICE11'-0\" × 7'-9\" BATH 113'-3\" × 6'-3\" FOYER9'-9\" × 7'-9\" PRIMARY CLOSET7'-3\" × 9'-3\" GALLERY4'-3\" × 12'-9\" MUD ROOM7'-9\" × 5'-9\" HALF BATH4'-9\" × 9'-3\" CLOSET5'-9\" × 7'-6\" CLOSET7'-0\" × 4'-9\" VESTIBULE5'-9\" × 4'-9\" CLOSET4'-3\" × 4'-9\" PANTRY4'-3\" × 4'-9\" LINEN4'-3\" × 3'-3\" 13'-2\" 13'-11\" 7'-0\" 9'-8\" 13'-2\" 16'-1\" 21'-10\" 95'-3\" 12'-10\" 3'-10\" 26'-8\" 13'-2\" 7'-9\" 8'-3\" 22'-0\" 95'-3\" 13'-8\" 8'-8\" 4'-8\" 13'-1\" 6'-2\" 53'-10\" 22'-0\" 3'"
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 3871,
+     "file": "walk-basic-es-1440-plat-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 4059,
+     "file": "walk-basic-es-1440-plat-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado Haz la cocina más grande Quita el porche de atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HIST"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 3670,
+     "file": "walk-basic-es-1440-plat-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros A"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 3736,
+     "file": "walk-basic-es-1440-plat-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,894 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +8"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 4065,
+     "file": "walk-basic-es-1440-plat-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,894 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +8"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-basic-es-1440-plat-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +8"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 4216,
+     "file": "walk-basic-es-1440-plat-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +8"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 3820,
+     "file": "walk-basic-es-1440-plat-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +8"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-basic-es-1440-plat-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer2@example.com SALIR ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. Tu lote Lote de 39,000 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 137 por 220 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,556 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cab"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 5799,
+     "file": "walk-basic-es-1440-plat-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR FARMHOUSE MODERNO · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás. De vuelta a la versión 1. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. Hacer la cocina más grande La cocina ahora mide 15.25 por 20.75 pies (antes 15.25 por 18). Haz la cocina más grande Agrega un porche atrás Haz la"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2462,
+     "file": "walk-basic-es-1440-plat-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote Estilo Farmhouse moderno Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 2,936 pies² Lo que pediste 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso · 2,800 pies² → se dibujó de 2,936 pies² para que quepa en el lote Porches 344 pies² Entrada de carros y banqueta 1,269 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS la cocina más grande Hacer la cocina más grande Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, así que nada de "
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1831,
+     "file": "walk-basic-es-1440-plat-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 8 CAMBIOS drafthouse.test+customer2@example.com SALIR Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocin"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero 4 recámaras",
+     "reply": "Este plano ya tiene 4 recámaras. No se usó ningún cambio.",
+     "buttons": [],
+     "ms": 2296,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Agregué un porche atrás. mismo tamaño · 1 cambio usado",
+     "buttons": [],
+     "ms": 1755,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "De vuelta a la versión 1. Se te devolvió 1 cambio.",
+     "buttons": [],
+     "ms": 2190,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado",
+     "buttons": [],
+     "ms": 1941,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "que se sienta más abierta",
+     "reply": "La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Quitar otras paredes o subir un techo no es algo que yo pueda dibujar desde aquí; coméntelo con la oficina. Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoja una opción abajo; solo se usa un cambio cuando usted escoge. Hacer la cocina más grande Hacer el comedor más grande Hacer la sala más grande",
+     "buttons": [
+      "Hacer la cocina más grande",
+      "Hacer el comedor más grande",
+      "Hacer la sala más grande"
+     ],
+     "ms": 2601,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "haz la casa más chica pero agrega 2 recámaras",
+     "reply": "Una casa más chica y con más recámaras son dos deseos que jalan cada uno para su lado: cada recámara necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco. Este plano tiene 2,936 pies² con 4 recámaras. Lo que sí puedo dibujar es una casa un poco más chica, de unos 2,814 pies², con 6 recámaras. Toque el botón para verla; solo se usa un cambio cuando usted lo toca. Dibujar una casa más chica, de unos 2,800 pies², con 6 recámaras",
+     "buttons": [
+      "Dibujar una casa más chica, de unos 2,800 pies², con 6 recámaras"
+     ],
+     "ms": 2758,
+     "changesLeft": "TE QUEDAN 8 CAMBIOS"
+    },
+    {
+     "ask": "asdf",
+     "reply": "No le entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno. Hacer la cocina más grande Agregar un porche atrás Dejar la cochera para 3 carros",
+     "buttons": [
+      "Hacer la cocina más grande",
+      "Agregar un porche atrás",
+      "Dejar la cochera para 3 carros"
+     ],
+     "ms": 2349,
+     "changesLeft": "TE QUEDAN 8 CAMBIOS"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "platSaved": true,
+   "platRead": false,
+   "note": "10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.",
+   "nextOffBeforeNumbers": true,
+   "openTap": {
+    "button": "Hacer la cocina más grande",
+    "reply": "La cocina ahora mide 15.25 por 20.75 pies (antes 15.25 por 18). +42 pies² · 1 cambio usado",
+    "changesLeft": "TE QUEDAN 8 CAMBIOS"
+   },
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer2@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "normal",
+   "what": "a normal lot",
+   "size": "390",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1441,
+     "file": "walk-basic-es-390-normal-01-start.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → ¿DÓNDE ESTÁ EL LOTE? DIRECCIÓN O Sube el deslinde (survey) o el plat · PDF o foto BUSCAR MI LOTE Leemos el plat, buscamos las reglas de la ciudad y dibujamos el espacio donde puedes construir. Todavía no se envía nada a un dibujante."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 3568,
+     "file": "walk-basic-es-390-normal-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. ¿ESTE ES TU LOTE? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: Hidalgo County Appraisal District via RGV911, consultado el 2026-11-20. El mapa de lotes es solo una guía: un dibujante lo compara con el plat registrado o con tu deslinde antes de que se construya algo. SÍ, ESTE ES MI LOTE NO ES MI LOTE ESCRIBI"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-basic-es-390-normal-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: Hidalgo County Appraisal District via RGV911, consultado el 2026-11-20. El mapa de lotes es solo una guía: un dibujante lo compara con el plat registrado o con tu deslinde antes de que se construya algo. SIEMPRE NO ES M"
+    },
+    {
+     "label": "04-style",
+     "ms": 821,
+     "file": "walk-basic-es-390-normal-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 2 DE 5 · ESTILO Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. FARMHOUSE MODERNO Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL HILL COUNTRY RANCHO CRAFTSMAN TRANSICIONAL TOSCANO MID-CENTURY COSTERO Farmhouse moderno ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 2277,
+     "file": "walk-basic-es-390-normal-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 2 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cabe en este lote y cumple las reglas de la ciudad. Empezamos"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4545,
+     "file": "walk-basic-es-390-normal-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-basic-es-390-normal-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS W D REF 2-CAR GARAGE20'-6\" × 22'-0\" LIVING22'-3\" × 16'-6\" PRIMARY BEDROOM17'-9\" × 17'-9\" HALLWAY4'-9\" × 60'-3\" DINING20'-6\" × 13'-0\" BEDROOM 217'-9\" × 14'-3\" BEDROOM 320'-6\" × 12'-3\" BEDROOM 417'-9\" × 13'-0\" KITCHEN14'-0\" × 15'-3\" FRONT PORCH22'-3\" × 9'-6\" PRIMARY BATH10'-6\" × 11'-3\" LAUNDRY10'-6\" × 9'-6\" CLOSET12'-0\" × 6'-6\" PRIMARY CLOSET7'-3\" × 8'-3\" BATH 28'-6\" × 6'-6\" STORAGE6'-6\" × 8'-3\" CLOSET17'-9\" × 2'-9\" PANTRY6'-6\" × 7'-0\" DROP ZONE7'-3\" × 5'-0\" HALL7'-3\" × 4'-6\" CLOSET7'-3\" × 3'-0\" 22'-3\" 20'-6\" 42'-10\" 17'-8\" 4'-7\" 20'-5\" 42'-10\" 13'-0\" 2'-9\" 17'-8\" 11'-1\" 14'-1\" 9'-5\" 16'-6\" 84'-10\" 13'-0\" 8'-2\" 6'-11\" 12'-3\" 6'-6\" 22'-0\" 84'-10\" N 0' 5' 10' 20' graphic scale, feet WALK TESTER · 1201 KERRIA AVE, MCALLEN, TX 78501 FLOOR PLAN · MODERN FARMHOUSE · 4 BED, 2 BATH, 2-CAR · 2,833 SF · NOV 20, 2026 PLANO TERRENO 3D D"
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 2249,
+     "file": "walk-basic-es-390-normal-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 2096,
+     "file": "walk-basic-es-390-normal-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado Haz la cocina más grande Quita el porche de atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (2) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 2291,
+     "file": "walk-basic-es-390-normal-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (3) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 1935,
+     "file": "walk-basic-es-390-normal-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo Haz la cocina más grande Agrega un"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 1842,
+     "file": "walk-basic-es-390-normal-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo que se sienta más abierta La cocin"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-basic-es-390-normal-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo que se sienta más abierta La cocina"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 3113,
+     "file": "walk-basic-es-390-normal-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo que se sienta más abierta La cocina"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 1895,
+     "file": "walk-basic-es-390-normal-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo que se sienta más abierta La cocina"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-basic-es-390-normal-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 2 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cabe en este lote y cumple las reglas de la ciudad. Empezamos"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 3495,
+     "file": "walk-basic-es-390-normal-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,833 pies² Cuartos 4 recámaras, 2 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás. De vuelta a la versión 1. Hacer la cocina 1 pie más de largo La cocina ahora mide 14 por 16.25 pies (antes 14 por 15.25). Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (4) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2383,
+     "file": "walk-basic-es-390-normal-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 5 DE 5 · ENVIAR TE QUEDAN 9 CAMBIOS ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 1201 Kerria Ave, McAllen, TX 78501 Estilo Farmhouse moderno Cuartos 4 recámaras · 2 baños · cochera para 2 carros · 1 piso Área habitable 2,833 pies² Lo que pediste 4 recámaras · 2 baños · cochera para 2 carros · 1 piso · 2,800 pies² → se dibujó de 2,833 pies² para que quepa en el lote Porches 211 pies² Entrada de carros y banqueta 738 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS Hacer la cocina 1 pie más de largo Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, así que nada de lo que pediste se pierde. TU PLANO ESTÁ GUARDADO "
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1715,
+     "file": "walk-basic-es-390-normal-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 5 DE 5 · ENVIAR TE QUEDAN 9 CAMBIOS Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el ju"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero 4 recámaras",
+     "reply": "Este plano ya tiene 4 recámaras. No se usó ningún cambio.",
+     "buttons": [],
+     "ms": 53,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Agregué un porche atrás. mismo tamaño · 1 cambio usado",
+     "buttons": [],
+     "ms": 793,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "De vuelta a la versión 1. Se te devolvió 1 cambio.",
+     "buttons": [],
+     "ms": 989,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "La cocina no puede crecer tanto aquí: la recámara principal quedaría demasiado cerca de la orilla del lote, dentro del espacio que la ciudad mantiene libre a lo largo de cada orilla. Lo que sí cabe es 1 pie más de largo. Hacer la cocina 1 pie más de largo",
+     "buttons": [
+      "Hacer la cocina 1 pie más de largo"
+     ],
+     "ms": 648,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "que se sienta más abierta",
+     "reply": "La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Quitar otras paredes o subir un techo no es algo que yo pueda dibujar desde aquí; coméntelo con la oficina. Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoja una opción abajo; solo se usa un cambio cuando usted escoge. Hacer la cocina 1 pie más de largo Hacer la sala más grande",
+     "buttons": [
+      "Hacer la cocina 1 pie más de largo",
+      "Hacer la sala más grande"
+     ],
+     "ms": 499,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "haz la casa más chica pero agrega 2 recámaras",
+     "reply": "Una casa más chica y con más recámaras son dos deseos que jalan cada uno para su lado: cada recámara necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco. Este plano tiene 2,833 pies² con 4 recámaras. Una casa más chica con 5 recámaras no cabe en este lote con habitaciones de un tamaño que funcione. Lo que sí puedo hacer es dejar la casa más o menos del tamaño que tiene, con 5 recámaras. Toque el botón para verla; solo se usa un cambio cuando usted lo toca. Dejar la casa más o menos de este tamaño, con 5 recámaras",
+     "buttons": [
+      "Dejar la casa más o menos de este tamaño, con 5 recámaras"
+     ],
+     "ms": 1805,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "asdf",
+     "reply": "No le entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno. Agregar un porche atrás Dejar la cochera para 3 carros Agregar una recámara",
+     "buttons": [
+      "Agregar un porche atrás",
+      "Dejar la cochera para 3 carros",
+      "Agregar una recámara"
+     ],
+     "ms": 589,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "askedAddress": false,
+   "openTap": {
+    "button": "Hacer la cocina 1 pie más de largo",
+    "reply": "La cocina ahora mide 14 por 16.25 pies (antes 14 por 15.25). mismo tamaño · 1 cambio usado",
+    "changesLeft": "TE QUEDAN 9 CAMBIOS"
+   },
+   "note": "10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.",
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer3@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "plat",
+   "what": "a plat with no address typed",
+   "size": "390",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1328,
+     "file": "walk-basic-es-390-plat-01-start.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → ¿DÓNDE ESTÁ EL LOTE? DIRECCIÓN O Sube el deslinde (survey) o el plat · PDF o foto BUSCAR MI LOTE Leemos el plat, buscamos las reglas de la ciudad y dibujamos el espacio donde puedes construir. Todavía no se envía nada a un dibujante."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 2407,
+     "file": "walk-basic-es-390-plat-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE Escribe el ancho y el fondo que marca tu plat, y aquí se dibuja tu lote. Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. TU PLAT QUEDÓ GUARDADO PARA EL DIBUJANTE Esta vez no pudimos leerlo automáticamente, así que un dibujante dibuja tu lote exacto a partir de él. Para seguir ahora, agrega arriba tu dirección para encontrar el lote en el mapa del condado, o escribe el ancho y el fondo que marca el plat. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX P"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-basic-es-390-plat-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. TU PLAT QUEDÓ GUARDADO PARA EL DIBUJANTE Esta vez no pudimos leerlo automáticamente, así que un dibujante dibuja tu lote exacto a partir de él. Para seguir ahora, agrega arriba tu dirección para encontrar el lote en el mapa del condado, o escribe el ancho y el fondo que marca el plat. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Condado de Cameron (fuera de los límites"
+    },
+    {
+     "label": "04-style",
+     "ms": 850,
+     "file": "walk-basic-es-390-plat-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 2 DE 5 · ESTILO Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. FARMHOUSE MODERNO Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL HILL COUNTRY RANCHO CRAFTSMAN TRANSICIONAL TOSCANO MID-CENTURY COSTERO Farmhouse moderno ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 1126,
+     "file": "walk-basic-es-390-plat-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. Tu lote Lote de 39,000 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 137 por 220 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,556 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cabe en este lote y cumple las reglas de la ciudad. ATRÁS DIBUJAR M"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4533,
+     "file": "walk-basic-es-390-plat-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-basic-es-390-plat-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS REF W D LIVING26'-9\" × 19'-9\" 2-CAR GARAGE22'-0\" × 22'-0\" FRONT PORCH30'-0\" × 10'-9\" PRIMARY BEDROOM16'-3\" × 17'-6\" KITCHEN13'-3\" × 15'-9\" BEDROOM 314'-0\" × 13'-6\" BEDROOM 213'-3\" × 13'-9\" BEDROOM 113'-3\" × 13'-3\" DINING13'-3\" × 11'-9\" LAUNDRY8'-3\" × 15'-9\" HALLWAY4'-3\" × 29'-9\" JACK & JILL13'-3\" × 8'-9\" PRIMARY BATH11'-9\" × 8'-3\" OFFICE11'-0\" × 7'-9\" BATH 113'-3\" × 6'-3\" FOYER9'-9\" × 7'-9\" PRIMARY CLOSET7'-3\" × 9'-3\" GALLERY4'-3\" × 12'-9\" MUD ROOM7'-9\" × 5'-9\" HALF BATH4'-9\" × 9'-3\" CLOSET5'-9\" × 7'-6\" CLOSET7'-0\" × 4'-9\" VESTIBULE5'-9\" × 4'-9\" CLOSET4'-3\" × 4'-9\" PANTRY4'-3\" × 4'-9\" LINEN4'-3\" × 3'-3\" 13'-2\" 13'-11\" 7'-0\" 9'-8\" 13'-2\" 16'-1\" 21'-10\" 95'-3\" 12'-10\" 3'-10\" 26'-8\" 13'-2\" 7'-9\" 8'-3\" 22'-0\" 95'-3\" 13'-8\" 8'-8\" 4'-8\" 13'-1\" 6'-2\" 53'-10\" 22'-0\" 3'-0\" 8'-3\" 17'-6\" 53'-10\" N 0' 5' 10' 20' graphic scale, feet WA"
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 2311,
+     "file": "walk-basic-es-390-plat-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 2026,
+     "file": "walk-basic-es-390-plat-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado Haz la cocina más grande Quita el porche de atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (2) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 2441,
+     "file": "walk-basic-es-390-plat-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (3) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 5770,
+     "file": "walk-basic-es-390-plat-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,894 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (4) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS "
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 2039,
+     "file": "walk-basic-es-390-plat-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,894 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado que se sienta más abierta La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Qui"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-basic-es-390-plat-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 8 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado que se sienta más abierta La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Qui"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 2117,
+     "file": "walk-basic-es-390-plat-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 8 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado que se sienta más abierta La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Qui"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 2018,
+     "file": "walk-basic-es-390-plat-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 8 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero 4 recámaras Este plano ya tiene 4 recámaras. No se usó ningún cambio. quiero un porche atrás Agregué un porche atrás. mismo tamaño · 1 cambio usado deshaz eso De vuelta a la versión 1. Se te devolvió 1 cambio. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado que se sienta más abierta La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Qui"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-basic-es-390-plat-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Farmhouse moderno. Después puedes cambiar lo que quieras con tus propias palabras. Tu lote Lote de 39,000 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 137 por 220 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Residencia Garza, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,556 pies² · toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 2,800 pies² Extras Oficina Segunda suite Medio baño Porche del frente Porche de atrás Lo que ocupa en el lote 3,284 pies² Cabe en este lote y cumple las reglas de la ciudad. ATRÁS DIBUJAR M"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 3498,
+     "file": "walk-basic-es-390-plat-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 4 DE 5 · BORRADOR TE QUEDAN 8 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan. Área habitable 2,936 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás. De vuelta a la versión 1. la cocina más grande Hice la cocina más o menos un 15 por ciento más grande. Hacer la cocina más grande La cocina ahora mide 15.25 por 20.75 pies (antes 15.25 por 18). Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (5) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2383,
+     "file": "walk-basic-es-390-plat-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 5 DE 5 · ENVIAR TE QUEDAN 8 CAMBIOS ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote Estilo Farmhouse moderno Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 2,936 pies² Lo que pediste 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso · 2,800 pies² → se dibujó de 2,936 pies² para que quepa en el lote Porches 344 pies² Entrada de carros y banqueta 1,269 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS la cocina más grande Hacer la cocina más grande Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, así que nada de lo que pediste se pierde. TU PLANO ESTÁ GUARDADO Un dibujante est"
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1862,
+     "file": "walk-basic-es-390-plat-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 5 DE 5 · ENVIAR TE QUEDAN 8 CAMBIOS Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el ju"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero 4 recámaras",
+     "reply": "Este plano ya tiene 4 recámaras. No se usó ningún cambio.",
+     "buttons": [],
+     "ms": 39,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Agregué un porche atrás. mismo tamaño · 1 cambio usado",
+     "buttons": [],
+     "ms": 720,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "De vuelta a la versión 1. Se te devolvió 1 cambio.",
+     "buttons": [],
+     "ms": 1142,
+     "changesLeft": "TE QUEDAN 10 CAMBIOS"
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "Hice la cocina más o menos un 15 por ciento más grande. +89 pies² · 1 cambio usado",
+     "buttons": [],
+     "ms": 4468,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "que se sienta más abierta",
+     "reply": "La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio, y ahí los techos son de 10 pies, mientras que en las recámaras son de 9. Quitar otras paredes o subir un techo no es algo que yo pueda dibujar desde aquí; coméntelo con la oficina. Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoja una opción abajo; solo se usa un cambio cuando usted escoge. Hacer la cocina más grande Hacer el comedor más grande Hacer la sala más grande",
+     "buttons": [
+      "Hacer la cocina más grande",
+      "Hacer el comedor más grande",
+      "Hacer la sala más grande"
+     ],
+     "ms": 731,
+     "changesLeft": "TE QUEDAN 9 CAMBIOS"
+    },
+    {
+     "ask": "haz la casa más chica pero agrega 2 recámaras",
+     "reply": "Una casa más chica y con más recámaras son dos deseos que jalan cada uno para su lado: cada recámara necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco. Este plano tiene 2,936 pies² con 4 recámaras. Lo que sí puedo dibujar es una casa un poco más chica, de unos 2,814 pies², con 6 recámaras. Toque el botón para verla; solo se usa un cambio cuando usted lo toca. Dibujar una casa más chica, de unos 2,800 pies², con 6 recámaras",
+     "buttons": [
+      "Dibujar una casa más chica, de unos 2,800 pies², con 6 recámaras"
+     ],
+     "ms": 825,
+     "changesLeft": "TE QUEDAN 8 CAMBIOS"
+    },
+    {
+     "ask": "asdf",
+     "reply": "No le entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno. Hacer la cocina más grande Agregar un porche atrás Dejar la cochera para 3 carros",
+     "buttons": [
+      "Hacer la cocina más grande",
+      "Agregar un porche atrás",
+      "Dejar la cochera para 3 carros"
+     ],
+     "ms": 716,
+     "changesLeft": "TE QUEDAN 8 CAMBIOS"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "platSaved": true,
+   "platRead": false,
+   "note": "10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.",
+   "nextOffBeforeNumbers": true,
+   "openTap": {
+    "button": "Hacer la cocina más grande",
+    "reply": "La cocina ahora mide 15.25 por 20.75 pies (antes 15.25 por 18). +42 pies² · 1 cambio usado",
+    "changesLeft": "TE QUEDAN 8 CAMBIOS"
+   },
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer4@example.com",
+   "outcome": "sent to the drafters"
+  }
+ ],
+ "drafter": [
+  {
+   "row": "Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft PLAT NOT R",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Read from the plat: compare the calls with the plat. CONFIRM LOT The zoning is a house district. Read when you confirm the lot. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. Not read: enter the district from the city map. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1508
+  },
+  {
+   "row": "Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. From the county parcel map: compare the outline with the recorded plat or the deed. CONFIRM LOT The zoning is a house district. R-1 (single-family), read from the city map: confirm or change. CONFIRM R-1 CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. R-1 (single-family), confirmed by drafter.test@drafthouse.local. CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1464
+  },
+  {
+   "row": "Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft PLAT NOT R",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Read from the plat: compare the calls with the plat. CONFIRM LOT The zoning is a house district. Read when you confirm the lot. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. Not read: enter the district from the city map. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1468
+  },
+  {
+   "row": "Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. From the county parcel map: compare the outline with the recorded plat or the deed. CONFIRM LOT The zoning is a house district. R-1 (single-family), read from the city map: confirm or change. CONFIRM R-1 CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. R-1 (single-family), confirmed by drafter.test@drafthouse.local. CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1450
+  }
+ ],
+ "drafterInbox": "DRAFT HOUSE drafter.test@drafthouse.local SIGN OUT REVIEW OFFICE LEGACY DEMO Review inbox Designs clients sent. Open one, check the plan, approve it for the Revit build or send it back with a note. WAITING FOR YOU (0) Nothing waiting. New designs appear here within ten seconds of being sent. LOTS TO CONFIRM (4) Read from a plat by the office, or taken from the county parcel map. Open one, compare the calls with the plat or the survey, confirm or send it back. Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft PLAT NOT READ DRAFTING changes 2 of 10 · just now Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes 1 of 10 · 1 min ago Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft PLAT NOT READ DRAFTING changes 2 of 10 · 2 min ago Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes 1 of 10 · 3 min ago Signed in as drafter.test@drafthouse.local.",
+ "drafterErrors": [],
+ "apiLogTail": [
+  "interpreter: no DRAFTHOUSE_CLAUDE_KEY or ANTHROPIC_API_KEY, clients get the basic rules",
+  "alerts: no email: set RESEND_API_KEY, ALERT_EMAIL_TO, ALERT_EMAIL_FROM (alerts show in activity only)",
+  "parcels: 8 county sources; Regrid dormant; 0 lookups since start; mapped columns not checked yet",
+  "proxy chain: X-Forwarded-For has 0 entries; no CF-Connecting-IP header; TRUST_PROXY_HOPS is 0",
+  "parcels: mapped columns all present on the layers"
+ ]
+}

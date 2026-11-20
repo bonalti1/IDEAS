@@ -261,7 +261,11 @@ test('live: Claude reads the Garza site plan and FEMA answers for its address', 
   assert.ok(lot.envelopeSf > 25000, `buildable ${lot.envelopeSf}`)
   const rooms = generateRooms(program, style, lot)
   assert.deepEqual(checkRules(rooms, program, style, lot).reasons, [], 'the Garza house fits its own lot')
-  const f = await (await fetch(base + `/api/lot/flood?address=${encodeURIComponent('2554 N FM 2360, Rio Grande City, TX 78582')}`)).json()
+  // round 14: what the read cost the office and its token counts stay on the server
+  for (const k of ['cost', 'usage', 'ms']) assert.equal(k in read, false, `${k} is not sent to the browser`)
+  // the flood route has needed an account since round 10 (this live test still asked without one)
+  const ana = await who(base, 'ana.live@example.com')
+  const f = await (await ana.get(`/api/lot/flood?address=${encodeURIComponent('2554 N FM 2360, Rio Grande City, TX 78582')}`)).json()
   assert.ok(f.matched || f.note, JSON.stringify(f))
 })
 

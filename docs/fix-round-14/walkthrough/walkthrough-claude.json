@@ -1,0 +1,875 @@
+{
+ "mode": "claude",
+ "at": "2026-11-20T04:00:56.257Z",
+ "runs": [
+  {
+   "lot": "normal",
+   "what": "a normal lot",
+   "size": "1440",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1528,
+     "file": "walk-claude-1440-normal-01-start.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer1@example.com SIGN OUT DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → WHERE IS THE LOT? ADDRESS OR Upload the survey or plat · PDF or photo FIND MY LOT We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 7617,
+     "file": "walk-claude-1440-normal-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. IS THIS YOUR LOT? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District via RGV911, read 2026-11-20. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built. YES, THIS IS MY L"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-claude-1440-normal-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. YOUR LOT, FROM THE COUNTY PARCEL MAP PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District via RGV911, read 2026-11-20. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built"
+    },
+    {
+     "label": "04-style",
+     "ms": 917,
+     "file": "walk-claude-1440-normal-04-style.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 3978,
+     "file": "walk-claude-1440-normal-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,533 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 2 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. We started you with what fits this lot; you can change it. A TIGHT LOT FOR"
+    },
+    {
+     "label": "06-signed-back-in-your-houses",
+     "ms": 1026,
+     "file": "walk-claude-1440-normal-06-signed-back-in-your-houses.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer1@example.com SIGN OUT DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → YOUR HOUSES Modern Farmhouse 1201 Kerria Ave, McAllen, TX 78501 · 1 min ago LOT SAVED, ROOMS NOT CHOSEN YET START ANOTHER HOUSE ADDRESS OR Upload the survey or plat · PDF or photo FIND MY LOT We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet."
+    },
+    {
+     "label": "07-resumed",
+     "ms": 1511,
+     "file": "walk-claude-1440-normal-07-resumed.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,533 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 2 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 6630,
+     "file": "walk-claude-1440-normal-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-claude-1440-normal-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT W D REF 2-CAR GARAGE20'-6\" × 22'-0\" LIVING22'-3\" × 16'-6\" PRIMARY BEDROOM17'-9\" × 17'-9\" HALLWAY4'-9\" × 60'-3\" DINING20'-6\" × 13'-0\" BEDROOM 217'-9\" × 14'-3\" BEDROOM 320'-6\" × 12'-3\" BEDROOM 417'-9\" × 13'-0\" KITCHEN14'-0\" × 15'-3\" FRONT PORCH22'-3\" × 9'-6\" PRIMARY BATH10'-6\" × 11'-3\" LAUNDRY10'-6\" × 9'-6\" CLOSET12'-0\" × 6'-6\" PRIMARY CLOSET7'-3\" × 8'-3\" BATH 28'-6\" × 6'-6\" STORAGE6'-6\" × 8'-3\" CLOSET17'-9\" × 2'-9\" PANTRY6'-6\" × 7'-0\" DROP ZONE7'-3\" × 5'-0\" HALL7'-3\" × 4'-6\" CLOSET7'-3\" × 3'-0\" 22'-3\" 20'-6\" 42'-10\" 17'-8\" 4'-7\" 20'-5\" 42'-10\" 13'-0\" 2'-9\" 17'-8\" 11'-1\" 14'-1\" 9'-5\" 16'-6\" 84'-10\" 13'-0\" 8'-2\" 6'-11\" 12'-3\" 6'-6\" 22'-0\" 84'-10\" N 0' 5' 10' 20' graphic scale, feet WALK TESTER · 1201 KERRIA AVE, MCALLEN, TX 78501 FLOOR PLAN · MODERN FARMHOUSE · "
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 7435,
+     "file": "walk-claude-1440-normal-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 6202,
+     "file": "walk-claude-1440-normal-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used Make the kitchen bigger Remove the rear porch Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 5002,
+     "file": "walk-claude-1440-normal-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (3) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 6934,
+     "file": "walk-claude-1440-normal-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along e"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 5696,
+     "file": "walk-claude-1440-normal-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along e"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-claude-1440-normal-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along ea"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 4842,
+     "file": "walk-claude-1440-normal-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along ea"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 4066,
+     "file": "walk-claude-1440-normal-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio to the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along ea"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-claude-1440-normal-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,533 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 2 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 4919,
+     "file": "walk-claude-1440-normal-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 2 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car Add a covered patio in the back I added a covered patio to the back of the house. Back to version 1. Make the kitchen 1 ft longer Kitchen is now 14' by 16.25' (was 14' by 15.25'). Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (4) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2409,
+     "file": "walk-claude-1440-normal-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 1201 Kerria Ave, McAllen, TX 78501 Style Modern Farmhouse Program 4 bed · 2 bath · 2-car · 1 story Living area 2,833 sf Asked for 4 bed · 2 bath · 2-car · 1 story · 2,800 sf → now 2,833 sf Porches 211 sf Driveway and walk 738 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen 1 ft longer Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. YOUR PLAN IS SAVED A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can"
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 5622,
+     "file": "walk-claude-1440-normal-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. TodayYour draft"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "I want 4 bedrooms",
+     "reply": "This plan already has 4 bedrooms. No change was used.",
+     "buttons": [],
+     "ms": 5842,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "I added a covered patio to the back of the house. same size · 1 change used",
+     "buttons": [],
+     "ms": 3680,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "undo that",
+     "reply": "Back to version 1. 1 change returned.",
+     "buttons": [],
+     "ms": 3366,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer",
+     "buttons": [
+      "Make the kitchen 1 ft longer"
+     ],
+     "ms": 5218,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make it feel more open",
+     "reply": "The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bedrooms have 9. Taking out other walls or raising a ceiling is not something I can draw from here; bring that up with the office. What I can do now is give that space more room. Pick one below; a change is used only when you pick. Make the kitchen 1 ft longer Make the living room bigger",
+     "buttons": [
+      "Make the kitchen 1 ft longer",
+      "Make the living room bigger"
+     ],
+     "ms": 4166,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "make the house smaller but add 2 bedrooms",
+     "reply": "A smaller house with more bedrooms is two wishes that pull against each other: every bedroom needs floor area of its own, so the other rooms have to give some up. This plan is 2,833 sf with 4 bedrooms. A smaller house with 5 bedrooms does not fit on this lot at room sizes that work. What I can do is keep the house about the size it is, with 5 bedrooms. Tap the button to see it; a change is used only when you tap. Keep the house about this size, with 5 bedrooms",
+     "buttons": [
+      "Keep the house about this size, with 5 bedrooms"
+     ],
+     "ms": 3230,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "asdf",
+     "reply": "I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one. Add a porch on the back Make the garage 3 cars Add a bedroom",
+     "buttons": [
+      "Add a porch on the back",
+      "Make the garage 3 cars",
+      "Add a bedroom"
+     ],
+     "ms": 2365,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "askedAddress": false,
+   "houseListed": true,
+   "openTap": {
+    "button": "Make the kitchen 1 ft longer",
+    "reply": "Kitchen is now 14' by 16.25' (was 14' by 15.25'). same size · 1 change used",
+    "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+   },
+   "note": "10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.",
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer1@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "plat",
+   "what": "a plat with no address typed",
+   "size": "1440",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1322,
+     "file": "walk-claude-1440-plat-01-start.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer2@example.com SIGN OUT DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → WHERE IS THE LOT? ADDRESS OR Upload the survey or plat · PDF or photo FIND MY LOT We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 22782,
+     "file": "walk-claude-1440-plat-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer2@example.com SIGN OUT N YOUR LOT · RIO GRANDE CITY, TX PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (unincorporated) Jim Wells County (unincorporated) Nueces County (unincorporated) Kleberg County (unincorporated) San Patricio County (unincorporated) garza-site-plan.png WHAT WE READ 4 calls, closes "
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-claude-1440-plat-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer2@example.com SIGN OUT N YOUR LOT · RIO GRANDE CITY, TX PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (unincorporated) Jim Wells County (unincorporated) Nueces County (unincorporated) Kleberg County (unincorporated) San Patricio County (unincorporated) garza-site-plan.png WHAT WE READ 4 calls, closes "
+    },
+    {
+     "label": "04-style",
+     "ms": 895,
+     "file": "walk-claude-1440-plat-04-style.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer2@example.com SIGN OUT Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 1326,
+     "file": "walk-claude-1440-plat-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer2@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. Your lot 43,635 sf lot. The largest house that fits the space you can build on is about 76 by 189 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,556 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4615,
+     "file": "walk-claude-1440-plat-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-claude-1440-plat-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT REF W D LIVING26'-9\" × 19'-9\" 2-CAR GARAGE22'-0\" × 22'-0\" FRONT PORCH30'-0\" × 10'-9\" PRIMARY BEDROOM16'-3\" × 17'-6\" KITCHEN13'-3\" × 15'-9\" BEDROOM 314'-0\" × 13'-6\" BEDROOM 213'-3\" × 13'-9\" BEDROOM 113'-3\" × 13'-3\" DINING13'-3\" × 11'-9\" LAUNDRY8'-3\" × 15'-9\" HALLWAY4'-3\" × 29'-9\" JACK & JILL13'-3\" × 8'-9\" PRIMARY BATH11'-9\" × 8'-3\" OFFICE11'-0\" × 7'-9\" BATH 113'-3\" × 6'-3\" FOYER9'-9\" × 7'-9\" PRIMARY CLOSET7'-3\" × 9'-3\" GALLERY4'-3\" × 12'-9\" MUD ROOM7'-9\" × 5'-9\" HALF BATH4'-9\" × 9'-3\" CLOSET5'-9\" × 7'-6\" CLOSET7'-0\" × 4'-9\" VESTIBULE5'-9\" × 4'-9\" CLOSET4'-3\" × 4'-9\" PANTRY4'-3\" × 4'-9\" LINEN4'-3\" × 3'-3\" 13'-2\" 13'-11\" 7'-0\" 9'-8\" 13'-2\" 16'-1\" 21'-10\" 95'-3\" 12'-10\" 3'-10\" 26'-8\" 13'-2\" 7'-9\" 8'-3\" 22'-0\" 95'-3\" 13'-8\" 8'-8\" 4'-8\" 13'-1\" 6'-2\" 53'-10\" 22'-0\" "
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 4232,
+     "file": "walk-claude-1440-plat-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 5662,
+     "file": "walk-claude-1440-plat-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used Make the kitchen bigger Remove the rear porch Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 2421,
+     "file": "walk-claude-1440-plat-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (3) UNDO LAST CHANGE BACK I "
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 4542,
+     "file": "walk-claude-1440-plat-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,894 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used Make the kitchen bigger"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 4926,
+     "file": "walk-claude-1440-plat-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,894 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used Make it feel more open "
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-claude-1440-plat-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used Make it feel more open "
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 3553,
+     "file": "walk-claude-1440-plat-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used Make it feel more open "
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 4529,
+     "file": "walk-claude-1440-plat-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back We added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used Make it feel more open "
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-claude-1440-plat-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer2@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. Your lot 43,635 sf lot. The largest house that fits the space you can build on is about 76 by 189 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,556 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 5887,
+     "file": "walk-claude-1440-plat-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back We added a covered patio across the back of the house, off the living room. Back to version 1. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. Make the kitchen bigger Kitchen is now 15.25' by 20.75' (was 15.25' by 18'). Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me gar"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2427,
+     "file": "walk-claude-1440-plat-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot From your plat, no address yet Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 2,936 sf Asked for 4 bed · 3.5 bath · 2-car · 1 story · 2,800 sf → now 2,936 sf Porches 344 sf Driveway and walk 1,279 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen bigger Make the kitchen bigger Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. YOUR PLAN IS SAVED A drafter is checking your lot against the county records, usually within one business day. We'll email "
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1784,
+     "file": "walk-claude-1440-plat-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer2@example.com SIGN OUT With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. TodayYour draft"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "I want 4 bedrooms",
+     "reply": "This plan already has 4 bedrooms. No change was used.",
+     "buttons": [],
+     "ms": 2810,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "We added a covered patio across the back of the house, off the living room. same size · 1 change used",
+     "buttons": [],
+     "ms": 3886,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "undo that",
+     "reply": "Back to version 1. 1 change returned.",
+     "buttons": [],
+     "ms": 963,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "I made the kitchen about 15% bigger in both directions, to roughly 15 by 18 feet. +89 sf · 1 change used",
+     "buttons": [],
+     "ms": 2882,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make it feel more open",
+     "reply": "The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bedrooms have 9. Taking out other walls or raising a ceiling is not something I can draw from here; bring that up with the office. What I can do now is give that space more room. Pick one below; a change is used only when you pick. Make the kitchen bigger Make the dining room bigger Make the living room bigger",
+     "buttons": [
+      "Make the kitchen bigger",
+      "Make the dining room bigger",
+      "Make the living room bigger"
+     ],
+     "ms": 3445,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "make the house smaller but add 2 bedrooms",
+     "reply": "A smaller house with more bedrooms is two wishes that pull against each other: every bedroom needs floor area of its own, so the other rooms have to give some up. This plan is 2,936 sf with 4 bedrooms. What I can draw is a house a little smaller, about 2,814 sf, with 6 bedrooms. Tap the button to see it; a change is used only when you tap. Draw a smaller house, about 2,800 sf, with 6 bedrooms",
+     "buttons": [
+      "Draw a smaller house, about 2,800 sf, with 6 bedrooms"
+     ],
+     "ms": 2034,
+     "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "asdf",
+     "reply": "I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one. Make the kitchen bigger Add a porch on the back Make the garage 3 cars",
+     "buttons": [
+      "Make the kitchen bigger",
+      "Add a porch on the back",
+      "Make the garage 3 cars"
+     ],
+     "ms": 3084,
+     "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "platSaved": false,
+   "platRead": true,
+   "note": "10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.",
+   "openTap": {
+    "button": "Make the kitchen bigger",
+    "reply": "Kitchen is now 15.25' by 20.75' (was 15.25' by 18'). +42 sf · 1 change used",
+    "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+   },
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer2@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "normal",
+   "what": "a normal lot",
+   "size": "390",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1220,
+     "file": "walk-claude-390-normal-01-start.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → WHERE IS THE LOT? ADDRESS OR Upload the survey or plat · PDF or photo FIND MY LOT We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 3409,
+     "file": "walk-claude-390-normal-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. IS THIS YOUR LOT? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District via RGV911, read 2026-11-20. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built. YES, THIS IS MY LOT NOT MY LOT TYPE IT IN TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter c"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-claude-390-normal-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. YOUR LOT, FROM THE COUNTY PARCEL MAP PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District via RGV911, read 2026-11-20. The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built. NOT MY LOT AFTER ALL TYPE IT IN FROM THE PLAT COUNTY PARCEL CITY No rules for this city yet (county defaults,"
+    },
+    {
+     "label": "04-style",
+     "ms": 830,
+     "file": "walk-claude-390-normal-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 2 OF 5 · STYLE Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 2444,
+     "file": "walk-claude-390-normal-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,533 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 2 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. We started you with what fits this lot; you can change it. A TIGHT LOT FOR OUR READY PLANS You can go on with what fits here, or have "
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4510,
+     "file": "walk-claude-390-normal-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-claude-390-normal-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN W D REF 2-CAR GARAGE20'-6\" × 22'-0\" LIVING22'-3\" × 16'-6\" PRIMARY BEDROOM17'-9\" × 17'-9\" HALLWAY4'-9\" × 60'-3\" DINING20'-6\" × 13'-0\" BEDROOM 217'-9\" × 14'-3\" BEDROOM 320'-6\" × 12'-3\" BEDROOM 417'-9\" × 13'-0\" KITCHEN14'-0\" × 15'-3\" FRONT PORCH22'-3\" × 9'-6\" PRIMARY BATH10'-6\" × 11'-3\" LAUNDRY10'-6\" × 9'-6\" CLOSET12'-0\" × 6'-6\" PRIMARY CLOSET7'-3\" × 8'-3\" BATH 28'-6\" × 6'-6\" STORAGE6'-6\" × 8'-3\" CLOSET17'-9\" × 2'-9\" PANTRY6'-6\" × 7'-0\" DROP ZONE7'-3\" × 5'-0\" HALL7'-3\" × 4'-6\" CLOSET7'-3\" × 3'-0\" 22'-3\" 20'-6\" 42'-10\" 17'-8\" 4'-7\" 20'-5\" 42'-10\" 13'-0\" 2'-9\" 17'-8\" 11'-1\" 14'-1\" 9'-5\" 16'-6\" 84'-10\" 13'-0\" 8'-2\" 6'-11\" 12'-3\" 6'-6\" 22'-0\" 84'-10\" N 0' 5' 10' 20' graphic scale, feet WALK TESTER · 1201 KERRIA AVE, MCALLEN, TX 78501 FLOOR PLAN · MODERN FARMHOUSE · 4 BED, 2 BATH, 2-CAR · 2,833 SF · NOV 20, 2026 PLAN SITE 3D "
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 3257,
+     "file": "walk-claude-390-normal-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 3165,
+     "file": "walk-claude-390-normal-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used Make the kitchen bigger Remove the rear porch Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 1748,
+     "file": "walk-claude-390-normal-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (3) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 4135,
+     "file": "walk-claude-390-normal-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 3045,
+     "file": "walk-claude-390-normal-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer Make it feel more open The kitchen, the dining room and the living room on this plan are "
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-claude-390-normal-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer Make it feel more open The kitchen, the dining room and the living room on this plan are a"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 3189,
+     "file": "walk-claude-390-normal-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer Make it feel more open The kitchen, the dining room and the living room on this plan are a"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 3210,
+     "file": "walk-claude-390-normal-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer Make it feel more open The kitchen, the dining room and the living room on this plan are a"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-claude-390-normal-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,533 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 2 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. We started you with what fits this lot; you can change it. A TIGHT LOT FOR OUR READY PLANS You can go on with what fits here, or have "
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 3476,
+     "file": "walk-claude-390-normal-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,833 sf Rooms 4 bed, 2 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house. Back to version 1. Make the kitchen 1 ft longer Kitchen is now 14' by 16.25' (was 14' by 15.25'). Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (4) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2366,
+     "file": "walk-claude-390-normal-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 5 OF 5 · SEND 9 CHANGES LEFT ON THIS PLAN Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 1201 Kerria Ave, McAllen, TX 78501 Style Modern Farmhouse Program 4 bed · 2 bath · 2-car · 1 story Living area 2,833 sf Asked for 4 bed · 2 bath · 2-car · 1 story · 2,800 sf → now 2,833 sf Porches 211 sf Driveway and walk 738 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen 1 ft longer Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. YOUR PLAN IS SAVED A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can send it. Nothing more to do now. You can keep changing the p"
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1732,
+     "file": "walk-claude-390-normal-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 5 OF 5 · SEND 9 CHANGES LEFT ON THIS PLAN With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. TodayYour draft, checked against the code. Within 1 business dayA drafter re"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "I want 4 bedrooms",
+     "reply": "This plan already has 4 bedrooms. No change was used.",
+     "buttons": [],
+     "ms": 1960,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "I added a covered patio across the back of the house. same size · 1 change used",
+     "buttons": [],
+     "ms": 1882,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "undo that",
+     "reply": "Back to version 1. 1 change returned.",
+     "buttons": [],
+     "ms": 402,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer. Make the kitchen 1 ft longer",
+     "buttons": [
+      "Make the kitchen 1 ft longer"
+     ],
+     "ms": 2838,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make it feel more open",
+     "reply": "The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bedrooms have 9. Taking out other walls or raising a ceiling is not something I can draw from here; bring that up with the office. What I can do now is give that space more room. Pick one below; a change is used only when you pick. Make the kitchen 1 ft longer Make the living room bigger",
+     "buttons": [
+      "Make the kitchen 1 ft longer",
+      "Make the living room bigger"
+     ],
+     "ms": 1745,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "make the house smaller but add 2 bedrooms",
+     "reply": "A smaller house with more bedrooms is two wishes that pull against each other: every bedroom needs floor area of its own, so the other rooms have to give some up. This plan is 2,833 sf with 4 bedrooms. A smaller house with 5 bedrooms does not fit on this lot at room sizes that work. What I can do is keep the house about the size it is, with 5 bedrooms. Tap the button to see it; a change is used only when you tap. Keep the house about this size, with 5 bedrooms",
+     "buttons": [
+      "Keep the house about this size, with 5 bedrooms"
+     ],
+     "ms": 1898,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "asdf",
+     "reply": "I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one. Add a porch on the back Make the garage 3 cars Add a bedroom",
+     "buttons": [
+      "Add a porch on the back",
+      "Make the garage 3 cars",
+      "Add a bedroom"
+     ],
+     "ms": 1891,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "askedAddress": false,
+   "openTap": {
+    "button": "Make the kitchen 1 ft longer",
+    "reply": "Kitchen is now 14' by 16.25' (was 14' by 15.25'). same size · 1 change used",
+    "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+   },
+   "note": "10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.",
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer3@example.com",
+   "outcome": "sent to the drafters"
+  },
+  {
+   "lot": "plat",
+   "what": "a plat with no address typed",
+   "size": "390",
+   "steps": [
+    {
+     "label": "01-start",
+     "ms": 1110,
+     "file": "walk-claude-390-plat-01-start.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → WHERE IS THE LOT? ADDRESS OR Upload the survey or plat · PDF or photo FIND MY LOT We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet."
+    },
+    {
+     "label": "02-lot-found",
+     "ms": 22298,
+     "file": "walk-claude-390-plat-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (unincorporated) Jim Wells County (unincorporated) Nueces County (unincorporated) Kleberg County (unincorporated) San Patricio County (unincorporated) garza-site-plan.png WHAT WE READ 4 calls, closes within 0.03 ft, 43,635 sf. Confidence 40%. S 00°00'00\" E 150' N 90°00'00\" W 317.99' Curve R 1"
+    },
+    {
+     "label": "03-lot-taken",
+     "ms": null,
+     "file": "walk-claude-390-plat-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (unincorporated) Jim Wells County (unincorporated) Nueces County (unincorporated) Kleberg County (unincorporated) San Patricio County (unincorporated) garza-site-plan.png WHAT WE READ 4 calls, closes within 0.03 ft, 43,635 sf. Confidence 40%. S 00°00'00\" E 150' N 90°00'00\" W 317.99' Curve R 1"
+    },
+    {
+     "label": "04-style",
+     "ms": 854,
+     "file": "walk-claude-390-plat-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 2 OF 5 · STYLE Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "05-rooms",
+     "ms": 1205,
+     "file": "walk-claude-390-plat-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. Your lot 43,635 sf lot. The largest house that fits the space you can build on is about 76 by 189 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,556 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "08-draft-3d",
+     "ms": 4432,
+     "file": "walk-claude-390-plat-08-draft-3d.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "09-draft-plan",
+     "ms": null,
+     "file": "walk-claude-390-plat-09-draft-plan.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN REF W D LIVING26'-9\" × 19'-9\" 2-CAR GARAGE22'-0\" × 22'-0\" FRONT PORCH30'-0\" × 10'-9\" PRIMARY BEDROOM16'-3\" × 17'-6\" KITCHEN13'-3\" × 15'-9\" BEDROOM 314'-0\" × 13'-6\" BEDROOM 213'-3\" × 13'-9\" BEDROOM 113'-3\" × 13'-3\" DINING13'-3\" × 11'-9\" LAUNDRY8'-3\" × 15'-9\" HALLWAY4'-3\" × 29'-9\" JACK & JILL13'-3\" × 8'-9\" PRIMARY BATH11'-9\" × 8'-3\" OFFICE11'-0\" × 7'-9\" BATH 113'-3\" × 6'-3\" FOYER9'-9\" × 7'-9\" PRIMARY CLOSET7'-3\" × 9'-3\" GALLERY4'-3\" × 12'-9\" MUD ROOM7'-9\" × 5'-9\" HALF BATH4'-9\" × 9'-3\" CLOSET5'-9\" × 7'-6\" CLOSET7'-0\" × 4'-9\" VESTIBULE5'-9\" × 4'-9\" CLOSET4'-3\" × 4'-9\" PANTRY4'-3\" × 4'-9\" LINEN4'-3\" × 3'-3\" 13'-2\" 13'-11\" 7'-0\" 9'-8\" 13'-2\" 16'-1\" 21'-10\" 95'-3\" 12'-10\" 3'-10\" 26'-8\" 13'-2\" 7'-9\" 8'-3\" 22'-0\" 95'-3\" 13'-8\" 8'-8\" 4'-8\" 13'-1\" 6'-2\" 53'-10\" 22'-0\" 3'-0\" 8'-3\" 17'-6\" 53'-10\" N 0' 5' 10' 20' graphic scale, fe"
+    },
+    {
+     "label": "10-chat-1",
+     "ms": 3406,
+     "file": "walk-claude-390-plat-10-chat-1.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-2",
+     "ms": 4004,
+     "file": "walk-claude-390-plat-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used Make the kitchen bigger Remove the rear porch Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-3",
+     "ms": 2507,
+     "file": "walk-claude-390-plat-10-chat-3.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (3) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-4",
+     "ms": 3247,
+     "file": "walk-claude-390-plat-10-chat-4.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,894 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (4) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "10-chat-5",
+     "ms": 3921,
+     "file": "walk-claude-390-plat-10-chat-5.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,894 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used Make it feel more open The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bed"
+    },
+    {
+     "label": "10-chat-5b-tapped",
+     "ms": null,
+     "file": "walk-claude-390-plat-10-chat-5b-tapped.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 8 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used Make it feel more open The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bed"
+    },
+    {
+     "label": "10-chat-6",
+     "ms": 2223,
+     "file": "walk-claude-390-plat-10-chat-6.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 8 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used Make it feel more open The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bed"
+    },
+    {
+     "label": "10-chat-7",
+     "ms": 3201,
+     "file": "walk-claude-390-plat-10-chat-7.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 8 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car I want 4 bedrooms This plan already has 4 bedrooms. No change was used. Add a covered patio in the back I added a covered patio across the back of the house, off the living room. same size · 1 change used undo that Back to version 1. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used Make it feel more open The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bed"
+    },
+    {
+     "label": "10b-browser-back",
+     "ms": null,
+     "file": "walk-claude-390-plat-10b-browser-back.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. Your lot 43,635 sf lot. The largest house that fits the space you can build on is about 76 by 189 ft. USE THE ROOMS OF A RECENT BUILD Garza residence, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,556 sf · tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 3,284 sf Fits this lot and the city's rules for it. BACK DRAFT MY HOUSE"
+    },
+    {
+     "label": "10c-reloaded-on-draft",
+     "ms": 3441,
+     "file": "walk-claude-390-plat-10c-reloaded-on-draft.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 4 OF 5 · DRAFT 8 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free. Living area 2,936 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living room. Back to version 1. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. Make the kitchen bigger Kitchen is now 15.25' by 20.75' (was 15.25' by 18'). Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (5) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "11-send-before-confirm",
+     "ms": 2384,
+     "file": "walk-claude-390-plat-11-send-before-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 5 OF 5 · SEND 8 CHANGES LEFT ON THIS PLAN Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot From your plat, no address yet Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 2,936 sf Asked for 4 bed · 3.5 bath · 2-car · 1 story · 2,800 sf → now 2,936 sf Porches 344 sf Driveway and walk 1,279 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen bigger Make the kitchen bigger Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. YOUR PLAN IS SAVED A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can send it. Nothing more to do now. You ca"
+    },
+    {
+     "label": "12-send-after-confirm",
+     "ms": 1831,
+     "file": "walk-claude-390-plat-12-send-after-confirm.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 5 OF 5 · SEND 8 CHANGES LEFT ON THIS PLAN With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. TodayYour draft, checked against the code. Within 1 business dayA drafter re"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "I want 4 bedrooms",
+     "reply": "This plan already has 4 bedrooms. No change was used.",
+     "buttons": [],
+     "ms": 2102,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "I added a covered patio across the back of the house, off the living room. same size · 1 change used",
+     "buttons": [],
+     "ms": 2703,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "undo that",
+     "reply": "Back to version 1. 1 change returned.",
+     "buttons": [],
+     "ms": 1210,
+     "changesLeft": "10 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · 1 change used",
+     "buttons": [],
+     "ms": 1938,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "Make it feel more open",
+     "reply": "The kitchen, the dining room and the living room on this plan are already one open space, with no walls between them, and the ceilings there are 10 ft where the bedrooms have 9. Taking out other walls or raising a ceiling is not something I can draw from here; bring that up with the office. What I can do now is give that space more room. Pick one below; a change is used only when you pick. Make the kitchen bigger Make the dining room bigger Make the living room bigger",
+     "buttons": [
+      "Make the kitchen bigger",
+      "Make the dining room bigger",
+      "Make the living room bigger"
+     ],
+     "ms": 2628,
+     "changesLeft": "9 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "make the house smaller but add 2 bedrooms",
+     "reply": "A smaller house with more bedrooms is two wishes that pull against each other: every bedroom needs floor area of its own, so the other rooms have to give some up. This plan is 2,936 sf with 4 bedrooms. What I can draw is a house a little smaller, about 2,814 sf, with 6 bedrooms. Tap the button to see it; a change is used only when you tap. Draw a smaller house, about 2,800 sf, with 6 bedrooms",
+     "buttons": [
+      "Draw a smaller house, about 2,800 sf, with 6 bedrooms"
+     ],
+     "ms": 928,
+     "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+    },
+    {
+     "ask": "asdf",
+     "reply": "I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one. Make the kitchen bigger Add a porch on the back Make the garage 3 cars",
+     "buttons": [
+      "Make the kitchen bigger",
+      "Add a porch on the back",
+      "Make the garage 3 cars"
+     ],
+     "ms": 1891,
+     "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+    }
+   ],
+   "errors": [],
+   "badWords": [],
+   "reached": "11-send-before-confirm",
+   "platSaved": false,
+   "platRead": true,
+   "note": "10 free changes; a failed request doesn't use one Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.",
+   "openTap": {
+    "button": "Make the kitchen bigger",
+    "reply": "Kitchen is now 15.25' by 20.75' (was 15.25' by 18'). +42 sf · 1 change used",
+    "changesLeft": "8 CHANGES LEFT ON THIS PLAN"
+   },
+   "nav": {
+    "draft": "#/draft/prj",
+    "back": "#/rooms/prj",
+    "forward": "#/draft/prj",
+    "reload": "#/draft/prj",
+    "sameChangesLeft": true,
+    "officeText": false
+   },
+   "sendBefore": "calm card: lot with a drafter",
+   "email": "drafthouse.test+customer4@example.com",
+   "outcome": "sent to the drafters"
+  }
+ ],
+ "drafter": [
+  {
+   "row": "Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft DRAFTING c",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Read from the plat: compare the calls with the plat. CONFIRM LOT The zoning is a house district. Read when you confirm the lot. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. Not read: enter the district from the city map. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1455
+  },
+  {
+   "row": "Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. From the county parcel map: compare the outline with the recorded plat or the deed. CONFIRM LOT The zoning is a house district. R-1 (single-family), read from the city map: confirm or change. CONFIRM R-1 CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. R-1 (single-family), confirmed by drafter.test@drafthouse.local. CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1443
+  },
+  {
+   "row": "Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft DRAFTING c",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Read from the plat: compare the calls with the plat. CONFIRM LOT The zoning is a house district. Read when you confirm the lot. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. Not read: enter the district from the city map. ENTER ZONING Flood zone noted. No flood zone was read for this lot: check the FEMA map. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1458
+  },
+  {
+   "row": "Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes",
+   "checklistOnFirstScreen": true,
+   "card": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. From the county parcel map: compare the outline with the recorded plat or the deed. CONFIRM LOT The zoning is a house district. R-1 (single-family), read from the city map: confirm or change. CONFIRM R-1 CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "afterConfirm": "CHECK THIS PLAN, IN ORDER The lot matches the plat or deed. Confirmed by drafter.test@drafthouse.local. The zoning is a house district. R-1 (single-family), confirmed by drafter.test@drafthouse.local. CHANGE Flood zone noted. No digital FEMA map here: the county floodplain administrator decides. The plan passes the audit. Passed, 3 warnings.",
+   "confirmMs": 1462
+  }
+ ],
+ "drafterInbox": "DRAFT HOUSE drafter.test@drafthouse.local SIGN OUT REVIEW OFFICE LEGACY DEMO Review inbox Designs clients sent. Open one, check the plan, approve it for the Revit build or send it back with a note. WAITING FOR YOU (0) Nothing waiting. New designs appear here within ten seconds of being sent. LOTS TO CONFIRM (4) Read from a plat by the office, or taken from the county parcel map. Open one, compare the calls with the plat or the survey, confirm or send it back. Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft DRAFTING changes 2 of 10 · just now Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes 1 of 10 · 1 min ago Walk Tester no address, plat \"garza-site-plan.png\" · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft DRAFTING changes 2 of 10 · 2 min ago Walk Tester 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 2 bath, 2-car · 3 versions after the first draft DRAFTING changes 1 of 10 · 4 min ago Signed in as drafter.test@drafthouse.local.",
+ "drafterErrors": [],
+ "apiLogTail": [
+  "interpreter: key from DRAFTHOUSE_CLAUDE_KEY (106 chars), model claude-opus-5-5",
+  "alerts: no email: set RESEND_API_KEY, ALERT_EMAIL_TO, ALERT_EMAIL_FROM (alerts show in activity only)",
+  "parcels: 8 county sources; Regrid dormant; 0 lookups since start; mapped columns not checked yet",
+  "proxy chain: X-Forwarded-For has 0 entries; no CF-Connecting-IP header; TRUST_PROXY_HOPS is 0",
+  "interpreter: claude-opus-5-5, api.anthropic.com reachable",
+  "parcels: mapped columns all present on the layers"
+ ]
+}

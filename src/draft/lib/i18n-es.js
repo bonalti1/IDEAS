@@ -49,6 +49,8 @@ export const es = {
   'Your houses': 'Tus casas',
   'Your lot': 'Tu lote',
   'lot to be set': 'lote por definir',
+  'From your plat, no address yet': 'De tu plat, todavía sin dirección',
+  '{asked} · {size} → now {drafted}': '{asked} · {size} → ahora {drafted}',
   'With a drafter: a design for your lot': 'Con un dibujante: un diseño para tu lote',
   'Left side': 'Lado izquierdo',
   'Right side': 'Lado derecho',

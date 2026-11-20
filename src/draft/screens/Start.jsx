@@ -74,7 +74,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
                 <button className="house" onClick={() => onResume(p.id)}>
                   <span className="house-main">
                     <b>{t(p.style?.name) || (p.address ? String(p.address).split(',')[0] : t('Your lot'))}</b>
-                    <span className="muted small">{p.address || t('lot to be set')} · {ago(p.updatedAt, t)}</span>
+                    <span className="muted small">{p.address || (p.lot ? t('From your plat, no address yet') : t('lot to be set'))} · {ago(p.updatedAt, t)}</span>
                   </span>
                   {/* a lot saved before any rooms were chosen (round 12, item B), or one sent to the drafter for a custom design (item A) */}
                   {p.needsCustom ? (

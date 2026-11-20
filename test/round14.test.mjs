@@ -290,6 +290,10 @@ for (const [w, h] of [
     const card = page.getByTestId('lot-card')
     await card.waitFor({ timeout: 20000 })
     assert.match(await page.getByTestId('plat-unread').innerText(), /Plat not read by the office\. The homeowner typed 80 by 140 ft/)
+    // the checklist at the top of the card says the same, not "Read from the plat"
+    const list = await page.getByTestId('review-checklist').innerText()
+    assert.match(list, /Plat not read by the office: the homeowner typed 80 by 140 ft from it\. Open the plat and check the outline\./)
+    assert.doesNotMatch(list, /Read from the plat: compare the calls/)
     assert.match(await card.innerText(), /Open the plat photo/)
     assert.doesNotMatch(await card.innerText(), /Read with \d+% confidence/)
     const href = await card.getByRole('link', { name: /Open the plat/ }).getAttribute('href')
