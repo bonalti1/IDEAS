@@ -74,7 +74,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
                 <button className="house" onClick={() => onResume(p.id)}>
                   <span className="house-main">
                     <b>{t(p.style?.name) || (p.address ? String(p.address).split(',')[0] : t('Your lot'))}</b>
-                    <span className="muted small">{p.address || t('lot to be set')} · {ago(p.updatedAt, t)}</span>
+                    <span className="muted small">{p.address || (p.lot ? t('From your plat, no address yet') : t('lot to be set'))} · {ago(p.updatedAt, t)}</span>
                   </span>
                   {/* a lot saved before any rooms were chosen (round 12, item B), or one sent to the drafter for a custom design (item A) */}
                   {p.needsCustom ? (
@@ -124,7 +124,8 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
               </span>
             )}
           </label>
-          <Button primary disabled={!ready} onClick={() => onNext({ address: address || 'Lot 514, Villa-Rama East Phase V', file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
+          {file && !a && <p className="fine" data-testid="start-file-only">{t('Add the address too if the lot has one. With it we find the lot on the county map and check the flood map.')}</p>}
+          <Button primary disabled={!ready} onClick={() => onNext({ address: a, file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
             {t('Find my lot')}
           </Button>
           <p className="fine">{t("We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet.")}{!user && ` ${t('Without an account, nothing is saved when you close this page.')}`}</p>

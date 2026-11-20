@@ -266,6 +266,14 @@ input:focus { outline: none; border-color: var(--brand-brown); }
 /* what a drafter must check before confirming a lot (round 12): a yellow line */
 .warnline { background: #fdf5dc; border: 1px solid #e3b23c; border-radius: 8px; padding: 8px 10px; color: #7a5200; }
 .lot-view { background: #ebe9e5; overflow: auto; }
+/* round 14: nothing is drawn as the homeowner's lot before there is one */
+.lot-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.lot-wait p { max-width: 30ch; margin: 0; font-size: 15px; line-height: 1.5; color: var(--brand-muted); border: 1.5px dashed var(--brand-hair); border-radius: 12px; padding: 22px 20px; background: rgba(255, 255, 255, 0.5); }
+.add-address { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: end; margin: 2px 0 10px; }
+.add-address .field { margin: 0; }
+.add-address small { grid-column: 1 / -1; }
+.plat-saved { border-left: 3px solid var(--brand-brown); }
+.plat-saved h3 { margin-bottom: 4px; }
 .plat-preview { position: relative; width: 100%; height: 100%; overflow: auto; background: #d9d6d0; }
 .plat-preview canvas { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .plat-preview .plat-overlay { position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 100%; max-width: 100%; height: auto; pointer-events: none; }
@@ -588,6 +596,10 @@ details.more.card > summary { font-weight: 600; }
 @media (max-width: 600px) {
   .screen.split > .side { flex: 0 0 auto; overflow: visible; }
   .screen.split > .viewport.lot-view { flex: 0 0 52vh; min-height: 360px; }
+  /* round 14: with no lot to draw yet, the empty drawing does not push the fields off a phone's first screen */
+  .screen.split > .viewport.lot-view.waiting { flex: 0 0 150px; min-height: 150px; }
+  .lot-wait { padding: 12px 16px; }
+  .lot-wait p { padding: 14px 16px; font-size: 14px; max-width: none; }
   .tabs button, .tabs.small button { min-height: 40px; padding: 10px 12px; }
   .tabs { flex-wrap: wrap; overflow-x: visible; }
   .viewport-views { gap: 6px; padding: 6px; }

@@ -57,6 +57,9 @@ const LOTS = [
   { id: 'c2', address: '118 S Cage Blvd, Pharr, TX 78577', what: 'the C-2 lot' },
   { id: 'we', address: '1300 W Nolana Ave, McAllen, TX 78504', what: 'the W/E mismatch' },
   { id: 'typo', address: '3305 N 27 street mcallen', what: 'the address typed with a slip' },
+  // round 14: only a plat is uploaded, no address is typed. With the reader on (the claude run) the outline is read;
+  // with it off (the basic run) the file is kept for the drafter and the homeowner types the size printed on it.
+  { id: 'plat', address: '', file: 'test/fixtures/garza-site-plan.png', typed: { width: '150', depth: '260', street: 'FM 2360' }, what: 'a plat with no address typed' },
 ].filter((l) => !ONLY.length || ONLY.includes(l.id))
 const SIZES = [
   { name: '1440', viewport: { width: 1440, height: 900 } },
@@ -114,9 +117,33 @@ async function homeowner(lot, size, signOutMidway) {
     await signIn()
     await step('01-start', t)
     t = Date.now()
-    await page.locator('#start-address').fill(lot.address)
+    if (lot.file) await page.locator('.start .drop input[type=file]').setInputFiles(lot.file)
+    else await page.locator('#start-address').fill(lot.address)
     await page.getByRole('button', { name: /Find my lot|Buscar mi lote/ }).click()
     await page.locator('#lot-city').waitFor({ timeout: 60000 })
+    if (lot.file) {
+      // the plat is read (the reader is on) or saved for the drafter (it is off); either way within two minutes
+      await page.waitForFunction(() => !/Reading (the|your) plat…|Leyendo (el|tu) plat…/.test(document.body.innerText), null, { timeout: 150000 }).catch(() => {})
+      await page.waitForTimeout(1500)
+      run.platSaved = (await page.getByTestId('plat-saved').count()) > 0
+      run.platRead = !run.platSaved && (await page.getByText(/What we read|Lo que leímos/i).count()) > 0
+      // the outline that was read, as the lot drawing: the page of the plat itself carries its owners' names, and
+      // no owner name goes into a picture
+      if (run.platRead && (await page.getByRole('button', { name: /^(Lot|Lote)$/ }).count())) {
+        await page.getByRole('button', { name: /^(Lot|Lote)$/ }).click()
+        await page.waitForTimeout(2500)
+      }
+      const first = await step('02-lot-found', t)
+      run.plat = [run.plat, run.platRead ? 'the plat was read: ' + (first.match(/\d+ (calls|llamadas)[^.]*\./)?.[0] || '') : run.platSaved ? 'the plat was saved for the drafter, not read' : 'the plat was neither read nor saved'].filter(Boolean).join(' | ')
+      if (/Lot 514|Villa-Rama|Claude|Census geocoder/i.test(first)) run.badWords.push('02-lot-found: office words or another lot on the lot step')
+      if (run.platSaved) {
+        run.nextOffBeforeNumbers = await page.getByTestId('lot-next').isDisabled()
+        await page.locator('#lot-width').fill(lot.typed.width)
+        await page.locator('#lot-depth').fill(lot.typed.depth)
+        await page.locator('#lot-street').fill(lot.typed.street)
+        await page.waitForTimeout(2500)
+      }
+    } else {
     // the lot step: the address question (W typed, E matched), or the parcel
     await Promise.race([page.getByTestId('parcel-card').waitFor({ timeout: 60000 }), page.getByTestId('address-check').waitFor({ timeout: 60000 }), page.getByTestId('parcel-error').waitFor({ timeout: 60000 })]).catch(() => {})
     await page.waitForTimeout(2500)
@@ -133,6 +160,7 @@ async function homeowner(lot, size, signOutMidway) {
     } else {
       const confirm = page.locator('#lot-confirm')
       if (await confirm.count()) await confirm.check()
+    }
     }
     await step('03-lot-taken', null)
     t = Date.now()

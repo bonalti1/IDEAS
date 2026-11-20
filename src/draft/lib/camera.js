@@ -11,6 +11,17 @@ const HALF = Math.tan(((FOV / 2) * Math.PI) / 180)
 const NAME_PAD = 7
 
 /** Where each street's name is written: the middle of the street band, half way along the lot's side. */
+/**
+ * Round 14: how far from the dashed line (the edge of the buildable area), toward the property line, an open-space
+ * label is centred. A strip wide enough for the words holds them; a strip narrower than the words (a 5 ft side yard
+ * under 4 ft letters) put them on top of the red property line, so there the label sits just outside the lot.
+ */
+export function edgeLabelOffset(setbackFt, textFt) {
+  const room = Number.isFinite(+setbackFt) && +setbackFt >= 0 ? +setbackFt : Infinity
+  if (room >= textFt * 1.7) return Math.min(Math.max(2, textFt), room / 2)
+  return room + textFt * 0.9
+}
+
 export function streetNamePoints(lot) {
   const out = []
   for (const st of lot.streets || []) {

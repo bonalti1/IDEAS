@@ -120,7 +120,7 @@ export function makeInterpreter({ env = process.env, log = console.log, client: 
     get reach() {
       return reach
     },
-    describe: () => ({ ok: !!client && reach.ok !== false, detail: client ? reach.detail : 'no API key, clients get the basic rules' }),
+    describe: () => ({ ok: !!client && reach.ok !== false, detail: client ? reach.detail : 'no API key: homeowners get the basic chat rules, and an uploaded plat is saved unread for the drafter. Set DRAFTHOUSE_CLAUDE_KEY on the API host.' }),
     async probe() {
       if (!client) return
       try {

@@ -237,8 +237,10 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
   const m = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen' })
   const prj2 = await (await ana.post('/api/projects', { lot: m, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, m) })).json()
   assert.equal((await maria.post(`/api/review/${prj2.id}/lot`, { confirmed: true })).status, 409)
-  // without the Claude key the plat reader says so
-  assert.equal((await ana.post('/api/lot/plat', { name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') })).status, 503)
+  // without the Claude key the plat is kept for the drafter and the homeowner goes on (round 14; it was a 503 naming the key)
+  const kept = await ana.post('/api/lot/plat', { name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') })
+  assert.equal(kept.status, 200)
+  assert.equal((await kept.json()).unread, true)
 })
 
 test('live: Claude reads the Garza site plan and FEMA answers for its address', { skip: !process.env.LIVE && 'set LIVE=1 (needs the Claude key and the internet)' }, async (t) => {
@@ -259,7 +261,11 @@ test('live: Claude reads the Garza site plan and FEMA answers for its address', 
   assert.ok(lot.envelopeSf > 25000, `buildable ${lot.envelopeSf}`)
   const rooms = generateRooms(program, style, lot)
   assert.deepEqual(checkRules(rooms, program, style, lot).reasons, [], 'the Garza house fits its own lot')
-  const f = await (await fetch(base + `/api/lot/flood?address=${encodeURIComponent('2554 N FM 2360, Rio Grande City, TX 78582')}`)).json()
+  // round 14: what the read cost the office and its token counts stay on the server
+  for (const k of ['cost', 'usage', 'ms']) assert.equal(k in read, false, `${k} is not sent to the browser`)
+  // the flood route has needed an account since round 10 (this live test still asked without one)
+  const ana = await who(base, 'ana.live@example.com')
+  const f = await (await ana.get(`/api/lot/flood?address=${encodeURIComponent('2554 N FM 2360, Rio Grande City, TX 78582')}`)).json()
   assert.ok(f.matched || f.note, JSON.stringify(f))
 })
 

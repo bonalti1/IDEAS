@@ -326,11 +326,11 @@ export default function Send({ lot, style, program, rooms, history, project, set
             </div>
           )}
           <div className="card stats">
-            <Stat k={tr('Lot')} v={lot?.address} />
+            <Stat k={tr('Lot')} v={lot?.address || (lot?.plat || lot?.spec?.platId ? tr('From your plat, no address yet') : tr('Your lot'))} />
             <Stat k={tr('Style')} v={tr(style.name)} />
             <Stat k={tr('Program')} v={pline(programOf(rooms, program), ' · ', { tandemShort: true })} />
             <Stat k={tr('Living area')} v={sf(t.areas.living)} />
-            {program.asked && <Stat k={tr('Asked for')} v={tr('{asked} · {size} → drafted {drafted} to fit the lot', { asked: pline(program.asked), size: sf(program.asked.sqft), drafted: sf(t.areas.living) })} />}
+            {program.asked && <Stat k={tr('Asked for')} v={t.areas.living > program.asked.sqft ? tr('{asked} · {size} → now {drafted}', { asked: pline(program.asked), size: sf(program.asked.sqft), drafted: sf(t.areas.living) }) : tr('{asked} · {size} → drafted {drafted} to fit the lot', { asked: pline(program.asked), size: sf(program.asked.sqft), drafted: sf(t.areas.living) })} />}
             <Stat k={tr('Porches')} v={sf(t.areas.frontPorch + t.areas.rearPorch)} />
             {t.areas.flatwork > 0 && <Stat k={tr('Driveway and walk')} v={sf(t.areas.flatwork)} />}
           </div>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import HouseScene from '../HouseScene.jsx'
 import { Button, Stat } from '../ui.jsx'
 import { api } from '../lib/api.js'
-import { buildLot, traverse, lotProblem } from '../lib/lot.js'
+import { buildLot, traverse, lotProblem, platFromTyped } from '../lib/lot.js'
 import { COUNTIES, geoMessage } from '../lib/cities.js'
 import { cityTable, guessCity, CITY_IDS } from '../lib/cities.js'
 import RulesPanel from '../RulesPanel.jsx'
@@ -124,13 +124,29 @@ const plain = (err, wrap, say = (s) => s) => {
   return s[0].toUpperCase() + s.slice(1) + '.'
 }
 
-export default function Lot({ intake, lot: saved, onNext, onBack }) {
+export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
+  // round 14: the county map, the address service and the flood map answer only for an account. A visitor trying
+  // the app without one is told so once, in a line with the way in; they got "(sign in first)" three times.
+  const guest = !user
   const [table, setTable] = useState(cityTable())
   const [mode, setMode] = useState(saved?.spec?.kind === 'plat' ? 'plat' : saved?.spec?.kind === 'manual' ? 'manual' : saved?.spec?.kind === 'parcel' ? 'parcel' : intake?.file ? 'plat' : 'manual')
-  const address = saved?.address || intake?.address || ''
-  const [spec, setSpec] = useState(() => (saved?.spec && saved.spec.kind !== 'reference' ? saved.spec : { kind: 'manual', address, width: 100, depth: 150, city: guessCity(address), frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))
+  // round 14: a homeowner who came with only a plat has no address yet (it used to be given another lot's name); it
+  // can be added here, and then the county map and the flood map are asked like for any address
+  const [address, setAddress] = useState(saved?.address || intake?.address || '')
+  const [addressDraft, setAddressDraft] = useState('')
+  // a lot typed off a plat the office could not read comes back as the numbers that were typed
+  const typedBack = saved?.spec?.kind === 'plat' && saved.spec.typedBy === 'homeowner' && saved.spec.typed ? saved.spec : null
+  const [spec, setSpec] = useState(() =>
+    typedBack
+      ? { kind: 'manual', address, ...typedBack.typed, city: typedBack.city, county: typedBack.county, setbacks: typedBack.setbacks || {}, noStreetGarage: !!typedBack.noStreetGarage, platId: typedBack.platId }
+      : saved?.spec && saved.spec.kind !== 'reference'
+        ? saved.spec
+        : { kind: 'manual', address, width: 100, depth: 150, city: guessCity(address), frontStreet: '', corner: '', sideStreet: '', setbacks: {} },
+  )
   const [file, setFile] = useState(intake?.file || null)
-  const [read, setRead] = useState(saved?.plat || null) // what the office read from the PDF
+  const [read, setRead] = useState(saved?.plat && !saved.plat.unread ? saved.plat : null) // what the office read from the PDF
+  // round 14: a plat that is on file for the drafter but could not be read (the reader is off, failed, or found no outline)
+  const [unread, setUnread] = useState(saved?.plat?.unread ? saved.plat : typedBack ? { platId: typedBack.platId, unread: true } : null)
   const [reading, setReading] = useState(false)
   const [readErr, setReadErr] = useState('')
   const [flood, setFlood] = useState(saved?.flood || null)
@@ -193,7 +209,9 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   }, [parcel, geo])
   const takeParcel = (p) => {
     // the client's yes is recorded; `confirmed` stays false until a drafter checks the parcel against the plat (like a plat read)
-    const sp = { ...parcelSpec(p, { address, city: geo?.cityId || spec.city || '', county: geo?.county || p.county || spec.county || '', geo, flood, zoning, confirmed: false }), clientConfirmed: true, clientConfirmedAt: new Date().toISOString() }
+    // a plat on file goes with the parcel: the drafter checks the county's outline against it
+    const platId = read?.platId || unread?.platId || null
+    const sp = { ...parcelSpec(p, { address, city: geo?.cityId || spec.city || '', county: geo?.county || p.county || spec.county || '', geo, flood, zoning, confirmed: false }), clientConfirmed: true, clientConfirmedAt: new Date().toISOString(), ...(platId ? { platId } : {}) }
     setSpec(sp)
     setMode('parcel')
     setParcelAnswer('yes')
@@ -212,7 +230,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   }
   // geocode the address for real: the city it is in, the street, and whether we build there
   useEffect(() => {
-    if (!address || geo || saved?.spec) return
+    if (!address || geo || saved?.spec || guest) return
     api
       .geocode(address)
       .then((g) => {
@@ -232,11 +250,22 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
     setReadErr('')
     try {
       const res = await api.readPlat({ name: f.name, data: await fileToBase64(f) })
-      setRead(res)
-      setSpec({ kind: 'plat', address, city: res.city && table[res.city] ? res.city : guessCity(address + ' ' + (res.address || '')), calls: res.calls, streets: res.streets || [], front: res.front ?? 0, kinds: res.kinds || undefined, setbacks: {}, platId: res.platId, confirmed: false, readConfidence: res.confidence, readNotes: res.notes })
-      setMode('plat')
+      if (res.unread || !(res.calls?.length >= 3)) {
+        // the file is kept for the drafter; the homeowner goes on by the address or by the size printed on the plat.
+        // A lot already found on the county map stays; numbers typed and ticked stay; the 100 by 150 guess does not.
+        setRead(null)
+        setUnread({ ...res, unread: true })
+        setSpec((sp) => (sp.kind === 'parcel' ? { ...sp, platId: res.platId } : sp.kind === 'manual' ? { ...sp, platId: res.platId, ...(confirmed ? {} : { width: '', depth: '' }) } : { kind: 'manual', address, width: '', depth: '', city: sp.city, county: sp.county, frontStreet: '', corner: '', sideStreet: '', setbacks: {}, platId: res.platId }))
+      } else {
+        setUnread(null)
+        setRead(res)
+        if (!address && res.address) setAddressDraft((d) => d || String(res.address).slice(0, 200))
+        setSpec({ kind: 'plat', address, city: res.city && table[res.city] ? res.city : guessCity(address + ' ' + (res.address || '')), calls: res.calls, streets: res.streets || [], front: res.front ?? 0, kinds: res.kinds || undefined, setbacks: {}, platId: res.platId, confirmed: false, readConfidence: res.confidence, readNotes: res.notes })
+        setMode('plat')
+      }
     } catch (e) {
-      setReadErr(e.message)
+      // the server's own sentence when it gave one (too big, not a PDF or a photo); never a browser error like "Failed to fetch"
+      setReadErr(e.status === 400 || e.status === 413 || e.status === 429 ? e.message : t('We could not send the file just now. Check your connection and try again, or type the lot in.'))
     }
     setReading(false)
   }
@@ -244,16 +273,24 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
     if (intake?.file && !read && !saved?.spec) readFile(intake.file)
   }, [])
 
+  // round 14: with a plat on file that was not read, the numbers the homeowner types are the plat's, and the lot is a
+  // plat lot the drafter confirms against the file
+  const fromPlat = !!unread && spec.kind === 'manual'
+  const sized = +spec.width >= 20 && +spec.depth >= 20
   const built = useMemo(() => {
     try {
+      const base = fromPlat && sized ? platFromTyped({ ...spec, address }, unread) : spec
       // decision B6 (round 10, item 4): the zoning read at the county parcel belongs to the lot only once the homeowner
       // takes that parcel; a typed lot carries a zoning only when a drafter confirmed one
-      const L = buildLot({ ...spec, address, flood, zoning: spec.kind === 'parcel' ? zoning || spec.zoning || null : spec.zoning?.confirmedBy ? spec.zoning : null }, table)
-      return { ...L, plat: read || null, geo: geo || null }
+      const L = buildLot({ ...base, address, flood, zoning: base.kind === 'parcel' ? zoning || base.zoning || null : base.zoning?.confirmedBy ? base.zoning : null }, table)
+      return { ...L, plat: read || unread || null, geo: geo || null }
     } catch (e) {
       return null
     }
-  }, [spec, table, address, flood, read, geo, zoning])
+  }, [spec, table, address, flood, read, unread, geo, zoning, fromPlat, sized])
+  // round 14: no lot is shown as the homeowner's before there is one. On the plat tab the 100 by 150 guess of the
+  // typed tab is not their lot, and neither is anything while a plat on file still waits for its numbers.
+  const noLotYet = spec.kind === 'manual' && (mode === 'plat' || fromPlat) && !(fromPlat && sized)
   // what is wrong with the lot as typed; the last good lot stays on the screen until it is right
   const problem = lotProblem(spec, built, lang)
   const lastGood = useRef(null)
@@ -261,7 +298,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
   const lot = problem ? null : built
   // a typed lot keeps the last good drawing while a number is half typed; a parcel or a plat is always the one drawn,
   // even when the setbacks leave no room on it: a previous lot must never stay on the screen (round 10, item 1)
-  const drawAnyway = built && (spec.kind === 'parcel' || spec.kind === 'plat') && built.boundary?.length >= 3
+  const drawAnyway = built && (built.kind === 'parcel' || built.kind === 'plat') && built.boundary?.length >= 3
   const shown = lot || (drawAnyway ? built : lastGood.current)
   const city = table[spec.city] || { name: t('No city rules yet'), county: null }
   const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
@@ -274,12 +311,18 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
 
   return (
     <div className="screen split">
-      <div className="viewport lot-view">
-        {mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? t('Very little room to build on this lot') : t('No room to build on this lot')) : ''} />}
-        <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag">
-          {shown ? `${shown.address || t('your lot')} · ${placeName(city.name, lang)}` : t('Enter the lot')}
-          {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? t('very little room to build') : t('no room to build')}` : ''}
-        </div>
+      <div className={'viewport lot-view' + (noLotYet ? ' waiting' : '')}>
+        {noLotYet ? (
+          <div className="lot-wait" data-testid="lot-wait">
+            <p>{reading ? t('Reading your plat…') : fromPlat ? t('Type the width and depth from your plat, and your lot is drawn here.') : t('Your lot is drawn here once we have your plat.')}</p>
+          </div>
+        ) : mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? t('Very little room to build on this lot') : t('No room to build on this lot')) : ''} />}
+        {!noLotYet && (
+          <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag">
+            {shown ? `${shown.address || t('your lot')} · ${placeName(city.name, lang)}` : t('Enter the lot')}
+            {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? t('very little room to build') : t('no room to build')}` : ''}
+          </div>
+        )}
         {mode === 'plat' && read && (
           <div className="viewport-views">
             <button className={showPlat ? 'on' : ''} onClick={() => setShowPlat(true)}>
@@ -293,7 +336,28 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
       </div>
       <aside className="side lot-side">
         <h2>{t('Your lot')}</h2>
-        <p className="muted small">{address || t('No address yet.')}</p>
+        {address || guest ? (
+          <p className="muted small">{address || t('No address yet.')}</p>
+        ) : (
+          <form
+            className="add-address"
+            data-testid="add-address"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const v = addressDraft.trim()
+              if (v.length >= 8 && /\d/.test(v) && /\s/.test(v)) setAddress(v.slice(0, 200))
+            }}
+          >
+            <label className="field">
+              <span>{t('Street address, if the lot has one')}</span>
+              <input id="lot-address" placeholder={t('Number, street and city')} value={addressDraft} onChange={(e) => setAddressDraft(e.target.value)} />
+            </label>
+            <Button small ghost type="submit" disabled={!(addressDraft.trim().length >= 8 && /\d/.test(addressDraft) && /\s/.test(addressDraft.trim()))} data-testid="add-address-go">
+              {t('Look it up')}
+            </Button>
+            <small className="fine">{t('With the address we find the lot on the county map and check the flood map. You can go on without it.')}</small>
+          </form>
+        )}
         {geo?.found && !mismatch && (
           <p className={'fine ' + (geo.cityId ? 'good' : 'warn')}>
             {t('Found: {address}', { address: geo.matched })}
@@ -333,7 +397,15 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           </div>
         )}
         {geo && !geo.found && <p className="fine warn">{say(geo.note)}</p>}
-        {!geo && address && !geoErr && !saved?.spec && <p className="fine">{t('Looking the address up…')}</p>}
+        {!geo && address && !geoErr && !saved?.spec && !guest && <p className="fine">{t('Looking the address up…')}</p>}
+        {guest && address && !saved?.spec && (
+          <p className="fine warn" data-testid="guest-lookup">
+            {t('Without an account we cannot find your lot on the county map or check the flood map. Type the lot in or upload the plat. Or sign in with your email, and we find it for you.')}{' '}
+            <button className="linkish" onClick={onBack} data-testid="guest-sign-in">
+              {t('Sign in')}
+            </button>
+          </p>
+        )}
         {geoErr && <p className="fine warn">{t('Could not look the address up ({error}). Pick the city yourself.', { error: say(geoErr) })}</p>}
         {/* round 7: the parcel from the county appraisal district, offered before anything is typed */}
         {address && !saved?.spec && parcelBusy && !parcel && <p className="fine">{t('Looking the lot up at the county appraisal district…')}</p>}
@@ -425,6 +497,18 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
         {parcelErr && <p className="fine warn" data-testid="parcel-error">{plain(parcelErr, (e) => t('Could not reach the county parcel map ({error}). Type the lot in or upload the plat; the drafter pulls the parcel later', { error: e }), say)}</p>}
         {floodErr && <p className="fine warn" data-testid="flood-error">{plain(floodErr, (e) => t('The flood map could not be read ({error}); the office checks the flood zone', { error: e }), say)}</p>}
         {zoningErr && <p className="fine warn" data-testid="zoning-error">{plain(zoningErr, (e) => t('The zoning map could not be read ({error}); the drafter reads the zoning', { error: e }), say)}</p>}
+        {unread && (
+          <div className="card thin plat-saved" data-testid="plat-saved">
+            <h3>{t('Your plat is saved for the drafter')}</h3>
+            <p className="small">
+              {spec.kind === 'parcel'
+                ? t('We could not read it automatically this time. Your lot from the county map is used for now, and the drafter checks it against your plat.')
+                : address || guest
+                  ? t('We could not read it automatically this time, so a drafter draws your exact lot from it. To keep going now, type the width and depth printed on the plat.')
+                  : t('We could not read it automatically this time, so a drafter draws your exact lot from it. To keep going now, add your street address above so we can find the lot on the county map, or type the width and depth printed on the plat.')}
+            </p>
+          </div>
+        )}
         <div className="tabs small">
           <button className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual') || (spec.kind !== 'manual' && setSpec({ kind: 'manual', address, width: 100, depth: 150, city: spec.city, county: spec.county, frontStreet: '', corner: '', sideStreet: '', setbacks: {} }))}>
             {t('Type it in')}
@@ -465,10 +549,38 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           </label>
         )}
 
-        {mode === 'manual' && (
+        {mode === 'plat' && (
+          <>
+            <label className={'drop' + (file ? ' has-file' : '')}>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => readFile(e.target.files?.[0] || null)} hidden />
+              <span>{reading ? t('Reading the plat…') : file ? <b>{file.name}</b> : <b>{t('Upload the plat or survey (PDF or photo)')}</b>}</span>
+            </label>
+            {readErr && <p className="fine bad">{say(readErr)}</p>}
+            {read && (
+              <div className="card thin">
+                <h3>{t('What we read')}</h3>
+                <p className="small">
+                  {read.lotNumber ? `${read.lotNumber}${read.subdivision ? ', ' + read.subdivision : ''}. ` : ''}
+                  {t('{n} calls', { n: read.calls?.length })}{lot ? `, ${t('closes within {ft} ft', { ft: lot.closure })}, ${sf(lot.areaSf)}` : ''}. {t('Confidence {pct}%.', { pct: Math.round((read.confidence || 0) * 100) })}
+                </p>
+                <ol className="list small">
+                  {read.calls?.map((c, i) => (
+                    <li key={i}>{c.curve ? `${t('Curve')} R ${c.curve.radius}' ${c.curve.arcLength ? `L ${c.curve.arcLength}'` : c.curve.delta ? `Δ ${c.curve.delta}°` : ''}` : `${c.bearing} ${c.distance}'`}</li>
+                  ))}
+                </ol>
+                {read.notes && <p className="fine">{say(read.notes)}</p>}
+                <p className="fine warn">{t('A drafter checks this against the plat before anything is built. You can keep going meanwhile.')}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {(mode === 'manual' || fromPlat) && (
           <>
             <p className="fine assume">
-              {rich('We do not have your plat, so the {width} by {depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.', { width: spec.width, depth: spec.depth })}
+              {fromPlat
+                ? t('These numbers stand in for your lot until the drafter draws it from your plat. Use the width along the street and the depth going back, in feet.')
+                : rich('We do not have your plat, so the {width} by {depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.', { width: spec.width, depth: spec.depth })}
             </p>
             <div className="row2">
               <label className="field">
@@ -507,36 +619,10 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           </>
         )}
 
-        {mode === 'plat' && (
-          <>
-            <label className={'drop' + (file ? ' has-file' : '')}>
-              <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => readFile(e.target.files?.[0] || null)} hidden />
-              <span>{reading ? t('Reading the plat…') : file ? <b>{file.name}</b> : <b>{t('Upload the plat or survey (PDF or photo)')}</b>}</span>
-            </label>
-            {readErr && <p className="fine bad">{say(readErr)}</p>}
-            {read && (
-              <div className="card thin">
-                <h3>{t('What we read')}</h3>
-                <p className="small">
-                  {read.lotNumber ? `${read.lotNumber}${read.subdivision ? ', ' + read.subdivision : ''}. ` : ''}
-                  {t('{n} calls', { n: read.calls?.length })}{lot ? `, ${t('closes within {ft} ft', { ft: lot.closure })}, ${sf(lot.areaSf)}` : ''}. {t('Confidence {pct}%.', { pct: Math.round((read.confidence || 0) * 100) })}
-                </p>
-                <ol className="list small">
-                  {read.calls?.map((c, i) => (
-                    <li key={i}>{c.curve ? `${t('Curve')} R ${c.curve.radius}' ${c.curve.arcLength ? `L ${c.curve.arcLength}'` : c.curve.delta ? `Δ ${c.curve.delta}°` : ''}` : `${c.bearing} ${c.distance}'`}</li>
-                  ))}
-                </ol>
-                {read.notes && <p className="fine">{say(read.notes)}</p>}
-                <p className="fine warn">{t('A drafter checks this against the plat before anything is built. You can keep going meanwhile.')}</p>
-              </div>
-            )}
-          </>
-        )}
-
         <details className="setbacks">
           <summary>
             {t('Space the city keeps open along each edge')} · {placeName(city.name, lang)}
-            {city.verified ? '' : ` ${t('(office defaults, unverified)')}`}
+            {city.verified ? '' : ` ${t('(a drafter checks these)')}`}
           </summary>
           <div className="row2">
             {[
@@ -556,20 +642,20 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           </p>
         </details>
 
-        {lot && (
+        {lot && !noLotYet && (
           <div className="stats">
             <Stat k={t('Lot area')} v={sf(lot.areaSf)} />
             <Stat k={t('Buildable area')} v={sf(lot.envelopeSf)} />
             <Stat k={t('Max coverage')} v={`${coverLine} · ${sf(lot.areaSf * cover)}`} />
-            <Stat k={t('Flood zone')} v={flood ? (flood.status === 'no-digital-firm' ? t('no digital FEMA map here · the county decides') : flood.zone ? `${flood.zone}${flood.sfha ? ` · ${t('special flood hazard area')}` : flood.status === 'shaded-x' ? ` · ${t('0.2% flood area')}` : ` · ${t('outside the 1% flood area')}`}${flood.where && /street/.test(flood.where) ? ` ${t('(at the street; the parcel point once the lot is picked)')}` : ''}` : flood.status === 'no-address' ? t('not found for this address') : t('no zone polygon at this point')) : floodErr ? t('FEMA did not answer · the office checks') : addressHeld ? t('after the address is settled') : address ? t('checking FEMA…') : '—'} />
+            <Stat k={t('Flood zone')} v={flood ? (flood.status === 'no-digital-firm' ? t('no digital FEMA map here · the county decides') : flood.zone ? `${flood.zone}${flood.sfha ? ` · ${t('special flood hazard area')}` : flood.status === 'shaded-x' ? ` · ${t('0.2% flood area')}` : ` · ${t('outside the 1% flood area')}`}${flood.where && /street/.test(flood.where) ? ` ${t('(at the street; the parcel point once the lot is picked)')}` : ''}` : flood.status === 'no-address' ? t('not found for this address') : t('no zone polygon at this point')) : floodErr ? t('FEMA did not answer · the office checks') : addressHeld ? t('after the address is settled') : guest ? t('the drafter checks') : address ? t('checking FEMA…') : '—'} />
             {zoning?.status === 'found' && <Stat k={t('Zoning')} v={`${zoning.district} · ${say(zoning.use)}`} />}
           </div>
         )}
-        {lot && <RulesPanel lot={lot} mode="homeowner" />}
+        {lot && !noLotYet && <RulesPanel lot={lot} mode="homeowner" />}
         {lot?.zoning?.residential === false && <p className="fine bad">{say(lot.zoning.message)}</p>}
-        {problem && <p className="fine bad">{plainReason(problem)}</p>}
-        <p className="fine">{t('Red is your property line. Green dashed is where the house can sit.')} {mode === 'plat' || spec.kind === 'parcel' ? t('A drafter confirms the lot before the design is sent on.') : t('A drafter double-checks this before anything is final.')}</p>
-        {mode === 'manual' && (
+        {problem && !noLotYet && <p className="fine bad">{plainReason(problem)}</p>}
+        {!noLotYet && <p className="fine">{t('Red is your property line. Green dashed is where the house can sit.')} {mode === 'plat' || fromPlat || spec.kind === 'parcel' ? t('A drafter confirms the lot before the design is sent on.') : t('A drafter double-checks this before anything is final.')}</p>}
+        {mode === 'manual' && !fromPlat && (
           <label className="confirm">
             <input id="lot-confirm" type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
             <span>
@@ -581,7 +667,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack }) {
           <Button ghost onClick={onBack}>
             {t('Back')}
           </Button>
-          <Button primary disabled={!lot || tooSmall || reading || (mode === 'manual' && !confirmed)} onClick={() => onNext(lot)} title={mode === 'manual' && !confirmed ? t('Confirm the lot size first') : ''} data-testid="lot-next">
+          <Button primary disabled={!lot || tooSmall || reading || noLotYet || (mode === 'manual' && !fromPlat && !confirmed)} onClick={() => onNext(lot)} title={noLotYet ? (fromPlat ? t('Type the width and depth from your plat first') : t('Upload the plat first, or type the lot in')) : mode === 'manual' && !fromPlat && !confirmed ? t('Confirm the lot size first') : ''} data-testid="lot-next">
             {t('Looks right, pick a style')}
           </Button>
         </div>
