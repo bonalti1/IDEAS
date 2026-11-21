@@ -344,7 +344,8 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   return (
     <LangProvider force={office ? 'en' : null}>
     <div className="dh">
-      <header className="dh-head">
+      {/* round 15 (U13): on the Draft and Send steps a phone's header is one short row and the step's name */}
+      <header className={'dh-head' + (!office && (step === 4 || step === 5) ? ' at-plan' : '')}>
         <a className="brand" href="#" onClick={(e) => (e.preventDefault(), restart())}>
           <Mark size={24} />
           <span>Draft House</span>

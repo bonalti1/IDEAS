@@ -659,3 +659,43 @@ details.more.card > summary { font-weight: 600; }
 .lot-side .fine.plat-numbers { margin: 0 0 10px; color: var(--brand-ink); font-size: 13px; }
 .lot-side select.pick { border-color: var(--brand-brown); box-shadow: 0 0 0 1px var(--brand-brown) inset; }
 .lot-side .fine.pick-city { margin: -4px 0 10px; color: var(--brand-brown); }
+/* U14: the free-changes note is one line; what counts waits behind the info button (a tap, or pointing at it) */
+.changes-note .changes-more { display: none; }
+.changes-note.open .changes-more { display: inline; }
+@media (hover: hover) { .changes-note .changes-info:hover ~ .changes-more { display: inline; } }
+.changes-note .changes-info { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; margin-left: 4px; padding: 4px; border-radius: 50%; color: var(--brand-brown); letter-spacing: 0; }
+.changes-note.open .changes-info { background: #efe9dc; }
+/* polish: the line under a change names what changed */
+.msg .meta[data-testid='change-meta'] b { font-weight: 600; }
+/* U13: the first screen starts with the sign-in, on a phone and on a wide screen: the name and the promise, then the
+   email, then who stands behind the plans and what you get */
+.start > .hero { order: 0; }
+.start > form.signin { order: 1; }
+.start > .trust { order: 2; }
+.start > .preview { order: 3; }
+.start > .credits-line { order: 4; margin-top: -24px; }
+@media (max-width: 600px) {
+  .start { gap: 18px; padding-top: 16px; }
+  .start > .hero { gap: 10px; }
+  .start > .hero img { height: 40px !important; }
+  .start > .hero .wordmark-text { font-size: 22px; }
+  .start > .credits-line { margin-top: -10px; }
+}
+/* U13: the Draft step on a phone. The header is one short row and the step's name; the 3D / plan picture stays at the
+   top of the screen, above the chat, while the homeowner scrolls and types (smaller while typing); the view buttons
+   sit on the picture instead of two rows of their own */
+@media (max-width: 600px) {
+  .dh-head.at-plan { gap: 4px 10px; padding: 6px 12px; min-height: 0; }
+  .dh-head.at-plan .brand span { display: none; }
+  .dh-head.at-plan .steps { display: none; }
+  .dh-head.at-plan .step-name { order: 4; margin-top: 0; }
+  .screen.split.drafting > .viewport { position: sticky; top: 0; z-index: 6; flex: 0 0 36vh; min-height: 230px; background: var(--brand-paper); border-bottom: 1px solid var(--brand-hair); box-shadow: 0 6px 12px -10px rgba(0, 0, 0, 0.35); transition: flex-basis 0.2s; }
+  .screen.split.drafting:has(form.ask input:focus) > .viewport { flex-basis: 26vh; min-height: 180px; }
+  .screen.split.drafting > .viewport .viewport-views { display: contents; }
+  .screen.split.drafting > .viewport .views-main, .screen.split.drafting > .viewport .views-3d { position: absolute; z-index: 2; right: 6px; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--brand-hair); border-radius: 10px; background: rgba(247, 247, 247, 0.94); }
+  .screen.split.drafting > .viewport .views-main { top: 6px; }
+  .screen.split.drafting > .viewport .views-3d { bottom: 6px; }
+  .screen.split.drafting > .viewport .viewport-views button, .screen.split.drafting > .viewport .viewport-views .check { min-height: 40px; padding: 6px 10px; font-size: 11px; white-space: nowrap; border-left: 0; margin-left: 0; }
+}
+/* the two groups of view buttons are one row everywhere else, as before */
+.views-main, .views-3d { display: contents; }

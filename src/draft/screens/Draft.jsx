@@ -7,7 +7,7 @@ import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/op
 import { interpretRequest } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
-import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
+import { useLang, says, houseText, programLineEs, optionLabel, phrase, roomName } from '../lib/i18n.js'
 import { isUndoRequest } from '../lib/ops.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
@@ -61,6 +61,39 @@ function useNarrow() {
 
 const signed = (n, unit = '') => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + unit
 
+/**
+ * Round 15 (polish): the line under a change the chat made says what changed, read from the change itself (its
+ * ops): "Kitchen now 16 × 14 ft · same floor area · 1 change used", not "same size". A change of the floor area
+ * still leads with it ("+120 sf").
+ */
+function ChangeMeta({ m, rooms, kit }) {
+  const { lang, t } = useLang()
+  const op = (m.ops || [])[0]
+  const room = op ? rooms.find((r) => r.id === op.room) : null
+  const name = op ? (op.op === 'add' && op.kind ? kit.rooms[op.kind]?.name : room?.name || null) : null
+  const ft = (n) => (Math.round(n * 2) / 2).toLocaleString()
+  const what = !name
+    ? null
+    : op.op === 'resize' && op.w > 0 && op.d > 0
+      ? t('{room} now {w} × {d} ft', { room: roomName(name, lang), w: ft(op.w), d: ft(op.d) })
+      : op.op === 'add'
+        ? t('{room} added', { room: roomName(name, lang) })
+        : op.op === 'remove'
+          ? t('{room} taken out', { room: roomName(name, lang) })
+          : op.op === 'move' || op.op === 'moveBeside' || op.op === 'swap'
+            ? t('{room} moved', { room: roomName(name, lang) })
+            : t('{room} changed', { room: roomName(name, lang) })
+  const sfPart = Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ` ${t('sf')}`)}</b> : what ? t('same floor area') : t('same size')
+  return (
+    <span className="meta" data-testid="change-meta">
+      {what && Math.round(m.meta.sf) === 0 ? <b>{what}</b> : null}
+      {what && Math.round(m.meta.sf) === 0 ? ' · ' : null}
+      {sfPart}
+      {what && Math.round(m.meta.sf) !== 0 ? ` · ${what}` : null} · {t('{n} change used', { n: m.meta.used ?? 1 })}
+    </span>
+  )
+}
+
 export default function Draft({ style, program, rooms, setRooms, changesLeft, setChangesLeft, history, setHistory, onNext, onBack, lot, project, setProject, changesAllowed, onSendLot = null }) {
   const [text, setText] = useState('')
   const [view, setView] = useState('3d')
@@ -71,6 +104,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   const [undo, setUndo] = useState([]) // snapshots before each applied change: { rooms, changesLeft, text }
   const [roof, setRoof] = useState(true)
   const [showVersions, setShowVersions] = useState(false)
+  const [noteOpen, setNoteOpen] = useState(false) // round 15 (U14): the free-changes explanation, on a tap
   const controls = useRef()
   const logRef = useRef()
   const kit = kitFor(style)
@@ -255,7 +289,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   }
 
   return (
-    <div className="screen split">
+    <div className="screen split drafting">
       {big && (
         <div className="lightbox" role="dialog" aria-label={big.label} onClick={() => setBig(null)}>
           <div className="lightbox-card" onClick={(e) => e.stopPropagation()}>
@@ -282,17 +316,20 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           <div className="viewport-hint">{view === 'top' ? t('Floor plan · tap a room for its size · pinch or scroll to zoom · drag to pan') : view === 'site' ? t('Site plan · lot lines, the space kept open, driveway, walk') : t('Drag to turn · scroll to zoom · right-drag to pan')}</div>
         </div>
         <div className="viewport-views">
-          <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
-            {t('Plan')}
-          </button>
-          <button className={view === 'site' ? 'on' : ''} onClick={() => setCamera('site')}>
-            {t('Site')}
-          </button>
-          <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
-            {t('3D')}
-          </button>
+          {/* round 15 (U13): two groups, one row on a wide screen; on a phone they sit on the picture, top and bottom */}
+          <span className="views-main">
+            <button className={view === 'top' ? 'on' : ''} onClick={() => setCamera('top')}>
+              {t('Plan')}
+            </button>
+            <button className={view === 'site' ? 'on' : ''} onClick={() => setCamera('site')}>
+              {t('Site')}
+            </button>
+            <button className={view === '3d' ? 'on' : ''} onClick={() => setCamera('3d')}>
+              {t('3D')}
+            </button>
+          </span>
           {view === '3d' && (
-            <>
+            <span className="views-3d">
               <button className="fit" onClick={() => setCamera(view)} title={t('Reset the camera')}>
                 {t('Reset')}
               </button>
@@ -304,7 +341,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
                 <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} />
                 {t('Sun check')}
               </label>
-            </>
+            </span>
           )}
         </div>
       </div>
@@ -315,10 +352,21 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           {/* round 11, item 7: the changes left are said once, in the header (they were here too, twice on one screen) */}
         </div>
         {/* round 13, item 7: what the count in the header means, in one line; the number is the plan's own allowance */}
-        <p className="fine changes-note" data-testid="changes-note">
-          {t("{n} free {n|change|changes}; a failed request doesn't use one", { n: changesAllowed })}
-          {/* the review of PR #12: what counts and what does not */}
-          <span className="muted"> {t('Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.')}</span>
+        {/* round 15 (U14): one line; what counts and what does not waits behind the info button (it was always there,
+            and ran into the line before it with no full stop) */}
+        <p className={'fine changes-note' + (noteOpen ? ' open' : '')} data-testid="changes-note">
+          {t("{n} free {n|change|changes}; a failed request doesn't use one", { n: changesAllowed })}.
+          <button type="button" className="linkish changes-info" data-testid="changes-info" aria-expanded={noteOpen} aria-label={t('What counts as a change')} title={t('What counts as a change')} onClick={() => setNoteOpen((o) => !o)}>
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+              <circle cx="10" cy="10" r="8.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="10" cy="6.2" r="1.1" fill="currentColor" />
+              <path d="M10 9v5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+          <span className="muted changes-more" data-testid="changes-more">
+            {' '}
+            {t('Only a change the chat makes to your plan uses one. Choosing your lot and rooms, your first draft and undo are free.')}
+          </span>
         </p>
         <div className="stats row2">
           <Stat k={t('Living area')} v={sf(area)} />
@@ -333,11 +381,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           {history.map((m, i) => (
             <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '') + (m.undone ? ' undone' : '')}>
               {m.who === 'house' ? houseText(m, lang) : m.text}
-              {m.meta && (
-                <span className="meta">
-                  {Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ` ${t('sf')}`)}</b> : t('same size')} · {t('{n} change used', { n: m.meta.used ?? 1 })}
-                </span>
-              )}
+              {m.meta && <ChangeMeta m={m} rooms={rooms} kit={kit} />}
               {m.askOffice && !m.asked && (
                 <span className="fixes ask-office">
                   <button onClick={() => askOffice(m.askOffice)} disabled={busy}>
