@@ -383,7 +383,10 @@ export function plainRefusal(caused, preexisting, ops, rooms, kit) {
     first.op === 'swap' ? 'Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.' :
     first.op === 'remove' ? 'Try one room at a time, or tell me what the space is for and I will redraw it.' :
     first.op === 'resize' ? 'Try a smaller step, or say how big it should be.' :
-    'Try a smaller step.'
+    // round 15, U4: a room, a garage, a move have no "smaller step"
+    first.op === 'add' ? 'Tell me which room could give up some space for it.' :
+    first.op === 'move' ? 'Tell me where you would like it instead.' :
+    'Tell me what you would like instead.'
   const main = because ? `${what} ${because}, so the plan would not work as drawn. ${suggestion}` : `${what} does not work on this plan as it is drawn. ${suggestion}`
   const old = preexisting.length ? problemWords(preexisting, rooms, 'noun') : null
   return preexisting.length ? `${main} The plan also has a problem from before${old ? `: ${old}` : ''}. The drafter sees the details.` : main
@@ -515,6 +518,16 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     const [mw, md] = maxSizeOf(kit, r.kind)
     const [MW, MD] = r.w >= r.d ? [Math.max(mw, md), Math.min(mw, md)] : [Math.min(mw, md), Math.max(mw, md)]
     if (o.w > MW + 0.01 || o.d > MD + 0.01) {
+      // round 15, U12 and P3: a room asked to grow past the largest this style draws gets one sentence and, as the
+      // button, the most it can grow here (the widest that fits, for "3 ft wider")
+      const grows = diff.ops.filter((x) => !x.auto).length === 1 && o.w >= r.w - 0.01 && o.d >= r.d - 0.01
+      if (grows) {
+        const best = closestGrow(r, Math.min(o.w, MW), Math.min(o.d, MD), rooms, program, style, kit, L, { exact: true })
+        const limit = `it is drawn at most ${ft(MW)} ft by ${ft(MD)} ft in this style`
+        const name = theRoom(r.name)
+        const reply = best ? `${cap1(name)} can only grow ${grewWords(best.a, best.b)} here: ${limit}.` : `${cap1(name)} cannot get bigger here: ${limit}.`
+        return { applied: false, rooms, reply, source, ops: diff.ops, reasons: ['out of range'], fixes: best ? [{ label: `Make ${name} ${grewWords(best.a, best.b)}`, ops: best.ops }] : [] }
+      }
       const capped = { ...o, w: Math.min(o.w, MW), d: Math.min(o.d, MD) }
       const name = r.name.toLowerCase()
       let fix = null
@@ -622,7 +635,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     const parts = inParts()
     if (parts) return parts
     let fixes = plain ? suggestFixes(diff.ops, [why], rooms, rooms, program, style, kit, L, true) : []
-    let reply = plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Try a smaller step.'
+    let reply = plain ? `I can't do that one. ${why.charAt(0).toUpperCase() + why.slice(1)}.`.replace(/\.\.$/, '.') : 'That change did not work out on this plan. Tell me what you would like instead.'
     // a swap that cannot be drawn (round 10, item 8): the reason is about the two rooms trading places, never about a
     // third room that could not grow to make it fit ("2-Car Garage cannot grow that way: Dining would be too small")
     const swap = diff.ops.find((o) => o.op === 'swap')
@@ -635,7 +648,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
     }
     // round 12: a room that cannot grow as asked, and a porch or patio with no wall for it, say why in plain words
     // and offer the closest thing that does work as the button
-    const plainer = plain ? growRefusal(diff.ops, why, [], rooms, program, style, kit, L) || porchRefusal(diff.ops, why, [], null, rooms, program, style, kit, L, edits, depth) : null
+    const plainer = plain ? growRefusal(diff.ops, why, [], rooms, program, style, kit, L) || porchRefusal(diff.ops, why, [], null, rooms, program, style, kit, L, edits, depth) || addRefusal(diff.ops, why, [], rooms, program, style, kit, L, edits, depth) : null
     if (plainer) {
       reply = plainer.reply
       fixes = plainer.fixes
@@ -665,7 +678,7 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
       ? plainRefusal(caused, preexisting, diff.ops, rooms, kit)
       : `The change itself is fine, but this plan already has a problem that has to go first${problemWords(preexisting, rooms, 'noun') ? `: ${problemWords(preexisting, rooms, 'noun')}` : ''}. Ask me to fix that, or go back one version; the drafter sees the details.`
     // round 12: the same plain words and button when it is the rules that refuse a bigger room or a patio
-    const plainer = caused.length ? growRefusal(diff.ops, null, caused, rooms, program, style, kit, L) || porchRefusal(diff.ops, null, caused, next.rooms, rooms, program, style, kit, L, edits, depth) : null
+    const plainer = caused.length ? growRefusal(diff.ops, null, caused, rooms, program, style, kit, L) || porchRefusal(diff.ops, null, caused, next.rooms, rooms, program, style, kit, L, edits, depth) || addRefusal(diff.ops, null, caused, rooms, program, style, kit, L, edits, depth) : null
     if (plainer) {
       reply = plainer.reply
       fixes = plainer.fixes
@@ -741,19 +754,40 @@ const grewWords = (a, b) => [a ? `${ft(a)} ft wider` : null, b ? `${ft(b)} ft lo
  * The most a room can grow toward a size, in whole feet each way, that applies and passes: { a, b, ops } (a feet
  * wider, b feet longer) or null. The steps tried run from the size asked down to one foot on one side.
  */
-function closestGrow(r, askW, askD, rooms, program, style, kit, L) {
+function closestGrow(r, askW, askD, rooms, program, style, kit, L, { exact = false } = {}) {
   const [mw, md] = maxSizeOf(kit, r.kind)
   const [MW, MD] = r.w >= r.d ? [Math.max(mw, md), Math.min(mw, md)] : [Math.min(mw, md), Math.max(mw, md)]
-  const maxA = Math.max(0, Math.floor(Math.min(askW, MW) - r.w + 0.01))
-  const maxB = Math.max(0, Math.floor(Math.min(askD, MD) - r.d + 0.01))
-  const steps = (max) => [...new Set([max, Math.ceil(max / 2), Math.min(1, max), 0])]
-  const asked = (a, b) => Math.abs(r.w + a - askW) < 0.01 && Math.abs(r.d + b - askD) < 0.01
-  const cands = []
-  for (const a of steps(maxA)) for (const b of steps(maxB)) if ((a || b) && !asked(a, b)) cands.push([a, b])
-  cands.sort((p, q) => (r.w + q[0]) * (r.d + q[1]) - (r.w + p[0]) * (r.d + p[1]))
-  for (const [a, b] of cands.slice(0, 12)) {
+  // the room to grow each way, to a quarter foot ("30 ft wide at most" from 27.5 is 2.5 ft)
+  const roomA = Math.max(0, Math.floor((Math.min(askW, MW) - r.w + 0.01) * 4) / 4)
+  const roomB = Math.max(0, Math.floor((Math.min(askD, MD) - r.d + 0.01) * 4) / 4)
+  // one way only ("3 ft wider"): every whole foot down from the most, so the widest that fits is found (round 15,
+  // P3); both ways: the most, half of it and a foot, each way
+  const steps = (max, other) => [...new Set([max, ...(other ? [Math.ceil(max / 2), Math.min(1, max)] : Array.from({ length: Math.floor(max) }, (_, i) => Math.floor(max) - i)), 0])]
+  const asked = (a, b) => !exact && Math.abs(r.w + a - askW) < 0.01 && Math.abs(r.d + b - askD) < 0.01
+  const tryGrow = (a, b) => {
+    if (!(a || b) || asked(a, b)) return null
     const ops = [{ op: 'resize', room: r.id, w: r.w + a, d: r.d + b }]
-    if (passes(ops, rooms, program, style, kit, L)) return { a, b, ops }
+    return passes(ops, rooms, program, style, kit, L) ? { a, b, ops } : null
+  }
+  // one way only: the widest that fits, to a quarter foot (the most whole feet that fit, then the quarters above)
+  if (!roomA !== !roomB) {
+    const max = roomA || roomB
+    const at = (v) => (roomA ? tryGrow(v, 0) : tryGrow(0, v))
+    let best = null
+    for (const v of steps(max, 0)) if (v && (best = at(v))) break
+    const base = best ? best.a || best.b : 0
+    if (base < max) for (const f of [0.75, 0.5, 0.25]) if (base + f < max - 0.01) {
+      const finer = at(base + f)
+      if (finer) return finer
+    }
+    return best
+  }
+  const cands = []
+  for (const a of steps(roomA, roomB)) for (const b of steps(roomB, roomA)) if ((a || b) && !asked(a, b)) cands.push([a, b])
+  cands.sort((p, q) => (r.w + q[0]) * (r.d + q[1]) - (r.w + p[0]) * (r.d + p[1]))
+  for (const [a, b] of cands.slice(0, 16)) {
+    const got = tryGrow(a, b)
+    if (got) return got
   }
   return null
 }
@@ -786,11 +820,11 @@ function growRefusal(ops, why, caused, rooms, program, style, kit, L) {
   }
   const best = closestGrow(r, o.w, o.d, rooms, program, style, kit, L)
   const fixes = best ? [{ label: `Make ${name} ${grewWords(best.a, best.b)}`, ops: best.ops }] : []
-  // an ask of under a foot has no smaller whole-foot step to try
-  const stepped = o.w - r.w >= 1 || o.d - r.d >= 1
-  const reply = `${name.replace(/^t/, 'T')} cannot get that much bigger here: ${because}. ${best ? `What does fit is ${grewWords(best.a, best.b)}.` : `${stepped ? 'I tried smaller steps down to 1 ft and none fits where it sits. ' : ''}Tell me which room next to it could give up some space.`}`
+  // round 15, U12: one sentence, and the most that fits as the button (never a rule speech)
+  const reply = best ? `${cap1(name)} can only grow ${grewWords(best.a, best.b)} here: ${because}.` : `${cap1(name)} cannot get bigger where it sits: ${because}.`
   return { reply, fixes }
 }
+const cap1 = (s) => String(s).replace(/^\p{Ll}/u, (c) => c.toUpperCase())
 /**
  * A porch or a covered patio the plan or the lot refuses: why, in plain words, and what does work as buttons: the
  * same porch smaller, the room behind it a little shorter, or a new draft of the house with one. Each is checked.
@@ -854,6 +888,66 @@ function porchRefusal(ops, why, caused, next, rooms, program, style, kit, L, edi
     because = lotWords(caused) || (words ? `that ${words}` : 'the plan would not work as drawn with it')
   }
   const reply = `A ${what} ${where} does not fit as asked: ${because}. ${fixes.length ? 'Here is what would work:' : 'Tell me which room could give up some space, or ask for a smaller house.'}`
+  return { reply, fixes }
+}
+// where a room that will not go where it was asked is tried next, in this order
+const ADD_HOSTS = ['hall', 'foyer', 'living', 'dining', 'kitchen', 'laundry', 'mud']
+// the rooms a new draft carries as a program flag
+const PROGRAM_FLAG = { office: { office: true }, halfbath: { halfBath: true }, suite2: { suite2: true } }
+/**
+ * Round 15, U4: a room added ("add an office", "add a half bath", "add a bedroom") that the plan or the lot refuses.
+ * The real reason in one plain sentence, and the one thing that does work as the button: the same room beside
+ * another room, a new draft of the house with it (at the size it is, or the largest that fits), an office in place
+ * of a bedroom; or, when nothing does, the plain words that there is no room for it. Never "a smaller step": a room
+ * has none. null when the change is not one room being added (a garage and a porch have their own answers).
+ */
+function addRefusal(ops, why, caused, rooms, program, style, kit, L, edits, depth) {
+  const real = ops.filter((o) => !o.auto)
+  if (real.length !== 1 || real[0].op !== 'add') return null
+  const o = real[0]
+  if (['garage', 'rearPorch', 'frontPorch'].includes(o.kind) || (why && /already has/i.test(why))) return null
+  const stories = program.stories || 1
+  const kindName = String(kit.rooms[o.kind]?.name || o.kind).toLowerCase()
+  const a = `${/^[aeiou]/.test(kindName) ? 'an' : 'a'} ${kindName}`
+  const list = rooms.filter(isRoom)
+  const fixes = []
+  // 1. the same room beside another room
+  for (const k of ADD_HOSTS) {
+    const host = list.find((r) => r.kind === k)
+    if (!host || host.id === o.near) continue
+    const cand = [{ ...o, near: host.id }]
+    if (!passes(cand, rooms, program, style, kit, L)) continue
+    fixes.push({ label: `Add ${a} next to ${theRoom(host.name)}`, ops: cand })
+    break
+  }
+  // 2. the house drawn again with it: one more bedroom or bath by count, or the room as part of the program
+  if (!fixes.length && depth === 0) {
+    const now = floorArea(rooms, stories)
+    if (o.kind === 'bed' || o.kind === 'bath') {
+      const fix = countFix(o.kind, programOf(rooms, program)[o.kind === 'bed' ? 'beds' : 'baths'] + 1, rooms, program, style, kit, 'fallback', L, edits, depth)
+      if (fix) fixes.push(fix)
+    } else if (PROGRAM_FLAG[o.kind]) {
+      const over = PROGRAM_FLAG[o.kind]
+      const has = (r) => r.ok && r.rooms.some((x) => isRoom(x) && x.kind === o.kind)
+      let sqft = null
+      let r = redraft(null, rooms, program, style, L, edits, over)
+      if (!has(r) && r.max) {
+        sqft = Math.floor(r.max / 50) * 50
+        r = Math.abs(sqft - now) > 25 ? redraft(sqft, rooms, program, style, L, edits, over) : { ok: false }
+      }
+      if (has(r)) fixes.push({ label: newDraftWords(sqft, now, a), ops: [{ op: 'redraft', ...(sqft ? { sqft } : {}), program: over }] })
+      // 3. an office in place of a bedroom, when the house keeps at least two
+      const beds = programOf(rooms, program).beds
+      if (!fixes.length && o.kind === 'office' && beds > 2) {
+        const swap = { office: true, beds: beds - 1 }
+        if (has(redraft(null, rooms, program, style, L, edits, swap))) fixes.push({ label: 'Draw the house again with an office in place of a bedroom', ops: [{ op: 'redraft', program: swap }] })
+      }
+    }
+  }
+  let because
+  if (why) because = lotWords([why]) || problemWords([why], rooms, 'noun') || 'there is no free wall for it where the rooms are'
+  else because = lotWords(caused) || problemWords(caused, rooms, 'noun') || 'the rooms around it would no longer work as drawn'
+  const reply = fixes.length ? `There is no room for ${a} where it would go: ${because}.` : `There is no room for ${a} on this lot: ${because}.`
   return { reply, fixes }
 }
 /** A button that sets the house to a number of bedrooms or bathrooms, when that goes through: { label, ops } or null. */

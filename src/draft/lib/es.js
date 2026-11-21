@@ -444,6 +444,9 @@ const CLAUSES = [
   [String.raw`there is no open stretch of wall at the back of the house for it on this plan, because other rooms sit behind the living room and the dining room`, () => 'en este plano no hay un tramo de pared libre en la parte de atrás de la casa, porque hay otras habitaciones detrás de la sala y del comedor'],
   [String.raw`there is no open stretch of wall at the front of the house for it on this plan`, () => 'en este plano no hay un tramo de pared libre al frente de la casa'],
   [String.raw`the plan would not work as drawn with it`, () => 'el plano no funcionaría como está dibujado'],
+  // round 15: the largest this style draws a room, and a room with no wall for it
+  [String.raw`it is drawn at most (${N}) ft by (${N}) ft in this style`, (m) => `en este estilo se dibuja de ${m[1]} por ${m[2]} pies como máximo`],
+  [String.raw`there is no free wall for it where the rooms are`, () => 'no hay una pared libre para eso donde están las habitaciones'],
   [String.raw`that room is not in the new draft`, () => 'esa habitación no está en el nuevo dibujo'],
   [String.raw`It could not be kept on the new draft\.?`, () => 'no se pudo conservar en el nuevo dibujo'],
   // a problem the plan had before the change
@@ -510,6 +513,7 @@ function withEs(text) {
   if ((m = t.match(/^(\d+) (bed|bath)rooms?( and a half bath)?$/))) return countHalfEs(m[1], m[2], m[3])
   if (t === 'a covered porch at the back') return 'un porche techado atrás'
   if (t === 'a front porch') return 'un porche al frente'
+  if ((m = t.match(/^an? (office|half bath|second suite|mini primary|bedroom|bathroom|pantry)$/))) return un(m[1])
   if ((m = t.match(/^a (covered patio|rear porch|front porch) at the (back|front)$/))) return porchEs(m[1])
   return t
 }
@@ -687,6 +691,15 @@ S(String.raw`Adding a (rear porch|front porch)(?:, (${N}) by (${N}) feet)?\.`, (
 // ── bigger, smaller ──
 S(String.raw`(.+?) cannot get that much bigger here: (.+?)\.(?= (?:What does fit is|I tried smaller steps|Tell me which room next to it))`, (m) => `${cap(el(m[1]))} no puede crecer tanto aquí: ${becauseEs(m[2])}.`)
 S(String.raw`What does fit is (.+?)\.`, (m) => `Lo que sí cabe es ${grewEs(m[1])}.`)
+// round 15, U12: a room that cannot grow as asked, in one sentence
+S(String.raw`(.+?) can only grow ((?:${N} ft (?:wider|longer))(?: and ${N} ft (?:wider|longer))?) here: (.+?)\.`, (m) => `${cap(el(m[1]))} solo puede crecer ${grewEs(m[2])} aquí: ${becauseEs(m[3])}.`)
+S(String.raw`(.+?) cannot get bigger (where it sits|here): (.+?)\.`, (m) => `${cap(el(m[1]))} no puede crecer ${m[2] === 'here' ? 'más' : 'donde está'}: ${becauseEs(m[3])}.`)
+// round 15, U4: a room added that has no room where it would go
+S(String.raw`There is no room for an? (.+?) (where it would go|on this lot): (.+?)\.`, (m) => `No hay espacio para ${un(m[1])} ${m[2] === 'on this lot' ? 'en este lote' : 'donde iría'}: ${becauseEs(m[3])}.`)
+F('Tell me which room could give up some space for it.', 'Dime qué habitación podría ceder un poco de espacio.')
+F('Tell me where you would like it instead.', 'Dime dónde la quieres mejor.')
+F('Tell me what you would like instead.', 'Dime qué te gustaría mejor.')
+F('That change did not work out on this plan. Tell me what you would like instead.', 'Ese cambio no funcionó en este plano. Dime qué te gustaría mejor.')
 S(String.raw`The (.+?) in this kit goes up to (${N})' by (${N})'; (${N})' by (${N})' is past that\.`, (m) => `En este estilo ${el(m[1])} llega hasta ${m[2]} por ${m[3]} pies; ${m[4]} por ${m[5]} pies se pasa de eso.`)
 S(String.raw`Making the (.+?) about (\d+) percent (bigger|smaller)\.`, (m) => `Hice ${el(m[1])} más o menos un ${m[2]} por ciento más ${m[3] === 'bigger' ? 'grande' : fem(m[1]) ? 'chica' : 'chico'}.`)
 S(String.raw`Making the (.+?) (${N}) feet (wider|deeper|bigger each way|smaller each way)\.`, (m) => `Hice ${el(m[1])} ${pies(m[2])} ${m[3] === 'wider' ? `más ${fem(m[1]) ? 'ancha' : 'ancho'}` : m[3] === 'deeper' ? `más ${fem(m[1]) ? 'larga' : 'largo'}` : m[3].startsWith('bigger') ? 'más grande por cada lado' : `más ${fem(m[1]) ? 'chica' : 'chico'} por cada lado`}.`)
@@ -809,6 +822,7 @@ S(String.raw`Make the garage (\d) cars?`, (m) => `Dejar la ${carsEs(m[1])}`)
 S(String.raw`(\d)-car with a tandem bay \(one bay two cars deep\)\?`, (m) => `¿Para ${m[1]} carros, con un lugar en fila (dos carros, uno detrás del otro)?`)
 S(String.raw`Re-draft the house with a (\d)-car garage(?: \((\d+) earlier changes? would not carry over\))?`, (m) => `Volver a dibujar la casa con ${carsEs(m[1])}${m[2] ? ` (${m[2] === '1' ? '1 cambio anterior no se conservaría' : `${m[2]} cambios anteriores no se conservarían`})` : ''}`)
 S(String.raw`Draw a (smaller|larger) house, about (${N}) sf, with (.+)`, (m) => `Dibujar una casa más ${m[1] === 'smaller' ? 'chica' : 'grande'}, de unos ${m[2]} pies², con ${withEs(m[3])}`)
+F('Draw the house again with an office in place of a bedroom', 'Vuelve a dibujar la casa con una oficina en lugar de una recámara')
 S(String.raw`Draw the house again with (.+)`, (m) => `Volver a dibujar la casa con ${withEs(m[1])}`)
 S(String.raw`Make the house smaller, about (${N}) sf, and keep (\d+) (bed|bath)rooms?`, (m) => `Hacer la casa más chica, de unos ${m[1]} pies², y dejar ${theCountEs(m[2], m[3])}`)
 S(String.raw`Keep the house about this size, with (\d+) (bed|bath)rooms?`, (m) => `Dejar la casa más o menos de este tamaño, con ${countEs(m[1], m[2])}`)
@@ -823,6 +837,7 @@ F('Bigger primary bath', 'Baño principal más grande')
 S(String.raw`Show me (garage|porch|bedroom wing|bedroom) options`, (m) => `Ver opciones para ${m[1] === 'garage' ? 'la cochera' : m[1] === 'porch' ? 'los porches' : 'las recámaras'}`)
 S(String.raw`Add a porch on the back`, 'Agregar un porche atrás')
 S(String.raw`Add a (\d)-car garage`, (m) => `Agregar una ${carsEs(m[1])}`)
+S(String.raw`Add an? ([^.?]+?) next to ([^.?]+)`, (m) => `Agrega ${un(m[1])} junto ${al(m[2])}`)
 S(String.raw`Add an? ([^.?]+)`, (m) => `Agregar ${un(m[1])}`)
 S(String.raw`Remove the ([^.?]+)`, (m) => `Quitar ${el(m[1])}`)
 S(String.raw`Move the (.+?) (${N}) ft (west|east|toward the back|toward the street)\?`, (m) => `¿Mover ${el(m[1])} ${pies(m[2])} ${wayEs(m[3])}?`)

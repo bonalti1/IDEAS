@@ -134,10 +134,10 @@ test('1a (basic rules): refusals and offers on a tight lot are Spanish too, with
   const tight = PLANS.tight
   const cases = [
     ['quiero un patio techado atrás', /^Un patio techado atrás no cabe como lo pidió: la casa y los porches cubrirían el 51 por ciento del lote, más del 50 por ciento que permite McAllen, TX\. Esto es lo que sí funcionaría:$/],
-    ['la cocina más grande', /^La cocina no puede crecer tanto aquí: .+\. Lo que sí cabe es 1 pie más de largo\.$/],
+    ['la cocina más grande', /^La cocina solo puede crecer 1 pie más de largo aquí: .+\.$/], // round 15, U12: one sentence
     ['quiero 5 recámaras', /^5 recámaras no caben en este lote: la casa quedaría demasiado cerca del costado del lote, donde la ciudad mantiene 5 pies libres\. Este plano tiene 4\./],
     ['que se sienta más abierta', /^La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio/],
-    ['agrega una oficina', /^Agregar una oficina se pasa de los 10 pies que la ciudad mantiene libres al fondo del lote, así que el plano no funcionaría como está dibujado\. Intente con un paso más chico\.$/],
+    ['agrega una oficina', /^No hay espacio para una oficina en este lote: .+ quedaría demasiado cerca del fondo del lote, donde la ciudad mantiene 10 pies libres\.$/], // round 15, U4: never a smaller step
     ['quiero 4 recámaras', /^Este plano ya tiene 4 recámaras\. No se usó ningún cambio\.$/],
     ['agrega una alberca', /^Eso no es algo que este plano pueda llevar: aquí solo se dibuja la casa\./],
     ['quiero un segundo piso', /^Por ahora el estilo Modern Farmhouse es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja\./],
@@ -171,11 +171,11 @@ test('1a (basic rules): refusals and offers on a tight lot are Spanish too, with
 test('1a (basic rules): the screen language decides when the text does not: lang "es" answers an English request in Spanish, and English stays English without it', async () => {
   const en = await basic('make the kitchen bigger', PLANS.tight)
   assert.equal(en.lang, undefined)
-  assert.match(en.reply, /^The kitchen cannot get that much bigger here: /)
+  assert.match(en.reply, /^The kitchen can only grow /) // round 15, U12
   assert.deepEqual(en.fixes.map((f) => f.label), ['Make the kitchen 1 ft longer'])
   const es = await basic('make the kitchen bigger', PLANS.tight, { lang: 'es' })
   assert.equal(es.lang, 'es')
-  assert.match(es.reply, /^La cocina no puede crecer tanto aquí: /)
+  assert.match(es.reply, /^La cocina solo puede crecer /) // round 15, U12
   spanish(es.reply, 'lang es')
   assert.deepEqual(es.fixes.map((f) => f.label), ['Hacer la cocina 1 pie más de largo'])
   assert.deepEqual(es.fixes[0].ops, en.fixes[0].ops, 'the same button, in Spanish')
@@ -447,10 +447,10 @@ test('1b (office API over HTTP): `lang` in the body sets the language when the t
   const id = await office.start(PLANS.tight)
   const en = await office.change(id, 'Make the kitchen bigger')
   assert.equal(en.lang, undefined)
-  assert.match(en.reply, /^The kitchen cannot get that much bigger here: /)
+  assert.match(en.reply, /^The kitchen can only grow /) // round 15, U12
   const es = await office.change(id, 'Make the kitchen bigger', { lang: 'es' })
   assert.equal(es.lang, 'es')
-  assert.match(es.reply, /^La cocina no puede crecer tanto aquí: /)
+  assert.match(es.reply, /^La cocina solo puede crecer /) // round 15, U12
   assert.deepEqual(es.fixes.map((f) => f.label), ['Hacer la cocina 1 pie más de largo'])
   assert.equal(es.changesUsed, 0)
   // the tap sends the button's Spanish label; the answer is Spanish with or without lang

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat } from '../ui.jsx'
-import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
+import { floorArea, kitFor, programOf, programLine } from '../lib/layout.js'
 import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/options.js'
-import { interpretRequest } from '../lib/interpret.js'
+import { interpretRequest, exampleFixes } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
 import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
@@ -18,26 +18,17 @@ const MORE_CHANGES_THANKS = says(['Done. The office has your request and usually
 const OUT_OF_CHANGES = says(["You've used the free changes on this plan. The office will add more for you. Want me to let them know?"])
 const ASK_LABEL = { meeting: phrase('Ask the office to set up my meeting'), 'more-changes': phrase('Ask the office for more changes') }
 
-/** Suggestions that fit the plan as it is right now. */
-function suggestionsFor(rooms, kit, t = (s) => s) {
-  const list = rooms.filter(isRoom)
-  const has = (k) => list.some((r) => r.kind === k)
-  const out = []
-  if (has('kitchen')) out.push(t('Make the kitchen bigger'))
-  if (!has('rearPorch')) out.push(t('Add a porch on the back'))
-  else out.push(t('Remove the rear porch'))
-  const garage = list.find((r) => r.kind === 'garage')
-  if (garage) {
-    // the same count the options use: a tandem garage already holds three
-    const tandem = !!garage.tandem || /tandem/i.test(garage.name || '')
-    const cars = tandem ? 3 : Math.max(1, Math.round(Math.max(garage.w, garage.d) / (kit.rooms.garage?.perCar || 11)))
-    if (cars < 3) out.push(t('Make the garage {n} cars', { n: cars + 1 }))
-  } else out.push(t('Add a 2-car garage'))
-  if (list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind)).length < 5) out.push(t('Add a bedroom'))
-  if (!has('office')) out.push(t('Add an office'))
-  if (has('mbath')) out.push(t('Bigger primary bath'))
-  if (!has('halfbath')) out.push(t('Add a half bath'))
-  return [...out.slice(0, 4), t('Show me garage options')]
+/**
+ * The example changes under the chat (round 15, U4): each one checked on THIS plan and lot before it is shown, the
+ * same way the chat's own offers are (lib/interpret.js exampleFixes), and sent with the ops that were checked, so a
+ * tap always applies. A "bigger" that does not fit shows as the growth that does ("Make the kitchen 1 ft longer").
+ * The garage options are offered when a garage change works here.
+ */
+const GARAGE_OPTIONS = 'options:garage' // the chip's key; its words are t('Show me garage options')
+function suggestionsFor(rooms, program, style, kit, lot) {
+  const list = exampleFixes(rooms, program, style, kit, lot, 5)
+  const garage = list.some((f) => f.ops.some((o) => o.op === 'garage' || (o.op === 'add' && o.kind === 'garage')))
+  return [...list.slice(0, 4), ...(garage ? [{ label: GARAGE_OPTIONS, options: true }] : [])]
 }
 
 /** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
@@ -101,7 +92,23 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   }
 
   const area = floorArea(rooms, program.stories)
-  const suggestions = useMemo(() => suggestionsFor(rooms, kit, t), [rooms, kit, t])
+  // checked a moment after the plan changes, so the page draws first (each check draws the plan once)
+  const [suggestions, setSuggestions] = useState([])
+  useEffect(() => {
+    let live = true
+    const id = setTimeout(() => {
+      try {
+        const list = suggestionsFor(rooms, program, style, kit, lot)
+        if (live) setSuggestions(list)
+      } catch {
+        if (live) setSuggestions([])
+      }
+    }, 60)
+    return () => {
+      live = false
+      clearTimeout(id)
+    }
+  }, [rooms, program, style, lot])
 
   // "Ask the office…": a meeting (cost is covered there) or more changes; the office is emailed and the answer carries the phone
   const askOffice = async (kind) => {
@@ -413,8 +420,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         </div>
         <div className="chips">
           {suggestions.map((s) => (
-            <button key={s} onClick={() => send(s)} disabled={changesLeft <= 0 || busy}>
-              {s}
+            <button key={s.label} onClick={() => (s.options ? send(t('Show me garage options')) : send(say(s.label), { ops: s.ops, label: s.label }))} disabled={changesLeft <= 0 || busy}>
+              {s.options ? t('Show me garage options') : say(s.label)}
             </button>
           ))}
         </div>

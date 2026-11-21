@@ -117,7 +117,7 @@ test('a fake Claude resize past what the roof allows is rejected, a sane one app
   const bad = async () => ({ ops: [{ op: 'resize', room: 'kitchen', w: 60, d: 19 }], reply: 'Huge kitchen.', confidence: 0.9 })
   const r1 = await ask('giant kitchen', fresh(), bad)
   assert.equal(r1.applied, false)
-  assert.match(r1.reply, /roof|setback|cover|in the way|too small|goes up to/) // round 8: a size past the kit's largest is out of range
+  assert.match(r1.reply, /roof|setback|cover|in the way|too small|goes up to|drawn at most/) // round 8: a size past the kit's largest is out of range (round 15, U12: said as "drawn at most")
   const good = async () => ({ ops: [{ op: 'resize', room: 'office', w: 12, d: 7.5 }], reply: 'Widened the office to 12 feet.', confidence: 0.9 })
   const r2 = await ask('office 12 feet wide', fresh(), good)
   assert.equal(r2.applied, true, r2.reply)

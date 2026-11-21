@@ -101,7 +101,7 @@ test('a resize past the kit\'s largest for the room is out of range, with the la
   const rooms = generateRooms(DEFAULT_PROGRAM, style, DEFAULT_LOT)
   const r = await ask('make the kitchen 200 feet wider', rooms)
   assert.ok(!r.applied)
-  assert.match(r.reply, /The kitchen in this kit goes up to 2\d' by \d+'/)
+  assert.match(r.reply, /^The kitchen can only grow .+ here: it is drawn at most 2\d ft by \d+ ft in this style\.$/) // round 15, U12: one sentence, the most that fits as the button
   for (const f of r.fixes) {
     assert.ok(f.ops.every((o) => o.op !== 'resize' || (o.w <= 24 && o.d <= 24)), f.label)
     const d = decide({ ops: f.ops, reply: '', confidence: 1 }, rooms, DEFAULT_PROGRAM, style, kit, 'fix', DEFAULT_LOT)
