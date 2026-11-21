@@ -1,0 +1,385 @@
+{
+  "kerria": {
+    "scale": 0.734,
+    "labels": [
+      {
+        "id": "garage",
+        "name": "2-CAR GARAGE",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "21' × 22'"
+      },
+      {
+        "id": "living",
+        "name": "LIVING",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "15' × 22'-3\""
+      },
+      {
+        "id": "kitchen",
+        "name": "KITCHEN",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "19' × 15'-9\""
+      },
+      {
+        "id": "dining",
+        "name": "DINING",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "19' × 13'-3\""
+      },
+      {
+        "id": "master",
+        "name": "PRIMARY BEDROOM",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "13' × 18'"
+      },
+      {
+        "id": "foyer",
+        "name": "ENTRY",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "19' × 9'"
+      },
+      {
+        "id": "bed2",
+        "name": "BEDROOM 2",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "11' × 15'"
+      },
+      {
+        "id": "bed1",
+        "name": "BEDROOM 1",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "11' × 15'"
+      },
+      {
+        "id": "frontPorch",
+        "name": "FRONT PORCH",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "19' × 7'-6\""
+      },
+      {
+        "id": "bed3",
+        "name": "BEDROOM 3",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "11' × 12'-6\""
+      },
+      {
+        "id": "office",
+        "name": "OFFICE",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "13' × 9'-9\""
+      },
+      {
+        "id": "mhall",
+        "name": "GALLERY",
+        "namePx": 10.5,
+        "sizePx": 9,
+        "size": "4' × 31'-3\""
+      },
+      {
+        "id": "laundry",
+        "name": "LAUNDRY",
+        "namePx": 13.1,
+        "sizePx": 11.2,
+        "size": "17' × 7'-3\""
+      },
+      {
+        "id": "hall",
+        "name": "HALLWAY",
+        "namePx": 10.5,
+        "sizePx": 9,
+        "size": "4' × 29'-6\""
+      },
+      {
+        "id": "jackjill",
+        "name": "JACK & JILL",
+        "namePx": 10.5,
+        "sizePx": 9,
+        "size": "11' × 10'-3\""
+      },
+      {
+        "id": "mbath",
+        "name": "PRIMARY BATH",
+        "namePx": 10.9,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "mud",
+        "name": "MUD ROOM",
+        "namePx": 10.5,
+        "sizePx": 9,
+        "size": "4' × 16'-9\""
+      },
+      {
+        "id": "mwic",
+        "name": "PRIMARY CLOSET",
+        "namePx": 13.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "bath1",
+        "name": "BATH 1",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "pantry",
+        "name": "PANTRY",
+        "namePx": 13.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "closet1",
+        "name": "CLOSET",
+        "namePx": 11.6,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "halfbath",
+        "name": "HALF BATH",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "vest",
+        "name": "VESTIBULE",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "closet2",
+        "name": "CLOSET",
+        "namePx": 10.5,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "linen2",
+        "name": "LINEN",
+        "namePx": 12,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "linen",
+        "name": "LINEN",
+        "namePx": 10.5,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "closet3",
+        "name": "CLOSET",
+        "namePx": 12.4,
+        "sizePx": null,
+        "size": null
+      }
+    ],
+    "errors": []
+  },
+  "100x150": {
+    "scale": 0.731,
+    "labels": [
+      {
+        "id": "living",
+        "name": "LIVING",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "27'-6\" × 20'-6\""
+      },
+      {
+        "id": "garage",
+        "name": "2-CAR GARAGE",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "22' × 22'"
+      },
+      {
+        "id": "frontPorch",
+        "name": "FRONT PORCH",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "31'-3\" × 10'"
+      },
+      {
+        "id": "master",
+        "name": "PRIMARY BEDROOM",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "15' × 18'"
+      },
+      {
+        "id": "kitchen",
+        "name": "KITCHEN",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "13'-9\" × 16'-3\""
+      },
+      {
+        "id": "bed2",
+        "name": "BEDROOM 2",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "13'-9\" × 14'-3\""
+      },
+      {
+        "id": "bed1",
+        "name": "BEDROOM 1",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "13'-9\" × 13'-3\""
+      },
+      {
+        "id": "suite2",
+        "name": "BEDROOM 3",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "14'-3\" × 12'-6\""
+      },
+      {
+        "id": "dining",
+        "name": "DINING",
+        "namePx": 12,
+        "sizePx": 10.2,
+        "size": "13'-9\" × 12'"
+      },
+      {
+        "id": "hall",
+        "name": "HALLWAY",
+        "namePx": 12.4,
+        "sizePx": 10.5,
+        "size": "4'-6\" × 30'-6\""
+      },
+      {
+        "id": "jackjill",
+        "name": "JACK & JILL",
+        "namePx": 10.2,
+        "sizePx": 8.6,
+        "size": "13'-9\" × 9'-3\""
+      },
+      {
+        "id": "office",
+        "name": "OFFICE",
+        "namePx": 10.9,
+        "sizePx": 9.3,
+        "size": "11'-6\" × 7'-9\""
+      },
+      {
+        "id": "mbath",
+        "name": "PRIMARY BATH",
+        "namePx": 12,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "bath1",
+        "name": "BATH 1",
+        "namePx": 13.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "foyer",
+        "name": "FOYER",
+        "namePx": 13.1,
+        "sizePx": 11.1,
+        "size": "10' × 7'-9\""
+      },
+      {
+        "id": "laundry",
+        "name": "LAUNDRY",
+        "namePx": 11.3,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "mwic",
+        "name": "PRIMARY CLOSET",
+        "namePx": 11.7,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "mud",
+        "name": "MUD ROOM",
+        "namePx": 10.6,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "mhall",
+        "name": "GALLERY",
+        "namePx": 10.6,
+        "sizePx": 9,
+        "size": "4' × 12'"
+      },
+      {
+        "id": "wic2",
+        "name": "CLOSET",
+        "namePx": 10.9,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "halfbath",
+        "name": "HALF BATH",
+        "namePx": 10.9,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "closet1",
+        "name": "CLOSET",
+        "namePx": 13.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "vest",
+        "name": "VESTIBULE",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "closet2",
+        "name": "CLOSET",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "pantry",
+        "name": "PANTRY",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      },
+      {
+        "id": "linen",
+        "name": "LINEN",
+        "namePx": 10.1,
+        "sizePx": null,
+        "size": null
+      }
+    ],
+    "errors": []
+  }
+}

@@ -269,7 +269,7 @@ export function toIFC({ rooms, program, kit, style, lot, projectName = 'Draft Ho
       } else {
         const win = kit.windows[e.mark] || {}
         const name = [tag, `Window ${e.mark}`].filter(Boolean).join(' ')
-        fill = add(`IFCWINDOW(${g()},#${oh},'${esc(name)}','${esc([win.type, win.material].filter(Boolean).join(' '))}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.WINDOW.,.${e.span >= 5 ? 'DOUBLE_PANEL_VERTICAL' : 'SINGLE_PANEL'}.,$)`)
+        fill = add(`IFCWINDOW(${g()},#${oh},'${esc(name)}','${esc([win.type, win.material].filter(Boolean).join(' '))}',$,#${fb.pl},#${fb.shape},'${tag}',${H},${W},.WINDOW.,.${e.span >= 5 && e.span / ((win.w || 36) / 12) >= 1.5 ? 'DOUBLE_PANEL_VERTICAL' : 'SINGLE_PANEL'}.,$)`)
         const props = [pBool('IsExternal', true), pText('Reference', e.mark)]
         if (win.uFactor) props.push(pReal('ThermalTransmittance', win.uFactor * 5.678, 'IFCTHERMALTRANSMITTANCEMEASURE')) // Btu/h·ft²·°F → W/m²·K
         pset('Pset_WindowCommon', props, [fill])

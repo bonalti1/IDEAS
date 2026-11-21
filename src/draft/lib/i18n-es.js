@@ -661,3 +661,10 @@ export const es = {
   'Done, the house is back to how it was. No change was used.': 'Listo, la casa quedó como estaba. No se usó ningún cambio.',
   'No change was used.': 'No se usó ningún cambio.',
 }
+
+// round 15, house: the room names of the Valley plan and the narrow plan's two halls, and the picture window
+Object.assign(es, {
+  Entry: 'Entrada',
+  'Rear Hall': 'Pasillo de atrás',
+  'fixed picture window, double insulated': 'ventana panorámica fija, doble vidrio aislante',
+})

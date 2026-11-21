@@ -30,8 +30,10 @@ const offline = async () => {
 
 // ── the plans: the default program on a 100 x 150 lot, the same with three bedrooms, and two tight lots ──────
 const ROOMY = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'E Nolana Ave', setbacks: {} })
-const TIGHT = buildLot({ kind: 'manual', width: 60, depth: 110, city: 'mcallen', setbacks: {} })
-const SMALL = buildLot({ kind: 'manual', width: 70, depth: 100, city: 'mcallen', setbacks: {} })
+// round 15: the tight lots are 58 and 55 ft wide (they were 60 and 70): a 60 or 70 ft lot now drafts the default rooms on the
+// Valley plan, and these tests are about the narrow and the compact plans
+const TIGHT = buildLot({ kind: 'manual', width: 58, depth: 110, city: 'mcallen', setbacks: {} })
+const SMALL = buildLot({ kind: 'manual', width: 55, depth: 100, city: 'mcallen', setbacks: {} })
 /** What the rooms step drafts for a program on a lot (the program itself, or what the fit offers in its place). */
 function draft(program, lot) {
   const f = fitsLot(program, style, lot)
@@ -208,10 +210,11 @@ test('2 (basic rules): on the tight lot the patio is refused for the real reason
   assert.equal(planIdOf(tight.rooms), 'narrow')
   const r = await ask('Add a covered patio in the back', tight)
   held(r, 'patio on the tight lot')
-  assert.equal(r.reply, 'A covered patio at the back does not fit as asked: the house and porches would cover 51 percent of the lot, more than the 50 percent McAllen, TX allows. Here is what would work:')
+  assert.equal(r.reply, 'A covered patio at the back does not fit as asked: the house and porches would cover 52 percent of the lot, more than the 50 percent McAllen, TX allows. Here is what would work:')
   assert.doesNotMatch(r.reply, /free wall/)
   assert.ok(r.fixes.length >= 1, 'at least one button')
-  assert.match(r.fixes[0].label, /^Add a smaller covered patio, \d+ ft by \d+ ft$/)
+  // round 15: on the 58 ft lot no smaller patio keeps the cover under 50%, so the first offer may be the smaller house
+  assert.match(r.fixes[0].label, /^(Add a smaller covered patio, \d+ ft by \d+ ft|Draw a smaller house, about [\d,]+ sf, with a covered patio at the back)$/)
   const done = await tapAll(r, tight, 'patio on the tight lot')
   for (const d of done) assert.ok(room(d.rooms, 'rearPorch'), 'the button adds the patio')
 })

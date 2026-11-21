@@ -6,6 +6,7 @@
 
 import { NARROW_PLAN } from './farmhouse-narrow.js'
 import { COMPACT_PLAN } from './farmhouse-compact.js'
+import { VALLEY_PLAN } from './farmhouse-valley.js'
 import { frontGarageVariant } from './farmhouse-front-garage.js'
 
 export const KIT = {
@@ -78,6 +79,8 @@ export const KIT = {
     B: { w: 42, h: 36, type: 'fixed double insulated', material: 'aluminum', head: '4\'-6"', uFactor: 0.4, shgc: 0.25, energy: 'CONFIRM' },
     C: { w: 24, h: 36, type: 'fixed double insulated', material: 'aluminum', head: '5\'-0"', uFactor: 0.4, shgc: 0.25, energy: 'CONFIRM' },
     D: { w: 36, h: 42, type: 'single hung double insulated', material: 'aluminum', head: '7\'-0"', uFactor: 0.4, shgc: 0.25, energy: 'CONFIRM' },
+    // round 15: the living room's picture window on the Valley plan (not on the Garza set; CONFIRM with the drafter)
+    E: { w: 84, h: 60, type: 'fixed picture window, double insulated', material: 'aluminum', head: '7\'-0"', uFactor: 0.4, shgc: 0.25, energy: 'CONFIRM' },
     // IECC 2021 climate zone 2: U-factor 0.40 or less, SHGC 0.25 or less. CONFIRM the supplier's ratings.
     energyCode: { zone: 2, maxU: 0.4, maxShgc: 0.25 },
     bathGlass: 'obscured glass at bathrooms',
@@ -156,7 +159,8 @@ export const KIT = {
   //    rear wall toward the street). This is what the layout engine starts from.
   //    Hallways are real rooms here so the walls come out where the set has them.
   // the narrow plan for 50 ft lots (src/kits/farmhouse-narrow.js); the drafter picks the one that fits the lot
-  plans: { compact: COMPACT_PLAN, narrow: NARROW_PLAN },
+  // round 15: the Valley plan (src/kits/farmhouse-valley.js) for 60 to 80 ft lots, tried before the narrow one
+  plans: { compact: COMPACT_PLAN, valley: VALLEY_PLAN, narrow: NARROW_PLAN },
   // the standard plan is drawn for 1,850 sf and up; the compact one (src/kits/farmhouse-compact.js) for 1,300 to 1,750
   planSqft: [1750, Infinity],
   plan: {
@@ -402,7 +406,7 @@ export const KIT = {
     floorType: 'Slab on Grade - 4in',
     roofTypes: { shingles: 'Architectural Shingles on 2x6', 'metal roof': 'Standing Seam Metal', 'metal awning': 'Standing Seam Metal' },
     doors: { interior: 'Single-Flush : 30" x 80"', interiorWide: 'Single-Flush : 32" x 80"', closet: 'Single-Flush : 24" x 80"', bath: 'Single-Flush : 28" x 80"', barn: 'Sliding-Barn : 30" x 96"', pantry: 'Single-Flush : 36" x 80"', utility: 'Single-Flush : 24" x 80"', garage: 'Single-Flush - 20 min : 32" x 80"', overhead: 'Overhead-Sectional : 192" x 84"', overheadSingle: 'Overhead-Sectional : 108" x 84"', exteriorSingle: 'Exterior - Single : 36" x 80"', exteriorPair: 'Exterior - French Pair : 72" x 96"' },
-    windows: { A: 'Single Hung : 36" x 60"', B: 'Fixed : 42" x 36"', C: 'Fixed : 24" x 36"', D: 'Single Hung : 36" x 42"' },
+    windows: { A: 'Single Hung : 36" x 60"', B: 'Fixed : 42" x 36"', C: 'Fixed : 24" x 36"', D: 'Single Hung : 36" x 42"', E: 'Fixed : 84" x 60"' },
     fixtures: { toilet: 'Toilet - Standard', shower: 'Shower Pan', vanity: 'Vanity - Single', sink: 'Sink - Kitchen', fridge: 'Refrigerator', range: 'Range', washer: 'Washer', dryer: 'Dryer', wh: 'Water Heater', bed: 'Bed - Queen', sofa: 'Sofa', table: 'Table - Dining', desk: 'Desk', counter: 'Base Cabinet - Run', island: 'Island', shelves: 'Shelving', linen: 'Linen Cabinet', bench: 'Bench', tv: 'Media Wall', coffee: 'Coffee Table' },
     titleBlockFamily: 'STB Title Block : 24x36',
     viewTemplates: { plan: 'Floor Plan - Residential', elevation: 'Exterior Elevation' },
@@ -430,8 +434,8 @@ KIT.plans.frontgarage = frontGarageVariant(KIT.plan)
 export const FIXTURE_H = { bed: 2, sofa: 2.3, coffee: 1.5, table: 2.5, desk: 2.5, tv: 2.2, counter: 3, island: 3, sink: 3.1, range: 3, fridge: 6, washer: 3, dryer: 3, wh: 5, toilet: 1.4, shower: 0.3, vanity: 2.8, linen: 6, shelves: 6, bench: 1.5 }
 export const FIXTURE_NAME = { bed: 'Bed', sofa: 'Sofa', coffee: 'Coffee table', table: 'Dining table', desk: 'Desk', tv: 'Media wall', counter: 'Counter', island: 'Island', sink: 'Sink', range: 'Range', fridge: 'Refrigerator', washer: 'Washer', dryer: 'Dryer', wh: 'Water heater', toilet: 'Water closet', shower: 'Shower', vanity: 'Vanity', linen: 'Linen cabinet', shelves: 'Shelving', bench: 'Bench' }
 // Window sill heights from the schedule heads (ft): A 7'-0" head, 60" tall, etc.
-export const WINDOW_SILL = { A: 2, B: 1.5, C: 2, D: 3.5 }
-export const WINDOW_HEAD = { A: 7, B: 4.5, C: 5, D: 7 }
+export const WINDOW_SILL = { A: 2, B: 1.5, C: 2, D: 3.5, E: 2 }
+export const WINDOW_HEAD = { A: 7, B: 4.5, C: 5, D: 7, E: 7 }
 export const DOOR_HEAD = 6.67
 
 export default KIT

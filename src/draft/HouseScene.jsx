@@ -62,7 +62,10 @@ function battens() {
 }
 const STONE = '#a69c8d'
 const TRIM = '#f7f5f0'
-const SHINGLES = '#4a4541'
+// round 15, item U9: a light weathered shingle (the dark one, #4a4541, read as one black slab over the house); the
+// porch and awning metal is the darker accent
+const SHINGLES = '#9b9184'
+const METAL = '#5d5852'
 const WAINSCOT_FT = 3.33 // the kit's 3'-4" stone wainscot (kit.exterior.stoneWainscotFt)
 
 function Walls({ rooms, kit, centre, lot }) {
@@ -253,7 +256,7 @@ function Roof({ roof, centre, lot }) {
         <meshLambertMaterial color={SHINGLES} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={metal} castShadow receiveShadow>
-        <meshLambertMaterial color="#8e8a84" side={THREE.DoubleSide} />
+        <meshLambertMaterial color={METAL} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={siding}>
         <meshLambertMaterial color="#ede7dc" side={THREE.DoubleSide} />
