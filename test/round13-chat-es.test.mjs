@@ -103,7 +103,7 @@ async function judge(q, r, plan, mode) {
     }
   } else {
     assert.equal(r.askOffice, 'meeting', what)
-    assert.equal(r.askLabel, 'Pedir a la oficina que programe mi reunión', `${what}: the office button is Spanish`)
+    assert.equal(r.askLabel, 'Pídele a la oficina que programe mi reunión', `${what}: the office button is Spanish`)
     assert.equal(r.reply, COST_REPLY_ES)
     assert.deepEqual(r.fixes || [], [])
   }
@@ -133,15 +133,15 @@ test('1a (basic rules): the twenty Spanish requests are all understood: the op e
 test('1a (basic rules): refusals and offers on a tight lot are Spanish too, with the reason in plain words and buttons that apply', async () => {
   const tight = PLANS.tight
   const cases = [
-    ['quiero un patio techado atrás', /^Un patio techado atrás no cabe como lo pidió: la casa y los porches cubrirían el 51 por ciento del lote, más del 50 por ciento que permite McAllen, TX\. Esto es lo que sí funcionaría:$/],
+    ['quiero un patio techado atrás', /^Un patio techado atrás no cabe como lo pediste: la casa y los porches cubrirían el 51 por ciento del lote, más del 50 por ciento que permite McAllen, TX\. Esto es lo que sí funcionaría:$/],
     ['la cocina más grande', /^La cocina solo puede crecer 1 pie más de largo aquí: .+\.$/], // round 15, U12: one sentence
     ['quiero 5 recámaras', /^5 recámaras no caben en este lote: la casa quedaría demasiado cerca del costado del lote, donde la ciudad mantiene 5 pies libres\. Este plano tiene 4\./],
     ['que se sienta más abierta', /^La cocina, el comedor y la sala de este plano ya son un solo espacio abierto, sin paredes de por medio/],
     ['agrega una oficina', /^No hay espacio para una oficina en este lote: .+ quedaría demasiado cerca del fondo del lote, donde la ciudad mantiene 10 pies libres\.$/], // round 15, U4: never a smaller step
     ['quiero 4 recámaras', /^Este plano ya tiene 4 recámaras\. No se usó ningún cambio\.$/],
     ['agrega una alberca', /^Eso no es algo que este plano pueda llevar: aquí solo se dibuja la casa\./],
-    ['quiero un segundo piso', /^Por ahora el estilo Modern Farmhouse es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja\./],
-    ['quita la cocina', /^Toda casa necesita una cocina, así que esa se queda\. Mejor dígame qué le gustaría cambiarle\.$/],
+    ['quiero un segundo piso', /^Por ahora el estilo Farmhouse moderno es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja\./],
+    ['quita la cocina', /^Toda casa necesita una cocina, así que esa se queda\. Mejor dime qué te gustaría cambiarle\.$/],
     ['haz la cocina más grande y luego más chica', /^Eso se cancela solo: agrandar y luego achicar la cocina la deja como está\. No se usó ningún cambio\.$/],
   ]
   for (const [text, re] of cases) {
@@ -177,13 +177,13 @@ test('1a (basic rules): the screen language decides when the text does not: lang
   assert.equal(es.lang, 'es')
   assert.match(es.reply, /^La cocina solo puede crecer /) // round 15, U12
   spanish(es.reply, 'lang es')
-  assert.deepEqual(es.fixes.map((f) => f.label), ['Hacer la cocina 1 pie más de largo'])
+  assert.deepEqual(es.fixes.map((f) => f.label), ['Haz la cocina 1 pie más de largo'])
   assert.deepEqual(es.fixes[0].ops, en.fixes[0].ops, 'the same button, in Spanish')
   // the office button: its words travel with the answer in both languages
   const cost = await basic('how much will this cost?', PLANS.roomy)
   assert.equal(cost.askLabel, ASK_LABEL.meeting)
   const costo = await basic('how much will this cost?', PLANS.roomy, { lang: 'es' })
-  assert.equal(costo.askLabel, 'Pedir a la oficina que programe mi reunión')
+  assert.equal(costo.askLabel, 'Pídele a la oficina que programe mi reunión')
   assert.equal(costo.reply, COST_REPLY_ES)
   // a Spanish request on an English screen is still answered in Spanish
   const typed = await basic('la cocina más grande', PLANS.roomy, { lang: 'en' })
@@ -228,44 +228,44 @@ test('1 (writing): the sentences around the chat: the rule reasons as plain.js w
   const fixed = {
     'Fits this lot and the city\'s rules for it.': 'Cabe en este lote y cumple las reglas de la ciudad para él.',
     'Fits once trimmed about 8% to keep the space the city requires along the edges of this lot.': 'Cabe si se reduce más o menos un 8%, para respetar el espacio que la ciudad pide dejar libre a lo largo de las orillas de este lote.',
-    'We started you with what fits this lot; you can change it.': 'Empezamos con lo que cabe en este lote; usted lo puede cambiar.',
+    'We started you with what fits this lot; you can change it.': 'Empezamos con lo que cabe en este lote; tú lo puedes cambiar.',
     'It fits with a 1-car garage.': 'Sí cabe con cochera para 1 carro.',
     'It fits without the office.': 'Sí cabe sin la oficina.',
     'It fits as a 3 bed, 2 bath starter with no garage.': 'Sí cabe como una casa sencilla de 3 recámaras y 2 baños, sin cochera.',
     'The largest this plan fits here is 2,350 sf.': 'Lo más grande que cabe aquí de este plano es 2,350 pies².',
-    'Try fewer rooms or a smaller garage.': 'Intente con menos habitaciones o con una cochera más chica.',
+    'Try fewer rooms or a smaller garage.': 'Intenta con menos habitaciones o con una cochera más chica.',
     'No change was used.': 'No se usó ningún cambio.',
     'same size': 'mismo tamaño',
     '1 change used': '1 cambio usado',
     '3 changes used': '3 cambios usados',
-    'Ask the office to set up my meeting': 'Pedir a la oficina que programe mi reunión',
-    'Ask the office for more changes': 'Pedir más cambios a la oficina',
-    "You've used the free changes on this plan. The office will add more for you. Want me to let them know?": 'Ya usó los cambios incluidos en este plano. La oficina le agregará más. ¿Quiere que les avise?',
-    'Thanks! The office will reach out within 1 business day. You can also call (956) 594-6936.': '¡Gracias! La oficina se comunicará con usted en 1 día hábil. También puede llamar al (956) 594-6936.',
-    'Done. The office has your request and usually adds more within 1 business day. You can also call (956) 594-6936.': 'Listo. La oficina ya tiene su solicitud y normalmente agrega más cambios en 1 día hábil. También puede llamar al (956) 594-6936.',
+    'Ask the office to set up my meeting': 'Pídele a la oficina que programe mi reunión',
+    'Ask the office for more changes': 'Pídele más cambios a la oficina',
+    "You've used the free changes on this plan. The office will add more for you. Want me to let them know?": 'Ya usaste los cambios incluidos en este plano. La oficina te agrega más. ¿Quieres que les avise?',
+    'Thanks! The office will reach out within 1 business day. You can also call (956) 594-6936.': '¡Gracias! La oficina se comunicará contigo en 1 día hábil. También puedes llamar al (956) 594-6936.',
+    'Done. The office has your request and usually adds more within 1 business day. You can also call (956) 594-6936.': 'Listo. La oficina ya tiene tu solicitud y normalmente agrega más cambios en 1 día hábil. También puedes llamar al (956) 594-6936.',
     'Back to version 3. 1 change returned.': 'Regresé a la versión 3. Te devolvimos 1 cambio.',
     'Done, the house is back to how it was. 1 change returned.': 'Listo, la casa quedó como estaba. Te devolvimos 1 cambio.',
     'Back to version 1. 2 changes returned.': 'Regresé a la versión 1. Te devolvimos 2 cambios.',
     'There is nothing to undo yet. No change was used.': 'Todavía no hay nada que deshacer. No se usó ningún cambio.',
-    'Undid "agrega una oficina". That change is back on your plan.': 'Deshice "agrega una oficina". Ese cambio regresó a su plano.',
+    'Undid "agrega una oficina". That change is back on your plan.': 'Deshice "agrega una oficina". Ese cambio regresó a tu plano.',
     'This design is with the drafters now, so it cannot change.': 'Este diseño ya está con los dibujantes, así que no se puede cambiar.',
-    'Something went wrong on our side. Try again in a moment.': 'Algo salió mal de nuestro lado. Intente de nuevo en un momento.',
-    'Make the kitchen bigger': 'Hacer la cocina más grande',
-    'Add a porch on the back': 'Agregar un porche atrás',
-    'Make the garage 3 cars': 'Dejar la cochera para 3 carros',
-    'Add a bedroom': 'Agregar una recámara',
-    'Add a half bath': 'Agregar un medio baño',
-    'Make it 2,400 sf': 'Dejarla en 2,400 pies²',
+    'Something went wrong on our side. Try again in a moment.': 'Algo salió mal de nuestro lado. Intenta de nuevo en un momento.',
+    'Make the kitchen bigger': 'Haz la cocina más grande',
+    'Add a porch on the back': 'Agrega un porche atrás',
+    'Make the garage 3 cars': 'Haz la cochera para 3 carros',
+    'Add a bedroom': 'Agrega una recámara',
+    'Add a half bath': 'Agrega un medio baño',
+    'Make it 2,400 sf': 'Déjala en 2,400 pies²',
     // the suggestions the Draft screen shows under the chat
-    'Remove the rear porch': 'Quitar el porche de atrás',
-    'Add a 2-car garage': 'Agregar una cochera para 2 carros',
-    'Add an office': 'Agregar una oficina',
+    'Remove the rear porch': 'Quita el porche de atrás',
+    'Add a 2-car garage': 'Agrega una cochera para 2 carros',
+    'Add an office': 'Agrega una oficina',
     'Bigger primary bath': 'Baño principal más grande',
-    'Show me garage options': 'Ver opciones para la cochera',
-    '3 options for the garage that pass the checks on this lot. Pick one: that is one change; looking is free.': '3 opciones para la cochera que pasan las revisiones en este lote. Escoja una: eso cuenta como un cambio; ver no usa ninguno.',
+    'Show me garage options': 'Muéstrame opciones para la cochera',
+    '3 options for the garage that pass the checks on this lot. Pick one: that is one change; looking is free.': '3 opciones para la cochera que pasan las revisiones en este lote. Escoge una: eso cuenta como un cambio; ver no usa ninguno.',
     'Only one sound option for the porches on this lot.': 'Solo hay una opción buena para los porches en este lote.',
     'No sound option for the bedroom wing on this lot: each one runs too close to an edge of the lot or breaks a plan rule.': 'No hay ninguna opción buena para el ala de las recámaras en este lote: cada una queda demasiado cerca de una orilla del lote o rompe una regla del plano.',
-    'Sign in with your email first so the office knows which house is yours. Then this button sends your request. You can also call (956) 594-6936.': 'Primero inicie sesión con su correo para que la oficina sepa cuál casa es la suya. Después este botón envía su solicitud. También puede llamar al (956) 594-6936.',
+    'Sign in with your email first so the office knows which house is yours. Then this button sends your request. You can also call (956) 594-6936.': 'Primero inicia sesión con tu correo para que la oficina sepa cuál casa es la tuya. Después este botón envía tu solicitud. También puedes llamar al (956) 594-6936.',
   }
   for (const [en, es] of Object.entries(fixed)) {
     assert.equal(toSpanish(en), es, en)
@@ -302,7 +302,7 @@ test('1 (writing): the sentences around the chat: the rule reasons as plain.js w
   const done = localize({ applied: true, reply: 'Made the kitchen a bit roomier for you.', did: ["Kitchen is now 15.75' by 18.75' (was 13.75' by 16.25')"], ops: [{ op: 'resize' }] }, 'es')
   assert.equal(done.reply, 'La cocina ahora mide 15.75 por 18.75 pies (antes 13.75 por 16.25).')
   const asked = localize({ applied: false, reply: 'Which bedroom did you have in mind?', ops: [] }, 'es')
-  assert.equal(asked.reply, 'No estoy seguro de qué cambiar. ¿Me lo puede decir de otra manera?')
+  assert.equal(asked.reply, 'No estoy seguro de qué cambiar. ¿Me lo puedes decir de otra manera?')
   assert.equal(localize({ applied: false, reply: 'x', askOffice: 'more-changes' }, 'en').askLabel, 'Ask the office for more changes')
 })
 
@@ -451,7 +451,7 @@ test('1b (office API over HTTP): `lang` in the body sets the language when the t
   const es = await office.change(id, 'Make the kitchen bigger', { lang: 'es' })
   assert.equal(es.lang, 'es')
   assert.match(es.reply, /^La cocina solo puede crecer /) // round 15, U12
-  assert.deepEqual(es.fixes.map((f) => f.label), ['Hacer la cocina 1 pie más de largo'])
+  assert.deepEqual(es.fixes.map((f) => f.label), ['Haz la cocina 1 pie más de largo'])
   assert.equal(es.changesUsed, 0)
   // the tap sends the button's Spanish label; the answer is Spanish with or without lang
   const picked = await office.change(id, es.fixes[0].label, { ops: es.fixes[0].ops })
@@ -467,7 +467,7 @@ test('1b (office API over HTTP): `lang` in the body sets the language when the t
   const cost = await office.change(id, 'how much is it?', { lang: 'es' })
   assert.equal(cost.reply, COST_REPLY_ES)
   assert.equal(cost.askOffice, 'meeting')
-  assert.equal(cost.askLabel, 'Pedir a la oficina que programe mi reunión')
+  assert.equal(cost.askLabel, 'Pídele a la oficina que programe mi reunión')
   const costEn = await office.change(id, 'how much is it?', { lang: 'en' })
   assert.equal(costEn.askLabel, 'Ask the office to set up my meeting')
   assert.match(costEn.reply, /^Great question\./)
@@ -488,9 +488,9 @@ test('1b (office API over HTTP): out of changes in Spanish: the answer and the o
   const out = await office.change(id, 'agrega una oficina')
   assert.equal(out.applied, false)
   assert.equal(out.outOfChanges, true)
-  assert.equal(out.reply, 'Ya usó los cambios incluidos en este plano. La oficina le agregará más. ¿Quiere que les avise?')
+  assert.equal(out.reply, 'Ya usaste los cambios incluidos en este plano. La oficina te agrega más. ¿Quieres que les avise?')
   assert.equal(out.askOffice, 'more-changes')
-  assert.equal(out.askLabel, 'Pedir más cambios a la oficina')
+  assert.equal(out.askLabel, 'Pídele más cambios a la oficina')
   assert.equal(out.changesLeft, 0)
 })
 
@@ -568,7 +568,7 @@ test('1c (Claude path): what the model writes is never passed on half-English: a
     assert.match(done.reply, /^La cocina ahora mide [\d.]+ por [\d.]+ pies \(antes [\d.]+ por [\d.]+\)\.$/)
     const asked = await officeClaude.change(id, 'quiero cambiar el cuarto')
     assert.equal(asked.applied, false)
-    assert.equal(asked.reply, 'No estoy seguro de qué cambiar. ¿Me lo puede decir de otra manera?')
+    assert.equal(asked.reply, 'No estoy seguro de qué cambiar. ¿Me lo puedes decir de otra manera?')
     assert.equal(asked.changesUsed, 1)
   } finally {
     claude.answerWith(null)
@@ -714,7 +714,7 @@ test('3 (basic rules): "make the house smaller but add 2 bedrooms" explains the 
         spanish(r.reply, what)
         spanish(r.fixes[0].label, what)
         assert.match(r.reply, /^Una casa más chica y con más recámaras son dos deseos que jalan cada uno para su lado: cada recámara necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco\. Este plano tiene [\d,]+ pies² con \d recámaras\. /, what)
-        assert.match(r.reply, / Toque el botón para verla; solo se usa un cambio cuando usted lo toca\.$/)
+        assert.match(r.reply, / Toca el botón para verla; solo se usa un cambio cuando lo tocas\.$/)
       } else {
         plain(r.reply, what)
         plain(r.fixes[0].label, what)
@@ -756,7 +756,7 @@ test('3 (basic rules): "asdf", "make it nicer", "hmm": "I did not catch that" an
       const r = await basic(text, plan)
       assert.equal(r.applied, false, what)
       assert.equal(r.offer, 'examples', what)
-      assert.equal(r.reply, es ? 'No le entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno.' : 'I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one.', what)
+      assert.equal(r.reply, es ? 'No te entendí. Aquí hay algunos cambios que sí funcionan en este plano. Toca uno, o dime con tus palabras qué te gustaría; solo se usa un cambio cuando tocas uno.' : 'I did not catch that. Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one.', what)
       assert.equal(r.fixes.length, 3, what)
       assert.equal(new Set(r.fixes.map((f) => f.label)).size, 3)
       for (const f of r.fixes) {
@@ -782,7 +782,7 @@ test('3 (basic rules): "asdf", "make it nicer", "hmm": "I did not catch that" an
   const bigger = await basic('make the house bigger', PLANS.roomy)
   assert.equal(bigger.applied, false)
   assert.equal(bigger.reply, 'How big should the house be? Tell me the living area you want, like "make the house 2,400 sf".')
-  assert.equal((await basic('haz la casa mas grande', PLANS.roomy)).reply, '¿De qué tamaño quiere la casa? Dígame el área habitable que quiere, por ejemplo "que la casa sea de 2,400 pies²".')
+  assert.equal((await basic('haz la casa mas grande', PLANS.roomy)).reply, '¿De qué tamaño quieres la casa? Dime el área habitable que quieres, por ejemplo "que la casa sea de 2,400 pies²".')
   // the model coming back unsure on such a request gets the same answer; its question stands when a room was named
   const unsure = async () => ({ ops: [], reply: 'Which room do you mean?', confidence: 0.2 })
   const viaModel = await interpretRequest('whatever you think', PLANS.roomy.rooms, PLANS.roomy.program, style, { lot: PLANS.roomy.lot, interpreter: unsure, report: false })
@@ -829,14 +829,14 @@ async function vagueOverHttp(o, mode) {
     const what = `${mode}: ${text}`
     assert.equal(r.applied, false, what)
     assert.equal(r.offer, 'examples', what)
-    assert.match(r.reply, es ? /^No le entendí\. Aquí hay algunos cambios que sí funcionan en este plano\./ : /^I did not catch that\. Here are some changes that work on this plan\./, what)
-    assert.deepEqual(r.fixes.map((f) => f.label), es ? ['Hacer la cocina más grande', 'Agregar un porche atrás', 'Agregar una recámara'] : ['Make the kitchen bigger', 'Add a porch on the back', 'Add a bedroom'], what)
+    assert.match(r.reply, es ? /^No te entendí\. Aquí hay algunos cambios que sí funcionan en este plano\./ : /^I did not catch that\. Here are some changes that work on this plan\./, what)
+    assert.deepEqual(r.fixes.map((f) => f.label), es ? ['Haz la cocina más grande', 'Agrega un porche atrás', 'Agrega una recámara'] : ['Make the kitchen bigger', 'Add a porch on the back', 'Add a bedroom'], what)
     assert.equal(r.changesUsed, 0, `${what}: nothing used`)
     assert.equal(r.changesLeft, 10)
   }
   // "asdf" on a Spanish screen; then one example tapped: it applies and uses one change
   const es = await o.change(id, 'asdf', { lang: 'es' })
-  assert.match(es.reply, /^No le entendí\./)
+  assert.match(es.reply, /^No te entendí\./)
   const d = await o.change(id, es.fixes[1].label, { ops: es.fixes[1].ops, lang: 'es' })
   assert.equal(d.applied, true, d.reply)
   assert.equal(d.changesUsed, 1)

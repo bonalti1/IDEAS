@@ -6,7 +6,7 @@ import { kitFor, lotOf, minSizeOf, maxSizeOf, planIdOf, isRoom, programOf, progr
 import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply, withPlanCoords, OPEN_ASK, isUndoRequest, tradeOffAsk, unclearAsk, countAsk } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
-import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES } from './es.js'
+import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES, hasUsted } from './es.js'
 import { isSendLot, wantsNicer } from './intents.js'
 
 const MIN_CONFIDENCE = 0.5
@@ -141,9 +141,12 @@ export function localize(result, lang = 'en') {
   if (lang !== 'es') return { ...result, ...ask }
   const reply = String(result.reply || '')
   let es = toSpanish(reply)
-  if (untranslated(reply).length) {
+  // round 15, U15: the chat says tú; a reply that came back in usted (the model's own Spanish) is said again from the
+  // plan code's own words, like a reply with English left in it
+  if (untranslated(reply).length || hasUsted(es)) {
     const did = result.applied && result.did?.length ? `${result.did.join('. ')}.` : null
-    es = did && !untranslated(did).length ? toSpanish(did) : toSpanish(reply, { fallback: result.applied ? 'El cambio quedó hecho.' : result.ops?.length ? 'No pude hacer ese cambio en este plano. Dígamelo de otra manera, o intente con un paso más chico.' : 'No estoy seguro de qué cambiar. ¿Me lo puede decir de otra manera?' })
+    const plain = result.applied ? 'El cambio quedó hecho.' : result.ops?.length ? 'No pude hacer ese cambio en este plano. Dímelo de otra manera.' : 'No estoy seguro de qué cambiar. ¿Me lo puedes decir de otra manera?'
+    es = did && !untranslated(did).length ? toSpanish(did) : hasUsted(es) ? plain : toSpanish(reply, { fallback: plain })
   }
   return { ...result, reply: es, ...(result.fixes ? { fixes: result.fixes.map((f) => ({ ...f, label: toSpanish(f.label) })) } : {}), ...ask, lang: 'es' }
 }

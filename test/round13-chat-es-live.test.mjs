@@ -83,7 +83,7 @@ test('live Claude: the twenty Spanish requests are read as the ops they mean, co
             assert.equal(d.applied, true, `${what}: the button "${r.fixes[0].label}" applies: ${d.reply}`)
             spanish(d.reply, `${what}: the answer to the tap`)
           } else {
-            assert.equal(r.askLabel, 'Pedir a la oficina que programe mi reunión')
+            assert.equal(r.askLabel, 'Pídele a la oficina que programe mi reunión')
           }
         }
       } catch (e) {
@@ -131,7 +131,7 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
       assert.equal(r.source, 'claude', text)
       assert.equal(r.offer, 'examples', `${text}: ${r.reply}`)
       assert.equal(r.fixes.length, 3, text)
-      assert.match(r.reply, spanishAsked ? /^No le entendí\./ : /^I did not catch that\./, text)
+      assert.match(r.reply, spanishAsked ? /^No te entendí\./ : /^I did not catch that\./, text)
       assert.equal(r.changesUsed, 0, text)
     }
     const tapped = await o.change(id, 'Add a porch on the back', (await o.change(id, 'asdf')).fixes.find((f) => f.label === 'Add a porch on the back').ops)

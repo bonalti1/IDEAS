@@ -365,6 +365,9 @@ const COUNT = String.raw`(\d+) (bed|bath)rooms?( and a half bath)?`
 const HAD = String.raw`(\d+)( (?:bed|bath)rooms?)?( and a half bath)?` // "it had 2", "it had 2 bathrooms", "it had 2 bathrooms and a half bath"
 const countHalfEs = (n, kind, half) => `${countEs(n, kind)}${half ? ' y medio' : ''}`
 const hadEs = (n, kind, named, half) => (named || half ? countHalfEs(n, kind, half) : n)
+// the styles by the names the style step shows in Spanish (round 15, U15: no English name in a Spanish reply)
+const STYLE_ES = { 'Modern Farmhouse': 'Farmhouse moderno', Modern: 'Moderno', Spanish: 'Español', Ranch: 'Rancho', Transitional: 'Transicional', Tuscan: 'Toscano', Coastal: 'Costero', 'This style': 'este' }
+const styleEs = (name) => STYLE_ES[String(name).trim()] || String(name).trim()
 const carsEs = (n) => `cochera para ${n} carro${String(n) === '1' ? '' : 's'}`
 const PLAN_ES = { standard: 'el plano estándar', compact: 'el plano compacto', 'narrow-lot': 'el plano para lote angosto', narrow: 'el plano para lote angosto', 'garage-forward': 'el plano con la cochera al frente', frontgarage: 'el plano con la cochera al frente', same: 'el mismo plano' }
 const planEs = (p) => PLAN_ES[p] || `el plano ${p}`
@@ -544,43 +547,43 @@ const Q = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const F = (english, spanish) => S(Q(english), spanish)
 
 const EN_COST = "Great question. Cost is something we go over with you in person at your meeting with the South Texas Builders office, so it's based on your exact plan, lot and selections. Want me to ask the office to set up that meeting?"
-export const COST_REPLY_ES = 'Buena pregunta. El costo lo revisamos con usted en persona en su reunión con la oficina de South Texas Builders, porque depende de su plano exacto, su lote y sus selecciones. ¿Quiere que le pida a la oficina que programe esa reunión?'
-export const ASK_LABEL_ES = { meeting: 'Pedir a la oficina que programe mi reunión', 'more-changes': 'Pedir más cambios a la oficina' }
+export const COST_REPLY_ES = 'Buena pregunta. El costo lo revisamos contigo en persona en tu reunión con la oficina de South Texas Builders, porque depende de tu plano exacto, tu lote y tus selecciones. ¿Quieres que le pida a la oficina que programe esa reunión?'
+export const ASK_LABEL_ES = { meeting: 'Pídele a la oficina que programe mi reunión', 'more-changes': 'Pídele más cambios a la oficina' }
 const CAN_DO_ES = 'En el plano puedo agregar o quitar habitaciones y porches, hacer una habitación más grande o más chica, mover una habitación junto a otra y dejar la cochera para 1, 2 o 3 carros.'
-const NO_STEP = 'Intente con un paso más chico.'
+const NO_STEP = 'Intenta con un paso más chico.'
 
 // what leads a rule's reason on the rooms step, ahead of every sentence that starts with a room's name
 S(String.raw`Does not fit this lot:`, 'No cabe en este lote:')
 // ── fixed sentences ──
 F(EN_COST, COST_REPLY_ES)
 F('On the plan I can add or remove rooms and porches, make a room bigger or smaller, move a room beside another, and set the garage to 1, 2 or 3 cars.', CAN_DO_ES)
-F('I am not sure what to change. Can you say it another way?', 'No estoy seguro de qué cambiar. ¿Me lo puede decir de otra manera?')
+F('I am not sure what to change. Can you say it another way?', 'No estoy seguro de qué cambiar. ¿Me lo puedes decir de otra manera?')
 F('No change was used.', 'No se usó ningún cambio.')
 F('No change used.', 'No se usó ningún cambio.')
 F('This counts as one change, for what was done.', 'Esto cuenta como un solo cambio, por lo que sí se hizo.')
 F('The change counts once, for what was done.', 'El cambio cuenta una sola vez, por lo que sí se hizo.')
 F('Here is what would work:', 'Esto es lo que sí funcionaría:')
-F('Tell me which room could give up some space, or ask for a smaller house.', 'Dígame qué habitación podría ceder un poco de espacio, o pida una casa más chica.')
-F('Tell me which room next to it could give up some space.', 'Dígame qué habitación de al lado podría ceder un poco de espacio.')
+F('Tell me which room could give up some space, or ask for a smaller house.', 'Dime qué habitación podría ceder un poco de espacio, o pide una casa más chica.')
+F('Tell me which room next to it could give up some space.', 'Dime qué habitación de al lado podría ceder un poco de espacio.')
 F('I tried smaller steps down to 1 ft and none fits where it sits.', 'Probé con pasos más chicos, hasta de 1 pie, y ninguno cabe donde está.')
-F('Try a smaller step, or say how big it should be.', 'Intente con un paso más chico, o dígame el tamaño que quiere.')
+F('Try a smaller step, or say how big it should be.', 'Intenta con un paso más chico, o dime el tamaño que quieres.')
 F('Try a smaller step.', NO_STEP)
-F('Try one room at a time, or tell me what the space is for and I will redraw it.', 'Intente con una habitación a la vez, o dígame para qué quiere el espacio y lo vuelvo a dibujar.')
-F('Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.', 'Intente con dos habitaciones de tamaño parecido, o dígame qué quiere junto a qué y lo vuelvo a dibujar.')
+F('Try one room at a time, or tell me what the space is for and I will redraw it.', 'Intenta con una habitación a la vez, o dime para qué quieres el espacio y lo vuelvo a dibujar.')
+F('Try two rooms of about the same size, or tell me what you want next to what and I will redraw it.', 'Intenta con dos habitaciones de tamaño parecido, o dime qué quieres junto a qué y lo vuelvo a dibujar.')
 F('That change did not work out on this plan.', 'Ese cambio no funcionó en este plano.')
-F('Tell me what you would like changed about it instead.', 'Mejor dígame qué le gustaría cambiarle.')
+F('Tell me what you would like changed about it instead.', 'Mejor dime qué te gustaría cambiarle.')
 F('The drafter sees the details.', 'El dibujante ve los detalles.')
 F('Front porch or back porch?', '¿El porche del frente o el de atrás?')
-F('Tell me what to do with that room: bigger, smaller, add one, or remove it.', 'Dígame qué hacer con esa habitación: hacerla más grande, más chica, agregar otra o quitarla.')
-F('Which two rooms should trade places? Say it like "swap the office and the dining room".', '¿Cuáles dos habitaciones quiere intercambiar? Dígalo así: "cambia de lugar la oficina y el comedor".')
-F('I did not catch which room you mean. Try "make the kitchen bigger", "add an office", "make the house 2,400 sf", or "swap the office and the dining room".', 'No entendí a qué habitación se refiere. Intente con "haz la cocina más grande", "agrega una oficina", "que la casa sea de 2,400 pies²" o "cambia de lugar la oficina y el comedor".')
-F('How big should the house be? Tell me the living area you want, like "make the house 2,400 sf".', '¿De qué tamaño quiere la casa? Dígame el área habitable que quiere, por ejemplo "que la casa sea de 2,400 pies²".')
-F('A size below zero? Say the living area you want, like "make the house 2,400 sf".', '¿Un tamaño menor que cero? Dígame el área habitable que quiere, por ejemplo "que la casa sea de 2,400 pies²".')
-F('Give a size between 600 and 10,000 sf.', 'Dé un tamaño entre 600 y 10,000 pies².')
+F('Tell me what to do with that room: bigger, smaller, add one, or remove it.', 'Dime qué hacer con esa habitación: hacerla más grande, más chica, agregar otra o quitarla.')
+F('Which two rooms should trade places? Say it like "swap the office and the dining room".', '¿Cuáles dos habitaciones quieres intercambiar? Dilo así: "cambia de lugar la oficina y el comedor".')
+F('I did not catch which room you mean. Try "make the kitchen bigger", "add an office", "make the house 2,400 sf", or "swap the office and the dining room".', 'No entendí a qué habitación te refieres. Intenta con "haz la cocina más grande", "agrega una oficina", "que la casa sea de 2,400 pies²" o "cambia de lugar la oficina y el comedor".')
+F('How big should the house be? Tell me the living area you want, like "make the house 2,400 sf".', '¿De qué tamaño quieres la casa? Dime el área habitable que quieres, por ejemplo "que la casa sea de 2,400 pies²".')
+F('A size below zero? Say the living area you want, like "make the house 2,400 sf".', '¿Un tamaño menor que cero? Dime el área habitable que quieres, por ejemplo "que la casa sea de 2,400 pies²".')
+F('Give a size between 600 and 10,000 sf.', 'Da un tamaño entre 600 y 10,000 pies².')
 F('That change did not come through as a list of steps.', 'Ese cambio no llegó completo.')
 F('That change did not come through whole.', 'Ese cambio no llegó completo.')
 F('That change is not valid.', 'Ese cambio no es válido.')
-F('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".', 'Dígame cuántas recámaras o baños debe tener la casa, por ejemplo "4 recámaras".')
+F('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".', 'Dime cuántas recámaras o baños debe tener la casa, por ejemplo "4 recámaras".')
 F('A resize needs a width and a depth in feet.', 'Para cambiar el tamaño necesito el ancho y el largo en pies.')
 F('A garage can hold 1 to 4 cars.', 'La cochera puede ser para 1 a 4 carros.')
 F('A move needs a distance east or west and toward the street or the back.', 'Para mover una habitación necesito la distancia hacia el este o el oeste, y hacia la calle o hacia atrás.')
@@ -588,21 +591,21 @@ F('A new draft needs a program.', 'Para un nuevo dibujo necesito saber qué habi
 F('Houses here sit on a slab; there is no basement in this plan.', 'Aquí las casas van sobre una losa de concreto; este plano no lleva sótano.')
 F('That is not something this plan can hold (the lot and the kit draw the house only).', 'Eso no es algo que este plano pueda llevar: aquí solo se dibuja la casa.')
 F("Colours and finishes are picked with the drafter once the plan is set; the kit's finishes (board and batten, stone, shingles) are on the sheet.", 'Los colores y los acabados se escogen con el dibujante cuando el plano ya está definido; los acabados del estilo (tabla y listón, piedra, tejas) vienen en la hoja.')
-F("You've used the free changes on this plan. The office will add more for you. Want me to let them know?", 'Ya usó los cambios incluidos en este plano. La oficina le agregará más. ¿Quiere que les avise?')
+F("You've used the free changes on this plan. The office will add more for you. Want me to let them know?", 'Ya usaste los cambios incluidos en este plano. La oficina te agrega más. ¿Quieres que les avise?')
 F('There is nothing to undo yet.', 'Todavía no hay nada que deshacer.')
-F('That change is back on your plan.', 'Ese cambio regresó a su plano.')
-F('Tap Undo below the chat to take the last change off; it comes back to your plan.', 'Toque Deshacer, debajo del chat, para quitar el último cambio; ese cambio regresa a su plano.')
-F('Something went wrong on our side. Try again in a moment.', 'Algo salió mal de nuestro lado. Intente de nuevo en un momento.')
+F('That change is back on your plan.', 'Ese cambio regresó a tu plano.')
+F('Tap Undo below the chat to take the last change off; it comes back to your plan.', 'Toca Deshacer, debajo del chat, para quitar el último cambio; ese cambio regresa a tu plano.')
+F('Something went wrong on our side. Try again in a moment.', 'Algo salió mal de nuestro lado. Intenta de nuevo en un momento.')
 F('This design is with the drafters now, so it cannot change.', 'Este diseño ya está con los dibujantes, así que no se puede cambiar.')
 F('Ask the office to set up my meeting', ASK_LABEL_ES.meeting)
 F('Ask the office for more changes', ASK_LABEL_ES['more-changes'])
 F('same size', 'mismo tamaño')
 F('Next to which room?', '¿Junto a cuál habitación?')
-F('What I can do now is give that space more room. Pick one below; a change is used only when you pick.', 'Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoja una opción abajo; solo se usa un cambio cuando usted escoge.')
+F('What I can do now is give that space more room. Pick one below; a change is used only when you pick.', 'Lo que sí puedo hacer ahora es darle más espacio a esa área. Escoge una opción abajo; solo se usa un cambio cuando escoges.')
 F('I also tried giving those rooms more space, and none of them can grow where it sits on this lot.', 'También probé darles más espacio a esas habitaciones, y ninguna puede crecer donde está en este lote.')
-F('Tell me which room should get more space and I will make it bigger.', 'Dígame a qué habitación quiere darle más espacio y la hago más grande.')
+F('Tell me which room should get more space and I will make it bigger.', 'Dime a qué habitación quieres darle más espacio y la hago más grande.')
 F("I can't do that one.", 'Eso no lo puedo hacer.')
-F('There is no garage in this plan; say "add a garage".', 'Este plano no tiene cochera; diga "agrega una cochera".')
+F('There is no garage in this plan; say "add a garage".', 'Este plano no tiene cochera; di "agrega una cochera".')
 F('That is the same room twice.', 'Es la misma habitación dos veces.')
 F('A porch and a room cannot trade places.', 'Un porche y una habitación no pueden cambiar de lugar.')
 F('The plan already has a garage.', 'El plano ya tiene cochera.')
@@ -610,10 +613,10 @@ F('There is no free wall at the laundry for a garage.', 'No hay una pared libre 
 F('There is no room for a garage against the laundry on this plan.', 'En este plano no hay espacio para una cochera junto a la lavandería.')
 F('There is no exterior front door into the house.', 'La casa no tiene puerta principal hacia afuera.')
 // round 13: a request nobody could read, and two wishes that pull against each other
-F('I did not catch that.', 'No le entendí.')
-F('Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one.', 'Aquí hay algunos cambios que sí funcionan en este plano. Toque uno, o dígame con sus palabras qué le gustaría; solo se usa un cambio cuando usted toca uno.')
-F('Tell me what you would like to change, like "make the kitchen bigger" or "add an office".', 'Dígame qué le gustaría cambiar, por ejemplo "haz la cocina más grande" o "agrega una oficina".')
-F('Tap the button to see it; a change is used only when you tap.', 'Toque el botón para verla; solo se usa un cambio cuando usted lo toca.')
+F('I did not catch that.', 'No te entendí.')
+F('Here are some changes that work on this plan. Tap one, or tell me in your own words what you would like; a change is used only when you tap one.', 'Aquí hay algunos cambios que sí funcionan en este plano. Toca uno, o dime con tus palabras qué te gustaría; solo se usa un cambio cuando tocas uno.')
+F('Tell me what you would like to change, like "make the kitchen bigger" or "add an office".', 'Dime qué te gustaría cambiar, por ejemplo "haz la cocina más grande" o "agrega una oficina".')
+F('Tap the button to see it; a change is used only when you tap.', 'Toca el botón para verla; solo se usa un cambio cuando lo tocas.')
 S(String.raw`A smaller house with more (bed|bath)rooms is two wishes that pull against each other: every (?:bed|bath)room needs floor area of its own, so the other rooms have to give some up\.`, (m) => `Una casa más chica y con más ${m[1] === 'bed' ? 'recámaras' : 'baños'} son dos deseos que jalan cada uno para su lado: ${m[1] === 'bed' ? 'cada recámara' : 'cada baño'} necesita su propio espacio, así que las demás habitaciones tienen que ceder un poco.`)
 S(String.raw`This plan is (${N}) sf with (\d+) (bed|bath)rooms?\.`, (m) => `Este plano tiene ${m[1]} pies² con ${countEs(m[2], m[3])}.`)
 S(String.raw`What I can draw is a house a little smaller, about (${N}) sf, with (\d+) (bed|bath)rooms?\.`, (m) => `Lo que sí puedo dibujar es una casa un poco más chica, de unos ${m[1]} pies², con ${countEs(m[2], m[3])}.`)
@@ -622,7 +625,7 @@ S(String.raw`A smaller house with (\d+) (bed|bath)rooms? does not fit on this lo
 S(String.raw`What I can do is keep the house about the size it is, with (\d+) (bed|bath)rooms?\.`, (m) => `Lo que sí puedo hacer es dejar la casa más o menos del tamaño que tiene, con ${countEs(m[1], m[2])}.`)
 S(String.raw`More (bed|bath)rooms do not fit on this lot, in a smaller house or in this one\.`, (m) => `Más ${m[1] === 'bed' ? 'recámaras' : 'baños'} no caben en este lote, ni en una casa más chica ni en esta.`)
 S(String.raw`What I can draw is the smaller house, about (${N}) sf, with the (\d+) (bed|bath)rooms? it has now\.`, (m) => `Lo que sí puedo dibujar es la casa más chica, de unos ${m[1]} pies², con ${theCountEs(m[2], m[3])} que tiene ahora.`)
-S(String.raw`I could not find a way to draw both on this lot\. Tell me which matters more, the smaller house or the (bed|bath)rooms, and I will draw that\.`, (m) => `No encontré la manera de dibujar las dos cosas en este lote. Dígame qué le importa más, la casa más chica o ${m[1] === 'bed' ? 'las recámaras' : 'los baños'}, y dibujo eso.`)
+S(String.raw`I could not find a way to draw both on this lot\. Tell me which matters more, the smaller house or the (bed|bath)rooms, and I will draw that\.`, (m) => `No encontré la manera de dibujar las dos cosas en este lote. Dime qué te importa más, la casa más chica o ${m[1] === 'bed' ? 'las recámaras' : 'los baños'}, y dibujo eso.`)
 S(String.raw`This plan already has (\d+) (bed|bath)rooms?, the most this style is drawn with\.`, (m) => `Este plano ya tiene ${countEs(m[1], m[2])}, lo máximo con que se dibuja este estilo.`)
 
 // ── a change the plan's rules refuse (ahead of the sentences for a change that went through: "Adding an office runs past …") ──
@@ -641,7 +644,7 @@ S(String.raw`${WHAT} (runs past .+?|covers more .+?|runs rooms .+?|leaves .+?|ta
 S(String.raw`${WHAT} does not work on this plan as it is drawn\.`, (m) => `${whatEs(m[1], m[2])} no funciona en este plano tal como está dibujado.`)
 S(String.raw`Every house needs an? (.+?), so that one stays\.`, (m) => `Toda casa necesita ${un(m[1])}, así que ${fem(m[1]) ? 'esa' : 'ese'} se queda.`)
 S(String.raw`The plan also has a problem from before(?:: (.+?))?\.(?= The drafter sees)`, (m) => `Además, el plano ya traía un problema${m[1] ? `: ${becauseEs(m[1], 'una regla del plano no se cumple')}` : ''}.`)
-S(String.raw`The change itself is fine, but this plan already has a problem that has to go first(?:: (.+?))?\. Ask me to fix that, or go back one version; the drafter sees the details\.`, (m) => `El cambio en sí está bien, pero este plano ya trae un problema que hay que resolver primero${m[1] ? `: ${becauseEs(m[1], 'una regla del plano no se cumple')}` : ''}. Pídame que lo arregle, o regrese una versión; el dibujante ve los detalles.`)
+S(String.raw`The change itself is fine, but this plan already has a problem that has to go first(?:: (.+?))?\. Ask me to fix that, or go back one version; the drafter sees the details\.`, (m) => `El cambio en sí está bien, pero este plano ya trae un problema que hay que resolver primero${m[1] ? `: ${becauseEs(m[1], 'una regla del plano no se cumple')}` : ''}. Pídeme que lo arregle, o regresa una versión; el dibujante ve los detalles.`)
 
 // ── undo, the office ──
 S(String.raw`Back to version (\d+)\.`, (m) => `Regresé a la versión ${m[1]}.`)
@@ -650,10 +653,10 @@ S(String.raw`(\d+) changes? returned\.`, (m) => `Te devolvimos ${m[1]} ${m[1] ==
 S(String.raw`(\d+) changes? used`, (m) => (m[1] === '1' ? '1 cambio usado' : `${m[1]} cambios usados`))
 S(String.raw`Undid "([^"]*)"\.`, (m) => `Deshice "${m[1]}".`)
 S(String.raw`Could not go back: .*`, () => 'No se pudo regresar a esa versión.')
-S(String.raw`Thanks! The office will reach out within 1 business day\. You can also call ([^.]+)\.`, (m) => `¡Gracias! La oficina se comunicará con usted en 1 día hábil. También puede llamar al ${m[1]}.`)
-S(String.raw`Done\. The office has your request and usually adds more within 1 business day\. You can also call ([^.]+)\.`, (m) => `Listo. La oficina ya tiene su solicitud y normalmente agrega más cambios en 1 día hábil. También puede llamar al ${m[1]}.`)
-S(String.raw`Sign in with your email first so the office knows which house is yours\. Then this button sends your request\. You can also call ([^.]+)\.`, (m) => `Primero inicie sesión con su correo para que la oficina sepa cuál casa es la suya. Después este botón envía su solicitud. También puede llamar al ${m[1]}.`)
-S(String.raw`The office did not get that just now\. Try again in a moment, or call ([^.]+)\.`, (m) => `La oficina no recibió eso en este momento. Intente de nuevo en un momento, o llame al ${m[1]}.`)
+S(String.raw`Thanks! The office will reach out within 1 business day\. You can also call ([^.]+)\.`, (m) => `¡Gracias! La oficina se comunicará contigo en 1 día hábil. También puedes llamar al ${m[1]}.`)
+S(String.raw`Done\. The office has your request and usually adds more within 1 business day\. You can also call ([^.]+)\.`, (m) => `Listo. La oficina ya tiene tu solicitud y normalmente agrega más cambios en 1 día hábil. También puedes llamar al ${m[1]}.`)
+S(String.raw`Sign in with your email first so the office knows which house is yours\. Then this button sends your request\. You can also call ([^.]+)\.`, (m) => `Primero inicia sesión con tu correo para que la oficina sepa cuál casa es la tuya. Después este botón envía tu solicitud. También puedes llamar al ${m[1]}.`)
+S(String.raw`The office did not get that just now\. Try again in a moment, or call ([^.]+)\.`, (m) => `La oficina no recibió eso en este momento. Intenta de nuevo en un momento, o llama al ${m[1]}.`)
 
 // round 15, B6: "make it nicer"
 F('Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes.', 'Aquí tienes algunas maneras de dejarla más bonita en este plano. Toca una; escoger otro estilo no usa nada, y solo se usa un cambio cuando el plano cambia.')
@@ -673,7 +676,7 @@ F('Sign in first, so we can save your lot and send it to a drafter.', 'Primero i
 F('We could not reach the office. Try again in a minute.', 'No pudimos comunicarnos con la oficina. Intenta de nuevo en un minuto.')
 
 // ── what the chat cannot take ──
-S(String.raw`(.+?) is one story for now; a second story is on the list, not drawn yet\.`, (m) => `Por ahora el estilo ${m[1]} es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja.`)
+S(String.raw`(.+?) is one story for now; a second story is on the list, not drawn yet\.`, (m) => `Por ahora el estilo ${styleEs(m[1])} es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja.`)
 S(String.raw`That nets out to no change: making the (.+?) (bigger and then smaller|smaller and then bigger) again leaves it as it is\.`, (m) => `Eso se cancela solo: ${m[2].startsWith('bigger') ? 'agrandar y luego achicar' : 'achicar y luego agrandar'} ${el(m[1])} ${fem(m[1]) ? 'la' : 'lo'} deja como está.`)
 S(String.raw`I do not know how to "[^"]*" a room\.`, () => 'No sé cómo hacer ese cambio en una habitación.')
 S(String.raw`There is no room "([^"]*)" (?:in this plan|to swap with|to move next to)\.`, (m) => `No hay ninguna habitación "${m[1]}" en este plano.`)
@@ -682,7 +685,7 @@ S(String.raw`The .+? kit does not have that room yet\.`, () => 'Este estilo toda
 
 // ── counts ──
 S(String.raw`This plan already has ${COUNT}\.`, (m) => `Este plano ya tiene ${countHalfEs(m[1], m[2], m[3])}.`)
-S(String.raw`(.+?) is drawn with (\d+) to (\d+) (bed|bath)rooms, so (\d+) (?:bed|bath)rooms? is outside what I can draw\. This plan has (\d+)\.`, (m) => `El estilo ${m[1]} se dibuja con ${m[2]} a ${countEs(m[3], m[4])}, así que ${countEs(m[5], m[4])} queda fuera de lo que puedo dibujar. Este plano tiene ${m[6]}.`)
+S(String.raw`(.+?) is drawn with (\d+) to (\d+) (bed|bath)rooms, so (\d+) (?:bed|bath)rooms? is outside what I can draw\. This plan has (\d+)\.`, (m) => `El estilo ${styleEs(m[1])} se dibuja con ${m[2]} a ${countEs(m[3], m[4])}, así que ${countEs(m[5], m[4])} queda fuera de lo que puedo dibujar. Este plano tiene ${m[6]}.`)
 S(String.raw`The house now has ${COUNT}; it had ${HAD}\.`, (m) => `Ahora la casa tiene ${countHalfEs(m[1], m[2], m[3])}; antes tenía ${hadEs(m[4], m[2], m[5], m[6])}.`)
 S(String.raw`Drew the house again with ${COUNT}; it had ${HAD}\. It is (${N}) sf of living area on the (\S+) plan\.`, (m) => `Volví a dibujar la casa con ${countHalfEs(m[1], m[2], m[3])}; antes tenía ${hadEs(m[4], m[2], m[5], m[6])}. Quedó de ${m[7]} pies² de área habitable, en ${planEs(m[8])}.`)
 S(String.raw`${COUNT} do(?:es)? not fit on this lot: (.+?)\. This plan has ${HAD}\.`, (m) => `${cap(countHalfEs(m[1], m[2], m[3]))} no ${m[1] === '1' && !m[3] ? 'cabe' : 'caben'} en este lote: ${becauseEs(m[4])}. Este plano tiene ${hadEs(m[5], m[2], m[6], m[7])}.`)
@@ -693,11 +696,11 @@ S(String.raw`There is no (Bedroom|Bath) (\d+); this plan has (?:(?:Bedrooms|Bath
   return `No hay ${bed ? 'Recámara' : 'Baño'} ${m[2]}; este plano ${has ? `tiene ${has}` : `no tiene ${bed ? 'recámaras' : 'baños'} con número`}.`
 })
 S(String.raw`This plan already has the most (.+?)s this lot holds \((\d+)\)\.`, (m) => `Este plano ya tiene el máximo de ${pluralEs(bare(m[1]))} que caben en este lote (${m[2]}).`)
-S(String.raw`This plan holds up to (\d+) (.+?)s( on this lot)?; it has (\d+)\. Ask for (\d+) more at most(?: \(one\))?\.`, (m) => `Este plano admite hasta ${m[1]} ${pluralEs(bare(m[2]))}${m[3] ? ' en este lote' : ''}; tiene ${m[4]}. Pida cuando mucho ${m[5]} más.`)
+S(String.raw`This plan holds up to (\d+) (.+?)s( on this lot)?; it has (\d+)\. Ask for (\d+) more at most(?: \(one\))?\.`, (m) => `Este plano admite hasta ${m[1]} ${pluralEs(bare(m[2]))}${m[3] ? ' en este lote' : ''}; tiene ${m[4]}. Pide cuando mucho ${m[5]} más.`)
 
 // ── a porch, a patio ──
-S(String.raw`A (covered patio|rear porch|front porch) at the (?:back|front) does not fit as asked: (.+?)\.(?= (?:Here is what would work:|Tell me which room could))`, (m) => `${cap(porchEs(m[1]))} no cabe como lo pidió: ${becauseEs(m[2], 'el plano no funcionaría como está dibujado')}.`)
-S(String.raw`Adding a covered patio at the (back|front) of the house(?:, (${N}) by (${N}) feet)?\. On the plan it is labelled (Rear Porch|Front Porch)\.`, (m) => `Agregué un patio techado ${m[1] === 'back' ? 'en la parte de atrás' : 'al frente'} de la casa${m[2] ? `, de ${m[2]} por ${m[3]} pies` : ''}. En el plano aparece como ${m[4] === 'Rear Porch' ? 'porche de atrás' : 'porche del frente'} (${m[4]}).`)
+S(String.raw`A (covered patio|rear porch|front porch) at the (?:back|front) does not fit as asked: (.+?)\.(?= (?:Here is what would work:|Tell me which room could))`, (m) => `${cap(porchEs(m[1]))} no cabe como lo pediste: ${becauseEs(m[2], 'el plano no funcionaría como está dibujado')}.`)
+S(String.raw`Adding a covered patio at the (back|front) of the house(?:, (${N}) by (${N}) feet)?\. On the plan it is labelled (Rear Porch|Front Porch)\.`, (m) => `Agregué un patio techado ${m[1] === 'back' ? 'en la parte de atrás' : 'al frente'} de la casa${m[2] ? `, de ${m[2]} por ${m[3]} pies` : ''}. En el plano aparece como ${m[4] === 'Rear Porch' ? 'porche de atrás' : 'porche del frente'}.`)
 S(String.raw`Adding a (rear porch|front porch)(?:, (${N}) by (${N}) feet)?\.`, (m) => `Agregué ${m[1] === 'rear porch' ? 'un porche atrás' : 'un porche al frente'}${m[2] ? `, de ${m[2]} por ${m[3]} pies` : ''}.`)
 
 // ── bigger, smaller ──
@@ -773,21 +776,21 @@ S(String.raw`That would not change anything: (.+?)\.(?=\s|$)`, (m) => `Eso no ca
 // ── a request in parts ──
 S(String.raw`Done: (.+?)\.(?=\s+(?:Not done:|I did the first|I didn't do:|Great question)|\s*$)`, (m) => `Hecho: ${m[1].split('; ').map(partEs).join('; ')}.`)
 S(String.raw`Not done: (.+?)\.(?=\s)`, (m) => `No se hizo: ${m[1].split('; ').map(partEs).join('; ')}.`)
-S(String.raw`I did the first (\d+); send (".*") next\.`, (m) => `Hice los primeros ${m[1]}; después mande ${m[2].replace(/"([^"]*)"/g, (q, t) => `"${partEs(t)}"`)}.`)
+S(String.raw`I did the first (\d+); send (".*") next\.`, (m) => `Hice los primeros ${m[1]}; después manda ${m[2].replace(/"([^"]*)"/g, (q, t) => `"${partEs(t)}"`)}.`)
 S(String.raw`I didn't do: (.+?)\.(?=\s+The change counts once|\s*$)`, (m) => {
   const notes = [...m[1].matchAll(/"([^"]*)"(?:: (.*?)| \(say which room, and what to change\))(?=; "|$)/g)].map((k) => {
-    if (k[2] === undefined) return `"${k[1]}" (diga qué habitación y qué quiere cambiarle)`
-    if (k[2] === 'send that on its own and I will show what can be done') return `"${k[1]}": mándelo aparte y le muestro lo que se puede hacer`
+    if (k[2] === undefined) return `"${k[1]}" (di qué habitación y qué quieres cambiarle)`
+    if (k[2] === 'send that on its own and I will show what can be done') return `"${k[1]}": mándalo aparte y te muestro lo que se puede hacer`
     const why = run(`${k[2]}.`)
     return `"${k[1]}": ${why.missed.length ? 'eso no lo puede llevar este plano' : why.out.replace(/\.$/, '').replace(/^(\p{Lu})(?=\p{Ll})/u, (c) => c.toLowerCase())}`
   })
-  return `No hice: ${notes.join('; ') || 'una parte de lo que pidió'}.`
+  return `No hice: ${notes.join('; ') || 'una parte de lo que pediste'}.`
 })
 
 // ── more open ──
 S(String.raw`(The .+?) on this plan are already (one open space, with no walls between them|open to each other, with no wall between them)(?:, and the ceilings there are (${N}) ft where the bedrooms have (${N}))?\.`, (m) => `${cap(listEs(m[1]))} de este plano ya son ${m[2].startsWith('one') ? 'un solo espacio abierto, sin paredes de por medio' : 'un espacio abierto entre sí, sin pared de por medio'}${m[3] ? `, y ahí los techos son de ${m[3]} pies, mientras que en las recámaras son de ${m[4]}` : ''}.`)
 S(String.raw`(The .+?|[A-Z].+?) (have their|has its) own walls on this plan\.`, (m) => `${cap(listEs(m[1]))} ${m[2] === 'has its' ? 'tiene' : 'tienen'} sus propias paredes en este plano.`)
-S(String.raw`Taking out (other walls|a wall) or raising a ceiling is not something I can draw from here; bring that up with the office\.`, (m) => `Quitar ${m[1] === 'a wall' ? 'una pared' : 'otras paredes'} o subir un techo no es algo que yo pueda dibujar desde aquí; coméntelo con la oficina.`)
+S(String.raw`Taking out (other walls|a wall) or raising a ceiling is not something I can draw from here; bring that up with the office\.`, (m) => `Quitar ${m[1] === 'a wall' ? 'una pared' : 'otras paredes'} o subir un techo no es algo que yo pueda dibujar desde aquí; coméntalo con la oficina.`)
 
 // ── the rules, as plain.js words them, and the fit ──
 S(String.raw`(.+?) would (?:sit|end up) too close to (the side of the lot|the back of the lot|the street|the side street|the street side \(.+?\)) \(the city keeps (${N}) ft open there\)\.`, (m) => `${cap(el(m[1]))} quedaría demasiado cerca ${edgeEs(m[2])} (ahí la ciudad mantiene ${pies(m[3])} libres).`)
@@ -816,54 +819,54 @@ S(String.raw`An? (\d)-car garage has no spot on this lot that a car can be drive
 S(String.raw`The lot's width caps this plan at about (${N}) sf\.`, (m) => `El ancho del lote limita este plano a unos ${m[1]} pies².`)
 S(String.raw`This plan has to be trimmed to (${N})% to fit the lot\.`, (m) => `Este plano tendría que reducirse al ${m[1]}% para caber en el lote.`)
 S(String.raw`Living area is (${N}) sf, (${N})% (over|under) the (${N}) sf asked for\.`, (m) => `El área habitable es de ${m[1]} pies², un ${m[2]}% ${m[3] === 'over' ? 'más' : 'menos'} que los ${m[4]} pies² que pidió.`)
-S(String.raw`This lot is zoned (.+?) \((.+?)\)\. A house may need a rezoning; you can keep drafting, and the office will call you before it is sent on\.`, (m) => `Este lote tiene zonificación ${m[1]} (${m[2]}). Una casa podría necesitar un cambio de zonificación; puede seguir dibujando, y la oficina le llamará antes de mandarlo.`)
+S(String.raw`This lot is zoned (.+?) \((.+?)\)\. A house may need a rezoning; you can keep drafting, and the office will call you before it is sent on\.`, (m) => `Este lote tiene zonificación ${m[1]} (${m[2]}). Una casa podría necesitar un cambio de zonificación; puedes seguir dibujando, y la oficina te llamará antes de mandarlo.`)
 S(String.raw`FEMA has no digital flood map for this spot; the county floodplain administrator sets the slab height\. The office asks before the slab is set\.`, 'FEMA no tiene un mapa digital de inundación para este lugar; el administrador de zonas inundables del condado define la altura de la losa. La oficina pregunta antes de definirla.')
 S(String.raw`Inside a FEMA special flood hazard area \(zone (.+?)(?:, base flood elevation (${N}) ft)?\): the slab elevation and flood insurance follow the base flood elevation\.`, (m) => `Dentro de un área especial de riesgo de inundación de FEMA (zona ${m[1]}${m[2] ? `, elevación base de inundación de ${m[2]} pies` : ''}): la altura de la losa y el seguro contra inundación siguen la elevación base de inundación.`)
 S(String.raw`Zone X \(shaded\), the 0\.2% annual-chance flood area: lenders and the city may ask for an elevation certificate\.`, 'Zona X (sombreada), el área con 0.2% de probabilidad anual de inundación: el banco y la ciudad pueden pedir un certificado de elevación.')
 
 // ── buttons ──
-S(String.raw`Make (.+?) bigger`, (m) => `Hacer ${el(m[1])} más grande`)
-S(String.raw`Make (.+?) smaller`, (m) => `Hacer ${el(m[1])} más ${fem(m[1]) ? 'chica' : 'chico'}`)
-S(String.raw`Make the (.+?) (${N})' by (${N})' instead\?`, (m) => `¿Mejor dejar ${el(m[1])} de ${m[2]} por ${m[3]} pies?`)
-S(String.raw`Make (.+?) (${N}) ft shorter to make room for the (covered patio|rear porch|front porch)`, (m) => `Acortar ${el(m[1])} ${pies(m[2])} para dar lugar ${m[3] === 'covered patio' ? 'al patio techado' : m[3] === 'rear porch' ? 'al porche de atrás' : 'al porche del frente'}`)
-S(String.raw`Make (.+?) ((?:${N} ft (?:wider|longer))(?: and ${N} ft (?:wider|longer))?)`, (m) => `Hacer ${el(m[1])} ${grewEs(m[2])}`)
-S(String.raw`Make it ${COUNT}`, (m) => `Dejarla con ${countHalfEs(m[1], m[2], m[3])}`)
-S(String.raw`Make it (${N}) sf`, (m) => `Dejarla en ${m[1]} pies²`)
-S(String.raw`Make it a (\d)-car garage instead\?`, (m) => `¿Mejor una ${carsEs(m[1])}?`)
-S(String.raw`Make the garage (\d) cars?`, (m) => `Dejar la ${carsEs(m[1])}`)
-S(String.raw`(\d)-car with a tandem bay \(one bay two cars deep\)\?`, (m) => `¿Para ${m[1]} carros, con un lugar en fila (dos carros, uno detrás del otro)?`)
-S(String.raw`Re-draft the house with a (\d)-car garage(?: \((\d+) earlier changes? would not carry over\))?`, (m) => `Volver a dibujar la casa con ${carsEs(m[1])}${m[2] ? ` (${m[2] === '1' ? '1 cambio anterior no se conservaría' : `${m[2]} cambios anteriores no se conservarían`})` : ''}`)
-S(String.raw`Draw a (smaller|larger) house, about (${N}) sf, with (.+)`, (m) => `Dibujar una casa más ${m[1] === 'smaller' ? 'chica' : 'grande'}, de unos ${m[2]} pies², con ${withEs(m[3])}`)
+S(String.raw`Make (.+?) bigger`, (m) => `Haz ${el(m[1])} más grande`)
+S(String.raw`Make (.+?) smaller`, (m) => `Haz ${el(m[1])} más ${fem(m[1]) ? 'chica' : 'chico'}`)
+S(String.raw`Make the (.+?) (${N})' by (${N})' instead\?`, (m) => `Mejor deja ${el(m[1])} de ${m[2]} por ${m[3]} pies`)
+S(String.raw`Make (.+?) (${N}) ft shorter to make room for the (covered patio|rear porch|front porch)`, (m) => `Acorta ${el(m[1])} ${pies(m[2])} para dar lugar ${m[3] === 'covered patio' ? 'al patio techado' : m[3] === 'rear porch' ? 'al porche de atrás' : 'al porche del frente'}`)
+S(String.raw`Make (.+?) ((?:${N} ft (?:wider|longer))(?: and ${N} ft (?:wider|longer))?)`, (m) => `Haz ${el(m[1])} ${grewEs(m[2])}`)
+S(String.raw`Make it ${COUNT}`, (m) => `Déjala con ${countHalfEs(m[1], m[2], m[3])}`)
+S(String.raw`Make it (${N}) sf`, (m) => `Déjala en ${m[1]} pies²`)
+S(String.raw`Make it a (\d)-car garage instead\?`, (m) => `Mejor haz una ${carsEs(m[1])}`)
+S(String.raw`Make the garage (\d) cars?`, (m) => `Haz la ${carsEs(m[1])}`)
+S(String.raw`(\d)-car with a tandem bay \(one bay two cars deep\)\?`, (m) => `Haz la cochera para ${m[1]} carros, con un lugar en fila (dos carros, uno detrás del otro)`)
+S(String.raw`Re-draft the house with a (\d)-car garage(?: \((\d+) earlier changes? would not carry over\))?`, (m) => `Vuelve a dibujar la casa con ${carsEs(m[1])}${m[2] ? ` (${m[2] === '1' ? '1 cambio anterior no se conservaría' : `${m[2]} cambios anteriores no se conservarían`})` : ''}`)
+S(String.raw`Draw a (smaller|larger) house, about (${N}) sf, with (.+)`, (m) => `Dibuja una casa más ${m[1] === 'smaller' ? 'chica' : 'grande'}, de unos ${m[2]} pies², con ${withEs(m[3])}`)
 F('Draw the house again with an office in place of a bedroom', 'Vuelve a dibujar la casa con una oficina en lugar de una recámara')
-S(String.raw`Draw the house again with (.+)`, (m) => `Volver a dibujar la casa con ${withEs(m[1])}`)
-S(String.raw`Make the house smaller, about (${N}) sf, and keep (\d+) (bed|bath)rooms?`, (m) => `Hacer la casa más chica, de unos ${m[1]} pies², y dejar ${theCountEs(m[2], m[3])}`)
-S(String.raw`Keep the house about this size, with (\d+) (bed|bath)rooms?`, (m) => `Dejar la casa más o menos de este tamaño, con ${countEs(m[1], m[2])}`)
-S(String.raw`Add a smaller (covered patio|rear porch|front porch), (${N}) ft by (${N}) ft`, (m) => `Agregar ${m[1] === 'covered patio' ? 'un patio techado' : m[1] === 'rear porch' ? 'un porche atrás' : 'un porche al frente'} más chico, de ${m[2]} por ${m[3]} pies`)
+S(String.raw`Draw the house again with (.+)`, (m) => `Vuelve a dibujar la casa con ${withEs(m[1])}`)
+S(String.raw`Make the house smaller, about (${N}) sf, and keep (\d+) (bed|bath)rooms?`, (m) => `Haz la casa más chica, de unos ${m[1]} pies², y deja ${theCountEs(m[2], m[3])}`)
+S(String.raw`Keep the house about this size, with (\d+) (bed|bath)rooms?`, (m) => `Deja la casa más o menos de este tamaño, con ${countEs(m[1], m[2])}`)
+S(String.raw`Add a smaller (covered patio|rear porch|front porch), (${N}) ft by (${N}) ft`, (m) => `Agrega ${m[1] === 'covered patio' ? 'un patio techado' : m[1] === 'rear porch' ? 'un porche atrás' : 'un porche al frente'} más chico, de ${m[2]} por ${m[3]} pies`)
 // "show me garage options": the answer above the option drawings
 const topicEs = (t) => (t === 'the garage' ? 'la cochera' : t === 'the porches' ? 'los porches' : t === 'the bedroom wing' ? 'el ala de las recámaras' : 'eso')
-S(String.raw`(\d+) options for (the garage|the porches|the bedroom wing) that pass the checks on this lot\. Pick one: that is one change; looking is free\.`, (m) => `${m[1]} opciones para ${topicEs(m[2])} que pasan las revisiones en este lote. Escoja una: eso cuenta como un cambio; ver no usa ninguno.`)
+S(String.raw`(\d+) options for (the garage|the porches|the bedroom wing) that pass the checks on this lot\. Pick one: that is one change; looking is free\.`, (m) => `${m[1]} opciones para ${topicEs(m[2])} que pasan las revisiones en este lote. Escoge una: eso cuenta como un cambio; ver no usa ninguno.`)
 S(String.raw`Only one sound option for (the garage|the porches|the bedroom wing) on this lot\.`, (m) => `Solo hay una opción buena para ${topicEs(m[1])} en este lote.`)
 S(String.raw`No sound option for (the garage|the porches|the bedroom wing) on this lot: each one runs too close to an edge of the lot or breaks a plan rule\.`, (m) => `No hay ninguna opción buena para ${topicEs(m[1])} en este lote: cada una queda demasiado cerca de una orilla del lote o rompe una regla del plano.`)
 // the suggestions under the chat
 F('Bigger primary bath', 'Baño principal más grande')
-S(String.raw`Show me (garage|porch|bedroom wing|bedroom) options`, (m) => `Ver opciones para ${m[1] === 'garage' ? 'la cochera' : m[1] === 'porch' ? 'los porches' : 'las recámaras'}`)
-S(String.raw`Add a porch on the back`, 'Agregar un porche atrás')
-S(String.raw`Add a (\d)-car garage`, (m) => `Agregar una ${carsEs(m[1])}`)
+S(String.raw`Show me (garage|porch|bedroom wing|bedroom) options`, (m) => `Muéstrame opciones para ${m[1] === 'garage' ? 'la cochera' : m[1] === 'porch' ? 'los porches' : 'las recámaras'}`)
+S(String.raw`Add a porch on the back`, 'Agrega un porche atrás')
+S(String.raw`Add a (\d)-car garage`, (m) => `Agrega una ${carsEs(m[1])}`)
 S(String.raw`Add an? ([^.?]+?) next to ([^.?]+)`, (m) => `Agrega ${un(m[1])} junto ${al(m[2])}`)
-S(String.raw`Add an? ([^.?]+)`, (m) => `Agregar ${un(m[1])}`)
-S(String.raw`Remove the ([^.?]+)`, (m) => `Quitar ${el(m[1])}`)
-S(String.raw`Move the (.+?) (${N}) ft (west|east|toward the back|toward the street)\?`, (m) => `¿Mover ${el(m[1])} ${pies(m[2])} ${wayEs(m[3])}?`)
+S(String.raw`Add an? ([^.?]+)`, (m) => `Agrega ${un(m[1])}`)
+S(String.raw`Remove the ([^.?]+)`, (m) => `Quita ${el(m[1])}`)
+S(String.raw`Move the (.+?) (${N}) ft (west|east|toward the back|toward the street)\?`, (m) => `Mueve ${el(m[1])} ${pies(m[2])} ${wayEs(m[3])}`)
 // what fits a lot, on the rooms step
 F("Fits this lot and the city's rules for it.", 'Cabe en este lote y cumple las reglas de la ciudad para él.')
 S(String.raw`Fits once trimmed about (${N})% to keep the space the city requires along the edges of this lot\.`, (m) => `Cabe si se reduce más o menos un ${m[1]}%, para respetar el espacio que la ciudad pide dejar libre a lo largo de las orillas de este lote.`)
-S(String.raw`The house is turned (${N})° from square to the street, to sit in the widest part of your lot\.`, (m) => `La casa está girada ${m[1]}° respecto a la calle, para quedar en la parte más ancha de su lote.`)
-F('We started you with what fits this lot; you can change it.', 'Empezamos con lo que cabe en este lote; usted lo puede cambiar.')
+S(String.raw`The house is turned (${N})° from square to the street, to sit in the widest part of your lot\.`, (m) => `La casa está girada ${m[1]}° respecto a la calle, para quedar en la parte más ancha de tu lote.`)
+F('We started you with what fits this lot; you can change it.', 'Empezamos con lo que cabe en este lote; tú lo puedes cambiar.')
 F('Checking the lot…', 'Revisando el lote…')
 S(String.raw`The largest this plan fits here is (${N}) sf\.`, (m) => `Lo más grande que cabe aquí de este plano es ${m[1]} pies².`)
 S(String.raw`It fits (smaller, as the (\S+) plan draws it|as (\d+) bed, (\d+)(\.5)? bath(?:, (\d)-car|, no garage)(, no office)? \(what the (\S+) plan holds\)|[^.]+)\.`, (m) => `Sí cabe ${fitLabelEs(m[1])}.`)
 S(String.raw`Our smallest plan is about (${N}) by (${N}) ft, and the largest house that fits the space you can build on here is about (${N}) by (${N}) ft\.`, (m) => `Nuestro plano más chico mide más o menos ${m[1]} por ${m[2]} pies, y la casa más grande que cabe en el espacio donde se puede construir aquí es de unos ${m[3]} por ${m[4]} pies.`)
-F('With the deed restriction (no garage facing the street) the garage has to load from the side or a side street, and that needs a wider lot. Try fewer cars, or no garage.', 'Por la restricción de la escritura (ninguna cochera de frente a la calle), la cochera tiene que tener la entrada por un lado o por una calle lateral, y para eso se necesita un lote más ancho. Intente con menos carros, o sin cochera.')
-F('Try fewer rooms or a smaller garage.', 'Intente con menos habitaciones o con una cochera más chica.')
+F('With the deed restriction (no garage facing the street) the garage has to load from the side or a side street, and that needs a wider lot. Try fewer cars, or no garage.', 'Por la restricción de la escritura (ninguna cochera de frente a la calle), la cochera tiene que tener la entrada por un lado o por una calle lateral, y para eso se necesita un lote más ancho. Intenta con menos carros, o sin cochera.')
+F('Try fewer rooms or a smaller garage.', 'Intenta con menos habitaciones o con una cochera más chica.')
 F('Try that', 'Probar eso')
 S(String.raw`(Use|Set) (${N}) sf`, (m) => `Usar ${m[2]} pies²`)
 S(String.raw`with a (\d)-car garage`, (m) => `con ${carsEs(m[1])}`)
@@ -876,8 +879,15 @@ F('without the garage', 'sin la cochera')
 const EN_WORDS = /(?<![\p{L}\p{N}])(?:the|and|is|are|was|were|this|that|with|would|does|not|for|of|to|on|at|in|it|its|you|your|can|cannot|house|rooms?|lot|make|making|add|adding|added|bigger|smaller|wider|ft|sf|feet|by|from|here|there|have|had|already|will|what|which|next|street|city|keeps|changes?|used|try|tell|step|kitchen|bedrooms?|bathrooms?|bath|garage|office|living|dining|laundry|closet|setbacks?|draft|drafter)(?![\p{L}\p{N}])/iu // letters with accents are letters (\b would cut "así" at the í)
 /** Words left in English in a text a Spanish speaker would read (what the client typed, in quotes, does not count). */
 export function hasEnglish(text) {
-  const t = String(text ?? '').replace(/"[^"]*"/g, ' ').replace(/\((?:Rear Porch|Front Porch)\)/g, ' ').replace(/South Texas Builders/g, ' ')
+  const t = String(text ?? '').replace(/"[^"]*"/g, ' ').replace(/South Texas Builders/g, ' ')
   return EN_WORDS.test(t)
+}
+// round 15, U15: the chat says tú, as the screens do. The usted forms a reply could carry (what the client typed, in
+// quotes, does not count)
+export const USTED = /(?<![\p{L}])(?:usted(?:es)?|dígame|dígalo|dígamelo|diga|toque|pídame|escoja|intente|inicie|llame al|mande|mándelo|coméntelo|regrese|¿quiere|¿puede|¿me (?:lo )?puede|también puede|puede seguir|su plano|sus palabras|su solicitud|su correo|le gustaría|le importa|le agregará|le muestro|le devolvi\p{L}*|se le devolvi\p{L}*|lo pidió|ya usó|se refiere|no le entendí)(?![\p{L}])/iu
+/** Usted left in a text a Spanish speaker reads (the chat says tú). */
+export function hasUsted(text) {
+  return USTED.test(String(text ?? '').replace(/"[^"]*"|«[^»]*»/g, ' '))
 }
 /** A sentence that is Spanish already (Claude's own reply, the client's words), so it is left as it is. */
 function looksSpanish(sentence) {
