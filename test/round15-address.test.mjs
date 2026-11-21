@@ -43,6 +43,11 @@ test('U6 (unit): one slip apart, and the county from the city typed', () => {
   assert.equal(oneEditApart('KERRIA', 'KERRIA'), false, 'the same street is not a slip')
   assert.equal(oneEditApart('KRIA', 'KERRIA'), false, 'two letters off is not guessed')
   assert.equal(oneEditApart('NOLANA', 'KERRIA'), false)
+  // live run, 2200 S 10th St McAllen: "11TH", "12TH" and "16TH" were read as slips of "10TH" and the exact parcel,
+  // found by a later step, was never reached. A numbered street is a different street.
+  assert.equal(oneEditApart('10TH', '11TH'), false, 'a different number is a different street')
+  assert.equal(oneEditApart('S 10TH ST', 'S 1TH ST'), false)
+  assert.equal(oneEditApart('3RD', '3RF'), true, 'a letter slip on a numbered street still counts')
   assert.equal(countyFromText('2002 Kiskade Ln Mission'), 'Hidalgo County')
   assert.equal(countyFromText('1201 Keria Ave, Mc Allen, TX'), 'Hidalgo County')
   assert.equal(countyFromText('344 SE 3rd St, Premont'), null, 'a city we have no rules for names no county')

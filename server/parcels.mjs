@@ -447,6 +447,8 @@ export function oneEditApart(a, b) {
   a = String(a || '')
   b = String(b || '')
   if (a === b || !a || !b || Math.abs(a.length - b.length) > 1) return false
+  // a numbered street is never a slip away from another ("10TH" and "11TH" are different streets): only letters slip
+  if (a.replace(/\D/g, '') !== b.replace(/\D/g, '')) return false
   if (a.length === b.length) {
     const diff = [...a].map((c, i) => (c === b[i] ? -1 : i)).filter((i) => i >= 0)
     return diff.length === 1 || (diff.length === 2 && diff[1] === diff[0] + 1 && a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]])
@@ -719,7 +721,7 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
     }
     // 3a. round 15, U6: no parcel at the typed number on the typed street, but one at that number on a street a single
     //     letter away ("Kiskade" for Kiskadee, "Keria" for Kerria): offered as a near match, said plainly, and the
-    //     drafter confirms it. Several such streets: the homeowner picks.
+    //     drafter confirms it. Several such streets: the later steps go on.
     if (number && street && !near) {
       const out = await step('street-near', async () => {
         let where
@@ -736,7 +738,7 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
           const rec = normalize(src, close[0], { matchedBy: 'street-near', confidence: 'near', censusPoint })
           return rec.match === 'one' ? { ...rec, listedAs: rec.situs, nearWhy: 'street' } : null
         }
-        if (close.length > 1) return { match: 'none', candidates: close.slice(0, 6).map((f) => { const { feature, ...c } = candidateOf(src, f, censusPoint); return c }), source: { id: src.id, name: src.name, url: src.url, fetchedAt: now(), checkedAt: src.checkedAt }, county: src.county }
+        // several streets a letter away: not a slip we can name; the later steps (the address point, the map) go on
         return null
       })
       if (out) return tag(out)

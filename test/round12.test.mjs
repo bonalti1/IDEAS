@@ -233,7 +233,8 @@ test('3: a plat lot gets its zoning read when a drafter confirms it, shown to co
   const review = fs.readFileSync('src/draft/screens/Review.jsx', 'utf8')
   assert.match(review, /data-testid="zoning-read"/)
   assert.match(review, /confirm or change/)
-  assert.match(review, /data-testid="zoning-as-read"/)
+  // round 15, U19: the read zoning is confirmed in one place, the checklist ("Confirm R-1"), not twice
+  assert.match(review, /data-testid="check-confirm-zoning"/)
 })
 
 // ── item 5 ─────────────────────────────────────────────────────────────────────────────────

@@ -706,3 +706,8 @@ details.more.card > summary { font-weight: 600; }
   .styles-soon ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; }
   .styles-soon li { width: auto; min-width: 0; letter-spacing: 0.03em; font-size: 10.5px; overflow-wrap: anywhere; hyphens: auto; }
 }
+
+/* round 15, U19: the office queue is wide enough for a row on one line; the street sits beside the name */
+.screen.narrow.inbox > * { max-width: 980px; }
+.inbox-main { flex: 1 1 auto; }
+.inbox-main .row-street { font-weight: 500; }

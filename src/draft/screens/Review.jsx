@@ -39,12 +39,25 @@ const ago = (iso) => {
   return m < 1 ? 'just now' : m < 60 ? `${Math.round(m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
 }
 
+// round 15, U19: rows with the same client name ("Test Customer") are told apart by the street and the day
+const street = (p) => (p.address ? String(p.address).split(',')[0].trim() : p.lot?.plat?.address ? String(p.lot.plat.address).split(',')[0].trim() : '')
+const day = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(+d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 function Row({ p, onOpen }) {
   const s = STATUS[p.status] || { label: p.status, tone: 'wait' }
+  // (in the office queue, "drafting" means the homeowner is still working on it, not a drafter)
+  const label = p.status === 'drafting' ? 'Homeowner still drafting' : s.label
   return (
     <button className="inbox-row" onClick={() => onOpen(p.id)}>
       <span className="inbox-main">
-        <b>{p.client}</b>
+        <b data-testid="row-title">
+          {p.client}
+          {street(p) ? <span className="row-street"> · {street(p)}</span> : <span className="row-street muted"> · no address</span>}
+        </b>
         <span className="muted small">
           {!p.lot && p.platId ? `no address · ${p.plat?.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.plat?.at ? `, ${String(p.plat.at).slice(0, 10)}` : ''} · nothing typed yet` : p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat ? `no address · ${p.lot.plat.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.lot.plat.at ? `, ${String(p.lot.plat.at).slice(0, 10)}` : ''}` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
@@ -79,10 +92,10 @@ function Row({ p, onOpen }) {
             {p.lot?.plat?.unread || p.lot?.spec?.outlineGapFt === undefined ? `Plat not read${p.lot?.spec?.typed?.width ? `, homeowner typed ${p.lot.spec.typed.width} × ${p.lot.spec.typed.depth}` : ''}` : 'Outline differs from the plat'}
           </span>
         )}
-        <span className={'pill ' + s.tone}>{s.label}</span>
-        <span className="muted small">
+        <span className={'pill ' + s.tone}>{label}</span>
+        <span className="muted small" data-testid="row-when">
           {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
-          {ago(p.sentAt || p.updatedAt)}
+          {day(p.sentAt || p.updatedAt)} ({ago(p.sentAt || p.updatedAt)})
         </span>
       </span>
     </button>
@@ -534,12 +547,10 @@ export default function Review({ user }) {
                     <span>Note (optional)</span>
                     <input id="lot-note" value={lotNote} onChange={(e) => setLotNote(e.target.value)} placeholder="What you checked, or what is off" />
                   </label>
+                  {/* round 15, U19: Confirm lot is in the checklist above, once; here the note and "Not right" */}
                   <div className="row2">
                     <Button small ghost disabled={busy} onClick={() => confirmLot(false)}>
                       Not right
-                    </Button>
-                    <Button small primary disabled={busy} onClick={() => confirmLot(true)}>
-                      Confirm lot
                     </Button>
                   </div>
                 </>
@@ -581,18 +592,7 @@ export default function Review({ user }) {
                     Confirm zoning
                   </Button>
                 </>
-              ) : (
-                <div className="row2">
-                  {!open.lot.zoning.confirmedBy && (
-                    <Button small primary disabled={busy} onClick={() => confirmZoning(open.lot.zoning)} data-testid="zoning-as-read">
-                      Confirm {open.lot.zoning.district}
-                    </Button>
-                  )}
-                  <Button small ghost disabled={busy} onClick={() => setZoneEdit(true)} data-testid="zoning-change">
-                    Change
-                  </Button>
-                </div>
-              )}
+              ) : null /* round 15, U19: Confirm and Change are in the checklist above, once */}
             </div>
           )}
           {open.lot?.spec?.kind === 'manual' && (
