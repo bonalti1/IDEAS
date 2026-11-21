@@ -198,7 +198,10 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       } else {
         const opts = { lot, history: standingEdits(history), lang }
         if (fix) {
-          opts.interpreter = async () => ({ ops: fix.ops, reply: '', confidence: 1 }) // the answer says what was done, not the button's question
+          // the button's checked ops are taken as given and only the rules run (round 15: its label is never read as a
+          // request, the way the office takes a tapped button); the answer says what was done, not the button's words
+          opts.fixOps = fix.ops
+          opts.interpreter = async () => ({ ops: fix.ops, reply: '', confidence: 1 })
           opts.report = false
         }
         res = await interpretRequest(q, rooms, program, style, opts)

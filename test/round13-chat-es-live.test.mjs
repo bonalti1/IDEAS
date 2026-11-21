@@ -123,7 +123,8 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
     spanish(trade.reply, 'the trade-off')
     assert.equal(o.log.filter((r) => r.diff).length, before, 'neither was sent to the model')
     // nobody can read these: the model comes back with nothing to do, and the answer is the three examples
-    for (const [text, spanishAsked] of [['asdf', false], ['make it nicer', false], ['hmm', false], ['hazla mas bonita', true]]) {
+    // round 15, B6: "make it nicer" and "hazla más bonita" have their own three buttons now; other unclear words here
+    for (const [text, spanishAsked] of [['asdf', false], ['whatever you think', false], ['hmm', false], ['lo que tú digas', true]]) {
       const r = await o.change(id, text)
       const sent = modelSaid(o.log, text)
       said.push(`"${text}" → Claude ops ${JSON.stringify(sent?.diff.ops)} conf ${sent?.diff.confidence}, own reply: ${sent?.diff.reply} → ${r.reply} [buttons: ${(r.fixes || []).map((f) => f.label).join(' | ')}]`)
