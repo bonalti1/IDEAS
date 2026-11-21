@@ -89,10 +89,11 @@ test('1: the five steps of the review: a homeowner cannot clear the zoning block
   assert.equal(prj.lot.spec.zoning.residential, false)
   assert.equal(prj.lot.spec.zoning.readBy, 'server')
   const design = { contract: 1, client: 'Ana', rooms: [] }
-  // 2. Send before the drafter confirmed the lot: 409, lot pending
+  // 2. Send before the drafter confirmed the lot (round 15, B4: an unconfirmed lot no longer stops Send): 409 on the
+  // zoning the server read at the parcel
   const s2 = await ana.post(`/api/projects/${prj.id}/send`, { design })
   assert.equal(s2.status, 409)
-  assert.equal((await s2.json()).lotPending, true)
+  assert.match((await s2.json()).error, /zoned C-2/)
   // 3. the drafter confirms the lot; the zoning it confirmed carries who confirmed it; Send: 409, zoned C-2
   const conf = await (await maria.post(`/api/review/${prj.id}/lot`, { confirmed: true })).json()
   assert.equal(conf.lot.spec.confirmed, true)
@@ -127,9 +128,13 @@ test('1: the five steps of the review: a homeowner cannot clear the zoning block
   // naming another parcel (a house lot's id) under the same outline drops the confirmation: the drafter looks again
   const swapped = await (await ana.put(`/api/projects/${prj.id}`, { lot: { ...lot, spec: { ...spec, propId: '255056', address: '1201 Kerria Ave, McAllen, TX 78501', city: 'mcallen' } } })).json()
   assert.equal(swapped.lot.spec.confirmed, false)
+  // (round 15, B4: a lot to confirm no longer stops Send; the plan waits for the drafter, who confirms the lot before
+  // approving)
+  // the server rebuilt the outline from the parcel named (round 12), and this plan does not sit on it: Send is refused
+  // on the rules, never waved through as a confirmed lot
   const s6 = await ana.post(`/api/projects/${prj.id}/send`, { design })
   assert.equal(s6.status, 409)
-  assert.equal((await s6.json()).lotPending, true)
+  assert.ok((await s6.json()).rules?.length > 0)
   // a house lot is not blocked by any of this: Kerria (R-1), confirmed, sends
   const kp = await (await ana.get(`/api/lot/parcel?address=${enc('1201 Kerria Ave, McAllen, TX 78501')}`)).json()
   const kSpec = parcelSpec(kp, { address: '1201 Kerria Ave, McAllen, TX 78501', city: 'mcallen', county: 'Hidalgo County' })

@@ -53,6 +53,11 @@ function Row({ p, onOpen }) {
       <span className="inbox-side">
         <Asks p={p} />
         {p.needsCustom && <span className="pill ask">Needs a house designed</span>}
+        {p.status === 'in_review' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed && (
+          <span className="pill stop" data-testid="row-lot-and-plan">
+            Lot to confirm + plan
+          </span>
+        )}
         {isUnchecked(p.lot?.spec) && !p.lot.spec.confirmed && (
           <span className="pill stop" data-testid="row-unchecked">
             Outline not checked
@@ -707,7 +712,11 @@ export default function Review({ user }) {
                 <Button ghost disabled={busy || !note.trim()} onClick={() => decide('returned')} title={note.trim() ? '' : 'A returned design needs a note'}>
                   Return with note
                 </Button>
-                <Button primary disabled={busy || (open.audit && !open.audit.ok && override.trim().length < 20)} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'An override note of 20 characters or more approves a plan with audit errors' : ''}>
+                {/* round 15, B4: a plan sent before its lot was checked is approved after the lot is confirmed */}
+                {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && !open.lot.spec.confirmed && (
+                  <small className="fine bad" data-testid="approve-needs-lot">Confirm the lot first (above): this plan was sent before its lot was checked.</small>
+                )}
+                <Button primary disabled={busy || ((open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && !open.lot.spec.confirmed) || (open.audit && !open.audit.ok && override.trim().length < 20)} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'An override note of 20 characters or more approves a plan with audit errors' : ''}>
                   {open.audit && !open.audit.ok && override.trim().length >= 20 ? 'Approve with override, build in Revit' : 'Approve, build in Revit'}
                 </Button>
               </div>

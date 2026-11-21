@@ -767,11 +767,11 @@ test('C: the homeowner is emailed once when a drafter confirms the lot (never fo
   const lines = () => log().split('\n').filter((l) => /client email not sent \(email not configured\): Draft House: your lot is confirmed/.test(l)).length
   const house = await mk('1201 Kerria Ave, McAllen, TX 78501', 'mcallen')
   assert.equal(lines(), 0)
-  // before: Send answers 409 with lotPending (the screen turns that into the calm card, never "Could not send")
+  // round 15, B4: Send is open before the lot is confirmed; the plan waits with its lot ("Lot to confirm + plan")
   const rooms = generateRooms(small, style, buildLot(house.lot.spec))
   await ana.put(`/api/projects/${house.id}`, { style: { id: style.id, name: style.name }, program: small, rooms })
   const early = await ana.post(`/api/projects/${house.id}/send`, { design })
-  assert.equal(early.status, 409)
+  assert.equal(early.status, 200)
   assert.equal((await early.json()).lotPending, true)
   await maria.post(`/api/review/${house.id}/lot`, { confirmed: true })
   await new Promise((ok) => setTimeout(ok, 150))
@@ -785,11 +785,9 @@ test('C: the homeowner is emailed once when a drafter confirms the lot (never fo
   await new Promise((ok) => setTimeout(ok, 150))
   assert.equal(lines(), 1)
   assert.doesNotMatch(log(), /ana@example\.com.*your lot is confirmed/, 'the address is not written to the log')
-  // the screen
+  // the screen (round 15, B4): one plain line, and the Send button is always there
   const send = fs.readFileSync('src/draft/screens/Send.jsx', 'utf8')
-  assert.match(send, /Your plan is saved/)
-  assert.match(send, /A drafter is checking your lot against the county records, usually within one business day\. We'll email you, and then you can send it\./)
-  assert.match(send, /\{!lotWaiting && \(\s*<Button primary/)
+  assert.match(send, /Our drafter will check your lot first, usually within 1 business day\. You don't need to do anything\./)
+  assert.doesNotMatch(send, /\{!lotWaiting && \(\s*<Button primary/)
   assert.doesNotMatch(send, /Could not send/)
-  assert.match(send, /e\.body\?\.lotPending/)
 })

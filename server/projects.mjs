@@ -711,8 +711,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async send(p, { design, ifc }, saveDesign) {
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
       if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to send yet')
-      if ((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
+      // round 15, B4 (office decision): a homeowner can always send. A lot the drafter has not confirmed yet goes with
+      // the plan, marked "Lot to confirm + plan"; the drafter confirms the lot before approving the plan.
+      const lotPending = (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed
       // decision B6 (round 10, item 4): a lot that is not a house district blocks Send, never the draft, and only when
       // the zoning is this lot's own (a parcel or plat lot, or a typed lot whose zoning a drafter confirmed)
       const lotNow = await lots.lotOfProject(p)
@@ -726,8 +728,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       p.status = 'in_review'
       p.sentAt = now()
       p.updatedAt = p.sentAt
+      p.lotPending = lotPending || undefined
       await store.projects.put(p)
-      await event('project', `${p.client}: design sent for review`, { projectId: p.id, designId: d.id })
+      await event('project', `${p.client}: design sent for review${lotPending ? ' (the lot is still to confirm)' : ''}`, { projectId: p.id, designId: d.id })
       return this.detail(p)
     },
 
@@ -753,7 +756,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       for (const p of open) await withAllowance(p)
-      const lots = open.filter((p) => (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
+      const lots = open.filter((p) => p.status !== 'in_review' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
       // round 12, item A: lots no standard plan fits, sent by the homeowner for a custom design, oldest first
       const custom = open.filter((p) => p.needsCustom).sort((a, b) => Date.parse(a.needsCustom.at) - Date.parse(b.needsCustom.at))
       // what clients asked the office for (a meeting, more changes), newest first, and every open plan's allowance
@@ -819,6 +822,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: 'lot', text: 'Lot corrected by the drafter', used: 0, rooms: placed })
       }
       const firstConfirm = confirmed && !wasConfirmed
+      if (confirmed) delete p.lotPending
+      // round 15, B4: a plan sent before its lot was checked, on a lot the drafter has now corrected, goes back to the
+      // homeowner with a plain note (the plan they sent sat on the old outline); unchanged, it stays waiting for review
+      if (p.status === 'in_review' && (changed || !confirmed)) {
+        const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision: 'returned', note: confirmed ? 'We corrected your lot from the county records or your plat. Look at the plan on the corrected lot, then send it again.' : 'Something about your lot needs checking before we can draw on it. We will contact you.', at: p.updatedAt, auto: true }
+        await store.reviews.add(r)
+        p.review = r
+        p.status = 'returned'
+      }
       await store.projects.put(p)
       await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
       // round 12, item C: the homeowner was told "we'll email you" while the lot waited. One email, the first time it
@@ -826,7 +838,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (firstConfirm && alerts?.emailTo && p.email && !zoningBlocksSend(lot)) {
         const first = String(p.client || '').split(' ')[0] || 'Hello'
         alerts
-          .emailTo(p.email, 'Draft House: your lot is confirmed', `${first},\n\nA drafter checked your lot${p.address ? ` at ${p.address}` : ''} against the county records, and it is confirmed.\n\n${p.version ? 'Open Draft House, look over your plan, and press "Send to drafters" when you are ready.' : 'Open Draft House to choose your rooms and see your first draft.'}\n\nSouth Texas Builders`)
+          .emailTo(p.email, 'Draft House: your lot is confirmed', `${first},\n\nA drafter checked your lot${p.address ? ` at ${p.address}` : ''} against the county records, and it is confirmed.\n\n${p.status === 'in_review' ? 'Your plan is with our drafters now. You do not need to do anything; we will contact you.' : p.status === 'returned' && p.review?.auto ? 'We corrected the lot, so please look at your plan on it in Draft House and send it again.' : p.version ? 'Open Draft House, look over your plan, and press "Send to drafters" when you are ready.' : 'Open Draft House to choose your rooms and see your first draft.'}\n\nSouth Texas Builders`)
           .catch(() => {})
       }
       return this.detail(p, { drafter: true })
@@ -856,6 +868,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async review(p, drafter, { decision, note, override }, queueJob) {
       if (p.status !== 'in_review') throw fail(409, `this design is ${p.status.replace('_', ' ')}, not waiting for review`)
       if (!['approved', 'returned'].includes(decision)) throw fail(400, 'decision must be approved or returned')
+      // round 15, B4: a plan sent before its lot was checked is approved only once the lot is confirmed, and only on a
+      // house district
+      if (decision === 'approved' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'Confirm the lot first: this plan was sent before its lot was checked.', { lotPending: true })
+      if (decision === 'approved' && zoningBlocksSend(await lots.lotOfProject(p))) throw fail(409, `The lot is zoned ${p.lot?.spec?.zoning?.district || 'for something else'}: call the homeowner about a rezoning before approving, or send the plan back.`, { zoning: true })
       const t = now()
       // the note is written to the client; the override note (below) stays in the office
       const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision, note: String(note || '').trim().slice(0, 2000), at: t }

@@ -246,7 +246,7 @@ for (const width of [1440, 390]) {
     await page.getByTestId('lot-waiting').waitFor({ timeout: 30000 })
     text = await check('08-send')
     assert.match(text, /¿Listo para entregarlo\?/)
-    assert.match(text, /Tu plano está guardado/)
+    assert.match(text, /Nuestro dibujante revisa tu lote primero/)
     assert.match(text, /Lo que cuesta/)
     assert.match(text, /El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders\./)
 
@@ -265,14 +265,14 @@ for (const width of [1440, 390]) {
     assert.equal(await page.getByTestId('lang-switch').getAttribute('data-lang'), 'en')
     let english = (await page.evaluate(wordsOnPage)).map((w) => w.text).join('\n')
     assert.match(english, /Ready to hand off\?/)
-    assert.match(english, /Your plan is saved/)
+    assert.match(english, /Our drafter will check your lot first/)
     // "Sign out" is in the header, or on a phone in the account menu
     const signOut = async () => (phone ? await page.locator('details.dh-account').textContent() : english)
     assert.match(await signOut(), /Sign out/)
     assert.doesNotMatch(await signOut(), /Salir/)
     if (phone) assert.match(english, /Step 5 of 5 · Send/)
     assert.match(english, /\d+ changes? left on this plan/)
-    assert.doesNotMatch(english, /¿Listo para entregarlo\?|Paso 5 de 5|Tu plano está guardado/)
+    assert.doesNotMatch(english, /¿Listo para entregarlo\?|Paso 5 de 5|Nuestro dibujante revisa tu lote primero/)
 
     // ── a reload: the choice is remembered, though the browser still asks for Spanish ──
     await page.reload({ waitUntil: 'domcontentloaded' })

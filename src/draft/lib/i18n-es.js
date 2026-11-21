@@ -193,6 +193,10 @@ export const es = {
   'Space the city keeps open along each edge': 'Espacio que la ciudad mantiene libre a lo largo de cada orilla',
   '(a drafter checks these)': '(un dibujante los revisa)',
   // round 14: a plat on file that could not be read, and a lot that came with no address
+  // round 15, send (lead)
+  "Our drafter will check your lot first, usually within 1 business day. You don't need to do anything.": 'Nuestro dibujante revisa tu lote primero, por lo general en 1 día hábil. No tienes que hacer nada.',
+  'We corrected your lot from the county records or your plat. Look at the plan on the corrected lot, then send it again.': 'Corregimos tu lote con los registros del condado o con tu plat. Revisa el plano sobre el lote corregido y vuelve a enviarlo.',
+  'Something about your lot needs checking before we can draw on it. We will contact you.': 'Hay algo de tu lote que debemos revisar antes de dibujar sobre él. Nos comunicamos contigo.',
   'Reading your plat…': 'Leyendo tu plat…',
   'Without an account we cannot find your lot on the county map or check the flood map. Type the lot in or upload the plat. Or sign in with your email, and we find it for you.': 'Sin una cuenta no podemos buscar tu lote en el mapa del condado ni revisar el mapa de inundación. Escribe las medidas del lote o sube el plat. O entra con tu correo, y lo buscamos por ti.',
   'the drafter checks': 'lo revisa el dibujante',
