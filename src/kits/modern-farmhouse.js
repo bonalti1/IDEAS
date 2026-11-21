@@ -6,6 +6,7 @@
 
 import { NARROW_PLAN } from './farmhouse-narrow.js'
 import { COMPACT_PLAN } from './farmhouse-compact.js'
+import { VALLEY_PLAN } from './farmhouse-valley.js'
 import { frontGarageVariant } from './farmhouse-front-garage.js'
 
 export const KIT = {
@@ -156,7 +157,8 @@ export const KIT = {
   //    rear wall toward the street). This is what the layout engine starts from.
   //    Hallways are real rooms here so the walls come out where the set has them.
   // the narrow plan for 50 ft lots (src/kits/farmhouse-narrow.js); the drafter picks the one that fits the lot
-  plans: { compact: COMPACT_PLAN, narrow: NARROW_PLAN },
+  // round 15: the Valley plan (src/kits/farmhouse-valley.js) for 60 to 80 ft lots, tried before the narrow one
+  plans: { compact: COMPACT_PLAN, valley: VALLEY_PLAN, narrow: NARROW_PLAN },
   // the standard plan is drawn for 1,850 sf and up; the compact one (src/kits/farmhouse-compact.js) for 1,300 to 1,750
   planSqft: [1750, Infinity],
   plan: {

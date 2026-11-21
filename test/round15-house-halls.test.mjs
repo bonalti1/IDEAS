@@ -9,16 +9,23 @@
 //      linen closet takes the first 7 ft of its hall)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isRoom } from '../src/draft/lib/layout.js'
+import { isRoom, fromPlan, DEFAULT_PROGRAM } from '../src/draft/lib/layout.js'
 import { auditPlan, auditSummary, CLEAR } from '../src/draft/lib/audit.js'
 import { recordedLots, typedLot, firstDraft, style } from './round15-house-lots.mjs'
 
 const halls = (rooms) => rooms.filter((r) => isRoom(r) && r.kind === 'hall')
 const drawn = (h) => Math.max(h.w, h.d)
+// what the rooms step offered on that lot in round 14: the narrow plan's 4 bed, 2 bath, 2-car at 2,500 sf
+const OFFERED = { ...DEFAULT_PROGRAM, beds: 4, baths: 2, halfBath: false, office: false, garage: 2, sqft: 2500 }
+/** The narrow plan as the card showed it: that program drafted on that lot on the narrow plan. */
+async function reported() {
+  const lot = (await recordedLots())['3305 N 27th St']
+  const d = fromPlan(OFFERED, style.kit, lot, 'narrow')
+  return { lot, program: OFFERED, rooms: d.rooms }
+}
 
-test('U19 1: the reported plan (3305 N 27th St, the default rooms): every hall is drawn 35 ft or under, and the audit lists each at its drawn length', async () => {
-  const lots = await recordedLots()
-  const f = firstDraft(lots['3305 N 27th St'])
+test('U19 1: the reported plan (the narrow plan\'s 4 bed, 2 bath at 2,500 sf on 3305 N 27th St): every hall is drawn 35 ft or under, and the audit lists each at its drawn length', async () => {
+  const f = await reported()
   const hs = halls(f.rooms)
   assert.ok(hs.length, 'the plan has halls')
   for (const h of hs) assert.ok(drawn(h) <= CLEAR.hallLongFt + 0.05, `${h.name} is drawn ${h.w.toFixed(2)} x ${h.d.toFixed(2)} ft (the card showed 4'-3" x 55'-3")`)
@@ -30,8 +37,7 @@ test('U19 1: the reported plan (3305 N 27th St, the default rooms): every hall i
 })
 
 test('U19 2: a hall drawn 55 ft long, though open to the kitchen and the dining room for half of it, is warned, and the halls check is not a pass', async () => {
-  const lots = await recordedLots()
-  const f = firstDraft(lots['3305 N 27th St'])
+  const f = await reported()
   // the hallway as round 14 drew it: one room from the rear hall's end to the living room, the kitchen 4 ft narrower
   const rooms = f.rooms.map((r) => ({ ...r }))
   const hall = rooms.find((r) => r.id === 'hall')
