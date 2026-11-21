@@ -14,6 +14,9 @@ import { useLang, placeName } from '../lib/i18n.js'
 
 export { parcelSpec }
 
+// the city select's "no city rules" choice (spec.city ''), apart from "not picked yet" (spec.city null)
+const NO_CITY = '__county'
+
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
     const r = new FileReader()
@@ -117,6 +120,53 @@ function ImagePreview({ file, read }) {
   )
 }
 
+/** The city an address names, or null when it names none: nothing is picked for the homeowner (round 15, U18). */
+const cityNamed = (text) => {
+  const id = guessCity(text || '')
+  return id !== 'hidalgo' || /hidalgo/i.test(text || '') ? id : null
+}
+
+/**
+ * Round 15 (U18): a small picture of the plat the homeowner uploaded (a photo as it is, a PDF's first page), for
+ * the card that says it is saved for the drafter. Nothing when the file is not on this device any more.
+ */
+function PlatThumb({ file }) {
+  const canvas = useRef()
+  const [url, setUrl] = useState(null)
+  const isPdf = !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''))
+  useEffect(() => {
+    if (!file || isPdf) return
+    const u = URL.createObjectURL(file)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [file, isPdf])
+  useEffect(() => {
+    if (!file || !isPdf) return
+    let dead = false
+    ;(async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist')
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+        const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise
+        const page = await doc.getPage(1)
+        const base = page.getViewport({ scale: 1 })
+        const vp = page.getViewport({ scale: 240 / Math.max(base.width, base.height) })
+        if (dead || !canvas.current) return
+        canvas.current.width = vp.width
+        canvas.current.height = vp.height
+        await page.render({ canvasContext: canvas.current.getContext('2d'), viewport: vp }).promise
+      } catch {
+        /* no picture: the card still says the plat is saved */
+      }
+    })()
+    return () => {
+      dead = true
+    }
+  }, [file, isPdf])
+  if (!file) return null
+  return isPdf ? <canvas ref={canvas} className="plat-thumb" data-testid="plat-thumb" /> : url ? <img src={url} alt="" className="plat-thumb" data-testid="plat-thumb" /> : null
+}
+
 /** A service's own plain line as it came ("FEMA did not answer; the office checks the flood zone"), anything else wrapped; one full stop. */
 const plain = (err, wrap, say = (s) => s) => {
   const t = /did not answer|didn't answer|Too many/.test(err) ? say(err) : wrap(say(err))
@@ -141,8 +191,11 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
       ? { kind: 'manual', address, ...typedBack.typed, city: typedBack.city, county: typedBack.county, setbacks: typedBack.setbacks || {}, noStreetGarage: !!typedBack.noStreetGarage, platId: typedBack.platId }
       : saved?.spec && saved.spec.kind !== 'reference'
         ? saved.spec
-        : { kind: 'manual', address, width: 100, depth: 150, city: guessCity(address), frontStreet: '', corner: '', sideStreet: '', setbacks: {} },
+        : { kind: 'manual', address, width: 100, depth: 150, city: cityNamed(address), frontStreet: '', corner: '', sideStreet: '', setbacks: {} },
   )
+  // round 15 (U8): the typed tab's 100 by 150 ft stand-in is not the homeowner's lot. Until they type a number, it is
+  // never drawn or counted while the county parcel is being looked up or offered
+  const [typedByHand, setTypedByHand] = useState(!!saved?.spec)
   const [file, setFile] = useState(intake?.file || null)
   const [read, setRead] = useState(saved?.plat && !saved.plat.unread ? saved.plat : null) // what the office read from the PDF
   // round 14: a plat that is on file for the drafter but could not be read (the reader is off, failed, or found no outline)
@@ -291,17 +344,37 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
   // round 14: no lot is shown as the homeowner's before there is one. On the plat tab the 100 by 150 guess of the
   // typed tab is not their lot, and neither is anything while a plat on file still waits for its numbers.
   const noLotYet = spec.kind === 'manual' && (mode === 'plat' || fromPlat) && !(fromPlat && sized)
+  // round 15 (U18): nothing tells us the city (a plat with no address): the homeowner picks it, nothing is picked for them
+  const needsCity = spec.kind === 'manual' && spec.city == null && !spec.county
   // what is wrong with the lot as typed; the last good lot stays on the screen until it is right
   const problem = lotProblem(spec, built, lang)
   const lastGood = useRef(null)
   if (!problem && built) lastGood.current = built
   const lot = problem ? null : built
+  // round 15 (U8): while the county parcel is being looked up, nothing is drawn ("looking"); once it is offered, that
+  // parcel's own outline is drawn, with no numbers until the homeowner says it is theirs
+  const standIn = spec.kind === 'manual' && !typedByHand && !confirmed && !fromPlat && mode === 'manual' && !saved?.spec
+  // (an address the homeowner said is not the one we found is not looked up: the typed lot is theirs to fill in)
+  const lookingUp = standIn && !!address && !guest && !parcel && !parcelErr && !geoErr && addressOk !== false
+  const offered = standIn && parcel?.match === 'one' && parcelAnswer === null
+  const offeredLot = useMemo(() => {
+    if (!offered || parcel.large) return null
+    try {
+      return buildLot({ ...parcelSpec(parcel, { address, city: geo?.cityId || spec.city || '', county: geo?.county || parcel.county || spec.county || '', geo, flood, zoning, confirmed: false }), address }, table)
+    } catch {
+      return null
+    }
+  }, [offered, parcel, table, geo, address])
+  const holdTyped = lookingUp || offered
   // a typed lot keeps the last good drawing while a number is half typed; a parcel or a plat is always the one drawn,
   // even when the setbacks leave no room on it: a previous lot must never stay on the screen (round 10, item 1)
   const drawAnyway = built && (built.kind === 'parcel' || built.kind === 'plat') && built.boundary?.length >= 3
   const shown = lot || (drawAnyway ? built : lastGood.current)
   const city = table[spec.city] || { name: t('No city rules yet'), county: null }
-  const set = (k, v) => setSpec((s) => ({ ...s, [k]: v }))
+  const set = (k, v) => {
+    if (['width', 'depth', 'frontStreet', 'corner', 'sideStreet'].includes(k)) setTypedByHand(true)
+    setSpec((s) => ({ ...s, [k]: v }))
+  }
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))
   const tooSmall = !!problem
   // round 12, item F: a lot with no city row has no coverage figure; the rules use 50%, and the screen says so (it said "NaN% · NaN sf")
@@ -310,19 +383,29 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
   const coverLine = hasCover ? `${Math.round(cover * 100)}%` : t('50% (county default, the drafter confirms)')
 
   return (
-    <div className="screen split">
+    <div className={'screen split' + (noLotYet ? ' lot-waiting' : '')}>
       <div className={'viewport lot-view' + (noLotYet ? ' waiting' : '')}>
         {noLotYet ? (
           <div className="lot-wait" data-testid="lot-wait">
             <p>{reading ? t('Reading your plat…') : fromPlat ? t('Type the width and depth from your plat, and your lot is drawn here.') : t('Your lot is drawn here once we have your plat.')}</p>
           </div>
+        ) : lookingUp || (offered && !offeredLot) ? (
+          <div className="lot-wait" data-testid="lot-looking">
+            <p>{lookingUp && addressHeld ? t('Is this your address? Answer beside this, and we look for your lot.') : lookingUp ? t('Looking for your lot on the county map…') : t('Is this your lot? Check the card beside this, then say yes or type it in.')}</p>
+          </div>
+        ) : offered ? (
+          <HouseScene view="top" showHouse={false} lot={offeredLot} lotProblem="" />
         ) : mode === 'plat' && file && showPlat && read ? file.type === 'application/pdf' ? <PlatPreview file={file} read={read} /> : <ImagePreview file={file} read={read} /> : <HouseScene view="top" showHouse={false} lot={shown || undefined} lotProblem={problem && drawAnyway ? (built.envelopeSf > 0 ? t('Very little room to build on this lot') : t('No room to build on this lot')) : ''} />}
-        {!noLotYet && (
-          <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag">
+        {offered && offeredLot ? (
+          <div className="viewport-tag" data-testid="lot-tag" data-area={Math.round(offeredLot.areaSf)}>
+            {`${String(address).split(',')[0]} · ${t('Is this your lot?')}`}
+          </div>
+        ) : !noLotYet && !holdTyped ? (
+          <div className={'viewport-tag' + (problem && drawAnyway ? ' bad' : '')} data-testid="lot-tag" data-area={shown ? Math.round(shown.areaSf) : ''}>
             {shown ? `${shown.address || t('your lot')} · ${placeName(city.name, lang)}` : t('Enter the lot')}
             {problem && drawAnyway ? ` · ${built.envelopeSf > 0 ? t('very little room to build') : t('no room to build')}` : ''}
           </div>
-        )}
+        ) : null}
         {mode === 'plat' && read && (
           <div className="viewport-views">
             <button className={showPlat ? 'on' : ''} onClick={() => setShowPlat(true)}>
@@ -499,6 +582,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
         {zoningErr && <p className="fine warn" data-testid="zoning-error">{plain(zoningErr, (e) => t('The zoning map could not be read ({error}); the drafter reads the zoning', { error: e }), say)}</p>}
         {unread && (
           <div className="card thin plat-saved" data-testid="plat-saved">
+            <PlatThumb file={file} />
             <h3>{t('Your plat is saved for the drafter')}</h3>
             <p className="small">
               {spec.kind === 'parcel'
@@ -525,8 +609,13 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
 
         <label className="field">
           <span>{t('City')}</span>
-          <select id="lot-city" value={spec.city || ''} onChange={(e) => set('city', e.target.value)}>
-            <option value="">{t('No rules for this city yet (county defaults, a drafter checks them)')}</option>
+          <select id="lot-city" value={spec.city == null ? '' : spec.city === '' ? NO_CITY : spec.city} onChange={(e) => e.target.value && set('city', e.target.value === NO_CITY ? '' : e.target.value)} className={needsCity ? 'pick' : ''}>
+            {spec.city == null && (
+              <option value="" disabled>
+                {t('Pick the city')}
+              </option>
+            )}
+            <option value={NO_CITY}>{t('No rules for this city yet (county defaults, a drafter checks them)')}</option>
             {CITY_IDS.map((id) => (
               <option key={id} value={id}>
                 {placeName(table[id].name, lang)}
@@ -534,7 +623,8 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
             ))}
           </select>
         </label>
-        {!table[spec.city] && (
+        {needsCity && <p className="fine pick-city" data-testid="pick-city">{t('Pick the city the lot is in, so we use its rules. Not in a city? Pick "No rules for this city yet" and then the county.')}</p>}
+        {!table[spec.city] && spec.city != null && (
           <label className="field">
             <span>{t('County')}</span>
             <select id="lot-county" value={spec.county || ''} onChange={(e) => set('county', e.target.value)}>
@@ -575,9 +665,9 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
           </>
         )}
 
-        {(mode === 'manual' || fromPlat) && (
+        {(mode === 'manual' || fromPlat) && !holdTyped && (
           <>
-            <p className="fine assume">
+            <p className={'fine' + (fromPlat ? ' plat-numbers' : ' assume')}>
               {fromPlat
                 ? t('These numbers stand in for your lot until the drafter draws it from your plat. Use the width along the street and the depth going back, in feet.')
                 : rich('We do not have your plat, so the {width} by {depth} ft lot below is an <b>assumption</b>. Put in the real width and depth from your deed or survey, or upload the plat.', { width: spec.width, depth: spec.depth })}
@@ -642,7 +732,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
           </p>
         </details>
 
-        {lot && !noLotYet && (
+        {lot && !noLotYet && !holdTyped && (
           <div className="stats">
             <Stat k={t('Lot area')} v={sf(lot.areaSf)} />
             <Stat k={t('Buildable area')} v={sf(lot.envelopeSf)} />
@@ -651,11 +741,11 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
             {zoning?.status === 'found' && <Stat k={t('Zoning')} v={`${zoning.district} · ${say(zoning.use)}`} />}
           </div>
         )}
-        {lot && !noLotYet && <RulesPanel lot={lot} mode="homeowner" />}
+        {lot && !noLotYet && !holdTyped && <RulesPanel lot={lot} mode="homeowner" />}
         {lot?.zoning?.residential === false && <p className="fine bad">{say(lot.zoning.message)}</p>}
-        {problem && !noLotYet && <p className="fine bad">{plainReason(problem)}</p>}
-        {!noLotYet && <p className="fine">{t('Red is your property line. Green dashed is where the house can sit.')} {mode === 'plat' || fromPlat || spec.kind === 'parcel' ? t('A drafter confirms the lot before the design is sent on.') : t('A drafter double-checks this before anything is final.')}</p>}
-        {mode === 'manual' && !fromPlat && (
+        {problem && !noLotYet && !holdTyped && <p className="fine bad">{plainReason(problem)}</p>}
+        {!noLotYet && !lookingUp && <p className="fine">{t('Red is your property line. Green dashed is where the house can sit.')} {mode === 'plat' || fromPlat || spec.kind === 'parcel' ? t('A drafter confirms the lot before the design is sent on.') : t('A drafter double-checks this before anything is final.')}</p>}
+        {mode === 'manual' && !fromPlat && !holdTyped && (
           <label className="confirm">
             <input id="lot-confirm" type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
             <span>
@@ -667,7 +757,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
           <Button ghost onClick={onBack}>
             {t('Back')}
           </Button>
-          <Button primary disabled={!lot || tooSmall || reading || noLotYet || (mode === 'manual' && !fromPlat && !confirmed)} onClick={() => onNext(lot)} title={noLotYet ? (fromPlat ? t('Type the width and depth from your plat first') : t('Upload the plat first, or type the lot in')) : mode === 'manual' && !fromPlat && !confirmed ? t('Confirm the lot size first') : ''} data-testid="lot-next">
+          <Button primary disabled={!lot || tooSmall || reading || noLotYet || needsCity || (mode === 'manual' && !fromPlat && !confirmed)} onClick={() => onNext(lot)} title={noLotYet ? (fromPlat ? t('Type the width and depth from your plat first') : t('Upload the plat first, or type the lot in')) : needsCity ? t('Pick the city first') : mode === 'manual' && !fromPlat && !confirmed ? t('Confirm the lot size first') : ''} data-testid="lot-next">
             {t('Looks right, pick a style')}
           </Button>
         </div>

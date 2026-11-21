@@ -658,4 +658,10 @@ export const es = {
   'Fitted to your lot: {how}.': 'Ajustada a tu lote: {how}.',
   'Fitting the rooms to your lot…': 'Ajustando los cuartos a tu lote…',
   'Rooms chosen, ready to draft': 'Cuartos elegidos, lista para el borrador',
+  'Looking for your lot on the county map…': 'Buscando tu lote en el mapa del condado…',
+  'Is this your lot? Check the card beside this, then say yes or type it in.': '¿Este es tu lote? Revisa la tarjeta de al lado y dinos que sí, o escríbelo tú.',
+  'Is this your address? Answer beside this, and we look for your lot.': '¿Es tu dirección? Contesta en la tarjeta de al lado y buscamos tu lote.',
+  'Pick the city': 'Elige la ciudad',
+  'Pick the city first': 'Primero elige la ciudad',
+  'Pick the city the lot is in, so we use its rules. Not in a city? Pick "No rules for this city yet" and then the county.': 'Elige la ciudad donde está el lote, para usar sus reglas. ¿No está en una ciudad? Elige «Todavía sin reglas para esta ciudad» y luego el condado.',
 }

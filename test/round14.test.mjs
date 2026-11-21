@@ -263,6 +263,9 @@ for (const [w, h] of [
     await page.waitForTimeout(1500)
     await noSideScroll(page)
     await page.screenshot({ path: `${OUT}/2-lot-from-the-plat-numbers-${w}.png`, fullPage: w < 600 })
+    // round 15 (U18) asks for no silent city when nothing tells us one: the homeowner picks it, then goes on
+    assert.ok(await page.getByTestId('lot-next').isDisabled(), 'not before the city is picked')
+    await page.locator('#lot-city').selectOption('mcallen')
     assert.ok(await page.getByTestId('lot-next').isEnabled())
     await page.getByTestId('lot-next').click()
     await page.getByTestId('style-farmhouse').waitFor({ timeout: 20000 })
