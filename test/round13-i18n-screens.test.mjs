@@ -210,7 +210,11 @@ for (const width of [1440, 390]) {
     // round 13, item 7: one line beside the count, with the plan's own number; on the page, not under anything
     const note = page.getByTestId('changes-note')
     // (the review of PR #12 added what counts and what does not)
-    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.')
+    // (round 15, U14: one line, and the rest behind the info button, two sentences with a full stop between them)
+    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta.')
+    await page.getByTestId('changes-info').click()
+    await page.getByTestId('changes-more').waitFor({ state: 'visible', timeout: 5000 })
+    assert.equal((await note.innerText()).replace(/\s+/g, ' ').trim(), '10 cambios gratis; si uno no se puede hacer, no cuenta. Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.')
     await note.scrollIntoViewIfNeeded()
     const clear = await note.evaluate((el) => {
       const r = el.getBoundingClientRect()

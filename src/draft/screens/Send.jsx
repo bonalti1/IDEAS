@@ -456,7 +456,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
               {tr("Plates {a}' and {b}' · roof {pitch} · {overhang} overhang · {ext} exterior, {plumb} plumbing walls.", { a: kit.plates.default, b: kit.plates.public, pitch: kit.roof.pitch, overhang: kit.roof.overhang, ext: kit.walls.exterior.studs, plumb: kit.walls.plumbing.studs })}
             </p>
           </div>
-          {isRef && <p className="fine">{tr(`Columns marked "set" are the numbers on the Garza drawings. Differences are the gap between the packer and a drafter's plan.`)}</p>}
+          {isRef && <p className="fine">{tr(`Columns marked "set" are the numbers on the recent build's drawings. Differences are the gap between the packer and a drafter's plan.`)}</p>}
         </>
       )}
 

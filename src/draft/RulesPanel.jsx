@@ -71,7 +71,7 @@ export default function RulesPanel({ lot, mode = 'homeowner', open = false, titl
             <tr className={lot.zoning.residential === false ? 'bad' : ''}>
               <td>{t('Zoning')}</td>
               <td colSpan={2}>
-                {lot.zoning.status === 'found' ? `${lot.zoning.district} (${say(lot.zoning.use)})` : lot.zoning.status === 'none' ? t('no district polygon at this point; the drafter reads the map') : say(lot.zoning.reason) || t('unknown')}
+                {lot.zoning.status === 'found' ? `${lot.zoning.district} (${say(lot.zoning.use)})` : lot.zoning.status === 'none' ? t('no district polygon at this point; the drafter reads the map') : lot.zoning.status === 'unknown' && mode !== 'drafter' ? t('the drafter reads the city zoning map') : say(lot.zoning.reason) || t('unknown')}
                 {mode === 'drafter' && lot.zoning.layer ? <div className="muted small">{lot.zoning.layer}</div> : null}
               </td>
             </tr>
