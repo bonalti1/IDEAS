@@ -487,7 +487,7 @@ export function auditPlan(rooms, program, kit, lot) {
     const home = byId[w.room]
     return home && w.axis === 'v' && Math.abs(centre(w)[0] - home.x) < 0.4 && !shaded(w, home)
   })
-  const westSf = westGlass.reduce((s, w) => s + ((K.windows?.[w.mark]?.w || 36) * (K.windows?.[w.mark]?.h || 60) * (w.span >= 5 ? 2 : 1)) / 144, 0)
+  const westSf = westGlass.reduce((s, w) => s + ((K.windows?.[w.mark]?.w || 36) * (K.windows?.[w.mark]?.h || 60) * Math.max(1, Math.round((w.span || 3) / ((K.windows?.[w.mark]?.w || 36) / 12)))) / 144, 0)
   if (westSf > 40) say('west-glass', 'warn', null, `${Math.round(westSf)} sf of west-facing glass with no porch or awning over it.`)
 
   // j) circulation: the halls as a share of the living area, and no hall that runs on past its last door

@@ -4,12 +4,18 @@ import { floorArea, outline, isConditioned, kitFor, lotOf } from './layout.js'
 import { drivewaySlabs, walkSlabs, frameOf } from './site.js'
 
 const sfOf = (o) => (o.w * o.h) / 144
+/** How many catalog units a window is: its width over its mark's width (a 6 ft pair of 3 ft units is two). */
+export const unitsOf = (w, kit) => {
+  const unit = (kit?.windows?.[w.mark]?.w || 36) / 12
+  return Math.max(1, Math.round((w.span || unit) / unit))
+}
 
 export function windowSchedule(rooms, kit) {
   const counts = {}
   const traced = rooms.filter((r) => r.kind === 'window')
   if (traced.length) {
-    traced.forEach((w) => (counts[w.mark] = (counts[w.mark] || 0) + (w.span >= 5 ? 2 : 1))) // twins are two units
+    // twins are two units: a window counts as many catalog units as its width holds (a 7 ft picture window is one)
+    traced.forEach((w) => (counts[w.mark] = (counts[w.mark] || 0) + unitsOf(w, kit)))
     return Object.entries(counts).map(([mark, count]) => ({ mark, ...kit.windows[mark], count }))
   }
   rooms.forEach((r) => {
