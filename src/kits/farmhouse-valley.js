@@ -110,7 +110,7 @@ export const VALLEY_PLAN = {
     { id: 'd-bed3', room: 'bed3', axis: 'v', x: 11, y: 48, w: 2.67, swing: -1, hinge: 'end', size: 'interiorWide' },
     { id: 'd-bath1', room: 'bath1', axis: 'h', x: 5, y: 43.5, w: 2.33, swing: 1, hinge: 'end', size: 'bath' },
     { id: 'd-closet3', room: 'closet3', axis: 'h', x: 9.5, y: 43.5, w: 2.5, swing: 1, hinge: 'start', size: 'closet' },
-    { id: 'd-halfbath', room: 'halfbath', axis: 'h', x: 12.2, y: 43.5, w: 2.33, pocket: true, size: 'bath' },
+    { id: 'd-halfbath', room: 'halfbath', axis: 'h', x: 13.55, y: 43.5, w: 2.33, pocket: true, size: 'bath' },
     // the right: the pantry off the kitchen, the gallery off the dining room, the suite and the office off the gallery
     { id: 'd-pantry', room: 'pantry', axis: 'v', x: 34, y: 3, w: 2.5, pocket: true, size: 'interior' },
     { id: 'd-gallery', room: 'mhall', axis: 'v', x: 34, y: 18.5, w: 3, cased: true },
@@ -158,9 +158,10 @@ export const VALLEY_PLAN = {
     { k: 'shower', room: 'bath1', x: 0.3, y: 37.8, w: 6, d: 2.6 },
     { k: 'toilet', room: 'bath1', x: 0.3, y: 41, w: 2.3, d: 1.5, face: 'e' },
     { k: 'vanity', room: 'bath1', x: 6.2, y: 40.8, w: 1.6, d: 2.4, face: 'w' },
-    // the half bath (4 x 6): the water closet at the back, the vanity on the side away from the door
+    // the half bath (4 x 6): the water closet at the back, a wall-hung lavatory on the west wall; the pocket door clear of
+    // both, at least a foot in from the wall's ends so a wall that moves never slides it in front of the lavatory
     { k: 'toilet', room: 'halfbath', x: 12.25, y: 37.8, w: 1.5, d: 2.3, face: 's' },
-    { k: 'vanity', room: 'halfbath', x: 13.5, y: 40.3, w: 1.4, d: 1.8, face: 'w' },
+    { k: 'vanity', room: 'halfbath', x: 11.3, y: 40.6, w: 1.1, d: 1.8, face: 'e' },
     // the primary bath (8 x 9): the shower across the back, the water closet facing in, the vanity on the outside wall
     { k: 'shower', room: 'mbath', x: 43.3, y: 20.7, w: 7.4, d: 3 },
     { k: 'toilet', room: 'mbath', x: 43.3, y: 17.7, w: 2.3, d: 1.5, face: 'e' },
