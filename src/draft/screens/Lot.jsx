@@ -374,14 +374,16 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
       return null
     }
   }, [offered, parcel, table, geo, address])
-  const holdTyped = lookingUp || offered
+  // (while we ask whether the address we found is theirs, the typed tab stays theirs to fill in: they may not answer)
+  const holdTyped = (lookingUp && !addressHeld) || offered
   // a typed lot keeps the last good drawing while a number is half typed; a parcel or a plat is always the one drawn,
   // even when the setbacks leave no room on it: a previous lot must never stay on the screen (round 10, item 1)
   const drawAnyway = built && (built.kind === 'parcel' || built.kind === 'plat') && built.boundary?.length >= 3
   const shown = lot || (drawAnyway ? built : lastGood.current)
   const city = table[spec.city] || { name: t('No city rules yet'), county: null }
   const set = (k, v) => {
-    if (['width', 'depth', 'frontStreet', 'corner', 'sideStreet'].includes(k)) setTypedByHand(true)
+    // (a homeowner who picks the city or types a number is filling in the lot themselves)
+    if (['width', 'depth', 'frontStreet', 'corner', 'sideStreet', 'city', 'county'].includes(k)) setTypedByHand(true)
     setSpec((s) => ({ ...s, [k]: v }))
   }
   const setSetback = (k, v) => setSpec((s) => ({ ...s, setbacks: { ...(s.setbacks || {}), [k]: v } }))

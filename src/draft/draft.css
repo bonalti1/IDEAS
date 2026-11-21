@@ -651,7 +651,7 @@ details.more.card > summary { font-weight: 600; }
 }
 /* U18: the address box is a full-width field with its button under it; its words fit */
 .add-address { grid-template-columns: 1fr; }
-.add-address .btn { justify-self: start; }
+.add-address .btn { justify-self: start; min-height: 40px; }
 .lot-side .add-address input { font-size: 15px; padding: 11px 12px; }
 /* U18: the plat's own picture on its card; the plat's numbers asked calmly, not in a warning box */
 .plat-saved .plat-thumb { float: right; width: 96px; height: auto; max-height: 120px; object-fit: contain; margin: 0 0 8px 12px; border: 1px solid var(--brand-hair); border-radius: 6px; background: #fff; }
