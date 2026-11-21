@@ -44,7 +44,8 @@ export function normalizeOps(ops, rooms) {
       if (o.op === 'count') {
         const kind = /bath/i.test(String(o.kind || '')) ? 'bath' : /bed|master|primary|suite/i.test(String(o.kind || '')) ? 'bed' : o.kind
         const count = Number.isFinite(+o.count) && o.count !== null && o.count !== '' ? Math.round(+o.count) : o.count
-        return { op: 'count', kind, count }
+        // "2.5 baths" (round 15, U3): two full baths and a half bath
+        return { op: 'count', kind, count, ...(kind === 'bath' && o.half ? { half: 1 } : {}) }
       }
       // a garage op without a bay count keeps the garage's bays ("make the garage side-load")
       if (o.op === 'garage' && !(o.cars >= 1)) {
@@ -71,7 +72,7 @@ export function validateOps(ops, rooms, kit) {
     if (unsafe(o)) return errors.push('That change is not valid.')
     if (!OPS.includes(o.op)) return errors.push(`I do not know how to "${String(o.op ?? '')}" a room.`)
     if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
-    if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12)) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
+    if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12 && (o.half === undefined || (o.kind === 'bath' && o.half === 1)))) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
     if (o.op === 'scale' && !(typeof o.sqft === 'number' && o.sqft >= 600 && o.sqft <= 10000)) errors.push('Give a size between 600 and 10,000 sf.')
     if (o.op === 'swap' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to swap with.`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push('A resize needs a width and a depth in feet.')
@@ -860,7 +861,7 @@ export function splitClauses(text) {
   const t = String(text || '')
   if (/\b(swap|switch|exchange|trade)\b/i.test(t)) return [t.trim()].filter(Boolean)
   return t
-    .split(/\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i)
+    .split(/\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b(?!\s+(?:a\s+)?half\b)|\bplus\b)\s*/i)
     .map((c) => c.trim())
     .filter((c) => c.length >= 2)
 }
@@ -955,9 +956,11 @@ export function countAsk(text) {
   t = t.toLowerCase()
   if (/\b(add|another|extra|more|fewer|less|put in|remove|delete|drop|get rid of|without|take out|bigger|larger|wider|deeper|longer|smaller|narrower|shorter|tighter|expand|enlarge|shrink|reduce|move|shift|swap|switch|next to|beside|closet|window|door)\b/.test(t)) return []
   if (/\d\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/.test(t)) return []
-  // "2.5 baths" is a bath and a half bath, not a count this reads (and never "5 baths")
-  if (/\d[.,]\d+[\s-]*(?:full[\s-]+)?(?:bed|bath)/.test(t)) return []
-  const out = []
+  // round 15, U3: "2.5 baths", "two and a half baths", "2 1/2 bathrooms" are that many full baths and a half bath
+  const halves = halfBathCounts(t)
+  if (halves === null) return []
+  t = halves.rest
+  const out = [...halves.found]
   for (const m of t.matchAll(COUNT_RE)) {
     const kind = m[2].startsWith('bed') ? 'bed' : 'bath'
     const count = WORDS[m[1]] || +m[1]
@@ -968,6 +971,30 @@ export function countAsk(text) {
     if (!had) out.push({ kind, count })
   }
   return out
+}
+
+const HALF_N = String.raw`(\d{1,2}|one|two|three|four|five|six)`
+const HALF_RE = [
+  // "2.5 baths", "2,5 baños", "2½ baths", "2 1/2 bathrooms", "two and a half baths", "2 and a half full baths"
+  new RegExp(String.raw`(?<![\d.,$#-])\b${HALF_N}\s*(?:[.,]5|½|\s1\/2|\s+and\s+(?:a\s+)?half)[\s-]*(?:full[\s-]+)?bath(?:room)?s?\b`, 'g'),
+  // "2 baths and a half", "two bathrooms and a half"
+  new RegExp(String.raw`(?<![\d.,$#-])\b${HALF_N}[\s-]*(?:full[\s-]+)?bath(?:room)?s?\s+and\s+(?:a\s+)?half\b(?!\s*bath)`, 'g'),
+]
+/**
+ * The bathroom counts with a half in them: { found: [{ kind: 'bath', count: full baths, half: 1 }], rest: the text
+ * with them taken out }, or null for a half that is not a count this reads ("3.7 baths").
+ */
+function halfBathCounts(t) {
+  const found = []
+  let rest = t
+  for (const re of HALF_RE)
+    rest = rest.replace(re, (m, n) => {
+      found.push({ kind: 'bath', count: WORDS[n] || +n, half: 1 })
+      return ' '
+    })
+  if (found.length > 1 && found.some((f) => f.count !== found[0].count)) return null
+  if (/\d[.,]\d+[\s-]*(?:full[\s-]+)?(?:bed|bath)/.test(rest)) return null // any other fraction is never read as a count
+  return { found: found.slice(0, 1), rest }
 }
 
 const OPEN_STRICT = /\bmore open\b|\bopen[- ]?(?:concept|plan|layout|floor ?plan)\b|\bopen(?:s|ed|ing)? (?:it|things|everything|the (?:house|home|plan|place|space|layout|floor ?plan|rooms?)) up\b|\bopen(?:s|ed|ing)? up\b|\bopen (?:the |up the )?[a-z &]{2,30}? (?:to|into|onto|with) the\b|\b(?:less|not so|too|so|feels?|feeling) (?:closed|boxy|boxed|chopped|cramped|shut)(?:[- ](?:in|up|off))?\b|\bclosed[- ](?:in|off)\b|\bair(?:y|ier)\b|\b(?:taller|higher|raised?|vaulted|cathedral)\b[a-z ]{0,12}\bceilings?\b|\bceilings?\b[a-z ]{0,12}\b(?:taller|higher|raised)\b|\b(?:remove|removing|take (?:out|down)|taking (?:out|down)|knock (?:out|down)|tear (?:out|down)|lose|get rid of|without|fewer|no) (?:a |an |the |that |those |some |any )?(?:[a-z&]+ ){0,3}?walls?\b/
@@ -1042,8 +1069,8 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   // "I want 4 bedrooms", "make it 3 bathrooms": the house is set to that many (rooms added, or a new draft)
   const counts = countAsk(t)
   if (counts.length) {
-    const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}`
-    return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
+    const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}${c.half ? ' and a half bath' : ''}`
+    return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count, ...(c.half ? { half: 1 } : {}) })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
   }
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)

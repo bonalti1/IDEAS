@@ -3,7 +3,7 @@
 // the regex fallback takes over when the API is unreachable or unsure.
 import { api } from './api.js'
 import { kitFor, lotOf, minSizeOf, maxSizeOf, planIdOf, isRoom, programOf, programLimits, generateRooms, floorArea } from './layout.js'
-import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply, withPlanCoords, OPEN_ASK, isUndoRequest, tradeOffAsk, unclearAsk } from './ops.js'
+import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitClauses, splitCost, costReply, withPlanCoords, OPEN_ASK, isUndoRequest, tradeOffAsk, unclearAsk, countAsk } from './ops.js'
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES } from './es.js'
@@ -85,8 +85,13 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
   let source = 'claude'
+  // "2.5 baths", "dos baños y medio": read here in both modes, so the model never turns it into 3 or 4 full baths
+  const halves = halfCountDiff(split.text)
   try {
-    diff = await interpreter({ text, rooms, program, kit, lot: opts.lot ? { spec: opts.lot.spec } : undefined, lang })
+    if (halves) {
+      diff = halves
+      source = 'fallback'
+    } else diff = await interpreter({ text, rooms, program, kit, lot: opts.lot ? { spec: opts.lot.spec } : undefined, lang })
     if (diff.source === 'fallback' || diff.source === 'timeout') source = diff.source // the office answered with the basic rules
   } catch (e) {
     diff = regexOps(text, rooms, kit, lotOf(opts.lot))
@@ -96,6 +101,17 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const result = withCost(decide(diff, rooms, program, style, kit, source, lotOf(opts.lot), { history: opts.history || [], unsupported: split.dropped.map((d) => ({ ...d, text: own(d.text) })) }))
   if (!opts.interpreter && opts.report !== false) api.verdict({ text, client: opts.lot?.client, source, applied: result.applied, reasons: result.reasons || [], reply: result.reply, ops: result.ops })
   return say(result)
+}
+
+/**
+ * A request that asks for a number of baths with a half in it ("2.5 baths", "two and a half baths", "dos baños y
+ * medio", "3 bedrooms 2.5 baths"): the count ops the basic rules read, taken as they are in both chat modes (round
+ * 15, U3), or null.
+ */
+export function halfCountDiff(text) {
+  const counts = countAsk(text)
+  if (!counts.some((c) => c.half)) return null
+  return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count, ...(c.half ? { half: 1 } : {}) })), reply: '', confidence: 1 }
 }
 
 /**
@@ -303,10 +319,10 @@ export function describeOp(o, rooms, kit) {
     case 'swap':
       return `swapping the ${name(o.room)} and the ${name(o.target)}`
     case 'count':
-      return countWords(o.kind, o.count)
+      return countWords(o.kind, o.count, o.half)
     case 'redraft': {
       const p = o.program || {}
-      const withs = [p.garage !== undefined ? `a ${p.garage}-car garage` : null, p.beds !== undefined ? countWords('bed', p.beds) : null, p.baths !== undefined ? countWords('bath', p.baths) : null, p.rearPorch === true ? 'a covered porch at the back' : null, p.frontPorch === true ? 'a front porch' : null].filter(Boolean)
+      const withs = [p.garage !== undefined ? `a ${p.garage}-car garage` : null, p.beds !== undefined ? countWords('bed', p.beds) : null, p.baths !== undefined ? countWords('bath', p.baths, p.halfBath === true ? 1 : 0) : null, p.rearPorch === true ? 'a covered porch at the back' : null, p.frontPorch === true ? 'a front porch' : null].filter(Boolean)
       return `a new draft${withs.length ? ` with ${withs.join(' and ')}` : ''}${o.sqft ? ` at ${num(o.sqft)} sf` : ''}`
     }
     default:
@@ -315,7 +331,7 @@ export function describeOp(o, rooms, kit) {
 }
 
 /** The parts of a request: what the fallback split, or each op with the resizes a swap carries. */
-const CLAUSE_SPLIT = /\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i
+const CLAUSE_SPLIT = /\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b(?!\s+(?:a\s+)?half\b)|\bplus\b)\s*/i
 const BIGGER = /\b(bigger|larger|wider|deeper|longer)\b/i
 const SMALLER = /\b(smaller|narrower|shorter|tighter)\b/i
 /**
@@ -668,9 +684,9 @@ function decideCore(diff, rooms, program, style, kit, source, lot, opts = {}) {
 
 // ── round 12, item G: four requests a customer test found, in plain words, each with a button that works ──────
 
-/** "4 bedrooms", "1 bathroom". */
-function countWords(kind, n) {
-  return `${n} ${kind === 'bed' ? 'bedroom' : 'bathroom'}${n === 1 ? '' : 's'}`
+/** "4 bedrooms", "1 bathroom", "2 bathrooms and a half bath". */
+function countWords(kind, n, half = 0) {
+  return `${n} ${kind === 'bed' ? 'bedroom' : 'bathroom'}${n === 1 ? '' : 's'}${kind === 'bath' && half ? ' and a half bath' : ''}`
 }
 /** A room for a sentence, the way a homeowner says it: "living room", "dining room", "kitchen", "Bedroom 3". */
 function plainName(name) {
@@ -841,10 +857,10 @@ function porchRefusal(ops, why, caused, next, rooms, program, style, kit, L, edi
   return { reply, fixes }
 }
 /** A button that sets the house to a number of bedrooms or bathrooms, when that goes through: { label, ops } or null. */
-function countFix(kind, n, rooms, program, style, kit, source, L, edits, depth) {
-  const ops = [{ op: 'count', kind, count: n }]
+function countFix(kind, n, rooms, program, style, kit, source, L, edits, depth, half = 0) {
+  const ops = [{ op: 'count', kind, count: n, ...(half ? { half: 1 } : {}) }]
   const d = decide({ ops, reply: '', confidence: 1 }, rooms, program, style, kit, source, L, { history: edits, depth: depth + 1 })
-  return d.applied ? { label: `${d.redrafted ? 'Draw the house again with' : 'Make it'} ${countWords(kind, n)}`, ops } : null
+  return d.applied ? { label: `${d.redrafted ? 'Draw the house again with' : 'Make it'} ${countWords(kind, n, half)}`, ops } : null
 }
 /**
  * "I want 4 bedrooms", "make it 3 bathrooms": the house is set to that many. More: the rooms are added where the
@@ -858,46 +874,58 @@ function setCount(o, rooms, program, style, kit, source, L, edits, depth) {
   const key = o.kind === 'bed' ? 'beds' : 'baths'
   const n = o.count
   const ops = [o]
-  const have = programOf(rooms, program)[key]
-  const say = (k) => countWords(o.kind, k)
-  if (n === have) return { applied: false, rooms, reply: `This plan already has ${say(n)}. No change was used.`, source, ops, reasons: ['no change'], noop: true }
+  const counted = programOf(rooms, program)
+  const have = counted[key]
+  // "2.5 baths", "dos baños y medio" (round 15, U3): n full baths and a half bath
+  const half = o.kind === 'bath' && o.half ? 1 : 0
+  const haveHalf = counted.halfBaths || 0
+  const needHalf = half && !haveHalf
+  const say = (k, h = half) => countWords(o.kind, k, h)
+  // what the plan has now, said the way the ask was: "2" for a plain count, "2 bathrooms" beside a half bath
+  const had = half ? say(have, haveHalf) : String(have)
+  const reached = (list, prog) => {
+    const c = programOf(list, prog)
+    return c[key] === n && (!half || c.halfBaths > 0)
+  }
+  const over = { [key]: n, ...(half ? { halfBath: true } : {}) }
+  if (n === have && !needHalf) return { applied: false, rooms, reply: `This plan already has ${say(n)}. No change was used.`, source, ops, reasons: ['no change'], noop: true }
   const [lo, hi] = programLimits(style)[key] || [1, 6]
   if (n < lo || n > hi) {
     const near = n < lo ? lo : hi
-    const fix = near !== have && depth < 2 ? countFix(o.kind, near, rooms, program, style, kit, source, L, edits, depth) : null
-    return { applied: false, rooms, reply: `${style?.name || 'This style'} is drawn with ${lo} to ${hi} ${o.kind === 'bed' ? 'bedrooms' : 'bathrooms'}, so ${say(n)} is outside what I can draw. This plan has ${have}.`, source, ops, reasons: ['out of range'], fixes: fix ? [fix] : [] }
+    const fix = near !== have && depth < 2 ? countFix(o.kind, near, rooms, program, style, kit, source, L, edits, depth, half) : null
+    return { applied: false, rooms, reply: `${style?.name || 'This style'} is drawn with ${lo} to ${hi} ${o.kind === 'bed' ? 'bedrooms' : 'bathrooms'}, so ${say(n, 0)} is outside what I can draw. This plan has ${have}.`, source, ops, reasons: ['out of range'], fixes: fix ? [fix] : [] }
   }
-  // more: added in place first, the way "add a bedroom" does it
-  if (n > have) {
-    const adds = Array.from({ length: n - have }, () => ({ op: 'add', kind: o.kind }))
+  // more (or the half bath only): added in place first, the way "add a bedroom" does it
+  if (n >= have) {
+    const adds = [...Array.from({ length: n - have }, () => ({ op: 'add', kind: o.kind })), ...(needHalf ? [{ op: 'add', kind: 'halfbath' }] : [])]
     const out = passes(adds, rooms, program, style, kit, L)
-    if (out && programOf(out.rooms, program)[key] === n) {
-      return { applied: true, rooms: out.rooms, reply: `The house now has ${say(n)}; it had ${have}. ${out.did.join('. ')}.`, source, ops: adds, did: out.did }
+    if (out && reached(out.rooms, program)) {
+      return { applied: true, rooms: out.rooms, reply: `The house now has ${say(n)}; it had ${had}. ${out.did.join('. ')}.`, source, ops: adds, did: out.did }
     }
   }
   // a new draft of the house as it stands, with that many
-  const r = redraft(null, rooms, program, style, L, edits, { [key]: n })
-  if (r.ok && programOf(r.rooms, r.program)[key] === n) {
+  const r = redraft(null, rooms, program, style, L, edits, over)
+  if (r.ok && reached(r.rooms, r.program)) {
     const plan = PLAN_WORDS[r.planId] || r.planId || 'same'
-    const reply = `Drew the house again with ${say(n)}; it had ${have}. It is ${num(floorArea(r.rooms, stories))} sf of living area on the ${plan} plan.${editsLine(r)}`
-    return { applied: true, rooms: r.rooms, reply, source, ops: [{ op: 'redraft', program: { [key]: n } }], did: [`${say(n)} (was ${have})`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
+    const reply = `Drew the house again with ${say(n)}; it had ${had}. It is ${num(floorArea(r.rooms, stories))} sf of living area on the ${plan} plan.${editsLine(r)}`
+    return { applied: true, rooms: r.rooms, reply, source, ops: [{ op: 'redraft', program: over }], did: [`${say(n)} (was ${had})`], redrafted: true, program: r.program, kept: r.kept, dropped: r.dropped }
   }
   // refused: why, and the nearest thing that goes through
   const fixes = []
   if (depth === 0) {
     const max = r.max ? Math.floor(r.max / 50) * 50 : null
     if (max && Math.abs(max - floorArea(rooms, stories)) > 25) {
-      const r2 = redraft(max, rooms, program, style, L, edits, { [key]: n })
-      if (r2.ok && programOf(r2.rooms, r2.program)[key] === n) fixes.push({ label: newDraftWords(max, floorArea(rooms, stories), say(n)), ops: [{ op: 'redraft', sqft: max, program: { [key]: n } }] })
+      const r2 = redraft(max, rooms, program, style, L, edits, over)
+      if (r2.ok && reached(r2.rooms, r2.program)) fixes.push({ label: newDraftWords(max, floorArea(rooms, stories), say(n)), ops: [{ op: 'redraft', sqft: max, program: over }] })
     }
-    const step = n > have ? n - 1 : n + 1
+    const step = half ? n : n > have ? n - 1 : n + 1
     if (step !== have && fixes.length < 2) {
       const fix = countFix(o.kind, step, rooms, program, style, kit, source, L, edits, depth)
       if (fix) fixes.push(fix)
     }
   }
   const because = lotWords(r.reasons, 'the house') || 'the rooms do not all fit on this lot at a size that works'
-  const reply = `${say(n).replace(/^./, (ch) => ch.toUpperCase())} ${n === 1 ? 'does' : 'do'} not fit on this lot: ${because}. This plan has ${have}.${fixes.length ? ' Here is what would work:' : ''}`
+  const reply = `${say(n).replace(/^./, (ch) => ch.toUpperCase())} ${n === 1 && !half ? 'does' : 'do'} not fit on this lot: ${because}. This plan has ${had}.${fixes.length ? ' Here is what would work:' : ''}`
   return { applied: false, rooms, reply, source, ops, reasons: r.reasons?.length ? r.reasons : ['does not fit'], caused: r.reasons || [], preexisting: [], fixes }
 }
 /** The rooms open to a room on this plan (no wall between them), the way the audit reads the kit: a set of room ids. */

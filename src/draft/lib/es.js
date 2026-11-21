@@ -122,6 +122,9 @@ function clauseEn(clause, ctx) {
   const found = []
   let s = ` ${clause} `.replace(/\s+/g, ' ')
   for (const [w, n] of Object.entries(NUM_WORDS)) s = s.replace(new RegExp(String.raw`\b${w}\b`, 'g'), String(n))
+  // "dos baños y medio", "2 y medio baños", "2.5 baños": that many full baths and a half bath (round 15, U3)
+  const half = s.match(/\b(\d{1,2})(?: [bv]ani?os?(?: completos?)? y medio| y medio [bv]ani?os?|[.,]5 [bv]ani?os?)\b/)
+  if (half && !RE.remove.test(s) && !RE.addVerb.test(s)) return `${half[1]}.5 bathrooms`
   for (const [re, en] of ROOM_WORDS) {
     s = s.replace(re, (m, digit) => {
       const many = /s$/.test(m.split(' ')[0]) && (en === 'bedroom' || en === 'bathroom' || en === 'half bath')
@@ -252,7 +255,9 @@ export function fromSpanish(text) {
   // one request that only reads whole: two rooms trading places, a wall between two rooms
   const whole = RE.swap.test(f) || /\bentre\b/.test(f)
   const cuts = []
-  if (!whole) for (const m of f.matchAll(SPLIT_ES)) cuts.push([m.index, m.index + m[0].length, /luego|despues/.test(m[0]) ? ' and then ' : /;/.test(m[0]) ? '; ' : ' and '])
+  // "dos baños y medio", "2 y medio baños" (round 15, U3): one count, never "2 bathrooms" and a "medio" nobody read
+  const halfJoin = (m) => /^\s*y\s*$/.test(m[0]) && ((/\b(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis) [bv]ani?os?(?: completos?)?$/.test(f.slice(0, m.index)) && /^medio\b(?! [bv]an)/.test(f.slice(m.index + m[0].length))) || (/\b(?:\d{1,2}|dos|tres|cuatro|cinco|seis)$/.test(f.slice(0, m.index)) && /^medio [bv]an/.test(f.slice(m.index + m[0].length))))
+  if (!whole) for (const m of f.matchAll(SPLIT_ES)) if (!halfJoin(m)) cuts.push([m.index, m.index + m[0].length, /luego|despues/.test(m[0]) ? ' and then ' : /;/.test(m[0]) ? '; ' : ' and '])
   const pieces = []
   let at = 0
   let join = ''
@@ -355,6 +360,11 @@ const pies = (n) => (String(n) === '1' ? '1 pie' : `${n} pies`)
 const countEs = (n, kind) => `${n} ${/bed/i.test(kind) ? (String(n) === '1' ? 'recámara' : 'recámaras') : String(n) === '1' ? 'baño' : 'baños'}`
 /** "the 4 bedrooms", "the 1 bathroom": "las 4 recámaras", "el baño". */
 const theCountEs = (n, kind) => (String(n) === '1' ? (/bed/i.test(kind) ? 'la recámara' : 'el baño') : `${/bed/i.test(kind) ? 'las' : 'los'} ${countEs(n, kind)}`)
+// "2 bathrooms and a half bath" (round 15, U3): "2 baños y medio"
+const COUNT = String.raw`(\d+) (bed|bath)rooms?( and a half bath)?`
+const HAD = String.raw`(\d+)( (?:bed|bath)rooms?)?( and a half bath)?` // "it had 2", "it had 2 bathrooms", "it had 2 bathrooms and a half bath"
+const countHalfEs = (n, kind, half) => `${countEs(n, kind)}${half ? ' y medio' : ''}`
+const hadEs = (n, kind, named, half) => (named || half ? countHalfEs(n, kind, half) : n)
 const carsEs = (n) => `cochera para ${n} carro${String(n) === '1' ? '' : 's'}`
 const PLAN_ES = { standard: 'el plano estándar', compact: 'el plano compacto', 'narrow-lot': 'el plano para lote angosto', narrow: 'el plano para lote angosto', 'garage-forward': 'el plano con la cochera al frente', frontgarage: 'el plano con la cochera al frente', same: 'el mismo plano' }
 const planEs = (p) => PLAN_ES[p] || `el plano ${p}`
@@ -480,7 +490,7 @@ function partEs(text) {
   if ((m = t.match(/^swapping the (.+) and the (.+)$/))) return `intercambiar ${el(m[1])} y ${el(m[2])}`
   if ((m = t.match(/^the (.+) next to the (.+)$/))) return `${el(m[1])} junto ${al(m[2])}`
   if ((m = t.match(/^a (\d)-car garage( \(tandem: one bay two cars deep\))?(?:, (side|front)-load)?$/))) return `${carsEs(m[1])}${m[2] ? ' (con un lugar en fila: dos carros, uno detrás del otro)' : ''}${m[3] ? `, ${loadEs(m[3])}` : ''}`
-  if ((m = t.match(/^(\d+) (bed|bath)rooms?$/))) return countEs(m[1], m[2])
+  if ((m = t.match(/^(\d+) (bed|bath)rooms?( and a half bath)?$/))) return countHalfEs(m[1], m[2], m[3])
   if (/^a new draft/.test(t)) return newDraftEs(t)
   if (t === 'that change') return 'ese cambio'
   return t
@@ -489,7 +499,7 @@ function partEs(text) {
 function newDraftEs(text) {
   const m = String(text).match(new RegExp(`^a new draft(?: with (.+?))?(?: at (${N}) sf)?$`))
   if (!m) return 'un nuevo dibujo'
-  const withs = m[1] ? m[1].split(' and ').map(withEs) : []
+  const withs = m[1] ? m[1].split(/ and (?!a half bath)/).map(withEs) : []
   return `un nuevo dibujo${withs.length ? ` con ${withs.join(' y ')}` : ''}${m[2] ? `, de ${m[2]} pies²` : ''}`
 }
 /** What a new draft carries: "a 3-car garage", "5 bedrooms", "a covered patio at the back". */
@@ -497,7 +507,7 @@ function withEs(text) {
   const t = String(text).trim()
   let m
   if ((m = t.match(/^a (\d)-car garage$/))) return carsEs(m[1])
-  if ((m = t.match(/^(\d+) (bed|bath)rooms?$/))) return countEs(m[1], m[2])
+  if ((m = t.match(/^(\d+) (bed|bath)rooms?( and a half bath)?$/))) return countHalfEs(m[1], m[2], m[3])
   if (t === 'a covered porch at the back') return 'un porche techado atrás'
   if (t === 'a front porch') return 'un porche al frente'
   if ((m = t.match(/^a (covered patio|rear porch|front porch) at the (back|front)$/))) return porchEs(m[1])
@@ -654,12 +664,12 @@ S(String.raw`The .+? kit has no "[^"]*" room\.`, () => 'Este estilo no tiene ese
 S(String.raw`The .+? kit does not have that room yet\.`, () => 'Este estilo todavía no tiene esa habitación.')
 
 // ── counts ──
-S(String.raw`This plan already has (\d+) (bed|bath)rooms?\.`, (m) => `Este plano ya tiene ${countEs(m[1], m[2])}.`)
+S(String.raw`This plan already has ${COUNT}\.`, (m) => `Este plano ya tiene ${countHalfEs(m[1], m[2], m[3])}.`)
 S(String.raw`(.+?) is drawn with (\d+) to (\d+) (bed|bath)rooms, so (\d+) (?:bed|bath)rooms? is outside what I can draw\. This plan has (\d+)\.`, (m) => `El estilo ${m[1]} se dibuja con ${m[2]} a ${countEs(m[3], m[4])}, así que ${countEs(m[5], m[4])} queda fuera de lo que puedo dibujar. Este plano tiene ${m[6]}.`)
-S(String.raw`The house now has (\d+) (bed|bath)rooms?; it had (\d+)\.`, (m) => `Ahora la casa tiene ${countEs(m[1], m[2])}; antes tenía ${m[3]}.`)
-S(String.raw`Drew the house again with (\d+) (bed|bath)rooms?; it had (\d+)\. It is (${N}) sf of living area on the (\S+) plan\.`, (m) => `Volví a dibujar la casa con ${countEs(m[1], m[2])}; antes tenía ${m[3]}. Quedó de ${m[4]} pies² de área habitable, en ${planEs(m[5])}.`)
-S(String.raw`(\d+) (bed|bath)rooms? do(?:es)? not fit on this lot: (.+?)\. This plan has (\d+)\.`, (m) => `${cap(countEs(m[1], m[2]))} no ${m[1] === '1' ? 'cabe' : 'caben'} en este lote: ${becauseEs(m[3])}. Este plano tiene ${m[4]}.`)
-S(String.raw`Setting the house to (.+?)\.`, (m) => `La casa queda con ${m[1].split(' and ').map((c) => countEs(...c.match(/^(\d+) (bed|bath)/).slice(1))).join(' y ')}.`)
+S(String.raw`The house now has ${COUNT}; it had ${HAD}\.`, (m) => `Ahora la casa tiene ${countHalfEs(m[1], m[2], m[3])}; antes tenía ${hadEs(m[4], m[2], m[5], m[6])}.`)
+S(String.raw`Drew the house again with ${COUNT}; it had ${HAD}\. It is (${N}) sf of living area on the (\S+) plan\.`, (m) => `Volví a dibujar la casa con ${countHalfEs(m[1], m[2], m[3])}; antes tenía ${hadEs(m[4], m[2], m[5], m[6])}. Quedó de ${m[7]} pies² de área habitable, en ${planEs(m[8])}.`)
+S(String.raw`${COUNT} do(?:es)? not fit on this lot: (.+?)\. This plan has ${HAD}\.`, (m) => `${cap(countHalfEs(m[1], m[2], m[3]))} no ${m[1] === '1' && !m[3] ? 'cabe' : 'caben'} en este lote: ${becauseEs(m[4])}. Este plano tiene ${hadEs(m[5], m[2], m[6], m[7])}.`)
+S(String.raw`Setting the house to (.+?)\.`, (m) => `La casa queda con ${m[1].replace(/ and a half bath/g, ' y medio').split(' and ').map((c) => { const k = c.match(/^(\d+) (bed|bath)\w*( y medio)?/); return k ? countHalfEs(k[1], k[2], k[3]) : c }).join(' y ')}.`)
 S(String.raw`There is no (Bedroom|Bath) (\d+); this plan has (?:(?:Bedrooms|Baths) (\d+)–(\d+)|(?:Bedroom|Bath) (\d+)|no (?:bedroom|bath) by number)\.`, (m) => {
   const bed = m[1] === 'Bedroom'
   const has = m[3] ? `${bed ? 'las Recámaras' : 'los Baños'} ${m[3]} a ${m[4]}` : m[5] ? `${bed ? 'la Recámara' : 'el Baño'} ${m[5]}` : null
@@ -791,7 +801,7 @@ S(String.raw`Make (.+?) smaller`, (m) => `Hacer ${el(m[1])} más ${fem(m[1]) ? '
 S(String.raw`Make the (.+?) (${N})' by (${N})' instead\?`, (m) => `¿Mejor dejar ${el(m[1])} de ${m[2]} por ${m[3]} pies?`)
 S(String.raw`Make (.+?) (${N}) ft shorter to make room for the (covered patio|rear porch|front porch)`, (m) => `Acortar ${el(m[1])} ${pies(m[2])} para dar lugar ${m[3] === 'covered patio' ? 'al patio techado' : m[3] === 'rear porch' ? 'al porche de atrás' : 'al porche del frente'}`)
 S(String.raw`Make (.+?) ((?:${N} ft (?:wider|longer))(?: and ${N} ft (?:wider|longer))?)`, (m) => `Hacer ${el(m[1])} ${grewEs(m[2])}`)
-S(String.raw`Make it (\d+) (bed|bath)rooms?`, (m) => `Dejarla con ${countEs(m[1], m[2])}`)
+S(String.raw`Make it ${COUNT}`, (m) => `Dejarla con ${countHalfEs(m[1], m[2], m[3])}`)
 S(String.raw`Make it (${N}) sf`, (m) => `Dejarla en ${m[1]} pies²`)
 S(String.raw`Make it a (\d)-car garage instead\?`, (m) => `¿Mejor una ${carsEs(m[1])}?`)
 S(String.raw`Make the garage (\d) cars?`, (m) => `Dejar la ${carsEs(m[1])}`)

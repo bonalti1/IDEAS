@@ -6,7 +6,7 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
-import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize, halfCountDiff } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
 import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
 import { isSendLot } from '../src/draft/lib/intents.js'
@@ -618,9 +618,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
       }
       const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
+      const halves = isFix ? null : halfCountDiff(split.text)
       if (isFix) {
         diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
+      } else if (halves) {
+        // "2.5 baths", "dos baños y medio" (round 15, U3): two full baths and a half bath, read the same in both modes
+        diff = halves
+        source = 'fallback'
       } else
       try {
         diff = await interpreter.ask({ request: asked, ...(lang === 'es' ? { lang } : {}), program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
