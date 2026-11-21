@@ -699,3 +699,10 @@ details.more.card > summary { font-weight: 600; }
 }
 /* the two groups of view buttons are one row everywhere else, as before */
 .views-main, .views-3d { display: contents; }
+/* polish: the lot's sides on the parcel card are a list, one side to a line (on a phone they ran together) */
+.parcel-card .edges.plain { flex-direction: column; flex-wrap: nowrap; gap: 3px; }
+/* polish: the names under "More styles soon" have room of their own on a phone (CRAFTSMAN ran into TRANSITIONAL) */
+@media (max-width: 600px) {
+  .styles-soon ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; }
+  .styles-soon li { width: auto; min-width: 0; letter-spacing: 0.03em; font-size: 10.5px; overflow-wrap: anywhere; hyphens: auto; }
+}
