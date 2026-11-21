@@ -243,8 +243,9 @@ test('1 (writing): the sentences around the chat: the rule reasons as plain.js w
     "You've used the free changes on this plan. The office will add more for you. Want me to let them know?": 'Ya usó los cambios incluidos en este plano. La oficina le agregará más. ¿Quiere que les avise?',
     'Thanks! The office will reach out within 1 business day. You can also call (956) 594-6936.': '¡Gracias! La oficina se comunicará con usted en 1 día hábil. También puede llamar al (956) 594-6936.',
     'Done. The office has your request and usually adds more within 1 business day. You can also call (956) 594-6936.': 'Listo. La oficina ya tiene su solicitud y normalmente agrega más cambios en 1 día hábil. También puede llamar al (956) 594-6936.',
-    'Back to version 3. 1 change returned.': 'Regresé a la versión 3. Se le devolvió 1 cambio.',
-    'Back to version 1. 2 changes returned.': 'Regresé a la versión 1. Se le devolvieron 2 cambios.',
+    'Back to version 3. 1 change returned.': 'Regresé a la versión 3. Te devolvimos 1 cambio.',
+    'Done, the house is back to how it was. 1 change returned.': 'Listo, la casa quedó como estaba. Te devolvimos 1 cambio.',
+    'Back to version 1. 2 changes returned.': 'Regresé a la versión 1. Te devolvimos 2 cambios.',
     'There is nothing to undo yet. No change was used.': 'Todavía no hay nada que deshacer. No se usó ningún cambio.',
     'Undid "agrega una oficina". That change is back on your plan.': 'Deshice "agrega una oficina". Ese cambio regresó a su plano.',
     'This design is with the drafters now, so it cannot change.': 'Este diseño ya está con los dibujantes, así que no se puede cambiar.',
@@ -636,7 +637,8 @@ async function undoOverHttp(o, mode, expectSource) {
     assert.equal(un.refunded, 1)
     assert.equal(un.version, ch.version + 1)
     assert.ok(sameRooms(un.rooms, first.rooms), `${mode}: "${text}": the plan is the earlier version`)
-    assert.match(un.reply, isSpanish(text) ? /^Regresé a la versión \d+\. Se le devolvió 1 cambio\.$/ : /^Back to version \d+\. 1 change returned\.$/, text)
+    // round 15, P1: plain words, no version number
+    assert.equal(un.reply, isSpanish(text) ? "Listo, la casa quedó como estaba. Te devolvimos 1 cambio." : "Done, the house is back to how it was. 1 change returned.", text)
     const now = await o.detail(id)
     assert.ok(sameRooms(now.rooms, first.rooms), 'saved that way')
     assert.equal(now.changesUsed, 0)

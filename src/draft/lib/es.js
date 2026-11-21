@@ -297,7 +297,7 @@ export function fromSpanish(text) {
   return { text: out || raw, pairs, back }
 }
 
-const UNDO_ES = /^(?:por favor,? )?(?:(?:deshaz|deshace|deshacer|deshaga|deshazme)(?:lo|la)?(?: (?:eso|esto|el (?:ultimo )?cambio|ese cambio|lo ultimo|lo anterior|el cambio anterior|lo que (?:hice|hiciste|hicimos|pedi)))?|(?:regresa|regresar|regrese|regresalo|regresala|regresame|vuelve|volver|vuelva|vuelvelo|dejalo|dejala|ponlo|ponla|quiero regresar|quiero volver)(?: (?:todo )?(?:a )?(?:como estaba|como antes|como estaba antes|atras|a la version anterior|al anterior|a lo anterior|una version|un paso|un cambio|para atras|pa tras|patras|a como estaba))?|quita(?:r|le)? (?:el |ese |este |mi )?(?:ultimo )?cambio|quita lo ultimo|cancela(?:r)? (?:eso|el (?:ultimo )?cambio|ese cambio|lo ultimo)|como estaba(?: antes)?|(?:para )?atras)(?:,? por favor)?$/
+const UNDO_ES = /^(?:por favor,? )?(?:(?:me |nos |lo )?(?:puedes|puede|pueden|podrias|podria|podrian|quieres|quiere) (?:por favor )?)?(?:(?:control|ctrl) ?z|(?:deshaz|deshace|deshacer|deshaga|deshazme)(?:lo|la)?(?: (?:eso|esto|el (?:ultimo )?cambio|ese cambio|lo ultimo|lo anterior|el cambio anterior|lo que (?:hice|hiciste|hicimos|pedi)))?|(?:regresa|regresar|regrese|regresalo|regresala|regresame|vuelve|volver|vuelva|vuelvelo|dejalo|dejala|ponlo|ponla|quiero regresar|quiero volver)(?: (?:todo )?(?:a )?(?:como estaba|como antes|como estaba antes|atras|a la version anterior|al anterior|a lo anterior|una version|un paso|un cambio|para atras|pa tras|patras|a como estaba))?|quita(?:r|le)? (?:el |ese |este |mi )?(?:ultimo )?cambio|quita lo ultimo|cancela(?:r)? (?:eso|el (?:ultimo )?cambio|ese cambio|lo ultimo)|como estaba(?: antes)?|(?:para )?atras)(?:,? por favor)?$/
 /** "deshaz eso", "regresa como estaba", "quita el último cambio": the last change comes off. */
 export function isUndoEs(text) {
   const f = fold(text).replace(/[.!?]+\s*$/, '').replace(/\s+/g, ' ').trim()
@@ -640,7 +640,8 @@ S(String.raw`The change itself is fine, but this plan already has a problem that
 
 // ── undo, the office ──
 S(String.raw`Back to version (\d+)\.`, (m) => `Regresé a la versión ${m[1]}.`)
-S(String.raw`(\d+) changes? returned\.`, (m) => (m[1] === '1' ? 'Se le devolvió 1 cambio.' : `Se le devolvieron ${m[1]} cambios.`))
+F('Done, the house is back to how it was.', 'Listo, la casa quedó como estaba.')
+S(String.raw`(\d+) changes? returned\.`, (m) => `Te devolvimos ${m[1]} ${m[1] === '1' ? 'cambio' : 'cambios'}.`)
 S(String.raw`(\d+) changes? used`, (m) => (m[1] === '1' ? '1 cambio usado' : `${m[1]} cambios usados`))
 S(String.raw`Undid "([^"]*)"\.`, (m) => `Deshice "${m[1]}".`)
 S(String.raw`Could not go back: .*`, () => 'No se pudo regresar a esa versión.')

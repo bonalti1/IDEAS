@@ -568,7 +568,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
           return out({ applied: false, undo: true, reply, source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version })
         }
         const back = await this.rollback(p, target)
-        const reply = `Back to version ${target}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`
+        // round 15, P1: plain words, no version number; in the language of the request (localized below)
+        const reply = `Done, the house is back to how it was.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change was used.'}`
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply, ops: [] })
         return out({ applied: true, undo: true, reply, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, refunded: back.refunded, project: back, ops: [] })
       }

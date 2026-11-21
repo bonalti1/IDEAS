@@ -10,6 +10,7 @@ import { TRUST } from '../lib/trust.js'
 import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
 import { isUndoRequest } from '../lib/ops.js'
 import { isSendLot } from '../lib/intents.js'
+import { isSpanish } from '../lib/es.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = says(['Thanks! The office will reach out within 1 business day. You can also call {phone}.', { phone: TRUST.phone }])
@@ -164,12 +165,14 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
     }
     // "undo", "go back": the last change comes off and comes back to the plan; no model, nothing used
     if (!fix && (isUndoRequest(q) || UNDO_RE.test(q) || UNDO_ES.test(q))) {
+      // round 15, P1: answered in the language of the request ("deshaz eso" in Spanish on an English screen too)
+      const asked = isSpanish(q) ? 'es' : lang
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!canUndo) {
-        setHistory((h) => [...h, { who: 'house', ...says(['There is nothing to undo yet.']), applied: false, source: 'fallback' }])
+        setHistory((h) => [...h, { who: 'house', ...says(['There is nothing to undo yet.'], ['No change was used.']), lang: asked, applied: false, source: 'fallback' }])
         return
       }
-      undoLast()
+      undoLast(asked)
       return
     }
     setBusy(true)
@@ -219,7 +222,9 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   }
 
   // back to an earlier saved version; the changes used after it come back to the plan
-  const restore = async (n) => {
+  // `undo` (the Undo button, a typed undo): said in plain words, never as a version number (round 15, P1), in the
+  // language of a typed request when there was one
+  const restore = async (n, { undo = false, lang: asked } = {}) => {
     if (!project || busy) return
     setBusy(true)
     try {
@@ -227,7 +232,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       setProject(p)
       setRooms(p.rooms)
       setChangesLeft(p.changesLeft)
-      setHistory((h) => [...h, { who: 'house', ...says(['Back to version {n}.', { n }], p.refunded ? ['{n} {n|change|changes} returned.', { n: p.refunded }] : null), applied: true, source: 'undo' }])
+      const line = undo ? (p.refunded ? says(['Done, the house is back to how it was. {n} {n|change|changes} returned.', { n: p.refunded }]) : says(['Done, the house is back to how it was. No change was used.'])) : says(['Back to version {n}.', { n }], p.refunded ? ['{n} {n|change|changes} returned.', { n: p.refunded }] : null)
+      setHistory((h) => [...h, { who: 'house', ...line, ...(asked ? { lang: asked } : {}), applied: true, source: 'undo' }])
     } catch (e) {
       setHistory((h) => [...h, { who: 'house', ...says(['Could not go back: {error}', { error: e.message }]), applied: false, source: 'fallback' }])
     }
@@ -237,8 +243,9 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   const current = versions[versions.length - 1]
   const canUndo = project ? current?.kind === 'change' && current.n > 1 : undo.length > 0
 
-  const undoLast = () => {
-    if (project) return restore(current.n - 1)
+  const undoLast = (asked) => {
+    const said = typeof asked === 'string' ? asked : undefined // the button passes its click event
+    if (project) return restore(current.n - 1, { undo: true, lang: said })
     const snap = undo[undo.length - 1]
     if (!snap) return
     setUndo((u) => u.slice(0, -1))
@@ -253,7 +260,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           break
         }
       }
-      return [...out, { who: 'house', ...says(['Undid "{text}". That change is back on your plan.', { text: snap.text }]), applied: true, source: 'undo' }]
+      return [...out, { who: 'house', ...says(['Done, the house is back to how it was. {n} {n|change|changes} returned.', { n: 1 }]), ...(said ? { lang: said } : {}), applied: true, source: 'undo' }]
     })
   }
 
@@ -335,7 +342,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           )}
           {history.map((m, i) => (
             <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '') + (m.undone ? ' undone' : '')}>
-              {m.who === 'house' ? houseText(m, lang) : m.text}
+              {m.who === 'house' ? houseText(m, m.lang || lang) : m.text}
               {m.meta && (
                 <span className="meta">
                   {Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ` ${t('sf')}`)}</b> : t('same size')} · {t('{n} change used', { n: m.meta.used ?? 1 })}

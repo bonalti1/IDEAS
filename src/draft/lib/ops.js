@@ -878,7 +878,8 @@ export const isCostQuestion = (text) => COST_RE.test(String(text || ''))
 export const costReply = (q) => (typeof q === 'object' ? q?.spanish : SPANISH_RE.test(String(q || ''))) ? COST_REPLY_ES : COST_REPLY
 
 // ── typed undo, a request nobody can read, two wishes that pull against each other (round 13) ──────────────
-const UNDO_EN = /^\s*(?:please,? )?(?:undo(?: that| it| this| the last(?: change| one)?| my last change| the change)?|go back(?: one| a step| a version| to (?:how|the way) it was(?: before)?| to (?:the )?(?:previous|last|earlier) (?:version|one))?|put it back(?: (?:how|the way) it was)?|take (?:that|it) back|revert(?: that| it)?|change it back|(?:back )?to how it was(?: before)?)(?:,? please)?\s*[.!]?\s*$/i
+// round 15, P2: a question ("can you undo that?") or a please before or after, and the keyboard's "ctrl z"
+const UNDO_EN = /^\s*(?:(?:ok|okay|hey|oops|actually|no),? )?(?:please,? )?(?:(?:can|could|would|will) you(?: please)?,? |(?:can|could) we |i want to |i'd like to |let's |lets |just )?(?:please,? )?(?:undo(?: that| it| this| the last(?: change| one)?| my last change| the change| what you just did)?|go back(?: one| a step| a version| to (?:how|the way) it was(?: before)?| to (?:the )?(?:previous|last|earlier) (?:version|one))?|put it back(?: (?:how|the way) it was)?|take (?:that|it) back|revert(?: that| it)?|change it back|(?:back )?to how it was(?: before)?|(?:ctrl|control|cmd|command)\s*[-+ ]?\s*z)(?:,? please)?\s*[.!?]*\s*$/i
 /**
  * "undo", "undo that", "go back", "go back to how it was", "put it back", "deshaz eso", "regresa como estaba",
  * "quita el último cambio": the last change comes off and comes back to the plan, the way the Undo button does it.

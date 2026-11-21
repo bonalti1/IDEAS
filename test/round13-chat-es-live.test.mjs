@@ -115,7 +115,7 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
     assert.equal(undo.applied, true)
     assert.equal(undo.undo, true)
     assert.equal(undo.changesUsed, 0)
-    assert.equal(undo.reply, 'Regresé a la versión 1. Se le devolvió 1 cambio.')
+    assert.equal(undo.reply, 'Listo, la casa quedó como estaba. Te devolvimos 1 cambio.') // round 15, P1
     const trade = await o.change(id, 'haz la casa mas chica pero agrega 2 recamaras')
     said.push(`"haz la casa mas chica pero agrega 2 recamaras" → ${trade.reply} [button: ${trade.fixes.map((f) => f.label).join(' | ')}]`)
     assert.equal(trade.offer, 'trade-off')
