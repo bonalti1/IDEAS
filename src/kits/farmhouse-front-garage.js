@@ -60,14 +60,17 @@ export function frontGarageVariant(plan) {
     { id: 'd-garage-overhead', room: 'garage', axis: 'h', x: 68, y: 58, w: 16, swing: 1, size: 'overhead', exterior: true },
   ]
   const movedWin = (w) => moved.has(w.room)
+  // round 15, item U9: windows sized by room, not one 3 x 5 pair everywhere: the living room's rear window a 7 ft
+  // picture window, the kitchen a 3 x 3.5 over the counter, Bath 1 a small fixed one, the laundry a 3.5 x 3 fixed
+  const resized = { living: { mark: 'E', w: 7 }, bath1: { mark: 'C', w: 2 } }
   const windows = [
-    ...plan.windows.filter((w) => !movedWin(w)).map((w) => ({ ...w })),
-    { mark: 'A', room: 'kitchen', axis: 'h', x: 51, y: 38, w: 6 },
+    ...plan.windows.filter((w) => !movedWin(w)).map((w) => ({ ...w, ...(resized[w.room] || {}) })),
+    { mark: 'D', room: 'kitchen', axis: 'h', x: 47.5, y: 38, w: 3 },
     { mark: 'D', room: 'dining', axis: 'h', x: 47.5, y: 12.25, w: 6 },
     { mark: 'A', room: 'master', axis: 'h', x: 62, y: -4, w: 6 },
     { mark: 'A', room: 'master', axis: 'v', x: 72, y: 8.5, w: 3 },
     { mark: 'C', room: 'mbath', axis: 'v', x: 72, y: 16, w: 2 },
-    { mark: 'A', room: 'laundry', axis: 'v', x: 72, y: 32, w: 3 },
+    { mark: 'B', room: 'laundry', axis: 'v', x: 72, y: 32, w: 3.5 },
   ]
   const fixtures = [
     ...plan.fixtures.filter((f) => !moved.has(f.room)).map((f) => ({ ...f })),

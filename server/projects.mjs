@@ -6,9 +6,11 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
-import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
+import { forClient as platView } from './lots.mjs'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize, halfCountDiff, nicerOffer } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
 import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
+import { isSendLot, wantsNicer } from '../src/draft/lib/intents.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
@@ -51,6 +53,9 @@ export const MEETING_THANKS = `Thanks! The office will reach out within 1 busine
 export const MORE_CHANGES_THANKS = `Done. The office has your request and usually adds more within 1 business day. You can also call ${OFFICE_PHONE}.`
 export const OUT_OF_CHANGES = "You've used the free changes on this plan. The office will add more for you. Want me to let them know?"
 export const REQUEST_KINDS = ['meeting', 'more-changes']
+// what the chat says once the lot is in the drafter's queue (round 15, U2); the Draft screen says the same
+export const SENT_LOT = 'Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days. No change was used.'
+export const NO_LOT_TO_SEND = 'This plan has no lot of its own yet. Choose your lot first, and then a drafter can design a house for it. No change was used.'
 
 /**
  * How far apart two outlines are, in feet: the largest gap between matching corners when both are walked from the
@@ -285,10 +290,32 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
      * outline (and the parcel it names) is the one already stored. A parcel lot that is new or changed gets its zoning
      * from the server's own read; a typed lot has none until a drafter confirms one.
      */
-    async ownerLot(lot, prev = null, { mayLookup } = {}) {
+    async ownerLot(lot, prev = null, { mayLookup, user = null } = {}) {
       if (!lot?.spec || typeof lot.spec !== 'object') return lot
-      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, listedAs, situs, outlineBy, addressGives, ...spec } = lot.spec
+      // round 15, B2: whether a plat was read, what was typed from it and how far an outline sits from it are the
+      // office's to say, never the browser's
+      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, listedAs, situs, outlineBy, addressGives, typedBy: _typedBy, typed: _typed, outlineGapFt: _gap, platAreaSf: _platArea, ...spec } = lot.spec
       const was = prev?.spec || null
+      lot = { ...lot, plat: null }
+      // round 15, B2 and B3: the plat a lot names is the office's own record. An id the office does not have is
+      // refused; so is a plat another account uploaded (one attached before uploads had an owner stays with its house)
+      let platRec = null
+      if (spec.platId != null && spec.platId !== '') {
+        platRec = await lots.plat(spec.platId)
+        if (!platRec) throw fail(400, 'We do not have that plat. Upload it again, or type the lot in.')
+        const kept = !!was && was.platId === spec.platId
+        if (platRec.owner ? platRec.owner !== user?.id && !kept : !kept) throw fail(400, 'That plat was uploaded from another account. Upload it again from this account, or type the lot in.')
+        lot.plat = platView(platRec)
+      } else delete spec.platId
+      if (spec.kind === 'plat') {
+        if (!platRec) throw fail(400, 'A lot from a plat needs its plat. Upload the plat again, or type the lot in.')
+        if (platRec.unread) Object.assign(spec, { typedBy: 'homeowner', outlineBy: 'homeowner' })
+        else {
+          const gap = outlineGapFt(spec.calls, platRec.calls)
+          if (gap <= 1) spec.outlineBy = 'plat'
+          else Object.assign(spec, { typedBy: 'homeowner', outlineBy: 'homeowner', outlineGapFt: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null, platAreaSf: platRec.areaSf ?? null })
+        }
+      }
       if (spec.kind === 'parcel') {
         // round 12: a parcel lot is the county's record, not what the browser drew. The stored lot stays while the
         // browser sends the same parcel, address and outline (within a foot) and the stored one is the county's, a
@@ -313,7 +340,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
           }
           spec.zoning = await this.readZoning(spec, { mayLookup, own: own || undefined })
         }
-        return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
+        return { ...(await this.builtLot(lot, spec)), spec, plat: lot.plat, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
       }
       const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null) && String(was.propId ?? '') === String(spec.propId ?? '')
       if (spec.kind === 'plat') {
@@ -323,7 +350,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (sameOutline && was.zoning) spec.zoning = was.zoning
       else if (was?.zoning?.confirmedBy && was.kind === spec.kind && spec.kind === 'manual') spec.zoning = was.zoning // a drafter's zoning on a typed lot stays with the plan
       else spec.zoning = null
-      return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, ...(spec.kind === 'plat' ? { confirmed: !!spec.confirmed } : {}) }
+      const out = await this.builtLot(lot, spec)
+      if (spec.typedBy === 'homeowner') spec.typed = { width: Math.round(out.dims?.width || 0), depth: Math.round(out.dims?.depth || 0), frontStreet: String(spec.frontStreet || '').slice(0, 80) }
+      return { ...out, spec, plat: lot.plat, zoning: spec.zoning || null, ...(spec.kind === 'plat' ? { confirmed: !!spec.confirmed } : {}) }
     },
     /** A lot spec the office cannot build is refused at the door, not on the first change. */
     async checkLot(lot) {
@@ -356,7 +385,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       // nothing ("Your houses" lists it and opens the lot step again). It has no lot yet, so no drafter sees it.
       const typed = String(body.address || '').replace(/\s+/g, ' ').trim().slice(0, 200)
       const addressOnly = !hasRooms && !lotOnly && !body.lot && typed.length >= 5
-      if (!hasRooms && !lotOnly && !addressOnly) throw fail(400, 'rooms required (or a lot, or an address, to save on its own)')
+      // round 15, B5: a plat uploaded with no address and no size typed yet is saved too, so the drafter sees it at once
+      const platOnly = !hasRooms && !lotOnly && !body.lot && !addressOnly && typeof body.platId === 'string'
+      const withPlat = !hasRooms && !lotOnly && !body.lot && typeof body.platId === 'string' // an address and a plat, or a plat alone
+      let platRec = null
+      if (withPlat) {
+        platRec = await lots.plat(body.platId)
+        if (!platRec || platRec.owner !== user.id) throw fail(400, 'We do not have that plat for this account. Upload it again, or type the lot in.')
+      }
+      if (!hasRooms && !lotOnly && !addressOnly && !platOnly) throw fail(400, 'rooms required (or a lot, or an address, to save on its own)')
       if (hasRooms && !body.style?.id) throw fail(400, 'style required')
       await this.checkLot(body.lot)
       const t = now()
@@ -371,7 +408,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         program: cleanProgram(body.program) || {},
         status: 'drafting',
         // where the homeowner is: 'style', 'rooms' or 'draft' (resume opens that step)
-        stage: hasRooms ? 'draft' : addressOnly ? 'lot' : stageOf(body.stage, 'style'),
+        stage: hasRooms ? 'draft' : addressOnly || platOnly ? 'lot' : stageOf(body.stage, 'style'),
+        ...(withPlat ? { platId: platRec.platId, plat: platView(platRec) } : {}),
         changesAllowed: await allowanceDefault(),
         changesUsed: 0,
         allowanceLog: [],
@@ -380,8 +418,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         updatedAt: t,
       }
       await store.projects.add(p)
+      if (p.lot?.spec?.platId || p.platId) await lots.platUsed(p.lot?.spec?.platId || p.platId, p.id)
       if (hasRooms) await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
-      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
+      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : platOnly ? `${p.client}: uploaded a plat (${p.platId}), lot not typed yet` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
       return this.detail(p)
     },
     /**
@@ -427,7 +466,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const [full, versions, reviews, job] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null])
       const jobView = job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null
       if (!drafter) return ownerView(publicProject(full, { versions, reviews, job: jobView }))
-      return publicProject(full, { versions, reviews, audit: this.auditCached(full), job: jobView, changesLeft: changesLeft(full) })
+      const out = publicProject(full, { versions, reviews, audit: this.auditCached(full), job: jobView, changesLeft: changesLeft(full) })
+      // round 15, P4: the uploaded file's own name only inside the drafter's card (it can carry an owner's name)
+      const platId = full.lot?.plat?.platId || full.platId
+      if (platId) {
+        const rec = await lots.plat(platId)
+        if (rec) out.platFile = { name: rec.name || null, ext: rec.ext, at: rec.at, unread: !!rec.unread }
+      }
+      return out
     },
     /**
      * The office estimate for a plan (round 8, M2): the range, the rate line, the parts and the takeoff.
@@ -487,12 +533,24 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     },
 
     // lot, style, program, and (when the program changed) regenerated rooms as a free version
-    async update(p, body) {
+    async update(p, body, { user = null } = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
+      // round 15, B5: a plat uploaded on a house that has only its address so far (no lot taken) goes with the house,
+      // so the drafter sees it in the queue at once. Only the account's own plat.
+      if (typeof body.platId === 'string' && !body.lot) {
+        const rec = await lots.plat(body.platId)
+        if (!rec || !user || rec.owner !== user.id) throw fail(400, 'We do not have that plat for this account. Upload it again, or type the lot in.')
+        if (!p.lot) {
+          p.platId = rec.platId
+          p.plat = platView(rec)
+          await lots.platUsed(rec.platId, p.id)
+        }
+      }
       if (body.lot) {
         await this.checkLot(body.lot)
         p.lot = body.lot
         p.address = body.lot.address || p.address
+        if (p.lot?.spec?.platId) await lots.platUsed(p.lot.spec.platId, p.id)
       }
       if (body.style?.id) p.style = { id: body.style.id, name: body.style.name || body.style.id }
       if (body.program) p.program = cleanProgram(body.program)
@@ -529,17 +587,31 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // is stored and logged stays as the plan code wrote it. Typed undo does what the Undo button does.
     async change(p, text, fixOps = null, opts = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
-      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
       const isFix = Array.isArray(fixOps) && fixOps.length > 0
       const spanish = isSpanish(request)
-      const said = spanish && !isFix ? fromSpanish(request) : null
       const lang = opts.lang === 'es' || spanish ? 'es' : 'en'
-      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
       const out = (result) => localize(result, lang)
-      const left = changesLeft(p)
       const counts = () => ({ changesLeft: changesLeft(p), changesAllowed: p.changesAllowed, changesUsed: p.changesUsed })
+      // round 15, U2: "send my lot to the drafter", "mándale mi lote al dibujante": the lot goes to the drafter's queue,
+      // the way the button on the rooms step sends it. Read here as in the browser (one matcher), so the chat answers
+      // the same with a Claude key or without; no model is asked and no change is used
+      if (!isFix && isSendLot(request)) {
+        let sent
+        try {
+          sent = await this.needsCustom(p, { note: request })
+        } catch (e) {
+          if (e.status !== 409) throw e
+          return out({ applied: false, reply: NO_LOT_TO_SEND, source: 'fallback', reasons: ['no lot'], fixes: [], ...counts(), version: p.version })
+        }
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'send lot', reply: SENT_LOT, ops: [] })
+        return out({ applied: false, sendLot: true, reply: SENT_LOT, source: 'fallback', reasons: ['send lot'], fixes: [], ...counts(), version: p.version, project: sent })
+      }
+      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
+      const said = spanish && !isFix ? fromSpanish(request) : null
+      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
+      const left = changesLeft(p)
       // "undo", "go back to how it was", "deshaz eso": the last change comes off and comes back to the plan, the way
       // the Undo button does it; no model is asked, nothing is used, and it works at 0 left
       if (!isFix && isUndoRequest(request)) {
@@ -550,7 +622,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
           return out({ applied: false, undo: true, reply, source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version })
         }
         const back = await this.rollback(p, target)
-        const reply = `Back to version ${target}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`
+        // round 15, P1: plain words, no version number; in the language of the request (localized below)
+        const reply = `Done, the house is back to how it was.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change was used.'}`
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply, ops: [] })
         return out({ applied: true, undo: true, reply, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, refunded: back.refunded, project: back, ops: [] })
       }
@@ -599,10 +672,22 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'trade-off', reply: offer.reply, ops: [] })
         return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
       }
+      // "make it nicer", "hazla más bonita" (round 15, B6): bigger windows, a front porch, another style, as buttons;
+      // no model is asked and nothing is used
+      if (!isFix && (wantsNicer(request) || wantsNicer(split.text))) {
+        const nicer = nicerOffer(rooms, p.program, style, kit, 'fallback', lot, edits)
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'nicer', reply: nicer.reply, ops: [] })
+        return out({ applied: false, reply: nicer.reply, source: 'fallback', reasons: nicer.reasons, offer: nicer.offer, fixes: nicer.fixes, ...counts(), version: p.version, ...costTail(nicer) })
+      }
       const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
+      const halves = isFix ? null : halfCountDiff(split.text)
       if (isFix) {
         diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
+      } else if (halves) {
+        // "2.5 baths", "dos baños y medio" (round 15, U3): two full baths and a half bath, read the same in both modes
+        diff = halves
+        source = 'fallback'
       } else
       try {
         diff = await interpreter.ask({ request: asked, ...(lang === 'es' ? { lang } : {}), program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })
@@ -677,8 +762,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async send(p, { design, ifc }, saveDesign) {
       if (!EDITABLE.includes(p.status)) throw fail(409, `already ${p.status.replace('_', ' ')}`)
       if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to send yet')
-      if ((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'a drafter has not confirmed your lot yet; it is in their queue', { lotPending: true })
       if (!design || design.contract !== 1) throw fail(400, 'design with contract 1 required')
+      // round 15, B4 (office decision): a homeowner can always send. A lot the drafter has not confirmed yet goes with
+      // the plan, marked "Lot to confirm + plan"; the drafter confirms the lot before approving the plan.
+      const lotPending = (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed
       // decision B6 (round 10, item 4): a lot that is not a house district blocks Send, never the draft, and only when
       // the zoning is this lot's own (a parcel or plat lot, or a typed lot whose zoning a drafter confirmed)
       const lotNow = await lots.lotOfProject(p)
@@ -692,8 +779,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       p.status = 'in_review'
       p.sentAt = now()
       p.updatedAt = p.sentAt
+      p.lotPending = lotPending || undefined
       await store.projects.put(p)
-      await event('project', `${p.client}: design sent for review`, { projectId: p.id, designId: d.id })
+      await event('project', `${p.client}: design sent for review${lotPending ? ' (the lot is still to confirm)' : ''}`, { projectId: p.id, designId: d.id })
       return this.detail(p)
     },
 
@@ -719,7 +807,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       for (const p of open) await withAllowance(p)
-      const lots = open.filter((p) => (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
+      // round 15, B5: a plat uploaded with nothing typed yet is a lot to look at too
+      const lots = open.filter((p) => p.status !== 'in_review' && (((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) || (!p.lot && p.platId)))
       // round 12, item A: lots no standard plan fits, sent by the homeowner for a custom design, oldest first
       const custom = open.filter((p) => p.needsCustom).sort((a, b) => Date.parse(a.needsCustom.at) - Date.parse(b.needsCustom.at))
       // what clients asked the office for (a meeting, more changes), newest first, and every open plan's allowance
@@ -785,6 +874,15 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         await store.versions.add({ projectId: p.id, n: p.version, at: p.updatedAt, kind: 'lot', text: 'Lot corrected by the drafter', used: 0, rooms: placed })
       }
       const firstConfirm = confirmed && !wasConfirmed
+      if (confirmed) delete p.lotPending
+      // round 15, B4: a plan sent before its lot was checked, on a lot the drafter has now corrected, goes back to the
+      // homeowner with a plain note (the plan they sent sat on the old outline); unchanged, it stays waiting for review
+      if (p.status === 'in_review' && (changed || !confirmed)) {
+        const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision: 'returned', note: confirmed ? 'We corrected your lot from the county records or your plat. Look at the plan on the corrected lot, then send it again.' : 'Something about your lot needs checking before we can draw on it. We will contact you.', at: p.updatedAt, auto: true }
+        await store.reviews.add(r)
+        p.review = r
+        p.status = 'returned'
+      }
       await store.projects.put(p)
       await event('project', `${p.client}: lot ${confirmed ? 'confirmed' : 'sent back'} by ${drafter.name || drafter.email}${changed ? ' with corrections' : ''}`, { projectId: p.id })
       // round 12, item C: the homeowner was told "we'll email you" while the lot waited. One email, the first time it
@@ -792,7 +890,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (firstConfirm && alerts?.emailTo && p.email && !zoningBlocksSend(lot)) {
         const first = String(p.client || '').split(' ')[0] || 'Hello'
         alerts
-          .emailTo(p.email, 'Draft House: your lot is confirmed', `${first},\n\nA drafter checked your lot${p.address ? ` at ${p.address}` : ''} against the county records, and it is confirmed.\n\n${p.version ? 'Open Draft House, look over your plan, and press "Send to drafters" when you are ready.' : 'Open Draft House to choose your rooms and see your first draft.'}\n\nSouth Texas Builders`)
+          .emailTo(p.email, 'Draft House: your lot is confirmed', `${first},\n\nA drafter checked your lot${p.address ? ` at ${p.address}` : ''} against the county records, and it is confirmed.\n\n${p.status === 'in_review' ? 'Your plan is with our drafters now. You do not need to do anything; we will contact you.' : p.status === 'returned' && p.review?.auto ? 'We corrected the lot, so please look at your plan on it in Draft House and send it again.' : p.version ? 'Open Draft House, look over your plan, and press "Send to drafters" when you are ready.' : 'Open Draft House to choose your rooms and see your first draft.'}\n\nSouth Texas Builders`)
           .catch(() => {})
       }
       return this.detail(p, { drafter: true })
@@ -822,6 +920,10 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     async review(p, drafter, { decision, note, override }, queueJob) {
       if (p.status !== 'in_review') throw fail(409, `this design is ${p.status.replace('_', ' ')}, not waiting for review`)
       if (!['approved', 'returned'].includes(decision)) throw fail(400, 'decision must be approved or returned')
+      // round 15, B4: a plan sent before its lot was checked is approved only once the lot is confirmed, and only on a
+      // house district
+      if (decision === 'approved' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) throw fail(409, 'Confirm the lot first: this plan was sent before its lot was checked.', { lotPending: true })
+      if (decision === 'approved' && zoningBlocksSend(await lots.lotOfProject(p))) throw fail(409, `The lot is zoned ${p.lot?.spec?.zoning?.district || 'for something else'}: call the homeowner about a rezoning before approving, or send the plan back.`, { zoning: true })
       const t = now()
       // the note is written to the client; the override note (below) stays in the office
       const r = { id: id('rev'), projectId: p.id, drafterId: drafter.id, drafter: drafter.name || drafter.email, decision, note: String(note || '').trim().slice(0, 2000), at: t }

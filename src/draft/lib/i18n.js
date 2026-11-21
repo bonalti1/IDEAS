@@ -269,7 +269,7 @@ export function optionLabel(label, lang) {
     [/^(\d)-car garage$/, (m) => `Cochera para ${car(m[1])}`],
     [/^Re-draft with a (\d)-car garage$/, (m) => `Dibujar de nuevo con cochera para ${car(m[1])}`],
     [/^Rear porch,? (\d+) ft deep$/, (m) => `Porche de atrás de ${m[1]} pies de fondo`],
-    [/^Front porch,? (deeper, )?(\d+) ft deep$/, (m) => `Porche del frente${m[1] ? ' más hondo,' : ''} de ${m[2]} pies de fondo`],
+    [/^Front porch,? (deeper, )?(\d+) ft deep$/, (m) => `Porche del frente${m[1] ? ' más profundo,' : ''} de ${m[2]} pies de fondo`],
     [/^(.+) 2 ft deeper$/, (m) => `${roomName(m[1], lang)} 2 pies más de fondo`],
   ]
   for (const [re, write] of rules) {

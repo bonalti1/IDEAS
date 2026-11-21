@@ -39,20 +39,43 @@ const ago = (iso) => {
   return m < 1 ? 'just now' : m < 60 ? `${Math.round(m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
 }
 
+// round 15, U19: rows with the same client name ("Test Customer") are told apart by the street and the day
+const street = (p) => (p.address ? String(p.address).split(',')[0].trim() : p.lot?.plat?.address ? String(p.lot.plat.address).split(',')[0].trim() : '')
+const day = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(+d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 function Row({ p, onOpen }) {
   const s = STATUS[p.status] || { label: p.status, tone: 'wait' }
+  // (in the office queue, "drafting" means the homeowner is still working on it, not a drafter)
+  const label = p.status === 'drafting' ? 'Homeowner still drafting' : s.label
   return (
     <button className="inbox-row" onClick={() => onOpen(p.id)}>
       <span className="inbox-main">
-        <b>{p.client}</b>
+        <b data-testid="row-title">
+          {p.client}
+          {street(p) ? <span className="row-street"> · {street(p)}</span> : <span className="row-street muted"> · no address</span>}
+        </b>
         <span className="muted small">
-          {p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat?.name ? `no address, plat "${String(p.lot.plat.name).slice(0, 60)}"` : 'no address')} ·{' '}
+          {!p.lot && p.platId ? `no address · ${p.plat?.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.plat?.at ? `, ${String(p.plat.at).slice(0, 10)}` : ''} · nothing typed yet` : p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat ? `no address · ${p.lot.plat.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.lot.plat.at ? `, ${String(p.lot.plat.at).slice(0, 10)}` : ''}` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
       <span className="inbox-side">
         <Asks p={p} />
         {p.needsCustom && <span className="pill ask">Needs a house designed</span>}
+        {!p.lot && p.platId && (
+          <span className="pill stop" data-testid="row-plat-only">
+            Plat not read, nothing typed yet
+          </span>
+        )}
+        {p.status === 'in_review' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed && (
+          <span className="pill stop" data-testid="row-lot-and-plan">
+            Lot to confirm + plan
+          </span>
+        )}
         {isUnchecked(p.lot?.spec) && !p.lot.spec.confirmed && (
           <span className="pill stop" data-testid="row-unchecked">
             Outline not checked
@@ -66,13 +89,13 @@ function Row({ p, onOpen }) {
         {p.lot?.spec?.confidence === 'pick' && !p.lot.spec.confirmed && <span className="pill ask">Parcel picked by hand</span>}
         {(p.lot?.spec?.typedBy === 'homeowner' || p.lot?.plat?.unread) && !p.lot.spec.confirmed && (
           <span className="pill stop" data-testid="row-plat-unread">
-            Plat not read
+            {p.lot?.plat?.unread || p.lot?.spec?.outlineGapFt === undefined ? `Plat not read${p.lot?.spec?.typed?.width ? `, homeowner typed ${p.lot.spec.typed.width} × ${p.lot.spec.typed.depth}` : ''}` : 'Outline differs from the plat'}
           </span>
         )}
-        <span className={'pill ' + s.tone}>{s.label}</span>
-        <span className="muted small">
+        <span className={'pill ' + s.tone}>{label}</span>
+        <span className="muted small" data-testid="row-when">
           {p.changesAllowed !== undefined ? `changes ${p.changesUsed || 0} of ${p.changesAllowed} · ` : ''}
-          {ago(p.sentAt || p.updatedAt)}
+          {day(p.sentAt || p.updatedAt)} ({ago(p.sentAt || p.updatedAt)})
         </span>
       </span>
     </button>
@@ -275,7 +298,7 @@ export default function Review({ user }) {
                     <div className="check-row">
                       <span>
                         <b>The lot matches the plat or deed.</b>{' '}
-                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : spec.typedBy === 'homeowner' ? `Plat not read by the office: the homeowner typed ${spec.typed?.width} by ${spec.typed?.depth} ft from it. Open the plat and check the outline.` : 'Read from the plat: compare the calls with the plat.'}
+                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : spec.typedBy === 'homeowner' && spec.outlineGapFt !== undefined && !open.lot?.plat?.unread ? 'The outline sent is not the one the office read from the plat. Open the plat and check the outline.' : spec.typedBy === 'homeowner' ? `Plat not read by the office: the homeowner typed ${spec.typed?.width} by ${spec.typed?.depth} ft from it. Open the plat and check the outline.` : 'Read from the plat: compare the calls with the plat.'}
                       </span>
                       {own && !spec.confirmed && (
                         <Button small primary disabled={busy} onClick={() => confirmLot(true)} data-testid="check-confirm-lot">
@@ -460,6 +483,19 @@ export default function Review({ user }) {
               </>
             )}
           </div>
+          {/* round 15, B5: a plat uploaded with nothing typed yet: the drafter sees it at once and can open it */}
+          {!open.lot && open.platId && (
+            <div className="card thin lotcard pending" data-testid="plat-only-card">
+              <h3>Plat uploaded · nothing typed yet</h3>
+              <p className="warnline stopline">Plat not read by the office. The homeowner uploaded it with no address and has not typed the lot yet: open the plat, and contact them or wait for the size.</p>
+              <p className="fine">
+                <button className="linkish" data-testid="open-plat" onClick={() => api.openPlat(open.platId).catch((e) => setLotError(e.message))}>
+                  {open.plat?.ext && open.plat.ext !== 'pdf' ? 'Open the plat photo' : 'Open the plat PDF'}
+                </button>
+                {open.platFile?.name ? <span className="muted"> · uploaded as "{open.platFile.name}"</span> : null}
+              </p>
+            </div>
+          )}
           {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && (
             <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')} data-testid="lot-card">
               <h3>
@@ -470,9 +506,14 @@ export default function Review({ user }) {
                 {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind !== 'plat' ? ' The parcel map is advisory: check it against the recorded plat or the survey.' : open.lot.spec.typedBy === 'homeowner' ? '' : ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.`}
               </p>
               {/* round 14: a plat the office could not read. The outline is only what the homeowner typed off it. */}
-              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && (
+              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && (open.lot.plat?.unread || open.lot.spec.outlineGapFt === undefined) && (
                 <p className="warnline stopline" data-testid="plat-unread">
                   Plat not read by the office. The homeowner typed {open.lot.spec.typed?.width} by {open.lot.spec.typed?.depth} ft from it: open the plat and check the outline before confirming.
+                </p>
+              )}
+              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && !open.lot.plat?.unread && open.lot.spec.outlineGapFt !== undefined && (
+                <p className="warnline stopline" data-testid="plat-outline-differs">
+                  The outline sent is not the one the office read from the plat{open.lot.spec.outlineGapFt != null ? ` (corners up to ${open.lot.spec.outlineGapFt} ft apart)` : ' (a different number of sides)'}{open.lot.spec.platAreaSf ? `; the plat reads ${Math.round(open.lot.spec.platAreaSf).toLocaleString()} sf` : ''}. Open the plat and check the outline before confirming.
                 </p>
               )}
               {open.lot.spec.kind === 'parcel' && open.lot.plat?.unread && (
@@ -494,9 +535,10 @@ export default function Review({ user }) {
               {open.lot.plat?.notes && <p className="fine">Reader: {open.lot.plat.notes}</p>}
               {open.lot.spec.platId && (
                 <p className="fine">
-                  <a href={api.platUrl(open.lot.spec.platId)} target="_blank" rel="noreferrer">
+                  <button className="linkish" data-testid="open-plat" onClick={() => api.openPlat(open.lot.spec.platId).catch((e) => setLotError(e.message))}>
                     {open.lot.plat?.ext && open.lot.plat.ext !== 'pdf' ? 'Open the plat photo' : 'Open the plat PDF'}
-                  </a>
+                  </button>
+                  {open.platFile?.name ? <span className="muted"> · uploaded as "{open.platFile.name}"</span> : null}
                 </p>
               )}
               {!open.lot.spec.confirmed && (
@@ -505,12 +547,10 @@ export default function Review({ user }) {
                     <span>Note (optional)</span>
                     <input id="lot-note" value={lotNote} onChange={(e) => setLotNote(e.target.value)} placeholder="What you checked, or what is off" />
                   </label>
+                  {/* round 15, U19: Confirm lot is in the checklist above, once; here the note and "Not right" */}
                   <div className="row2">
                     <Button small ghost disabled={busy} onClick={() => confirmLot(false)}>
                       Not right
-                    </Button>
-                    <Button small primary disabled={busy} onClick={() => confirmLot(true)}>
-                      Confirm lot
                     </Button>
                   </div>
                 </>
@@ -552,18 +592,7 @@ export default function Review({ user }) {
                     Confirm zoning
                   </Button>
                 </>
-              ) : (
-                <div className="row2">
-                  {!open.lot.zoning.confirmedBy && (
-                    <Button small primary disabled={busy} onClick={() => confirmZoning(open.lot.zoning)} data-testid="zoning-as-read">
-                      Confirm {open.lot.zoning.district}
-                    </Button>
-                  )}
-                  <Button small ghost disabled={busy} onClick={() => setZoneEdit(true)} data-testid="zoning-change">
-                    Change
-                  </Button>
-                </div>
-              )}
+              ) : null /* round 15, U19: Confirm and Change are in the checklist above, once */}
             </div>
           )}
           {open.lot?.spec?.kind === 'manual' && (
@@ -701,7 +730,11 @@ export default function Review({ user }) {
                 <Button ghost disabled={busy || !note.trim()} onClick={() => decide('returned')} title={note.trim() ? '' : 'A returned design needs a note'}>
                   Return with note
                 </Button>
-                <Button primary disabled={busy || (open.audit && !open.audit.ok && override.trim().length < 20)} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'An override note of 20 characters or more approves a plan with audit errors' : ''}>
+                {/* round 15, B4: a plan sent before its lot was checked is approved after the lot is confirmed */}
+                {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && !open.lot.spec.confirmed && (
+                  <small className="fine bad" data-testid="approve-needs-lot">Confirm the lot first (above): this plan was sent before its lot was checked.</small>
+                )}
+                <Button primary disabled={busy || ((open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && !open.lot.spec.confirmed) || (open.audit && !open.audit.ok && override.trim().length < 20)} onClick={() => decide('approved')} title={open.audit && !open.audit.ok ? 'An override note of 20 characters or more approves a plan with audit errors' : ''}>
                   {open.audit && !open.audit.ok && override.trim().length >= 20 ? 'Approve with override, build in Revit' : 'Approve, build in Revit'}
                 </Button>
               </div>

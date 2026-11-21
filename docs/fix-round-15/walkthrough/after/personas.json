@@ -1,0 +1,967 @@
+{
+ "at": "2026-11-21T15:45:59.163Z",
+ "key": true,
+ "runs": [
+  {
+   "persona": "maria",
+   "size": 1440,
+   "lang": "en",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "maria-1440-en-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → Your house on your lot, in 3D A real floor plan you change by chatting Your first draft and 10 changes come with every plan. Need more? The office adds them. START WITH YOUR EMAIL Your house "
+    },
+    {
+     "label": "lot-found",
+     "file": "maria-1440-en-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT N 1201 KERRIA AVE · IS THIS YOUR LOT? Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. IS THIS YOUR LOT? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo "
+    },
+    {
+     "label": "lot-taken",
+     "file": "maria-1440-en-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. YOUR LOT, FROM THE COUNTY PARCEL MAP PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for a"
+    },
+    {
+     "label": "style",
+     "file": "maria-1440-en-04-style.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "rooms",
+     "file": "maria-1440-en-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kit"
+    },
+    {
+     "label": "signed-back-in",
+     "file": "maria-1440-en-06-signed-back-in.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer1@example.com SIGN OUT DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → YOUR HOUSES Modern Farmhouse 1201 Kerria Ave, McAllen, TX 78501 · 1 min ago ROOMS CHOSEN, READY TO DRAFT START ANOTHER HOUSE ADDRESS OR Upload t"
+    },
+    {
+     "label": "resumed",
+     "file": "maria-1440-en-07-resumed.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer1@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kit"
+    },
+    {
+     "label": "draft",
+     "file": "maria-1440-en-08-draft.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-1",
+     "file": "maria-1440-en-09-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used Make the kitchen bigger Remove the rear porch Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, S"
+    },
+    {
+     "label": "chat-2",
+     "file": "maria-1440-en-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used undo that Done, the house is back to how it was. 1 change returned. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living ro"
+    },
+    {
+     "label": "chat-3",
+     "file": "maria-1440-en-11-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,850 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used undo that Done, the house is back to how it was. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, so it's now roug"
+    },
+    {
+     "label": "chat-4",
+     "file": "maria-1440-en-12-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 3,000 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used undo that Done, the house is back to how it was. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, so it's now roug"
+    },
+    {
+     "label": "send",
+     "file": "maria-1440-en-13-send.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 1201 Kerria Ave, McAllen, TX 78501 Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 3,000 sf Porches 143 sf Driveway and walk 578 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen bigger add an office Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. Ou"
+    },
+    {
+     "label": "sent",
+     "file": "maria-1440-en-14-sent.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 8 CHANGES LEFT ON THIS PLAN drafthouse.test+customer1@example.com SIGN OUT With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and r"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used",
+     "changesLeft": 9
+    },
+    {
+     "ask": "undo that",
+     "reply": "Done, the house is back to how it was. 1 change returned.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "I made the kitchen about 15% bigger in both directions, so it's now roughly 21¾ by 18 feet. +43 sf · Kitchen now 22 × 18 ft · 1 change used",
+     "changesLeft": 9
+    },
+    {
+     "ask": "add an office",
+     "reply": "I added a second office to your plan, placed near the existing office. +150 sf · Office added · 1 change used",
+     "changesLeft": 8
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "maria",
+   "size": 390,
+   "lang": "es",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "maria-390-es-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → Tu casa en tu lote, en 3D Un plano de verdad que cambias platicando Cada plano in"
+    },
+    {
+     "label": "lot-found",
+     "file": "maria-390-es-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. ¿ESTE ES TU LOTE? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: el distrito de avalúos del condado de Hidalgo"
+    },
+    {
+     "label": "lot-taken",
+     "file": "maria-390-es-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libre más ancho que la ciudad pide junto a una calle. Fuente: el distrito de aval"
+    },
+    {
+     "label": "style",
+     "file": "maria-390-es-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 2 DE 5 · ESTILO Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. CASA DE CAMPO MODERNA Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL CAMPESTRE TEXANO RANCHO ARTESANAL TRANSICIONAL TOSCANO MODERNO DE LOS AÑOS 50 COSTERO Casa de campo moderna ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "rooms",
+     "file": "maria-390-es-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen c"
+    },
+    {
+     "label": "signed-back-in",
+     "file": "maria-390-es-06-signed-back-in.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → TUS CASAS Casa de campo moderna 1201 Kerria Ave, McAllen, TX 78501 · hace 1 min CUARTOS"
+    },
+    {
+     "label": "resumed",
+     "file": "maria-390-es-07-resumed.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen c"
+    },
+    {
+     "label": "draft",
+     "file": "maria-390-es-08-draft.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz el baño principal más grande Haz la sala 3.25 pies más de largo CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-1",
+     "file": "maria-390-es-09-chat-1.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Le agregué un porche atrás a tu casa, junto a la sala. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado Haz la cocina más grande Quita el porche de atrás Haz el baño principal más grande Haz la sala 3.25 pies más de largo CAMBIAR HISTORIAL (2) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-2",
+     "file": "maria-390-es-10-chat-2.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Le agregué un porche atrás a tu casa, junto a la sala. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado deshaz eso Listo, la casa quedó como estaba. Te devolvimos 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz el baño principal más grande Haz la sala 3.25 pies más de largo CAMBIAR HISTORIAL (3) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-3",
+     "file": "maria-390-es-11-chat-3.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,850 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Le agregué un porche atrás a tu casa, junto a la sala. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado deshaz eso Listo, la casa quedó como estaba. Te devolvimos 1 cambio. la cocina más grande Hice tu cocina más grande, de unos 21 3/4 por 18 pies, para que tengas más espacio para cocinar y convivir. +43 pies² · Cocina: ahora mide 22 × 18 pies · 1 cambio usado Haz la cocina 2 pies más de largo Agrega un porche atrás Haz el baño pri"
+    },
+    {
+     "label": "chat-4",
+     "file": "maria-390-es-12-chat-4.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 8 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 3,000 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Le agregué un porche atrás a tu casa, junto a la sala. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado deshaz eso Listo, la casa quedó como estaba. Te devolvimos 1 cambio. la cocina más grande Hice tu cocina más grande, de unos 21 3/4 por 18 pies, para que tengas más espacio para cocinar y convivir. +43 pies² · Cocina: ahora mide 22 × 18 pies · 1 cambio usado agrega una oficina Agregué una segunda oficina junto a la que ya tienes,"
+    },
+    {
+     "label": "send",
+     "file": "maria-390-es-13-send.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 8 CAMBIOS ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 1201 Kerria Ave, McAllen, TX 78501 Estilo Casa de campo moderna Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 3,000 pies² Área de porches 143 pies² Entrada de carros y banqueta 578 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS la cocina más grande agrega una oficina Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, así q"
+    },
+    {
+     "label": "sent",
+     "file": "maria-390-es-14-sent.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 8 CAMBIOS Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emer"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Le agregué un porche atrás a tu casa, junto a la sala. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado",
+     "changesLeft": 9
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "Listo, la casa quedó como estaba. Te devolvimos 1 cambio.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "Hice tu cocina más grande, de unos 21 3/4 por 18 pies, para que tengas más espacio para cocinar y convivir. +43 pies² · Cocina: ahora mide 22 × 18 pies · 1 cambio usado",
+     "changesLeft": 9
+    },
+    {
+     "ask": "agrega una oficina",
+     "reply": "Agregué una segunda oficina junto a la que ya tienes, con el tamaño típico de este modelo. +150 pies² · Se agregó: Oficina · 1 cambio usado",
+     "changesLeft": 8
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "rosa",
+   "size": 1440,
+   "lang": "es",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "rosa-1440-es-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → Tu casa en tu lote, en 3D Un plano de verdad que cambias platicando Cada plano in"
+    },
+    {
+     "label": "lot-found",
+     "file": "rosa-1440-es-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer3@example.com SALIR N 1201 KERRIA AVE · ¿ESTE ES TU LOTE? Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. ¿ESTE ES TU LOTE? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado que da a N 12th St deja el espacio libr"
+    },
+    {
+     "label": "lot-taken",
+     "file": "rosa-1440-es-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer3@example.com SALIR N 1201 KERRIA AVE, MCALLEN, TX 78501 · MCALLEN, TX Tu lote 1201 Kerria Ave, McAllen, TX 78501 Encontramos: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Condado de Hidalgo. Tenemos las reglas de McAllen, TX, tomadas del código de la ciudad. TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 lados, como 10,405 pies² (0.239 acres). Frente (Kerria Ave): unos 80 pies Lado izquierdo (N 12th St): unos 131 pies Lado derecho: unos 130 pies Fondo del lote: unos 80 pies Izquierda y derecha son viendo el lote desde la calle. Es un lote de esquina: el lado "
+    },
+    {
+     "label": "style",
+     "file": "rosa-1440-es-04-style.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer3@example.com SALIR Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. CASA DE CAMPO MODERNA Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL CAMPESTRE TEXANO RANCHO ARTESANAL TRANSICIONAL TOSCANO MODERNO DE LOS AÑOS 50 COSTERO Casa de campo moderna ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "rooms",
+     "file": "rosa-1440-es-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer3@example.com SALIR ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros "
+    },
+    {
+     "label": "signed-back-in",
+     "file": "rosa-1440-es-06-signed-back-in.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer3@example.com SALIR DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → TUS CASAS Casa de campo moderna 1201 "
+    },
+    {
+     "label": "resumed",
+     "file": "rosa-1440-es-07-resumed.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer3@example.com SALIR ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 1201 Kerria Ave Lote de 10,405 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 62 por 99 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros "
+    },
+    {
+     "label": "draft",
+     "file": "rosa-1440-es-08-draft.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz el baño principal más grande Haz la sala 3.25 pies más de largo CAMBIAR HI"
+    },
+    {
+     "label": "chat-1",
+     "file": "rosa-1440-es-09-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer3@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 2.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,809 pies² Cuartos 4 recámaras, 2.5 baños, cochera para 2 carros dos baños y medio Volví a dibujar la casa con 2 baños y medio; antes tenía 3 baños y medio. Quedó de 2,809 pies² de área habitable, en el plano del Valle. +2 pies² · 1 cambio usado Haz la cocina más grande Agrega un p"
+    },
+    {
+     "label": "chat-2",
+     "file": "rosa-1440-es-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros dos baños y medio Volví a dibujar la casa con 2 baños y medio; antes tenía 3 baños y medio. Quedó de 2,809 pies² de área habitable, en el plano del Valle. +2 pies² · 1 cambio usado deshaz eso Listo, la casa quedó com"
+    },
+    {
+     "label": "chat-3",
+     "file": "rosa-1440-es-11-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros dos baños y medio Volví a dibujar la casa con 2 baños y medio; antes tenía 3 baños y medio. Quedó de 2,809 pies² de área habitable, en el plano del Valle. +2 pies² · 1 cambio usado deshaz eso Listo, la casa quedó com"
+    },
+    {
+     "label": "chat-4",
+     "file": "rosa-1440-es-12-chat-4.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros dos baños y medio Volví a dibujar la casa con 2 baños y medio; antes tenía 3 baños y medio. Quedó de 2,809 pies² de área habitable, en el plano del Valle. +2 pies² · 1 cambio usado deshaz eso Listo, la casa quedó com"
+    },
+    {
+     "label": "send",
+     "file": "rosa-1440-es-13-send.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 1201 Kerria Ave, McAllen, TX 78501 Estilo Casa de campo moderna Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 2,807 pies² Área de porches 143 pies² Entrada de carros y banqueta 578 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS Ninguno. Te quedaste con el primer borrador. So"
+    },
+    {
+     "label": "sent",
+     "file": "rosa-1440-es-14-sent.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer3@example.com SALIR Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 1"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "dos baños y medio",
+     "reply": "Volví a dibujar la casa con 2 baños y medio; antes tenía 3 baños y medio. Quedó de 2,809 pies² de área habitable, en el plano del Valle. +2 pies² · 1 cambio usado",
+     "changesLeft": 9
+    },
+    {
+     "ask": "deshaz eso",
+     "reply": "Listo, la casa quedó como estaba. Te devolvimos 1 cambio.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "hazla más bonita",
+     "reply": "Aquí tienes algunas maneras de dejarla más bonita en este plano. Toca una; escoger otro estilo no usa nada, y solo se usa un cambio cuando el plano cambia. Haz las ventanas más grandes Haz el porche del frente 2 pies más profundo Escoge otro estilo para la casa",
+     "changesLeft": 10
+    },
+    {
+     "ask": "la sala 3 pies más ancha",
+     "reply": "La sala no puede crecer donde está: la entrada de servicio de al lado se quedaría con muy poco espacio.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "rosa",
+   "size": 390,
+   "lang": "en",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "rosa-390-en-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → Your house on your lot, in 3D A real floor plan you change by chatting Your first draft and 10 changes come with every plan. Need more? The office adds them. START WITH YOUR EMAIL Your house "
+    },
+    {
+     "label": "lot-found",
+     "file": "rosa-390-en-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. IS THIS YOUR LOT? PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District, read 2026-11-21. The parcel map is advisory: a drafter checks it agains"
+    },
+    {
+     "label": "lot-taken",
+     "file": "rosa-390-en-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 1201 Kerria Ave, McAllen, TX 78501 Found: 1201 KERRIA AVE, MCALLEN, TX, 78501 · McAllen, Hidalgo County. We have the McAllen, TX rules, from the city code. YOUR LOT, FROM THE COUNTY PARCEL MAP PALMS LOT 7 BLK 4 · 1201 KERRIA AVE MCALLEN. 4 sides, about 10,405 sf (0.239 acres). Front (Kerria Ave): about 80 ft Left side (N 12th St): about 131 ft Right side: about 130 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corner lot: the side on N 12th St keeps the wider open space the city asks for along a street. From the Hidalgo County Appraisal District, read 2026-11-21. The parcel map is advisory: a draft"
+    },
+    {
+     "label": "style",
+     "file": "rosa-390-en-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 2 OF 5 · STYLE Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "rooms",
+     "file": "rosa-390-en-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath "
+    },
+    {
+     "label": "signed-back-in",
+     "file": "rosa-390-en-06-signed-back-in.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → YOUR HOUSES Modern Farmhouse 1201 Kerria Ave, McAllen, TX 78501 · 1 min ago ROOMS CHOSEN, READY TO DRAFT START ANOTHER HOUSE ADDRESS OR Upload the survey or plat · PDF or photo A plat is the drawin"
+    },
+    {
+     "label": "resumed",
+     "file": "rosa-390-en-07-resumed.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 1201 Kerria Ave 10,405 sf lot. The largest house that fits the space you can build on is about 62 by 99 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half bath "
+    },
+    {
+     "label": "draft",
+     "file": "rosa-390-en-08-draft.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-1",
+     "file": "rosa-390-en-09-chat-1.png",
+     "says": "STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,809 sf Rooms 4 bed, 2.5 bath, 2-car two and a half baths Drew the house again with 2 bathrooms and a half bath; it had 3 bathrooms and a half bath. It is 2,809 sf of living area on the Valley plan. +2 sf · 1 change used Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-2",
+     "file": "rosa-390-en-10-chat-2.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car two and a half baths Drew the house again with 2 bathrooms and a half bath; it had 3 bathrooms and a half bath. It is 2,809 sf of living area on the Valley plan. +2 sf · 1 change used undo that Done, the house is back to how it was. 1 change returned. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (3) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-3",
+     "file": "rosa-390-en-11-chat-3.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car two and a half baths Drew the house again with 2 bathrooms and a half bath; it had 3 bathrooms and a half bath. It is 2,809 sf of living area on the Valley plan. +2 sf · 1 change used undo that Done, the house is back to how it was. 1 change returned. make it nicer Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes. Make the windows bigger Make the front porch 2 ft deeper Choose another style Make the kitchen bigger Add a"
+    },
+    {
+     "label": "chat-4",
+     "file": "rosa-390-en-12-chat-4.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car two and a half baths Drew the house again with 2 bathrooms and a half bath; it had 3 bathrooms and a half bath. It is 2,809 sf of living area on the Valley plan. +2 sf · 1 change used undo that Done, the house is back to how it was. 1 change returned. make it nicer Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes. Make the windows bigger Make the front porch 2 ft deeper Choose another style make the living room 3 ft wid"
+    },
+    {
+     "label": "send",
+     "file": "rosa-390-en-13-send.png",
+     "says": "STEP 5 OF 5 · SEND 10 CHANGES LEFT ON THIS PLAN Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 1201 Kerria Ave, McAllen, TX 78501 Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 2,807 sf Porches 143 sf Driveway and walk 578 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES None. You kept the first draft. Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. Our drafter will check your lot first, usually within 1 business day. You don't need to do"
+    },
+    {
+     "label": "sent",
+     "file": "rosa-390-en-14-sent.png",
+     "says": "STEP 5 OF 5 · SEND 10 CHANGES LEFT ON THIS PLAN With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driv"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "two and a half baths",
+     "reply": "Drew the house again with 2 bathrooms and a half bath; it had 3 bathrooms and a half bath. It is 2,809 sf of living area on the Valley plan. +2 sf · 1 change used",
+     "changesLeft": 9
+    },
+    {
+     "ask": "undo that",
+     "reply": "Done, the house is back to how it was. 1 change returned.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "make it nicer",
+     "reply": "Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes. Make the windows bigger Make the front porch 2 ft deeper Choose another style",
+     "changesLeft": 10
+    },
+    {
+     "ask": "make the living room 3 ft wider",
+     "reply": "The living room cannot get bigger where it sits: the mud room next to it would be left too small.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "jose",
+   "size": 1440,
+   "lang": "en",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "jose-1440-en-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → Your house on your lot, in 3D A real floor plan you change by chatting Your first draft and 10 changes come with every plan. Need more? The office adds them. START WITH YOUR EMAIL Your house "
+    },
+    {
+     "label": "lot-found",
+     "file": "jose-1440-en-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer5@example.com SIGN OUT N 2002 KISKADEE LN · IS THIS YOUR LOT? Your lot 2002 Kiskadee Ln, Mission, TX 78572 Found: 2002 KISKADEE LN, MISSION, TX, 78572 · Mission, Hidalgo County. We have the Mission, TX rules; 9 of them are summaries the office confirms (the street side, the sides, the back, a side street, the garage door, how much of the lot a house may cover, the height, the smallest lot, the narrowest lot). IS THIS YOUR LOT? TANGLEWOOD AT BENTSEN PALM PH 1 LOT 169 · 2002 KISKADEE LN MISSION. 11 sides, about 5,881 sf (0.135 acres). Front (Kiskadee Ln): about 50 ft, curved Left side: about 100 ft Right side: about"
+    },
+    {
+     "label": "lot-taken",
+     "file": "jose-1440-en-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer5@example.com SIGN OUT N 2002 KISKADEE LN, MISSION, TX 78572 · MISSION, TX Your lot 2002 Kiskadee Ln, Mission, TX 78572 Found: 2002 KISKADEE LN, MISSION, TX, 78572 · Mission, Hidalgo County. We have the Mission, TX rules; 9 of them are summaries the office confirms (the street side, the sides, the back, a side street, the garage door, how much of the lot a house may cover, the height, the smallest lot, the narrowest lot). YOUR LOT, FROM THE COUNTY PARCEL MAP TANGLEWOOD AT BENTSEN PALM PH 1 LOT 169 · 2002 KISKADEE LN MISSION. 11 sides, about 5,881 sf (0.135 acres). Front (Kiskadee Ln): about 50 ft, curved Left side"
+    },
+    {
+     "label": "style",
+     "file": "jose-1440-en-04-style.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer5@example.com SIGN OUT Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "rooms",
+     "file": "jose-1440-en-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer5@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. A TIGHT LOT FOR OUR READY PLANS You can go on with what fits here, or have our drafter design a house for this lot with the rooms you want. SEND MY LOT TO THE DRAFTER 2002 Kiskadee Ln 5,880 sf lot. The largest house that fits the space you can build on is about 37 by 43 ft. Bedrooms − 3 + Full bathrooms − 2 + Garage − 0-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 1,400 sf Extras Office Second suite Half bath Front porch Rear porch Footprint on lot 1"
+    },
+    {
+     "label": "lot-sent",
+     "file": "jose-1440-en-06-lot-sent.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer5@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. YOUR LOT IS WITH OUR DRAFTER We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest. 2002 Kiskadee Ln 5,880 sf lot. The largest house that fits the space you can build on is about 37 by 43 ft. Bedrooms − 3 + Full bathrooms − 2 + Garage − 0-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 1,400 sf Extras Office"
+    },
+    {
+     "label": "draft",
+     "file": "jose-1440-en-07-draft.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer5@example.com SIGN OUT MODERN FARMHOUSE · 3 BED · 2 BATH · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 1,399 sf Rooms 3 bed, 2 bath Here is your first draft. The house is turned 15° from square to the street, to sit in the widest part of your lot. Add a porch on the back CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-1",
+     "file": "jose-1440-en-08-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer5@example.com SIGN OUT MODERN FARMHOUSE · 3 BED · 2 BATH · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 1,399 sf Rooms 3 bed, 2 bath Here is your first draft. The house is turned 15° from square to the street, to sit in the widest part of your lot. Send my lot to the drafter please Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days. No change was used. Add a porch on the back CHANGE HISTORY (1) UNDO"
+    },
+    {
+     "label": "send",
+     "file": "jose-1440-en-09-send.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer5@example.com SIGN OUT Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 2002 Kiskadee Ln, Mission, TX 78572 Style Modern Farmhouse Program 3 bed · 2 bath · 1 story Living area 1,399 sf Porches 128 sf Driveway and walk 115 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES None. You kept the first draft. Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. Our drafter will"
+    },
+    {
+     "label": "sent",
+     "file": "jose-1440-en-10-sent.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer5@example.com SIGN OUT With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and "
+    }
+   ],
+   "chat": [
+    {
+     "ask": "Send my lot to the drafter please",
+     "reply": "Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days. No change was used.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "jose",
+   "size": 390,
+   "lang": "es",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "jose-390-es-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → Tu casa en tu lote, en 3D Un plano de verdad que cambias platicando Cada plano in"
+    },
+    {
+     "label": "lot-found",
+     "file": "jose-390-es-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 2002 Kiskadee Ln, Mission, TX 78572 Encontramos: 2002 KISKADEE LN, MISSION, TX, 78572 · Mission, Condado de Hidalgo. Tenemos las reglas de Mission, TX; 9 son resúmenes que la oficina confirma (el lado de la calle, los lados, el fondo, una calle lateral, la puerta de la cochera, cuánto del lote puede cubrir una casa, la altura, el lote más chico, el lote más angosto). ¿ESTE ES TU LOTE? TANGLEWOOD AT BENTSEN PALM PH 1 LOT 169 · 2002 KISKADEE LN MISSION. 11 lados, como 5,881 pies² (0.135 acres). Frente (Kiskadee Ln): unos 50 pies, en curva Lado izquierdo: unos 100 pies Lado derecho: unos 112 pies Fondo del lote: unos 72 pies Izquierda y derecha"
+    },
+    {
+     "label": "lot-taken",
+     "file": "jose-390-es-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE N Tu lote 2002 Kiskadee Ln, Mission, TX 78572 Encontramos: 2002 KISKADEE LN, MISSION, TX, 78572 · Mission, Condado de Hidalgo. Tenemos las reglas de Mission, TX; 9 son resúmenes que la oficina confirma (el lado de la calle, los lados, el fondo, una calle lateral, la puerta de la cochera, cuánto del lote puede cubrir una casa, la altura, el lote más chico, el lote más angosto). TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO TANGLEWOOD AT BENTSEN PALM PH 1 LOT 169 · 2002 KISKADEE LN MISSION. 11 lados, como 5,881 pies² (0.135 acres). Frente (Kiskadee Ln): unos 50 pies, en curva Lado izquierdo: unos 100 pies Lado derecho: unos 112 pies Fondo del lote: unos 7"
+    },
+    {
+     "label": "style",
+     "file": "jose-390-es-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 2 DE 5 · ESTILO Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. CASA DE CAMPO MODERNA Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL CAMPESTRE TEXANO RANCHO ARTESANAL TRANSICIONAL TOSCANO MODERNO DE LOS AÑOS 50 COSTERO Casa de campo moderna ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "rooms",
+     "file": "jose-390-es-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. UN LOTE JUSTO PARA NUESTROS PLANOS LISTOS Puedes seguir con lo que cabe aquí, o pedir que nuestro dibujante diseñe una casa para este lote con los cuartos que quieres. ENVIAR MI LOTE AL DIBUJANTE 2002 Kiskadee Ln Lote de 5,880 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 37 por 43 pies. Recámaras − 3 + Baños completos − 2 + Cochera − 0 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable 1,400 pies² Extras Oficina Segunda suite Medio baño Porche del fren"
+    },
+    {
+     "label": "lot-sent",
+     "file": "jose-390-es-06-lot-sent.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. TU LOTE YA ESTÁ CON NUESTRO DIBUJANTE Guardamos tu lote y los cuartos que pediste. Un dibujante diseña una casa para este lote y te escribe por correo, por lo general en dos días hábiles. Aquí puedes seguir cambiando los cuartos; el dibujante ve lo más reciente. 2002 Kiskadee Ln Lote de 5,880 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 37 por 43 pies. Recámaras − 3 + Baños completos − 2 + Cochera − 0 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área habitable "
+    },
+    {
+     "label": "draft",
+     "file": "jose-390-es-07-draft.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 1,399 pies² Cuartos 3 recámaras, 2 baños Aquí está tu primer borrador. La casa está girada 15° respecto a la calle, para que quede en la parte más ancha de tu lote. Agrega un porche atrás CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-1",
+     "file": "jose-390-es-08-chat-1.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 1,399 pies² Cuartos 3 recámaras, 2 baños Aquí está tu primer borrador. La casa está girada 15° respecto a la calle, para que quede en la parte más ancha de tu lote. mándale mi lote al dibujante Tu lote ya está con nuestro dibujante. Un dibujante diseña una casa para este lote y te escribe por correo, por lo general en dos días hábiles. No se usó ningún cambio. Agrega un porche atrás CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "send",
+     "file": "jose-390-es-09-send.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 10 CAMBIOS ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 2002 Kiskadee Ln, Mission, TX 78572 Estilo Casa de campo moderna Cuartos 3 recámaras · 2 baños · 1 piso Área habitable 1,399 pies² Área de porches 128 pies² Entrada de carros y banqueta 115 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS Ninguno. Te quedaste con el primer borrador. Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo, así que nada de lo que p"
+    },
+    {
+     "label": "sent",
+     "file": "jose-390-es-10-sent.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 10 CAMBIOS Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de eme"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "mándale mi lote al dibujante",
+     "reply": "Tu lote ya está con nuestro dibujante. Un dibujante diseña una casa para este lote y te escribe por correo, por lo general en dos días hábiles. No se usó ningún cambio.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "mike",
+   "size": 390,
+   "lang": "en",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "mike-390-en-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → Your house on your lot, in 3D A real floor plan you change by chatting Your first draft and 10 changes come with every plan. Need more? The office adds them. START WITH YOUR EMAIL Your house "
+    },
+    {
+     "label": "lot-found",
+     "file": "mike-390-en-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 2218 Royal Palm Dr, Mission, TX 78572 Found: 2218 ROYAL PALM DR, MISSION, TX, 78572 · Mission, Hidalgo County. We have the Mission, TX rules; 9 of them are summaries the office confirms (the street side, the sides, the back, a side street, the garage door, how much of the lot a house may cover, the height, the smallest lot, the narrowest lot). IS THIS YOUR LOT? ROYAL PALMS NO. 3 LOT 1 · 2218 ROYAL PALM DR MISSION. 4 sides, about 10,019 sf (0.23 acres). Front (Royal Palm Dr): about 80 ft Left side (E Griffin Pkwy): about 125 ft Right side: about 125 ft Back of the lot: about 80 ft Left and right are as you face the lot from the street. A corn"
+    },
+    {
+     "label": "lot-taken",
+     "file": "mike-390-en-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 1 OF 5 · LOT N Your lot 2218 Royal Palm Dr, Mission, TX 78572 Found: 2218 ROYAL PALM DR, MISSION, TX, 78572 · Mission, Hidalgo County. We have the Mission, TX rules; 9 of them are summaries the office confirms (the street side, the sides, the back, a side street, the garage door, how much of the lot a house may cover, the height, the smallest lot, the narrowest lot). YOUR LOT, FROM THE COUNTY PARCEL MAP ROYAL PALMS NO. 3 LOT 1 · 2218 ROYAL PALM DR MISSION. 4 sides, about 10,019 sf (0.23 acres). Front (Royal Palm Dr): about 80 ft Left side (E Griffin Pkwy): about 125 ft Right side: about 125 ft Back of the lot: about 80 ft Left and right are as you face the lot from"
+    },
+    {
+     "label": "style",
+     "file": "mike-390-en-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 2 OF 5 · STYLE Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "rooms",
+     "file": "mike-390-en-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 2218 Royal Palm Dr 10,019 sf lot. The largest house that fits the space you can build on is about 61 by 94 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half ba"
+    },
+    {
+     "label": "signed-back-in",
+     "file": "mike-390-en-06-signed-back-in.png",
+     "says": "DRAFT HOUSE DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → YOUR HOUSES Modern Farmhouse 2218 Royal Palm Dr, Mission, TX 78572 · 1 min ago ROOMS CHOSEN, READY TO DRAFT START ANOTHER HOUSE ADDRESS OR Upload the survey or plat · PDF or photo A plat is the dra"
+    },
+    {
+     "label": "resumed",
+     "file": "mike-390-en-07-resumed.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 STEP 3 OF 5 · ROOMS What goes in the house? Modern Farmhouse. Change anything later in plain language. 2218 Royal Palm Dr 10,019 sf lot. The largest house that fits the space you can build on is about 61 by 94 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · office · no garage · front and rear porches · one story · 2,533 sf Fitted to your lot: without the second suite. tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office Second suite Half ba"
+    },
+    {
+     "label": "draft",
+     "file": "mike-390-en-08-draft.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-1",
+     "file": "mike-390-en-09-chat-1.png",
+     "says": "STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used Make the kitchen bigger Remove the rear porch Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-2",
+     "file": "mike-390-en-10-chat-2.png",
+     "says": "STEP 4 OF 5 · DRAFT 10 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,807 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used can you undo that? Done, the house is back to how it was. 1 change returned. Make the kitchen bigger Add a porch on the back Make the primary bath bigger Make the living room 3.25 ft longer CHANGE HISTORY (3) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-3",
+     "file": "mike-390-en-11-chat-3.png",
+     "says": "STEP 4 OF 5 · DRAFT 9 CHANGES LEFT ON THIS PLAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,850 sf Rooms 4 bed, 3.5 bath, 2-car Add a covered patio in the back I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used can you undo that? Done, the house is back to how it was. 1 change returned. Make the kitchen bigger I made the kitchen about 15% bigger in both directions, so it's now roughly 21.75 by 18 feet. +43 sf · Kitchen now 22 × 18 ft · 1 change used Make the kitchen 2 ft longer Add a porch on the back Make the primary bath bigger Make the living room 3.25"
+    },
+    {
+     "label": "send",
+     "file": "mike-390-en-12-send.png",
+     "says": "STEP 5 OF 5 · SEND 9 CHANGES LEFT ON THIS PLAN Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot 2218 Royal Palm Dr, Mission, TX 78572 Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 2,850 sf Porches 143 sf Driveway and walk 584 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES Make the kitchen bigger Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. Our drafter will check your lot first, usually within 1 business day. You don't need to do anyth"
+    },
+    {
+     "label": "sent",
+     "file": "mike-390-en-13-sent.png",
+     "says": "STEP 5 OF 5 · SEND 9 CHANGES LEFT ON THIS PLAN With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its drive"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "Add a covered patio in the back",
+     "reply": "I added a covered patio across the back of the house, off the living area. Rear Porch added · same floor area · 1 change used",
+     "changesLeft": 9
+    },
+    {
+     "ask": "can you undo that?",
+     "reply": "Done, the house is back to how it was. 1 change returned.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "I made the kitchen about 15% bigger in both directions, so it's now roughly 21.75 by 18 feet. +43 sf · Kitchen now 22 × 18 ft · 1 change used",
+     "changesLeft": 9
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "mike",
+   "size": 1440,
+   "lang": "es",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "mike-1440-es-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → Tu casa en tu lote, en 3D Un plano de verdad que cambias platicando Cada plano in"
+    },
+    {
+     "label": "lot-found",
+     "file": "mike-1440-es-02-lot-found.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer8@example.com SALIR N 2218 ROYAL PALM DR · ¿ESTE ES TU LOTE? Tu lote 2218 Royal Palm Dr, Mission, TX 78572 Encontramos: 2218 ROYAL PALM DR, MISSION, TX, 78572 · Mission, Condado de Hidalgo. Tenemos las reglas de Mission, TX; 9 son resúmenes que la oficina confirma (el lado de la calle, los lados, el fondo, una calle lateral, la puerta de la cochera, cuánto del lote puede cubrir una casa, la altura, el lote más chico, el lote más angosto). ¿ESTE ES TU LOTE? ROYAL PALMS NO. 3 LOT 1 · 2218 ROYAL PALM DR MISSION. 4 lados, como 10,019 pies² (0.23 acres). Frente (Royal Palm Dr): unos 80 pies Lado izquierdo (E G"
+    },
+    {
+     "label": "lot-taken",
+     "file": "mike-1440-es-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer8@example.com SALIR N 2218 ROYAL PALM DR, MISSION, TX 78572 · MISSION, TX Tu lote 2218 Royal Palm Dr, Mission, TX 78572 Encontramos: 2218 ROYAL PALM DR, MISSION, TX, 78572 · Mission, Condado de Hidalgo. Tenemos las reglas de Mission, TX; 9 son resúmenes que la oficina confirma (el lado de la calle, los lados, el fondo, una calle lateral, la puerta de la cochera, cuánto del lote puede cubrir una casa, la altura, el lote más chico, el lote más angosto). TU LOTE, SEGÚN EL MAPA DE LOTES DEL CONDADO ROYAL PALMS NO. 3 LOT 1 · 2218 ROYAL PALM DR MISSION. 4 lados, como 10,019 pies² (0.23 acres). Frente (Royal Pal"
+    },
+    {
+     "label": "style",
+     "file": "mike-1440-es-04-style.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer8@example.com SALIR Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. CASA DE CAMPO MODERNA Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL CAMPESTRE TEXANO RANCHO ARTESANAL TRANSICIONAL TOSCANO MODERNO DE LOS AÑOS 50 COSTERO Casa de campo moderna ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "rooms",
+     "file": "mike-1440-es-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer8@example.com SALIR ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 2218 Royal Palm Dr Lote de 10,019 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 61 por 94 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carr"
+    },
+    {
+     "label": "signed-back-in",
+     "file": "mike-1440-es-06-signed-back-in.png",
+     "says": "DRAFT HOUSE ES EN drafthouse.test+customer8@example.com SALIR DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → TUS CASAS Casa de campo moderna 2218 "
+    },
+    {
+     "label": "resumed",
+     "file": "mike-1440-es-07-resumed.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN drafthouse.test+customer8@example.com SALIR ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. 2218 Royal Palm Dr Lote de 10,019 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 61 por 94 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · oficina · sin cochera · porches al frente y atrás · un piso · 2,533 pies² Ajustada a tu lote: sin la segunda suite. toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carr"
+    },
+    {
+     "label": "draft",
+     "file": "mike-1440-es-08-draft.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer8@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz el baño principal más grande Haz la sala 3.25 pies más de largo CAMBIAR HI"
+    },
+    {
+     "label": "chat-1",
+     "file": "mike-1440-es-09-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer8@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás de la casa, junto a la sala, con el tamaño típico del plano. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado Haz la cocina más grande Quita el porche de "
+    },
+    {
+     "label": "chat-2",
+     "file": "mike-1440-es-10-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 10 CAMBIOS drafthouse.test+customer8@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,807 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás de la casa, junto a la sala, con el tamaño típico del plano. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado ¿puedes deshacer eso? Listo, la casa quedó "
+    },
+    {
+     "label": "chat-3",
+     "file": "mike-1440-es-11-chat-3.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer8@example.com SALIR CASA DE CAMPO MODERNA · 4 RECÁMARAS · 3.5 BAÑOS · COCHERA PARA 2 CARROS · 1 PISO ARRASTRA PARA GIRAR · USA LA RUEDA PARA ACERCAR · ARRASTRA CON EL BOTÓN DERECHO PARA MOVER PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,850 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros quiero un porche atrás Agregué un porche atrás de la casa, junto a la sala, con el tamaño típico del plano. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado ¿puedes deshacer eso? Listo, la casa quedó c"
+    },
+    {
+     "label": "send",
+     "file": "mike-1440-es-12-send.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer8@example.com SALIR ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote 2218 Royal Palm Dr, Mission, TX 78572 Estilo Casa de campo moderna Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 2,850 pies² Área de porches 143 pies² Entrada de carros y banqueta 584 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS la cocina más grande Solo aparecen los cambio"
+    },
+    {
+     "label": "sent",
+     "file": "mike-1440-es-13-sent.png",
+     "says": "DRAFT HOUSE 1 LOTE 2 ESTILO 3 CUARTOS 4 BORRADOR 5 ENVIAR ES EN TE QUEDAN 9 CAMBIOS drafthouse.test+customer8@example.com SALIR Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "quiero un porche atrás",
+     "reply": "Agregué un porche atrás de la casa, junto a la sala, con el tamaño típico del plano. Se agregó: Porche de atrás · misma área de piso · 1 cambio usado",
+     "changesLeft": 9
+    },
+    {
+     "ask": "¿puedes deshacer eso?",
+     "reply": "Listo, la casa quedó como estaba. Te devolvimos 1 cambio.",
+     "changesLeft": 10
+    },
+    {
+     "ask": "la cocina más grande",
+     "reply": "Hice la cocina más grande, de unos 21¾ por 18 pies, para que tengas más espacio para cocinar y convivir. +43 pies² · Cocina: ahora mide 22 × 18 pies · 1 cambio usado",
+     "changesLeft": 9
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "ana",
+   "size": 1440,
+   "lang": "en",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "ana-1440-en-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Your lot. Your style. A real house plan in minutes, finished by our drafters. STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and reach, egress windows, 42\" halls, closets, bath clearances, the garage and its driveway, the kitchen triangle, the suite, no voids. A licensed review comes with the drafter's sheet set. See homes we have built → Your house on your lot, in 3D A real floor plan you change by chatting Your first draft and 10 changes come with every plan. Need more? The office adds them. START WITH YOUR EMAIL Your house "
+    },
+    {
+     "label": "lot-plat",
+     "file": "ana-1440-en-02-lot-plat.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer9@example.com SIGN OUT YOUR LOT · RIO GRANDE CITY, TX PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (u"
+    },
+    {
+     "label": "lot-taken",
+     "file": "ana-1440-en-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer9@example.com SIGN OUT YOUR LOT · RIO GRANDE CITY, TX PLAT LOT Your lot STREET ADDRESS, IF THE LOT HAS ONE LOOK IT UP With the address we find the lot on the county map and check the flood map. You can go on without it. TYPE IT IN FROM THE PLAT CITY No rules for this city yet (county defaults, a drafter checks them) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Hidalgo County (unincorporated) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Cameron County (unincorporated) Starr County (unincorporated) Willacy County (u"
+    },
+    {
+     "label": "style",
+     "file": "ana-1440-en-04-style.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer9@example.com SIGN OUT Pick a style Each style is a kit our drafters built: roof, materials, and how the rooms like to sit together. MODERN FARMHOUSE Gables, board and batten, deep porch. ready to draft MORE STYLES SOON MODERN SPANISH HILL COUNTRY RANCH CRAFTSMAN TRANSITIONAL TUSCAN MID-CENTURY COASTAL Modern Farmhouse is ready to draft today. Pick a style to go on. BACK PICK A STYLE TO CONTINUE"
+    },
+    {
+     "label": "rooms",
+     "file": "ana-1440-en-05-rooms.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN drafthouse.test+customer9@example.com SIGN OUT What goes in the house? Modern Farmhouse. Change anything later in plain language. Your lot 43,007 sf lot. The largest house that fits the space you can build on is about 76 by 189 ft. USE THE ROOMS OF A RECENT BUILD Recent build, Rio Grande City 3 bed · 3.5 bath · mini primary · office · no garage · front and rear porches · one story · 2,556 sf tap to set the rooms below to this; the rooms below are what you will get Bedrooms − 4 + Full bathrooms − 3 + Garage − 2-car + Stories 1 · this style's kit is a one-story plan; two-story styles come with their kits Living area 2,800 sf Extras Office "
+    },
+    {
+     "label": "draft",
+     "file": "ana-1440-en-06-draft.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer9@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car Here is your first draft. Tell me what to change, like you would tell a designer. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (1) UNDO LAST CHANGE BACK I LOVE IT, SEND TO DRAFTERS"
+    },
+    {
+     "label": "chat-1",
+     "file": "ana-1440-en-07-chat-1.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 9 CHANGES LEFT ON THIS PLAN drafthouse.test+customer9@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,894 sf Rooms 4 bed, 3.5 bath, 2-car Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · Kitchen now 15.5 × 18 ft · 1 change used Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage options CHANGE HISTORY (2) UNDO LAST CHANGE BACK I LOVE IT, SEND "
+    },
+    {
+     "label": "chat-2",
+     "file": "ana-1440-en-08-chat-2.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer9@example.com SIGN OUT MODERN FARMHOUSE · 4 BED · 3.5 BATH · 2-CAR · 1 STORY DRAG TO TURN · SCROLL TO ZOOM · RIGHT-DRAG TO PAN PLAN SITE 3D RESET ROOF SUN CHECK Shape it 10 free changes; a failed request doesn't use one. Living area 2,804 sf Rooms 4 bed, 3.5 bath, 2-car Make the kitchen bigger I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · Kitchen now 15.5 × 18 ft · 1 change used undo Done, the house is back to how it was. 1 change returned. Make the kitchen bigger Add a porch on the back Make the garage 3 cars Add a bedroom Show me garage o"
+    },
+    {
+     "label": "send",
+     "file": "ana-1440-en-09-send.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer9@example.com SIGN OUT Ready to hand off? Your design locks when you send it. Our drafters take it from here. SUMMARY DRAFTER PACKAGE Lot From your plat, no address yet Style Modern Farmhouse Program 4 bed · 3.5 bath · 2-car · 1 story Living area 2,804 sf Porches 323 sf Driveway and walk 1,721 sf WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING YOUR CHANGES None. You kept the first draft. Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost. Our draft"
+    },
+    {
+     "label": "sent",
+     "file": "ana-1440-en-10-sent.png",
+     "says": "DRAFT HOUSE 1 LOT 2 STYLE 3 ROOMS 4 DRAFT 5 SEND ES EN 10 CHANGES LEFT ON THIS PLAN drafthouse.test+customer9@example.com SIGN OUT With the drafting team DRAFTING IN REVIEW APPROVED REVIT MODEL READY A drafter checks the plan against the lot and the code, then approves it for the Revit build or sends it back with a note. Usually within a business day. DOWNLOAD YOUR SUMMARY (PDF) WHAT IT COSTS We go over cost with you at your meeting with the South Texas Builders office. ASK THE OFFICE TO SET UP MY MEETING STB Plans by the South Texas Builders design team The STB design team · Lead Drafter, South Texas Builders Every plan is checked against 16 IRC planning checks before you see it: doors and "
+    }
+   ],
+   "chat": [
+    {
+     "ask": "Make the kitchen bigger",
+     "reply": "I made the kitchen about 15% bigger in both directions, to roughly 15¼ by 18 feet. +89 sf · Kitchen now 15.5 × 18 ft · 1 change used",
+     "changesLeft": 9
+    },
+    {
+     "ask": "undo",
+     "reply": "Done, the house is back to how it was. 1 change returned.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  },
+  {
+   "persona": "ana",
+   "size": 390,
+   "lang": "es",
+   "steps": [
+    {
+     "label": "first-screen",
+     "file": "ana-390-es-01-first-screen.png",
+     "says": "DRAFT HOUSE ES EN DRAFT HOUSE Tu lote. Tu estilo. Un plano de casa de verdad en minutos, terminado por nuestros dibujantes. STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de emergencia, pasillos de 42\", clósets, espacios libres en los baños, la cochera y su entrada, el triángulo de la cocina, la suite, sin huecos. La revisión con licencia viene con el juego de planos del dibujante. Mira casas que hemos construido → Tu casa en tu lote, en 3D Un plano de verdad que cambias platicando Cada plano in"
+    },
+    {
+     "label": "lot-plat",
+     "file": "ana-390-es-02-lot-plat.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE PLAT LOTE Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Condado de Cameron (fuera de los límites de la ciudad) Condado de Starr (fuera de los límites de la ciudad) Condado de"
+    },
+    {
+     "label": "lot-taken",
+     "file": "ana-390-es-03-lot-taken.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 1 DE 5 · LOTE PLAT LOTE Tu lote DIRECCIÓN, SI EL LOTE TIENE UNA BUSCAR Con la dirección encontramos el lote en el mapa del condado y revisamos el mapa de inundación. Puedes seguir sin ella. ESCRIBIRLO CON EL PLAT CIUDAD Todavía sin reglas para esta ciudad (se usan las del condado y un dibujante las revisa) McAllen, TX Edinburg, TX Mission, TX Pharr, TX Condado de Hidalgo (fuera de los límites de la ciudad) Weslaco, TX San Juan, TX Mercedes, TX Brownsville, TX Harlingen, TX San Benito, TX Rio Grande City, TX Alice, TX Palmview, TX Corpus Christi, TX Condado de Cameron (fuera de los límites de la ciudad) Condado de Starr (fuera de los límites de la ciudad) Condado de"
+    },
+    {
+     "label": "style",
+     "file": "ana-390-es-04-style.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 2 DE 5 · ESTILO Elige un estilo Cada estilo es un paquete que armaron nuestros dibujantes: techo, materiales y cómo se acomodan mejor los cuartos. CASA DE CAMPO MODERNA Techos de dos aguas, fachada de tabla y listón, porche amplio. listo para dibujar PRONTO HABRÁ MÁS ESTILOS MODERNO ESPAÑOL CAMPESTRE TEXANO RANCHO ARTESANAL TRANSICIONAL TOSCANO MODERNO DE LOS AÑOS 50 COSTERO Casa de campo moderna ya está listo para dibujar. Elige un estilo para seguir. ATRÁS ELIGE UN ESTILO PARA CONTINUAR"
+    },
+    {
+     "label": "rooms",
+     "file": "ana-390-es-05-rooms.png",
+     "says": "DRAFT HOUSE 1 2 3 4 5 PASO 3 DE 5 · CUARTOS ¿Qué lleva la casa? Casa de campo moderna. Después puedes cambiar lo que quieras con tus propias palabras. Tu lote Lote de 43,004 pies². La casa más grande que cabe en el espacio donde puedes construir mide como 76 por 190 pies. USAR LOS CUARTOS DE UNA CASA RECIENTE Casa reciente, Rio Grande City 3 recámaras · 3.5 baños · segunda suite chica · oficina · sin cochera · porches al frente y atrás · un piso · 2,556 pies² toca para poner estos cuartos aquí abajo; lo que vas a recibir son los cuartos de abajo Recámaras − 4 + Baños completos − 3 + Cochera − 2 carros + Pisos 1 · este estilo es de un piso; los de dos pisos vienen con su propio paquete Área h"
+    },
+    {
+     "label": "draft",
+     "file": "ana-390-es-06-draft.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros Aquí está tu primer borrador. Dime qué quieres cambiar, como se lo dirías a un diseñador. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (1) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-1",
+     "file": "ana-390-es-07-chat-1.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 9 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,894 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros la cocina más grande Hice tu cocina más grande, de unos 15 por 18 pies, para que tengas más espacio para cocinar y moverte. +89 pies² · Cocina: ahora mide 15.5 × 18 pies · 1 cambio usado Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (2) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "chat-2",
+     "file": "ana-390-es-08-chat-2.png",
+     "says": "PASO 4 DE 5 · BORRADOR TE QUEDAN 10 CAMBIOS PLANO TERRENO 3D CENTRAR TECHO SOL Dale forma 10 cambios gratis; si uno no se puede hacer, no cuenta. Área habitable 2,804 pies² Cuartos 4 recámaras, 3.5 baños, cochera para 2 carros la cocina más grande Hice tu cocina más grande, de unos 15 por 18 pies, para que tengas más espacio para cocinar y moverte. +89 pies² · Cocina: ahora mide 15.5 × 18 pies · 1 cambio usado deshacer Listo, la casa quedó como estaba. Te devolvimos 1 cambio. Haz la cocina más grande Agrega un porche atrás Haz la cochera para 3 carros Agrega una recámara Muéstrame opciones de cochera CAMBIAR HISTORIAL (3) DESHACER EL ÚLTIMO CAMBIO ATRÁS ME ENCANTA, ENVIAR A LOS DIBUJANTES"
+    },
+    {
+     "label": "send",
+     "file": "ana-390-es-09-send.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 10 CAMBIOS ¿Listo para entregarlo? Tu diseño queda cerrado cuando lo envías. De aquí en adelante lo llevan nuestros dibujantes. RESUMEN PAQUETE PARA EL DIBUJANTE Lote De tu plat, todavía sin dirección Estilo Casa de campo moderna Cuartos 4 recámaras · 3.5 baños · cochera para 2 carros · 1 piso Área habitable 2,804 pies² Área de porches 323 pies² Entrada de carros y banqueta 1,283 pies² LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN TUS CAMBIOS Ninguno. Te quedaste con el primer borrador. Solo aparecen los cambios que sí se aplicaron; los dibujantes lo ven junto con el modelo"
+    },
+    {
+     "label": "sent",
+     "file": "ana-390-es-10-sent.png",
+     "says": "PASO 5 DE 5 · ENVIAR TE QUEDAN 10 CAMBIOS Con el equipo de dibujantes EN BORRADOR EN REVISIÓN APROBADO MODELO DE REVIT LISTO Un dibujante revisa el plano contra el lote y el código; después lo aprueba para armarlo en Revit o te lo regresa con una nota. Por lo general en un día hábil. DESCARGAR TU RESUMEN (PDF) LO QUE CUESTA El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders. PEDIR A LA OFICINA QUE AGENDE MI REUNIÓN STB Planos del equipo de diseño de South Texas Builders El equipo de diseño de STB · Dibujante principal, South Texas Builders Antes de que lo veas, cada plano pasa 16 revisiones del código residencial (IRC): puertas y accesos, ventanas de salida de eme"
+    }
+   ],
+   "chat": [
+    {
+     "ask": "la cocina más grande",
+     "reply": "Hice tu cocina más grande, de unos 15 por 18 pies, para que tengas más espacio para cocinar y moverte. +89 pies² · Cocina: ahora mide 15.5 × 18 pies · 1 cambio usado",
+     "changesLeft": 9
+    },
+    {
+     "ask": "deshacer",
+     "reply": "Listo, la casa quedó como estaba. Te devolvimos 1 cambio.",
+     "changesLeft": 10
+    }
+   ],
+   "issues": [],
+   "errors": [],
+   "outcome": "sent",
+   "score": 10
+  }
+ ],
+ "drafter": {
+  "issues": [],
+  "rows": [
+   "Ana Tester · 2554 N. FM 2360 2554 N. FM 2360, Rio Grande City, TX 78582 (printed on the plat) · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 versions after the first draft LOT TO CONFIRM + PLAN IN RE",
+   "Ana Tester · 2554 N. FM 2360 2554 N. FM 2360, Rio Grande City, TX 78582 (printed on the plat) · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 versions after the first draft LOT TO CONFIRM + PLAN IN RE",
+   "Mike Tester · 2218 Royal Palm Dr 2218 Royal Palm Dr, Mission, TX 78572 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 3 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 1 of 10 · ",
+   "Mike Tester · 2218 Royal Palm Dr 2218 Royal Palm Dr, Mission, TX 78572 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 3 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 1 of 10 · ",
+   "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEEDS A HOUSE DESIGNED LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21, 3:4",
+   "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEEDS A HOUSE DESIGNED LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21, 3:4",
+   "Rosa Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21",
+   "Rosa Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21",
+   "Maria Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 2 of 10 · Nov 2",
+   "Maria Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versions after the first draft LOT TO CONFIRM + PLAN IN REVIEW changes 2 of 10 · Nov 2",
+   "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEEDS A HOUSE DESIGNED LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21, 3:4",
+   "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEEDS A HOUSE DESIGNED LOT TO CONFIRM + PLAN IN REVIEW changes 0 of 10 · Nov 21, 3:4"
+  ],
+  "cards": [
+   {
+    "row": "Ana Tester · 2554 N. FM 2360 2554 N. FM 2360, Rio Grande City, TX 78582 (printed on the plat) · Modern Farmhouse · 4 bed",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Ana Tester · 2554 N. FM 2360 2554 N. FM 2360, Rio Grande City, TX 78582 (printed on the plat) · Modern Farmhouse · 4 bed",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Mike Tester · 2218 Royal Palm Dr 2218 Royal Palm Dr, Mission, TX 78572 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 3 v",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Mike Tester · 2218 Royal Palm Dr 2218 Royal Palm Dr, Mission, TX 78572 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 3 v",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEED",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEED",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Rosa Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 version",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Rosa Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 2 version",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Maria Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versio",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Maria Tester · 1201 Kerria Ave 1201 Kerria Ave, McAllen, TX 78501 · Modern Farmhouse · 4 bed, 3.5 bath, 2-car · 4 versio",
+    "confirmed": true,
+    "approved": false
+   },
+   {
+    "row": "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEED",
+    "confirmed": false,
+    "approved": false
+   },
+   {
+    "row": "Jose Tester · 2002 Kiskadee Ln 2002 Kiskadee Ln, Mission, TX 78572 · Modern Farmhouse · 3 bed, 2 bath · first draft NEED",
+    "confirmed": false,
+    "approved": false
+   }
+  ],
+  "errors": [],
+  "score": 10
+ }
+}

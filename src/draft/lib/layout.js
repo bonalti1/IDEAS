@@ -187,7 +187,9 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
     const inRange = (range) => !range || !program.sqft || (program.sqft >= range[0] && program.sqft <= range[1])
     // a plan wider than the lot at its smallest is not drawn to find that out (round 8: the rooms step's speed)
     const envW = envelopeWidth(lot)
-    const narrowEnough = (plan) => !plan?.minWidth || plan.minWidth <= envW + 0.01
+    // round 15: a plan drawn for the lots narrower than the garage-forward plan (the Valley plan) is not tried on a lot
+    // that plan fits (maxEnvelope: the buildable width it is drawn under)
+    const narrowEnough = (plan) => (!plan?.minWidth || plan.minWidth <= envW + 0.01) && (!plan?.maxEnvelope || envW < plan.maxEnvelope)
     // first the plans drawn for this living area (the compact one for a small house), the standard plan ahead
     // of the others; then any plan that holds the program and fits the lot; the standard plan when none does
     const standard = fromPlan(program, kit, lot, 'standard')
@@ -330,7 +332,8 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   const wing = T.id && T.id !== 'standard' && !T.wing ? { shift: 0, east: null } : extendWing(rooms, kit, { beds: extraBeds, baths: extraBaths, prefer: program.wingSplit ? 'split' : null })
   const wingShift = wing.shift
   // Bath 1 served the mini primary; without it (and no bedroom in its spot), the bath opens from Bedroom 1 (never the outside)
-  if (!program.suite2 && !frontSlot) {
+  // (only on a plan that draws the mini primary: the Valley plan's Bath 1 opens from its own bedroom as drawn)
+  if (!program.suite2 && !frontSlot && T.rooms.some((r) => r.id === 'suite2')) {
     const bath1 = rooms.find((r) => r.id === 'bath1')
     const bed1 = rooms.find((r) => r.id === 'bed1')
     const door = rooms.find((e) => e.id === 'd-bath1')
@@ -401,9 +404,23 @@ export function fromPlan(program, kit, lot = DEFAULT_LOT, planId = null) {
   let k = Math.max(kReq, kMin)
   let capped = null // the area the lot's width caps this plan at, when it is short of the ask
   const minSqft = Math.round(areaAt(kMin) / 50) * 50
+  // round 15, item U9: a plan drawn for the Valley's deep lots (growDeep) grows deeper before it grows wider: its
+  // rooms take up to growDeep times their drawn depth for each step of width, so the house stays about half again as
+  // deep as it is wide instead of spreading across the lot. It goes wider only once the depth is used up.
+  if (k > 1 + 1e-9 && T.growDeep) {
+    const areaXY = (kx, ky) => {
+      const copy = rooms.filter(isRoom).map((r) => ({ ...r }))
+      scalePlan(copy, [kx, ky], cx, cy, kit, T.id || null)
+      return copy.filter(isConditioned).reduce((a, r) => a + r.w * r.d, 0) * program.stories
+    }
+    const g = T.growDeep
+    const kx = search((v) => areaXY(v, Math.min(1.6, v * g)) >= program.sqft, 1, k)
+    const ky = search((v) => areaXY(kx, v) >= program.sqft, kx, Math.min(1.6, kx * g))
+    k = [kx, ky]
+  }
   // a house that grows past the lot's width grows deeper instead: the width scale stops where the envelope
   // does, and the depth scale makes up the area (rooms up to 40% deeper than drawn)
-  if (k > 1 + 1e-9 && lotOf(lot).envelope) {
+  if (!Array.isArray(k) && k > 1 + 1e-9 && lotOf(lot).envelope) {
     const [envW] = envelopeSize(lotOf(lot))
     const widthAt = (kx, ky) => {
       const copy = rooms.filter(isRoom).map((r) => ({ ...r }))

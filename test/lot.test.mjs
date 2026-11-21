@@ -172,6 +172,8 @@ async function startServer(t, env = {}) {
   }
   throw new Error('server did not start')
 }
+// round 15, B2: a plat lot names a plat the office has, uploaded from the same account
+const platIdOf = async (w) => (await (await w.post('/api/lot/plat', { name: 'p.png', data: fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64') })).json()).platId
 const who = async (base, email) => {
   const { token } = await (await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) })).json()
   const h = { 'content-type': 'application/json', authorization: `Bearer ${token}` }
@@ -208,20 +210,28 @@ test('city rules are served, drafters edit them, and lots pick the edit up', asy
   assert.equal(c.applied, true, c.reply)
 })
 
-test('a plat lot blocks sending until a drafter confirms it; the confirmation can correct the lot', async (t) => {
+test('a plat lot the drafter has not confirmed never blocks Send (round 15, B4): the plan waits as "Lot to confirm + plan", approval waits for the lot, and a corrected lot sends the plan back', async (t) => {
   const base = await startServer(t)
   const ana = await who(base, 'ana@example.com')
   const maria = await who(base, 'maria@drafthouse.test')
   const spec = { kind: 'plat', calls: referenceCalls(), streets: [{ edge: 4, name: 'Ida Blvd' }], front: 4, kinds: ['side', 'streetSide', 'streetSide', 'streetSide', 'front', 'rear', 'rear'], city: 'palmview', setbacks: { front: 10, side: 6, rear: 20, streetSide: 25 }, platId: 'plat_test', confirmed: false }
+  spec.platId = await platIdOf(ana)
   const lot = buildLot(spec)
   const prj = await (await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, lot) })).json()
   assert.equal(prj.lot.confirmed, false)
+  // round 15, B4: the homeowner can always send; the plan waits for the drafter with its lot
   const sent = await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana' } })
-  assert.equal(sent.status, 409)
-  assert.equal((await sent.json()).lotPending, true)
+  assert.equal(sent.status, 200)
+  assert.equal((await sent.json()).status, 'in_review')
   const inbox = await (await maria.get('/api/review')).json()
-  assert.equal(inbox.lots.length, 1)
-  assert.equal(inbox.lots[0].id, prj.id)
+  assert.equal(inbox.waiting.length, 1)
+  assert.equal(inbox.waiting[0].id, prj.id)
+  assert.equal(inbox.waiting[0].lotPending, true, 'marked "Lot to confirm + plan"')
+  assert.equal(inbox.lots.length, 0, 'not listed twice')
+  // the drafter cannot approve the plan before the lot is confirmed
+  const early = await maria.post(`/api/review/${prj.id}`, { decision: 'approved' })
+  assert.equal(early.status, 409)
+  assert.match((await early.json()).error, /^Confirm the lot first/)
   assert.equal((await ana.post(`/api/review/${prj.id}/lot`, { confirmed: true })).status, 403)
   // the drafter corrects the front setback and confirms: the plan is re-placed as a free version
   const ok = await (await maria.post(`/api/review/${prj.id}/lot`, { confirmed: true, spec: { setbacks: { front: 12, side: 6, rear: 20, streetSide: 25 } }, note: 'front is 12 per the plat note' })).json()
@@ -230,9 +240,13 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
   assert.equal(ok.lot.rules.front, 12)
   assert.equal(ok.versions[ok.versions.length - 1].kind, 'lot')
   assert.equal(ok.changesLeft, 10)
+  // the corrected lot moved the plan, so the plan the homeowner sent goes back to them with a plain note
+  assert.equal(ok.status, 'returned')
+  assert.match(ok.review.note, /^We corrected your lot/)
   assert.equal((await (await maria.get('/api/review')).json()).lots.length, 0)
   const sent2 = await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana' } })
   assert.equal(sent2.status, 200)
+  assert.equal((await sent2.json()).lotPending, undefined)
   // a typed lot has nothing to confirm
   const m = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen' })
   const prj2 = await (await ana.post('/api/projects', { lot: m, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, m) })).json()
@@ -246,7 +260,8 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
 test('live: Claude reads the Garza site plan and FEMA answers for its address', { skip: !process.env.LIVE && 'set LIVE=1 (needs the Claude key and the internet)' }, async (t) => {
   const base = await startServer(t, { DRAFTHOUSE_CLAUDE_KEY: process.env.DRAFTHOUSE_CLAUDE_KEY || process.env.ANTHROPIC_API_KEY, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '' })
   const data = fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64')
-  const r = await fetch(base + '/api/lot/plat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'garza-site-plan.png', data }) })
+  // round 15, office decision 2: uploading needs an account
+  const r = await (await who(base, 'ana.live@example.com')).post('/api/lot/plat', { name: 'garza-site-plan.png', data })
   assert.equal(r.status, 200)
   const read = await r.json()
   assert.equal(read.calls.length, 4, 'four sides')

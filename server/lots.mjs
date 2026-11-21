@@ -64,7 +64,10 @@ export const PLAT_SYSTEM = `You read recorded plats, surveys and site plans of r
 - Confidence below 0.6 when bearings were inferred, text was hard to read, or the calls do not close.`
 
 /** A plat record as the browser gets it: what the reader cost the office, its token counts and the office's reason stay on the server. */
-const forClient = ({ usage, cost, ms, why, traverseError, ...rec }) => (rec.unread ? { platId: rec.platId, name: rec.name, ext: rec.ext, unread: true, at: rec.at } : rec)
+const platLabel = (ext) => (ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)')
+export const forClient = ({ usage, cost, ms, why, traverseError, name, owner, usedBy, ...rec }) => (rec.unread ? { platId: rec.platId, ext: rec.ext, label: platLabel(rec.ext), unread: true, at: rec.at } : { ...rec, label: platLabel(rec.ext) })
+/** Round 15, U7: an upload no house uses is removed after this many days. */
+export const PLAT_KEEP_DAYS = 30
 
 export const FEMA_DOWN = 'FEMA did not answer; the office checks the flood zone'
 export const CENSUS_DOWN = "the address service didn't answer; try again in a moment or type the lot in"
@@ -184,7 +187,7 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
     },
 
     /** A plat PDF → calls, streets, front, confidence; the PDF is kept for the drafter. */
-    async readPlat({ name, data, page, mediaType }) {
+    async readPlat({ name, data, page, mediaType }, { owner = null } = {}) {
       if (!data) throw fail(400, 'file data required')
       const buf = Buffer.from(data, 'base64')
       if (buf.length > 12 * 1024 * 1024) throw fail(413, 'That file is over 12 MB. Send just the plat page, or a photo of it.')
@@ -197,13 +200,15 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       const platId = 'plat_' + crypto.randomBytes(5).toString('hex')
       const label = String(name || platId).slice(0, 120)
       await files.putRaw(`plats/${platId}.${ext}`, buf, type)
+      // round 15, B3: who uploaded it; only that account, the owner of a house that uses it, or the office may open it.
+      // The file's own name is kept for the drafter only (it can carry an owner's name), and never goes in a log.
       // round 14: a plat the office cannot read right now (no reader key on this server, the reader failed, or it
       // found no outline) is KEPT for the drafter and the homeowner keeps going; the homeowner never sees why in
       // office words. `why` is for the office: 'no-reader' | 'reader-failed' | 'no-outline'.
       const keep = async (why, detail, extra = {}) => {
-        const rec = { platId, name: label, ext, ...extra, unread: true, why, at: now() }
+        const rec = { platId, name: label, ext, owner, size: buf.length, ...extra, unread: true, why, at: now() }
         await store.meta.set(`plat:${platId}`, rec)
-        await event('design', `plat "${label}" saved, not read (${detail}): the homeowner finds the lot by address or types its size, and the drafter draws it from the file`)
+        await event('design', `plat ${platId} saved, not read (${detail}): the homeowner finds the lot by address or types its size, and the drafter draws it from the file`)
         return forClient(rec)
       }
       if (!interpreter.configured) return keep('no-reader', 'the plat reader has no Claude key on this server: set DRAFTHOUSE_CLAUDE_KEY')
@@ -236,13 +241,42 @@ export function makeLots({ env = process.env, store, files, interpreter, event, 
       if (!(Array.isArray(out.calls) && out.calls.length >= 3) || error || !(areaSf > 0)) {
         return keep('no-outline', `the reader found ${out.calls?.length || 0} sides${error ? ` that do not join up (${String(error).slice(0, 80)})` : ''}, $${(out.cost || 0).toFixed(3)}`, { ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms })
       }
-      const rec = { platId, name: label, ext, ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms, at: now() }
+      const rec = { platId, name: label, ext, owner, size: buf.length, ...out, closure, areaSf, traverseError: error, usage: out.usage, cost: out.cost, ms: out.ms, at: now() }
       await store.meta.set(`plat:${platId}`, rec)
-      await event('design', `plat "${label}" read: ${out.calls?.length || 0} calls, ${areaSf ? `${areaSf.toLocaleString()} sf` : 'does not traverse'}, confidence ${Math.round((out.confidence || 0) * 100)}%, $${(out.cost || 0).toFixed(3)}`)
+      await event('design', `plat ${platId} read: ${out.calls?.length || 0} calls, ${areaSf ? `${areaSf.toLocaleString()} sf` : 'does not traverse'}, confidence ${Math.round((out.confidence || 0) * 100)}%, $${(out.cost || 0).toFixed(3)}`)
       return forClient(rec)
     },
     async plat(platId) {
-      return store.meta.get(`plat:${platId}`)
+      if (!/^plat_[0-9a-f]{10}$/.test(String(platId || ''))) return null
+      const rec = await store.meta.get(`plat:${platId}`)
+      return rec && !rec.deleted ? rec : null
+    },
+    /** Round 15, U7: a house now uses this plat, so it is kept. */
+    async platUsed(platId, projectId) {
+      const rec = await this.plat(platId)
+      if (!rec || (rec.usedBy || []).includes(projectId)) return
+      await store.meta.set(`plat:${platId}`, { ...rec, usedBy: [...(rec.usedBy || []), projectId].slice(-20) })
+    },
+    /**
+     * Round 15, U7: uploads that no house uses are removed after PLAT_KEEP_DAYS days (the file and its record, which
+     * is kept as a stub so the id is never served again). `t` is the clock, for tests. Returns what was removed.
+     */
+    async prunePlats({ t = Date.now(), keepDays = PLAT_KEEP_DAYS } = {}) {
+      const names = (await files.listRaw?.('plats')) || []
+      const removed = []
+      for (const n of names) {
+        const m = /(plat_[0-9a-f]{10})\.(pdf|png|jpg)$/.exec(n)
+        if (!m) continue
+        const rec = await store.meta.get(`plat:${m[1]}`)
+        if (rec?.usedBy?.length) continue
+        const at = Date.parse(rec?.at || '')
+        if (Number.isFinite(at) && t - at < keepDays * 86400000) continue
+        await files.deleteRaw(n)
+        await store.meta.set(`plat:${m[1]}`, { platId: m[1], deleted: true, at: rec?.at || null, deletedAt: new Date(t).toISOString() })
+        removed.push(m[1])
+      }
+      if (removed.length) await event('design', `removed ${removed.length} uploaded ${removed.length === 1 ? 'plat' : 'plats'} no house used in ${keepDays} days`)
+      return removed
     },
 
     /** The geocode already made for an address, from the cache only (no outside call), or null. */

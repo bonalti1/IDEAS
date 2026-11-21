@@ -35,8 +35,10 @@ export const COMPACT_PLAN = {
     { id: 'bath1', kind: 'bath', name: 'Bath 1', x: 5, y: 31, w: 8, d: 5 },
     { id: 'living', kind: 'living', name: 'Living', x: 0, y: 36, w: 17, d: 15 },
     // the hall, a linen closet at its rear end
-    { id: 'linen', kind: 'wic', name: 'Linen', x: 13, y: 0, w: 4, d: 4 },
-    { id: 'hall', kind: 'hall', name: 'Hallway', x: 13, y: 4, w: 4, d: 32 },
+    // round 15, item U19: the linen closet takes the hall's first 7 ft, so the hall is 29 ft drawn (it was 32, and 36
+    // at 1,750 sf, over the 35 ft a hall may run)
+    { id: 'linen', kind: 'wic', name: 'Linen', x: 13, y: 0, w: 4, d: 7 },
+    { id: 'hall', kind: 'hall', name: 'Hallway', x: 13, y: 7, w: 4, d: 29 },
     // east column (20.5 ft), rear to front
     { id: 'bed3', kind: 'bed', name: 'Bedroom 3', x: 17, y: 0, w: 11.5, d: 11 },
     { id: 'closet3', kind: 'wic', name: 'Closet', x: 17, y: 11, w: 11.5, d: 2.5 },
@@ -74,9 +76,9 @@ export const COMPACT_PLAN = {
     { id: 'd-bed2', room: 'bed2', axis: 'v', x: 13, y: 26, w: 2.67, swing: -1, hinge: 'start', size: 'interiorWide' },
     { id: 'd-closet2', room: 'closet2', axis: 'h', x: 2.5, y: 31, w: 4, swing: -1, hinge: 'start', pair: true, size: 'closet' },
     { id: 'd-bath1', room: 'bath1', axis: 'v', x: 13, y: 34.8, w: 2.33, swing: -1, hinge: 'end', size: 'bath' },
-    { id: 'd-linen', room: 'linen', axis: 'h', x: 15, y: 4, w: 2, swing: 1, hinge: 'start', size: 'closet' },
-    { id: 'd-bed3', room: 'bed3', axis: 'v', x: 17, y: 5.5, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
-    { id: 'd-closet3', room: 'closet3', axis: 'h', x: 20.5, y: 11, w: 4, swing: -1, hinge: 'start', pair: true, size: 'closet' },
+    { id: 'd-linen', room: 'linen', axis: 'h', x: 15, y: 7, w: 2, swing: 1, hinge: 'start', size: 'closet' },
+    { id: 'd-bed3', room: 'bed3', axis: 'v', x: 17, y: 8.5, w: 2.67, swing: 1, hinge: 'start', size: 'interiorWide' },
+    { id: 'd-closet3', room: 'closet3', axis: 'h', x: 24.5, y: 11, w: 4, swing: -1, hinge: 'start', pair: true, size: 'closet' },
     // kitchen side: the pantry, mud room and laundry off the kitchen's south wall; the garage into the mud room
     // the pantry is under 25 sf: its door swings out into the kitchen
     { id: 'd-pantry', room: 'pantry', axis: 'h', x: 18.75, y: 24, w: 2.5, swing: -1, hinge: 'start', size: 'interior' },

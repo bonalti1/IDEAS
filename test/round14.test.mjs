@@ -24,7 +24,7 @@ const CHROME = chromePath()
 const skip = !CHROME && 'no Chrome found (set CHROME=/path/to/chrome)'
 const OUT = shotDir('round14')
 const PLAT = 'test/fixtures/garza-site-plan.png'
-const OFFICE_WORDS = /Claude|API key|office key|reader needs|503|Census geocoder|unverified|Lot 514|Villa-Rama/i
+const OFFICE_WORDS = /Claude|API key|office key|reader needs|\b503\b|Census geocoder|unverified|Lot 514|Villa-Rama/i
 
 async function startApi(t, env = {}) {
   const port = await freePort()
@@ -106,7 +106,8 @@ test('2 and 5 (unit): the reader off, failing or finding no outline keeps the fi
   assert.equal(off.put.length, 1, 'the file is kept')
   assert.equal(off.stored.why, 'no-reader')
   assert.match(off.events[0], /saved, not read .*DRAFTHOUSE_CLAUDE_KEY/)
-  assert.deepEqual(Object.keys(off.out).sort(), ['at', 'ext', 'name', 'platId', 'unread'], 'the browser gets no reason')
+  // round 15, P4: no file name either (it can carry an owner's name); a plain label instead
+  assert.deepEqual(Object.keys(off.out).sort(), ['at', 'ext', 'label', 'platId', 'unread'], 'the browser gets no reason')
   assert.doesNotMatch(JSON.stringify(off.out), OFFICE_WORDS)
   // the reader did not answer
   const down = await run({ configured: true, parseDocument: async () => { throw new Error('overloaded_error: try later') } })
@@ -150,7 +151,9 @@ test('2 and 4 (HTTP): with no reader key the upload is 200 and kept; the typed-o
   assert.equal(rec.unread, true)
   assert.doesNotMatch(JSON.stringify(rec), OFFICE_WORDS)
   // the file is there for the drafter
-  const file = await fetch(`${base}/api/lot/plat/${rec.platId}`)
+  // round 15, B3: the file opens for the account that uploaded it (signed out it is 401)
+  assert.equal((await fetch(`${base}/api/lot/plat/${rec.platId}`)).status, 401)
+  const file = await ana.get(`/api/lot/plat/${rec.platId}`)
   assert.equal(file.status, 200)
   assert.equal(file.headers.get('content-type'), 'image/png')
   assert.equal((await file.arrayBuffer()).byteLength, fs.statSync(PLAT).size)
@@ -263,6 +266,9 @@ for (const [w, h] of [
     await page.waitForTimeout(1500)
     await noSideScroll(page)
     await page.screenshot({ path: `${OUT}/2-lot-from-the-plat-numbers-${w}.png`, fullPage: w < 600 })
+    // round 15 (U18) asks for no silent city when nothing tells us one: the homeowner picks it, then goes on
+    assert.ok(await page.getByTestId('lot-next').isDisabled(), 'not before the city is picked')
+    await page.locator('#lot-city').selectOption('mcallen')
     assert.ok(await page.getByTestId('lot-next').isEnabled())
     await page.getByTestId('lot-next').click()
     await page.getByTestId('style-farmhouse').waitFor({ timeout: 20000 })
@@ -283,7 +289,9 @@ for (const [w, h] of [
     await page.goto(appBase + '/#/review', { waitUntil: 'domcontentloaded' })
     const row = page.getByTestId('row-plat-unread').first()
     await row.waitFor({ timeout: 30000 })
-    assert.match(await page.locator('.inbox-row').first().innerText(), /no address, plat "garza-site-plan\.png"/, 'the row names the plat when there is no address')
+    // round 15, P4: the row says what it is and when, never the uploaded file's own name
+    assert.match(await page.locator('.inbox-row').first().innerText(), /no address · Plat \(photo\), \d{4}-\d{2}-\d{2}/, 'the row says a plat came with no address')
+    assert.doesNotMatch(await page.locator('.inbox-row').first().innerText(), /garza-site-plan/)
     await noSideScroll(page)
     await page.screenshot({ path: `${OUT}/3-drafter-queue-plat-not-read-${w}.png`, fullPage: w < 600 })
     await row.click()
@@ -294,10 +302,12 @@ for (const [w, h] of [
     const list = await page.getByTestId('review-checklist').innerText()
     assert.match(list, /Plat not read by the office: the homeowner typed 80 by 140 ft from it\. Open the plat and check the outline\./)
     assert.doesNotMatch(list, /Read from the plat: compare the calls/)
-    assert.match(await card.innerText(), /Open the plat photo/)
+    assert.match(await card.innerText(), /Open the plat photo/i)
     assert.doesNotMatch(await card.innerText(), /Read with \d+% confidence/)
-    const href = await card.getByRole('link', { name: /Open the plat/ }).getAttribute('href')
-    assert.equal((await fetch(href)).status, 200, 'the file opens')
+    // round 15, B3: the plat opens with the drafter's own token, in a new tab, from memory (a plain link carries none)
+    const [tab] = await Promise.all([page.context().waitForEvent('page'), card.getByTestId('open-plat').click()])
+    await tab.waitForURL(/^blob:/, { timeout: 15000 })
+    await tab.close()
     await card.scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${OUT}/4-drafter-card-plat-not-read-${w}.png`, fullPage: w < 600 })
     assert.deepEqual(errors, [], 'no page errors')

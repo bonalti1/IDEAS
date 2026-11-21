@@ -83,7 +83,7 @@ test('live Claude: the twenty Spanish requests are read as the ops they mean, co
             assert.equal(d.applied, true, `${what}: the button "${r.fixes[0].label}" applies: ${d.reply}`)
             spanish(d.reply, `${what}: the answer to the tap`)
           } else {
-            assert.equal(r.askLabel, 'Pedir a la oficina que programe mi reunión')
+            assert.equal(r.askLabel, 'Pídele a la oficina que programe mi reunión')
           }
         }
       } catch (e) {
@@ -115,7 +115,7 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
     assert.equal(undo.applied, true)
     assert.equal(undo.undo, true)
     assert.equal(undo.changesUsed, 0)
-    assert.equal(undo.reply, 'Regresé a la versión 1. Se le devolvió 1 cambio.')
+    assert.equal(undo.reply, 'Listo, la casa quedó como estaba. Te devolvimos 1 cambio.') // round 15, P1
     const trade = await o.change(id, 'haz la casa mas chica pero agrega 2 recamaras')
     said.push(`"haz la casa mas chica pero agrega 2 recamaras" → ${trade.reply} [button: ${trade.fixes.map((f) => f.label).join(' | ')}]`)
     assert.equal(trade.offer, 'trade-off')
@@ -123,7 +123,8 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
     spanish(trade.reply, 'the trade-off')
     assert.equal(o.log.filter((r) => r.diff).length, before, 'neither was sent to the model')
     // nobody can read these: the model comes back with nothing to do, and the answer is the three examples
-    for (const [text, spanishAsked] of [['asdf', false], ['make it nicer', false], ['hmm', false], ['hazla mas bonita', true]]) {
+    // round 15, B6: "make it nicer" and "hazla más bonita" have their own three buttons now; other unclear words here
+    for (const [text, spanishAsked] of [['asdf', false], ['whatever you think', false], ['hmm', false], ['lo que tú digas', true]]) {
       const r = await o.change(id, text)
       const sent = modelSaid(o.log, text)
       said.push(`"${text}" → Claude ops ${JSON.stringify(sent?.diff.ops)} conf ${sent?.diff.confidence}, own reply: ${sent?.diff.reply} → ${r.reply} [buttons: ${(r.fixes || []).map((f) => f.label).join(' | ')}]`)
@@ -131,7 +132,7 @@ test('live Claude: an English request on a Spanish screen is answered in Spanish
       assert.equal(r.source, 'claude', text)
       assert.equal(r.offer, 'examples', `${text}: ${r.reply}`)
       assert.equal(r.fixes.length, 3, text)
-      assert.match(r.reply, spanishAsked ? /^No le entendí\./ : /^I did not catch that\./, text)
+      assert.match(r.reply, spanishAsked ? /^No te entendí\./ : /^I did not catch that\./, text)
       assert.equal(r.changesUsed, 0, text)
     }
     const tapped = await o.change(id, 'Add a porch on the back', (await o.change(id, 'asdf')).fixes.find((f) => f.label === 'Add a porch on the back').ops)

@@ -106,12 +106,6 @@ export default function Send({ lot, style, program, rooms, history, project, set
       else setJob((await api.sendDesign(design, ifc)).job)
     } catch (e) {
       if (project) {
-        // a lot still waiting for its drafter is not a failure: the calm card says so (the project is read again)
-        if (e.body?.lotPending) {
-          api.project(project.id).then(setProject).catch(() => {})
-          setSending(false)
-          return
-        }
         setError(tr('We could not send it yet: {reason}', { reason: say(plainReason(e.message)) }))
         setSending(false)
         return
@@ -348,12 +342,11 @@ export default function Send({ lot, style, program, rooms, history, project, set
             )}
             <p className="fine">{tr('Only changes that went through are listed; drafters see it with the model, so nothing you asked for gets lost.')}</p>
           </div>
+          {/* round 15, B4: a lot not confirmed yet never stops Send; one plain line says what happens */}
           {lotWaiting && !zoneBlock && (
-            <div className="card note calm" data-testid="lot-waiting">
-              <h3>{tr('Your plan is saved')}</h3>
-              <p>{tr("A drafter is checking your lot against the county records, usually within one business day. We'll email you, and then you can send it.")}</p>
-              <p className="fine">{tr('Nothing more to do now. You can keep changing the plan in the meantime; this page shows the Send button as soon as the lot is confirmed.')}</p>
-            </div>
+            <p className="fine lot-first" data-testid="lot-waiting">
+              {tr("Our drafter will check your lot first, usually within 1 business day. You don't need to do anything.")}
+            </p>
           )}
           {(!rules.ok || zoneBlock) && (
             <div className="card note bad" data-testid="send-blocked">
@@ -463,7 +456,7 @@ export default function Send({ lot, style, program, rooms, history, project, set
               {tr("Plates {a}' and {b}' · roof {pitch} · {overhang} overhang · {ext} exterior, {plumb} plumbing walls.", { a: kit.plates.default, b: kit.plates.public, pitch: kit.roof.pitch, overhang: kit.roof.overhang, ext: kit.walls.exterior.studs, plumb: kit.walls.plumbing.studs })}
             </p>
           </div>
-          {isRef && <p className="fine">{tr(`Columns marked "set" are the numbers on the Garza drawings. Differences are the gap between the packer and a drafter's plan.`)}</p>}
+          {isRef && <p className="fine">{tr(`Columns marked "set" are the numbers on the recent build's drawings. Differences are the gap between the packer and a drafter's plan.`)}</p>}
         </>
       )}
 
@@ -472,8 +465,8 @@ export default function Send({ lot, style, program, rooms, history, project, set
         <Button ghost onClick={onBack}>
           {tr('Keep editing')}
         </Button>
-        {!lotWaiting && (
-          <Button primary disabled={sending || !rules.ok || zoneBlock} onClick={send} title={zoneBlock ? tr('The office calls you about the zoning first') : rules.ok ? '' : tr('Fix the problems listed above first')}>
+        {(
+          <Button primary disabled={sending || !rules.ok || zoneBlock} onClick={send} data-testid="send" title={zoneBlock ? tr('The office calls you about the zoning first') : rules.ok ? '' : tr('Fix the problems listed above first')}>
             {sending ? tr('Sending…') : tr('Send to drafters')}
           </Button>
         )}

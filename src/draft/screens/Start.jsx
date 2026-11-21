@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Mark } from '../ui.jsx'
 import SignIn from './SignIn.jsx'
 import { STATUS } from '../lib/status.js'
 import TrustBlock from '../TrustBlock.jsx'
 import { useLang } from '../lib/i18n.js'
+import { keepPlat, pendingPlat, dropPlat, platKind } from '../lib/pending-plat.js'
 
 const ago = (iso, t) => {
   const d = (Date.now() - Date.parse(iso)) / 60000
@@ -22,12 +23,23 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
   const ready = looksLikeAddress || !!file
   const hint = a && !looksLikeAddress && !file ? (a.length < 8 ? t('Type the full street address with the city, like 1300 W Nolana Ave, McAllen, TX.') : t('Add the street number and the city, like 1300 W Nolana Ave, McAllen, TX. Or upload the plat.')) : ''
   const canStart = !!user || guest
+  // round 15, D2: a plat is uploaded only from an account. A visitor who picks one is asked to sign in right here; the
+  // file is kept in this browser meanwhile (also across the emailed sign-in link) and comes back once signed in.
+  const platWaits = !user && !!file
+  useEffect(() => {
+    if (user && !file) pendingPlat().then((f) => f && setFile(f))
+  }, [user])
+  const pick = (f) => {
+    setFile(f)
+    if (f && !user) keepPlat(f)
+    if (!f) dropPlat()
+  }
 
   return (
     <div className="screen start">
       <div className="hero">
         <Mark size={64} />
-        <h1 className="wordmark-text">
+        <h1 className="wordmark-text" translate="no">
           <span>Draft</span>
           <i className="rule" />
           <span>House</span>
@@ -81,6 +93,9 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
                     <span className="pill wait" data-testid="house-custom">{t('With a drafter: a design for your lot')}</span>
                   ) : !p.version && !p.lot ? (
                     <span className="pill" data-testid="house-address-only">{t('Address saved, lot not chosen yet')}</span>
+                  ) : !p.version && p.stage === 'rooms' && p.program && Object.keys(p.program).length > 0 ? (
+                    // round 15 (U11): the real step: rooms saved from the rooms step, not drafted yet
+                    <span className="pill" data-testid="house-rooms-chosen">{t('Rooms chosen, ready to draft')}</span>
                   ) : !p.version ? (
                     <span className="pill" data-testid="house-lot-only">{t('Lot saved, rooms not chosen yet')}</span>
                   ) : (
@@ -113,10 +128,10 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
           )}
           <div className="or">{t('or')}</div>
           <label className={'drop' + (file ? ' has-file' : '')}>
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} hidden />
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => pick(e.target.files?.[0] || null)} hidden data-testid="start-plat-input" />
             {file ? (
-              <span>
-                <b>{file.name}</b> · {t('ready to read')}
+              <span data-testid="start-plat-picked">
+                <b>{platKind(file) === 'Plat (PDF)' ? t('Plat (PDF)') : t('Plat (photo)')}</b> · {platWaits ? t('kept here while you sign in') : t('ready to read')}
               </span>
             ) : (
               <span>
@@ -124,10 +139,33 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
               </span>
             )}
           </label>
-          {file && !a && <p className="fine" data-testid="start-file-only">{t('Add the address too if the lot has one. With it we find the lot on the county map and check the flood map.')}</p>}
-          <Button primary disabled={!ready} onClick={() => onNext({ address: a, file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
-            {t('Find my lot')}
-          </Button>
+          {/* round 15 (U15): the two words, said once in plain words where they are first asked for */}
+          <p className="fine plat-words" data-testid="plat-words">{t('A plat is the drawing of your lot recorded with the county; a survey is the drawing of your lot a surveyor measured.')}</p>
+          {platWaits && (
+            <div className="plat-signin" data-testid="plat-signin">
+              <SignIn
+                title={t('Sign in to send your plat')}
+                lede={t('We keep the plat on your account for the drafter, so it needs an email. The file you picked stays here while you sign in.')}
+                onSignedIn={onSignedIn}
+              />
+              <button className="linkish" onClick={() => pick(null)} data-testid="plat-signin-skip">
+                {t('Go on without the plat')}
+              </button>
+            </div>
+          )}
+          {file && !a && !platWaits && <p className="fine" data-testid="start-file-only">{t('Add the address too if the lot has one. With it we find the lot on the county map and check the flood map.')}</p>}
+          {!platWaits && (
+            <Button
+              primary
+              disabled={!ready}
+              onClick={() => {
+                if (file) dropPlat()
+                onNext({ address: a, file, client: (name || user?.name || '').trim() || user?.email || 'Client' })
+              }}
+            >
+              {t('Find my lot')}
+            </Button>
+          )}
           <p className="fine">{t("We read the plat, look up the city's rules, and draw the space you can build on. Nothing is sent to a drafter yet.")}{!user && ` ${t('Without an account, nothing is saved when you close this page.')}`}</p>
         </div>
       )}

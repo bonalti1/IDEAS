@@ -27,7 +27,18 @@ export function makeWindow({ windowMs = 600000, limitFor = () => 20, now = () =>
   }
   return {
     left: (key) => limitFor(key) - live(key).length,
-    count: (key) => map.set(key, [...live(key), now()]),
+    /** Counts one now and returns its stamp, so a caller can give exactly that one back with release(). */
+    count: (key) => {
+      const t = now()
+      map.set(key, [...live(key), t])
+      return t
+    },
+    release: (key, stamp) => {
+      const list = map.get(key) || []
+      const i = list.lastIndexOf(stamp)
+      if (i >= 0) list.splice(i, 1)
+      if (!list.length) map.delete(key)
+    },
     prune() {
       for (const k of [...map.keys()]) live(k)
       return map.size

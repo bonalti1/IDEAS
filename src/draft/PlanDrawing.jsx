@@ -2,21 +2,27 @@
 // zoom on a phone, a tap on a room for its name and size, and a double tap to fit. `api` ref gets { fit }.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildDesign } from './lib/contract.js'
-import { planSVG, sitePlanSVG } from './lib/plan-svg.js'
+import { planSVG, sitePlanSVG, planForFrame } from './lib/plan-svg.js'
 import { useLang, roomName } from './lib/i18n.js'
+import { drawingEs } from './lib/drawing-es.js'
 
 export default function PlanDrawing({ rooms, program, style, lot, client, api, highlightKind, mode = 'plan' }) {
+  const [frame, setFrame] = useState(null) // the frame's size, for the labels' size at 100%
+  const { lang, t: tr } = useLang() // `t` is the pan and zoom here
   const { svg, design } = useMemo(() => {
     try {
       const design = buildDesign({ rooms, program, style, lot, client })
-      return { svg: (mode === 'site' ? sitePlanSVG(design) : planSVG(design)).svg, design }
+      // round 15, item U9: the room labels sized to read at 100% in this frame (the CSS fits the drawing at 96%, 100% on a phone)
+      const phone = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 720px)').matches
+      const drawn = mode === 'site' ? sitePlanSVG(design).svg : frame ? planForFrame(design, frame, phone ? 1 : 0.96).svg : planSVG(design).svg
+      // round 15 (U15): on a Spanish screen the drawing's own words are Spanish too (the drafter's sheets stay English)
+      return { svg: lang === 'es' ? drawingEs(drawn) : drawn, design }
     } catch (e) {
       return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text font-size="2" y="5">${String(e.message)}</text></svg>`, design: null }
     }
-  }, [rooms, program, style, lot, client, mode])
+  }, [rooms, program, style, lot, client, mode, lang, frame && Math.round(frame.w / 8), frame && Math.round(frame.h / 8)])
   const [t, setT] = useState({ k: 1, x: 0, y: 0 })
   const [tip, setTip] = useState(null) // { x, y, name, size }
-  const { lang, t: tr } = useLang() // `t` is the pan and zoom here
   const pointers = useRef(new Map())
   const drag = useRef(null)
   const pinch = useRef(null)
@@ -29,6 +35,17 @@ export default function PlanDrawing({ rooms, program, style, lot, client, api, h
   useEffect(() => {
     if (api) api.current = { fit }
   }, [api])
+  // the frame's size: the labels are sized for it (a resize of a few pixels does not redraw)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const read = () => setFrame({ w: el.clientWidth, h: el.clientHeight })
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   useEffect(() => setTip(null), [mode, rooms])
   const zoomAt = (px, py, f) =>
     setT((s) => {

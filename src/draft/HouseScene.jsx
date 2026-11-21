@@ -13,7 +13,7 @@ import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { drivewaySlabs, walkSlabs } from './lib/site.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
-import { camerasFor, topHeight } from './lib/camera.js'
+import { camerasFor, topHeight, groundTextScale } from './lib/camera.js'
 import './scene.css'
 
 export { camerasFor }
@@ -62,7 +62,10 @@ function battens() {
 }
 const STONE = '#a69c8d'
 const TRIM = '#f7f5f0'
-const SHINGLES = '#4a4541'
+// round 15, item U9: a light weathered shingle (the dark one, #4a4541, read as one black slab over the house); the
+// porch and awning metal is the darker accent
+const SHINGLES = '#9b9184'
+const METAL = '#5d5852'
 const WAINSCOT_FT = 3.33 // the kit's 3'-4" stone wainscot (kit.exterior.stoneWainscotFt)
 
 function Walls({ rooms, kit, centre, lot }) {
@@ -253,7 +256,7 @@ function Roof({ roof, centre, lot }) {
         <meshLambertMaterial color={SHINGLES} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={metal} castShadow receiveShadow>
-        <meshLambertMaterial color="#8e8a84" side={THREE.DoubleSide} />
+        <meshLambertMaterial color={METAL} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={siding}>
         <meshLambertMaterial color="#ede7dc" side={THREE.DoubleSide} />
@@ -520,7 +523,8 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
   // the picture in the page until the canvas has drawn
   const [drawn, setDrawn] = useState(false)
   // the words on the ground are for reading the lot; beside a house in the 3D view they are kept small
-  const groundText = showHouse && roomList.length > 0 && view !== 'top' ? 0.45 : 1
+  const phone = typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 720px)').matches
+  const groundText = groundTextScale({ house: showHouse && roomList.length > 0, view, phone })
   return (
     <>
       {/* the top view is always north-up: its north mark is fixed in the corner of the picture, whole at any width

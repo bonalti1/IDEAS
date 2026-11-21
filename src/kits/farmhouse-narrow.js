@@ -27,7 +27,7 @@ export const NARROW_PLAN = {
   // rooms that go when their bedroom goes, and what shortens with it (the hall starts at the dining room)
   companions: { bed4: ['closet4'] },
   fills: {},
-  trims: [{ when: 'bed4', room: 'hall', y: 0 }],
+  trims: [{ when: 'bed4', room: 'hallr', y: 0 }],
   rooms: [
     // west column (15 ft), rear to front: the suite, Bedroom 2, the service rooms, the living room (the fourth bedroom,
     // behind the suite, is last in the list: a 3-bed program drops the last bedroom)
@@ -41,14 +41,18 @@ export const NARROW_PLAN = {
     { id: 'hall2', kind: 'hall', name: 'Hall', x: 9, y: 36.5, w: 6, d: 4 },
     { id: 'mud', kind: 'mud', name: 'Drop Zone', x: 9, y: 40.5, w: 6, d: 5 },
     { id: 'living', kind: 'living', name: 'Living', x: 0, y: 45.5, w: 19, d: 16.5 },
-    // the hall, rear to the living room; open to the dining room, the kitchen and the living room along the way
-    { id: 'hall', kind: 'hall', name: 'Hallway', x: 15, y: -6.5, w: 4, d: 52 },
+    // round 15, item U19: the hall is drawn as two halls with the kitchen between them, not one 52 ft corridor (55 ft
+    // and more once the plan grew). The rear hall serves the suite and the fourth bedroom and is open to the dining
+    // room; the kitchen takes the stretch beside it (its west aisle is the way through); the hallway runs from the
+    // kitchen to the living room past Bedrooms 2 and 3, the hall bath and the laundry
+    { id: 'hallr', kind: 'hall', name: 'Rear Hall', x: 15, y: -6.5, w: 4, d: 17.5 },
+    { id: 'hall', kind: 'hall', name: 'Hallway', x: 15, y: 24, w: 4, d: 21.5 },
     // east column (20.5 ft), rear to front: the dining room on the rear porch, the kitchen with the pantry and a
     // storage closet off it, Bedroom 3 across the column with its door straight off the main hall and its window
     // east, then the hall bath (off the main hall) and Bedroom 3's closet in the row before the garage (round 8:
     // no short hall serving both the bedroom and the pantry)
     { id: 'dining', kind: 'dining', name: 'Dining', x: 19, y: 0, w: 20.5, d: 11 },
-    { id: 'kitchen', kind: 'kitchen', name: 'Kitchen', x: 19, y: 11, w: 14, d: 13 },
+    { id: 'kitchen', kind: 'kitchen', name: 'Kitchen', x: 15, y: 11, w: 18, d: 13 },
     { id: 'storage', kind: 'wic', name: 'Storage', x: 33, y: 11, w: 6.5, d: 7 },
     { id: 'pantry', kind: 'pantry', name: 'Pantry', x: 33, y: 18, w: 6.5, d: 6 },
     { id: 'bed3', kind: 'bed', name: 'Bedroom 3', x: 19, y: 24, w: 20.5, d: 10.5 },
@@ -66,7 +70,8 @@ export const NARROW_PLAN = {
   open: [
     ['hall', 'living'],
     ['hall', 'kitchen'],
-    ['hall', 'dining'],
+    ['hallr', 'kitchen'],
+    ['hallr', 'dining'],
     ['hall', 'hall2'],
     ['dining', 'kitchen'],
   ],
@@ -105,7 +110,6 @@ export const NARROW_PLAN = {
     { id: 'd-storage', room: 'storage', axis: 'v', x: 33, y: 14.5, w: 2.5, swing: 1, hinge: 'start', size: 'interior' },
     // public openings
     { id: 'd-dining', room: 'dining', axis: 'v', x: 19, y: 5.5, w: 4, cased: true },
-    { id: 'd-kitchen', room: 'kitchen', axis: 'v', x: 19, y: 16, w: 5, cased: true },
     { id: 'd-living', room: 'living', axis: 'h', x: 17, y: 45.5, w: 3.5, cased: true },
     // outside: the front door, the dining room's French door to the rear porch, the garage
     { id: 'd-front', room: 'living', axis: 'h', x: 5, y: 62, w: 6, swing: -1, pair: true, size: 'exteriorPair', exterior: true },

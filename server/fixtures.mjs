@@ -187,7 +187,8 @@ export function fixtureFetch(fixtures = loadFixtures(), { log = () => {}, failUr
       const want = parseAddress(q.get('address') || '')
       const f = fixtures.find((x) => {
         const have = parseAddress(x.address)
-        return have.number === want.number && have.street && want.street && (have.street.includes(want.street) || want.street.includes(have.street))
+        // round 15: the same street, as the live geocoder needs ("KISKADE" is not found live; it was found here)
+        return have.number === want.number && have.street && want.street && have.street === want.street
       })
       return json({ result: { input: { address: { address: q.get('address') } }, addressMatches: f?.census ? [f.census] : [] } })
     }

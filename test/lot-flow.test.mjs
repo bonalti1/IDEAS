@@ -90,8 +90,12 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   // the default rooms may not fit an 80 ft lot: take the size the rooms step offers, then draft
   // (round 12, item E: the rooms start at what fits this lot; the homeowner is told so and never meets "does not fit" first)
   const draftBtn = page.getByRole('button', { name: /Draft my house/ })
-  await page.getByTestId('auto-start').waitFor({ timeout: 60000 })
-  assert.match(await page.getByTestId('auto-start').innerText(), /We started you with what fits this lot; you can change it\./)
+  // round 15: on Kerria the default rooms fit as asked (the Valley plan), so nothing is trimmed and no start card shows;
+  // a lot that does need it still says "We started you with what fits this lot" (round12.test.mjs, item E)
+  await draftBtn.waitFor({ timeout: 60000 })
+  await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 120000 })
+  await page.waitForTimeout(1000)
+  if (await page.getByTestId('auto-start').count()) assert.match(await page.getByTestId('auto-start').innerText(), /We started you with what fits this lot; you can change it\./)
   assert.doesNotMatch(await page.locator('main').innerText(), /Does not fit/)
   assert.equal(await draftBtn.isEnabled(), true)
   await shot(page, 'rooms-start-fits-1440')
@@ -109,9 +113,9 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   // no Send button to press yet, and never "Could not send"
   const waiting = page.getByTestId('lot-waiting')
   await waiting.waitFor({ timeout: 20000 })
-  assert.match(await waiting.innerText(), /Your plan is saved/i)
-  assert.match(await waiting.innerText(), /A drafter is checking your lot against the county records, usually within one business day\. We'll email you, and then you can send it\./)
-  assert.equal(await page.getByRole('button', { name: 'Send to drafters' }).count(), 0, 'the Send button comes when the lot is confirmed')
+  // round 15, B4: one plain line, and the Send button is there
+  assert.match(await waiting.innerText(), /Our drafter will check your lot first, usually within 1 business day/i)
+  assert.ok(await page.getByTestId('send').isEnabled(), 'the Send button is there before the lot is confirmed')
   assert.doesNotMatch(await page.locator('.screen').innerText(), /Could not|could not send|cannot be sent/i)
   await shot(page, 'send-lot-with-drafter-calm-1440')
 
@@ -164,8 +168,9 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
 
   // ── the lot confirmed, the client sends again and the summary PDF carries the "Rules used" page (item 9) ──
   // (the Send page looks again every 20 seconds: the button appears on its own once the drafter has confirmed)
+  // (round 15, B4: the button was there all along; the line about the lot goes once the page sees the confirmation)
+  await page.getByTestId('lot-waiting').waitFor({ state: 'detached', timeout: 45000 })
   await page.getByRole('button', { name: 'Send to drafters' }).waitFor({ timeout: 45000 })
-  assert.equal(await page.getByTestId('lot-waiting').count(), 0)
   await page.getByRole('button', { name: 'Send to drafters' }).click()
   const dl = page.getByRole('button', { name: /Download your summary/ })
   await dl.waitFor({ timeout: 30000 })

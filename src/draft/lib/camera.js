@@ -22,6 +22,16 @@ export function edgeLabelOffset(setbackFt, textFt) {
   return room + textFt * 0.9
 }
 
+/**
+ * Round 15 (polish, k02): how big the words on the ground are drawn. Beside a house in the 3D view they are kept small
+ * (full-size lettering was as tall as a door). On a phone the lot is drawn about 300 px wide, so 4 ft letters came out
+ * about 7 px: there they are drawn half as big again, about 11 px.
+ */
+export function groundTextScale({ house = false, view = 'top', phone = false } = {}) {
+  if (house && view !== 'top') return 0.45
+  return phone ? 1.5 : 1
+}
+
 export function streetNamePoints(lot) {
   const out = []
   for (const st of lot.streets || []) {
@@ -68,13 +78,29 @@ export function camerasFor(lot = DEFAULT_LOT, rooms = []) {
   }
   const cos = Math.cos(lot.angle || 0)
   const sin = Math.sin(lot.angle || 0)
+  // round 15 (polish): with a house, the 3D view holds the house and the lot's street side too. A house turned to sit
+  // in the widest part of a pie lot (Kiskadee) had its curved frontage cut off at the bottom of the picture.
+  let C3 = [CX, CZ]
+  let span3 = span
+  if (solid.length) {
+    const b = lot.boundary || []
+    const front = (lot.edges || []).flatMap((e, i) => (e.kind === 'front' && b.length ? [b[i], b[(i + 1) % b.length]] : [])).filter(Boolean)
+    if (front.length) {
+      const xs = solid.flatMap((r) => [r.center[0] - r.w / 2 - r.d / 2, r.center[0] + r.w / 2 + r.d / 2]).concat(front.map((p) => p[0]))
+      const zs = solid.flatMap((r) => [r.center[1] - r.w / 2 - r.d / 2, r.center[1] + r.w / 2 + r.d / 2]).concat(front.map((p) => p[1]))
+      C3 = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2]
+      span3 = Math.max(span, Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) * 0.95)
+    }
+  }
   // the 3D view looks from the street side (local +z) toward the rear
-  const back = (lx, lz) => [CX + lx * cos - lz * sin, CZ + lx * sin + lz * cos]
-  const d3 = solid.length ? Math.max(120, span * 1.3) : span
+  const back = (lx, lz) => [C3[0] + lx * cos - lz * sin, C3[1] + lx * sin + lz * cos]
+  // (the view is centred on the house and its street side together; it does not step back to show every corner of a
+  // straight street side, which made the house small on a phone)
+  const d3 = solid.length ? Math.max(120, span3 * 1.3) : span
   const [px, pz] = back(-d3 * 0.55, d3 * 0.75)
   return {
     top: { position: [CX, span * 1.25, CZ + 0.5], target: [CX, 0, CZ], ...(hold ? { hold } : {}) },
-    '3d': { position: [px, d3 * 0.55, pz], target: [CX, 0, CZ] },
+    '3d': { position: [px, d3 * 0.55, pz], target: [C3[0], 0, C3[1]] },
   }
 }
 

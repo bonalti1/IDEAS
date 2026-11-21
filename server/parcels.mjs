@@ -10,6 +10,7 @@
 //   4. a 40 m buffer around the Census point, keeping the candidates whose situs starts with the number and holds the street
 //   5. otherwise { match: 'none', candidates } (up to 6, nearest first) so the client taps their lot
 import { vectorToBearing, traverse } from '../src/draft/lib/lot.js'
+import { cityTable } from '../src/draft/lib/cities.js'
 import { PARCEL_SOURCES, ROAD_SOURCE, sourcesFor, sourceById, TEST_ADDRESSES } from './parcel-sources.mjs'
 
 const fail = (status, error, extra = {}) => Object.assign(new Error(error), { status, ...extra })
@@ -434,12 +435,38 @@ const situsOf = (src, attrs) => {
   if (F.situsParts) return normalizeSitus(F.situsParts.map((k) => attr(attrs, k)).filter(Boolean).join(' '))
   return normalizeSitus([attr(attrs, F.situsNum), attr(attrs, F.situsStreet)].filter(Boolean).join(' '))
 }
-const situsMatches = (situs, { number, street }) => !!number && situs.startsWith(number + ' ') && (!street || situs.includes(street))
+// round 15, U6: the street is a whole word of the situs (KISKADE is not KISKADEE: that is a near match, said as one)
+const situsMatches = (situs, { number, street }) => !!number && situs.startsWith(number + ' ') && (!street || (' ' + situs + ' ').includes(' ' + street + ' '))
 /**
  * The same street with a house number a few off (round 11, item 6): the county's 911 address point says 323 N 11th St
  * and names a parcel the appraisal district lists as 329 11TH. Under 10 apart on the same street is the district's
  * loose numbering, not another lot; a different street (118 S Cage Blvd naming 118 W Park Ave) never is.
  */
+/** Round 15, U6: is one street name a single slip from the other (one letter added, dropped, changed or two swapped)? */
+export function oneEditApart(a, b) {
+  a = String(a || '')
+  b = String(b || '')
+  if (a === b || !a || !b || Math.abs(a.length - b.length) > 1) return false
+  // a numbered street is never a slip away from another ("10TH" and "11TH" are different streets): only letters slip
+  if (a.replace(/\D/g, '') !== b.replace(/\D/g, '')) return false
+  if (a.length === b.length) {
+    const diff = [...a].map((c, i) => (c === b[i] ? -1 : i)).filter((i) => i >= 0)
+    return diff.length === 1 || (diff.length === 2 && diff[1] === diff[0] + 1 && a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]])
+  }
+  const [s, l] = a.length < b.length ? [a, b] : [b, a]
+  for (let i = 0; i <= s.length; i++) if (s.slice(0, i) + l[i] + s.slice(i) === l) return true
+  return false
+}
+/** Round 15, U6: the county of a city named in a typed address ("... Mission", "Mc Allen, TX"), when the geocoder found nothing. */
+export function countyFromText(address) {
+  const hay = String(address || '').toUpperCase().replace(/[^A-Z]/g, '')
+  const cities = Object.values(cityTable())
+    .filter((c) => c.kind === 'city' && c.county)
+    .map((c) => ({ key: c.name.replace(/,.*$/, '').toUpperCase().replace(/[^A-Z]/g, ''), county: c.county }))
+    .sort((x, y) => y.key.length - x.key.length)
+  // the city sits after the street: look at what follows the house number and the first word
+  return cities.find((c) => hay.slice(4).includes(c.key))?.county || null
+}
 export const situsNear = (situs, { number, street }) => {
   const m = /^(\d+)[A-Z]?\s/.exec(String(situs || ''))
   const n = /^(\d+)/.exec(String(number || ''))
@@ -692,6 +719,30 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
       })
       if (hit) return tag(hit)
     }
+    // 3a. round 15, U6: no parcel at the typed number on the typed street, but one at that number on a street a single
+    //     letter away ("Kiskade" for Kiskadee, "Keria" for Kerria): offered as a near match, said plainly, and the
+    //     drafter confirms it. Several such streets: the later steps go on.
+    if (number && street && !near) {
+      const out = await step('street-near', async () => {
+        let where
+        if (F.situs) where = whereClause([[F.situs, 'LIKE', `${number} %`]], T)
+        else if (F.situsNum) where = whereClause([[F.situsNum, '=', number]], T)
+        if (!where) return null
+        const feats = await arcgis(src, src.url, { where })
+        const close = feats.filter((f) => {
+          const s = situsOf(src, f.properties || f.attributes || {})
+          const got = parseAddress(s)
+          return got.number === number && oneEditApart(got.street, street)
+        })
+        if (close.length === 1) {
+          const rec = normalize(src, close[0], { matchedBy: 'street-near', confidence: 'near', censusPoint })
+          return rec.match === 'one' ? { ...rec, listedAs: rec.situs, nearWhy: 'street' } : null
+        }
+        // several streets a letter away: not a slip we can name; the later steps (the address point, the map) go on
+        return null
+      })
+      if (out) return tag(out)
+    }
     // 3b. no parcel is listed at the typed number, but the county's address point for it sits on a parcel listed a few
     //     numbers off on the same street: that parcel, marked "near" (never "exact"), with the listed address said
     if (near) {
@@ -779,7 +830,8 @@ export function makeParcels({ store, event = async () => {}, log = console.log, 
       // homeowner says the found address is theirs
       if (geo?.found && geo.mismatch && !confirmed) return { match: 'confirm-address', mismatch: geo.mismatch, geo: { found: true, matched: geo.matched, county: geo.county, place: geo.place }, candidates: [], cachedAt: now() }
       const censusPoint = lat != null && lon != null ? { lat: +lat, lon: +lon } : geo?.found ? { lat: geo.lat, lon: geo.lon } : null
-      const county = countyHint || geo?.county || null
+      // round 15, U6: the address service found nothing (a slip in the street name): the city typed still names the county
+      const county = countyHint || geo?.county || (a && !geo?.found ? countyFromText(a) : null)
       const { number, street } = parseAddress(a || geo?.matched || '')
       const place = geo?.place || null
       const tried = []

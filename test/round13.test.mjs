@@ -146,8 +146,11 @@ test('M1: with the county not answering the lot is kept as unchecked; Confirm as
   assert.equal(why.unchecked, true)
   assert.match(why.error, /The county did not answer, so this outline is still not checked against the county\./)
   assert.equal((await (await maria.get(`/api/projects/${prj.id}`)).json()).lot.spec.confirmed, false, 'nothing was confirmed')
-  // Send stays blocked for the homeowner meanwhile
-  assert.equal((await ana.post(`/api/projects/${prj.id}/send`, {})).status, 409)
+  // round 15, B4: the homeowner can still send; the plan waits with its unchecked lot, and the drafter cannot approve it
+  const sentEarly = await ana.post(`/api/projects/${prj.id}/send`, { design: { contract: 1, client: 'Ana' } })
+  assert.equal(sentEarly.status, 200)
+  assert.equal((await sentEarly.json()).lotPending, true)
+  assert.equal((await maria.post(`/api/review/${prj.id}`, { decision: 'approved' })).status, 409)
   // the county is back (the same office, restarted without the outage): Confirm replaces the outline, and the mark goes
   await down.kill()
   const up = await startServer(t, { DATA_DIR })
@@ -161,6 +164,8 @@ test('M1: with the county not answering the lot is kept as unchecked; Confirm as
   assert.notEqual(after.spec.confidence, 'unchecked')
   assert.deepEqual(after.spec.calls, kerria.calls, 'the county\'s outline for the number, not the one the browser sent')
   assert.ok(after.areaSf > 10300 && after.areaSf < 10550, `area ${after.areaSf}`)
+  // the outline changed under the plan the homeowner sent, so the plan went back to them with a plain note
+  assert.equal((await (await ana.get(`/api/projects/${prj.id}`)).json()).status, 'returned')
 })
 
 test('M1: while the county stays down, a drafter who ticks "I checked the outline myself" confirms on their own name, and it is logged', async (t) => {

@@ -78,7 +78,7 @@ test('live Claude: the four sentences map to the right ops or offer, and the off
     assert.equal(kitchen.r.applied, true, kitchen.r.reply)
     const stuck = await send('Make the kitchen bigger', tight, 'tight 60 x 110')
     assert.equal(stuck.r.applied, false, stuck.r.reply)
-    assert.match(stuck.r.reply, /^The kitchen cannot get that much bigger here: /)
+    assert.match(stuck.r.reply, /^The kitchen (can only grow|cannot get bigger)/) // round 15, U12
     assert.ok(stuck.r.fixes.length >= 1, 'the size that fits is offered')
     tapsApply(stuck.r, tight, 'kitchen on the tight lot')
     // 4. more open

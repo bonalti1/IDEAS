@@ -42,7 +42,7 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
     ['POST', '/api/projects/prj_nope/rollback', 'user'],
     ['POST', '/api/projects/prj_nope/send', 'user'],
     ['PUT', '/api/admin/cities/mcallen', 'drafter'],
-    ['POST', '/api/lot/plat', 'app'],
+    ['POST', '/api/lot/plat', 'user'],
     ['POST', '/api/projects/prj_nope/meeting-request', 'user'],
     ['POST', '/api/review/prj_nope/allowance', 'drafter'],
     ['PUT', '/api/admin/allowance', 'drafter'],
@@ -91,7 +91,8 @@ test('88-odd malformed bodies: every route answers under 500 (a meant 503 keeps 
   // a 503 that was meant for the client keeps its words (billing routes are gone while BILLING_ENABLED is off, round 8)
   const checkout = await fetch(base + '/api/billing/checkout', { method: 'POST', headers: { 'content-type': 'application/json', ...heads.user }, body: JSON.stringify({ pack: 'pack5' }) })
   assert.equal(checkout.status, 404)
-  const plat = await fetch(base + '/api/lot/plat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') }) })
+  // round 15, office decision 2: uploading a plat needs an account
+  const plat = await fetch(base + '/api/lot/plat', { method: 'POST', headers: { 'content-type': 'application/json', ...heads.user }, body: JSON.stringify({ name: 'x.pdf', data: Buffer.from('%PDF-1.4').toString('base64') }) })
   // round 14: a plat the office cannot read is kept for the drafter, not refused with the office's reason
   assert.equal(plat.status, 200)
   const kept = await plat.json()

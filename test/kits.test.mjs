@@ -75,6 +75,7 @@ test('a generated kit module loads, registers, and drafts a house that passes th
   fs.copyFileSync('src/kits/farmhouse-narrow.js', path.join(out, 'farmhouse-narrow.js'))
   fs.copyFileSync('src/kits/farmhouse-compact.js', path.join(out, 'farmhouse-compact.js'))
   fs.copyFileSync('src/kits/farmhouse-front-garage.js', path.join(out, 'farmhouse-front-garage.js'))
+  fs.copyFileSync('src/kits/farmhouse-valley.js', path.join(out, 'farmhouse-valley.js'))
   const r = spawnSync(py, ['-I', 'scripts/kit-from-ifc.py', ifcPath, '--id', 'spanish', '--name', 'Spanish', '--out', out, '--quiet'], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stderr)
   assert.ok(fs.existsSync(path.join(out, 'spanish.ifc.js')))

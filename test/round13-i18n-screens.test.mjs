@@ -210,7 +210,11 @@ for (const width of [1440, 390]) {
     // round 13, item 7: one line beside the count, with the plan's own number; on the page, not under anything
     const note = page.getByTestId('changes-note')
     // (the review of PR #12 added what counts and what does not)
-    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.')
+    // (round 15, U14: one line, and the rest behind the info button, two sentences with a full stop between them)
+    assert.equal(await note.innerText(), '10 cambios gratis; si uno no se puede hacer, no cuenta.')
+    await page.getByTestId('changes-info').click()
+    await page.getByTestId('changes-more').waitFor({ state: 'visible', timeout: 5000 })
+    assert.equal((await note.innerText()).replace(/\s+/g, ' ').trim(), '10 cambios gratis; si uno no se puede hacer, no cuenta. Solo cuenta un cambio que el chat le hace a tu plano. Elegir tu lote y tus cuartos, tu primer borrador y deshacer no cuentan.')
     await note.scrollIntoViewIfNeeded()
     const clear = await note.evaluate((el) => {
       const r = el.getBoundingClientRect()
@@ -228,7 +232,9 @@ for (const width of [1440, 390]) {
     // the suggestion chips are Spanish, and a tap sends what the chip says, with the language the homeowner reads
     const chip = page.locator('.chips button').first()
     const chipText = (await chip.innerText()).trim()
-    assert.equal(chipText, 'Haz la cocina más grande')
+    // round 15, U4/U15: the first chip is the change checked on this plan ("Haz la cocina 1 pie más de largo" where a bigger
+    // kitchen does not fit), said as a tú command
+    assert.match(chipText, /^(Haz|Agrega|Quita|Deja|Mueve|Muéstrame) /)
     await chip.click()
     await page.locator('.msg.you').last().waitFor({ timeout: 10000 })
     await page.locator('.msg.thinking').waitFor({ state: 'detached', timeout: 60000 }).catch(() => {})
@@ -246,7 +252,7 @@ for (const width of [1440, 390]) {
     await page.getByTestId('lot-waiting').waitFor({ timeout: 30000 })
     text = await check('08-send')
     assert.match(text, /¿Listo para entregarlo\?/)
-    assert.match(text, /Tu plano está guardado/)
+    assert.match(text, /Nuestro dibujante revisa tu lote primero/)
     assert.match(text, /Lo que cuesta/)
     assert.match(text, /El costo lo vemos contigo en tu reunión con la oficina de South Texas Builders\./)
 
@@ -265,14 +271,14 @@ for (const width of [1440, 390]) {
     assert.equal(await page.getByTestId('lang-switch').getAttribute('data-lang'), 'en')
     let english = (await page.evaluate(wordsOnPage)).map((w) => w.text).join('\n')
     assert.match(english, /Ready to hand off\?/)
-    assert.match(english, /Your plan is saved/)
+    assert.match(english, /Our drafter will check your lot first/)
     // "Sign out" is in the header, or on a phone in the account menu
     const signOut = async () => (phone ? await page.locator('details.dh-account').textContent() : english)
     assert.match(await signOut(), /Sign out/)
     assert.doesNotMatch(await signOut(), /Salir/)
     if (phone) assert.match(english, /Step 5 of 5 · Send/)
     assert.match(english, /\d+ changes? left on this plan/)
-    assert.doesNotMatch(english, /¿Listo para entregarlo\?|Paso 5 de 5|Tu plano está guardado/)
+    assert.doesNotMatch(english, /¿Listo para entregarlo\?|Paso 5 de 5|Nuestro dibujante revisa tu lote primero/)
 
     // ── a reload: the choice is remembered, though the browser still asks for Spanish ──
     await page.reload({ waitUntil: 'domcontentloaded' })

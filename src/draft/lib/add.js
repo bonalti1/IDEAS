@@ -233,12 +233,14 @@ export function addPorch(flat, kit, where = 'rear', { w = null, d = null } = {})
   const living = flat.find((r) => r.id === 'living') || flat.find((r) => isRoom(r) && r.kind === 'living')
   const dining = flat.find((r) => isRoom(r) && r.kind === 'dining')
   const foyer = flat.find((r) => isRoom(r) && r.kind === 'foyer')
+  const kitchen = flat.find((r) => isRoom(r) && r.kind === 'kitchen')
   const minDepth = kit.porch?.minDepthFt || 8
   const depth = d > 0 ? Math.min(16, Math.max(minDepth, d)) : Math.max(minDepth, kit.porch?.depthFt || 10)
   const rooms = flat.filter((r) => isRoom(r))
   // the wall it goes on: the living room's back wall, or the dining room's when the living room's is taken
-  // (the narrow and the compact plans put the living room at the front, the dining room at the back)
-  const anchors = (where === 'rear' ? [living, dining] : [foyer || living]).filter(Boolean)
+  // (the narrow and the compact plans put the living room at the front, the dining room at the back), or the kitchen's
+  // when it is the family room on the yard (round 15: the Valley plan's kitchen has the back wall and the French door)
+  const anchors = (where === 'rear' ? [living, dining, kitchen] : [foyer || living]).filter(Boolean)
   let anchor = null
   let rect = null
   let x0 = 0
@@ -273,7 +275,7 @@ export function addPorch(flat, kit, where = 'rear', { w = null, d = null } = {})
   const room = { id: kind, kind, name: kit.rooms[kind]?.name || (where === 'rear' ? 'Rear Porch' : 'Front Porch'), x: x0, y: rect.y, w: x1 - x0, d: depth, zone: where, open: true, fill: '#e6e1d8', h: 0.6 }
   flat.push(room)
   // French doors from the room it serves when that wall has no exterior door yet
-  const serves = where === 'rear' ? (dining && dining.x >= x0 && dining.x + dining.w <= x1 + 0.5 ? dining : anchor === dining ? dining : living) : foyer || living
+  const serves = where === 'rear' ? (anchor === kitchen ? kitchen : dining && dining.x >= x0 && dining.x + dining.w <= x1 + 0.5 ? dining : anchor === dining ? dining : living) : foyer || living
   if (serves && !flat.some((e) => e.kind === 'door' && e.exterior && e.room === serves.id && Math.abs(e.y + e.d / 2 - (where === 'rear' ? serves.y : serves.y + serves.d)) < 0.6)) {
     const cx = Math.max(serves.x, x0) + Math.min(serves.x + serves.w, x1) - (Math.max(serves.x, x0) + Math.min(serves.x + serves.w, x1)) / 2
     const cy = where === 'rear' ? serves.y : serves.y + serves.d

@@ -54,6 +54,8 @@ async function startServer(t, env = {}) {
   }
   return { base, log: () => out, kill: () => proc.kill() }
 }
+// round 15, B2: a plat lot names a plat the office has, uploaded from the same account
+const platIdOf = async (w) => (await (await w.post('/api/lot/plat', { name: 'p.png', data: fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64') })).json()).platId
 async function who(base, email, extra = {}) {
   const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: email.split('@')[0] }) })
   const { token } = await r.json()
@@ -189,7 +191,7 @@ test('3: a plat lot gets its zoning read when a drafter confirms it, shown to co
   const maria = await who(base, 'maria@drafthouse.test')
   const plat = (address, city) => ({ kind: 'plat', address, city, county: 'Hidalgo County', calls: [{ bearing: 'N 00°00\'00" E', distance: 150 }, { bearing: 'N 90°00\'00" E', distance: 100 }, { bearing: 'S 00°00\'00" E', distance: 150 }, { bearing: 'N 90°00\'00" W', distance: 100 }], front: 3, streets: [{ edge: 3, name: 'Cage Blvd' }], setbacks: {}, zoning: { district: 'R-1', residential: true } })
   const make = async (address, city) => {
-    const lot = buildLot(plat(address, city))
+    const lot = buildLot({ ...plat(address, city), platId: await platIdOf(ana) })
     const r = await ana.post('/api/projects', { lot, style: { id: style.id }, program: small, rooms: generateRooms(small, style, lot) })
     assert.equal(r.status, 201, await r.clone().text())
     return r.json()
@@ -231,7 +233,8 @@ test('3: a plat lot gets its zoning read when a drafter confirms it, shown to co
   const review = fs.readFileSync('src/draft/screens/Review.jsx', 'utf8')
   assert.match(review, /data-testid="zoning-read"/)
   assert.match(review, /confirm or change/)
-  assert.match(review, /data-testid="zoning-as-read"/)
+  // round 15, U19: the read zoning is confirmed in one place, the checklist ("Confirm R-1"), not twice
+  assert.match(review, /data-testid="check-confirm-zoning"/)
 })
 
 // ── item 5 ─────────────────────────────────────────────────────────────────────────────────
@@ -700,9 +703,12 @@ test('E: on every recorded lot the homeowner starts from a program that fits, or
     table.push(`${address.split(',')[0]}: starts at ${start.beds} bed, ${start.baths} bath, ${start.garage ? start.garage + '-car' : 'no garage'}${start.office ? ', office' : ''}, ${start.sqft} sf${f.turn ? `, turned ${f.turn} deg` : ''}`)
   }
   console.log(table.join('\n'))
-  assert.ok(trimmed >= 8, 'round 11: the default 4 bed, 3 bath, office, 2-car met "does not fit" on most real lots')
-  // 3305 N 27th St, the lot of the real-customer test
-  assert.match(table.find((l) => /3305 N 27th/.test(l)), /starts at/)
+  // round 11: the default met "does not fit" on most real lots (11 of these 14 started trimmed in round 14); round 15:
+  // the Valley plan takes the default as asked on the 60 to 80 ft lots, and the rest still start trimmed
+  assert.ok(trimmed >= 5, `${trimmed} lots start trimmed`)
+  assert.ok(table.filter((l) => /the default fits/.test(l)).length >= 6, table.join(' | '))
+  // 3305 N 27th St, the lot of the real-customer test: the default rooms as asked (round 14 started it trimmed)
+  assert.match(table.find((l) => /3305 N 27th/.test(l)), /the default fits/)
   const step = fs.readFileSync('src/draft/screens/Program.jsx', 'utf8')
   assert.match(step, /We started you with what fits this lot; you can change it\./)
   assert.match(step, /startFrom\(checked, program\)/)
@@ -765,11 +771,11 @@ test('C: the homeowner is emailed once when a drafter confirms the lot (never fo
   const lines = () => log().split('\n').filter((l) => /client email not sent \(email not configured\): Draft House: your lot is confirmed/.test(l)).length
   const house = await mk('1201 Kerria Ave, McAllen, TX 78501', 'mcallen')
   assert.equal(lines(), 0)
-  // before: Send answers 409 with lotPending (the screen turns that into the calm card, never "Could not send")
+  // round 15, B4: Send is open before the lot is confirmed; the plan waits with its lot ("Lot to confirm + plan")
   const rooms = generateRooms(small, style, buildLot(house.lot.spec))
   await ana.put(`/api/projects/${house.id}`, { style: { id: style.id, name: style.name }, program: small, rooms })
   const early = await ana.post(`/api/projects/${house.id}/send`, { design })
-  assert.equal(early.status, 409)
+  assert.equal(early.status, 200)
   assert.equal((await early.json()).lotPending, true)
   await maria.post(`/api/review/${house.id}/lot`, { confirmed: true })
   await new Promise((ok) => setTimeout(ok, 150))
@@ -783,11 +789,9 @@ test('C: the homeowner is emailed once when a drafter confirms the lot (never fo
   await new Promise((ok) => setTimeout(ok, 150))
   assert.equal(lines(), 1)
   assert.doesNotMatch(log(), /ana@example\.com.*your lot is confirmed/, 'the address is not written to the log')
-  // the screen
+  // the screen (round 15, B4): one plain line, and the Send button is always there
   const send = fs.readFileSync('src/draft/screens/Send.jsx', 'utf8')
-  assert.match(send, /Your plan is saved/)
-  assert.match(send, /A drafter is checking your lot against the county records, usually within one business day\. We'll email you, and then you can send it\./)
-  assert.match(send, /\{!lotWaiting && \(\s*<Button primary/)
+  assert.match(send, /Our drafter will check your lot first, usually within 1 business day\. You don't need to do anything\./)
+  assert.doesNotMatch(send, /\{!lotWaiting && \(\s*<Button primary/)
   assert.doesNotMatch(send, /Could not send/)
-  assert.match(send, /e\.body\?\.lotPending/)
 })

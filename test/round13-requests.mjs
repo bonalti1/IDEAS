@@ -182,7 +182,7 @@ export const REQUESTS = [
     // never reaches the model: the meeting answer, with the office button in Spanish
     text: 'cuanto cuesta?', plan: 'roomy', outcome: 'answer', means: 'how much does it cost?', cost: true,
     op: (ops) => ops.length === 0,
-    claude: () => say([], 'El costo se revisa en su reunión con la oficina de South Texas Builders.', { confidence: 0.3 }),
+    claude: () => say([], 'El costo se revisa en tu reunión con la oficina de South Texas Builders.', { confidence: 0.3 }),
   },
   {
     text: 'agrega otra recamara', plan: 'roomy', outcome: 'applied', means: 'add a bedroom',
@@ -214,5 +214,5 @@ export function asPrompted(request, rooms) {
   if (/^add an office$/i.test(request)) return say([add('office')], 'Added an office.')
   if (/^remove the half bath$/i.test(request)) return say([{ op: 'remove', room: idOf(rooms, 'halfbath') }], 'Removed the half bath.')
   // anything else: the model comes back unsure, in the client's language
-  return { ops: [], reply: /[áéíóúñ¿]|\b(?:la|el|que|mas|casa)\b/i.test(request) ? '¿Me puede decir qué quiere cambiar?' : 'Could you tell me what you would like to change?', confidence: 0.2, intent: 'none' }
+  return { ops: [], reply: /[áéíóúñ¿]|\b(?:la|el|que|mas|casa)\b/i.test(request) ? '¿Me puedes decir qué quieres cambiar?' : 'Could you tell me what you would like to change?', confidence: 0.2, intent: 'none' }
 }

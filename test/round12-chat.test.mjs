@@ -30,8 +30,10 @@ const offline = async () => {
 
 // ── the plans: the default program on a 100 x 150 lot, the same with three bedrooms, and two tight lots ──────
 const ROOMY = buildLot({ kind: 'manual', width: 100, depth: 150, city: 'mcallen', frontStreet: 'E Nolana Ave', setbacks: {} })
-const TIGHT = buildLot({ kind: 'manual', width: 60, depth: 110, city: 'mcallen', setbacks: {} })
-const SMALL = buildLot({ kind: 'manual', width: 70, depth: 100, city: 'mcallen', setbacks: {} })
+// round 15: the tight lots are 58 and 55 ft wide (they were 60 and 70): a 60 or 70 ft lot now drafts the default rooms on the
+// Valley plan, and these tests are about the narrow and the compact plans
+const TIGHT = buildLot({ kind: 'manual', width: 58, depth: 110, city: 'mcallen', setbacks: {} })
+const SMALL = buildLot({ kind: 'manual', width: 55, depth: 100, city: 'mcallen', setbacks: {} })
 /** What the rooms step drafts for a program on a lot (the program itself, or what the fit offers in its place). */
 function draft(program, lot) {
   const f = fitsLot(program, style, lot)
@@ -105,7 +107,8 @@ test('1 (basic rules): "I want 4 bedrooms" and its close phrasings are a count, 
   assert.deepEqual(count('I want 2 more bedrooms').map((o) => o.op), ['add', 'add'])
   assert.deepEqual(count('make bedroom 2 bigger').map((o) => o.op), ['resize'])
   assert.deepEqual(countAsk('make the 3 bedrooms bigger'), [])
-  assert.deepEqual(countAsk('3 bedrooms and 2.5 baths'), [])
+  // round 15, U3: "2.5 baths" is now read, as 2 full baths and a half bath (it was left unread here before)
+  assert.deepEqual(countAsk('3 bedrooms and 2.5 baths'), [{ kind: 'bath', count: 2, half: 1 }, { kind: 'bed', count: 3 }])
   assert.deepEqual(countAsk('remove 2 bedrooms'), [])
   assert.deepEqual(countAsk('a 4 bedroom house at 2,400 sf'), [])
   assert.deepEqual(validateOps([{ op: 'count', kind: 'bed', count: 4 }], roomy.rooms, kit).errors, [])
@@ -207,10 +210,11 @@ test('2 (basic rules): on the tight lot the patio is refused for the real reason
   assert.equal(planIdOf(tight.rooms), 'narrow')
   const r = await ask('Add a covered patio in the back', tight)
   held(r, 'patio on the tight lot')
-  assert.equal(r.reply, 'A covered patio at the back does not fit as asked: the house and porches would cover 51 percent of the lot, more than the 50 percent McAllen, TX allows. Here is what would work:')
+  assert.equal(r.reply, 'A covered patio at the back does not fit as asked: the house and porches would cover 52 percent of the lot, more than the 50 percent McAllen, TX allows. Here is what would work:')
   assert.doesNotMatch(r.reply, /free wall/)
   assert.ok(r.fixes.length >= 1, 'at least one button')
-  assert.match(r.fixes[0].label, /^Add a smaller covered patio, \d+ ft by \d+ ft$/)
+  // round 15: on the 58 ft lot no smaller patio keeps the cover under 50%, so the first offer may be the smaller house
+  assert.match(r.fixes[0].label, /^(Add a smaller covered patio, \d+ ft by \d+ ft|Draw a smaller house, about [\d,]+ sf, with a covered patio at the back)$/)
   const done = await tapAll(r, tight, 'patio on the tight lot')
   for (const d of done) assert.ok(room(d.rooms, 'rearPorch'), 'the button adds the patio')
 })
@@ -239,7 +243,8 @@ test('3 (basic rules): on the 100 x 150 lot the kitchen grows; on the tight lot 
 
   const r = await ask('Make the kitchen bigger', tight)
   held(r, 'kitchen on the tight lot')
-  assert.equal(r.reply, 'The kitchen cannot get that much bigger here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge. What does fit is 1 ft longer.')
+  // round 15, U12: one sentence, the most that fits as the button
+  assert.equal(r.reply, 'The kitchen can only grow 1 ft longer here: the primary bedroom would end up too close to the edge of the lot, inside the space the city keeps open along each edge.')
   assert.deepEqual(r.fixes.map((f) => f.label), ['Make the kitchen 1 ft longer'])
   assert.ok(r.reasons.length >= 1, 'the raw reason stays for the drafter log')
   const [d] = await tapAll(r, tight, 'kitchen on the tight lot')
@@ -257,7 +262,7 @@ test('3 (basic rules): a size the rules refuse after it is drawn names the edge 
   assert.equal(lotWords(['Bath 1 has no door.']), null)
   const stuck = await ask('Make the kitchen bigger', small)
   held(stuck, 'kitchen on the compact plan')
-  assert.equal(stuck.reply, 'The kitchen cannot get that much bigger here: the hallway next to it would be left too small. I tried smaller steps down to 1 ft and none fits where it sits. Tell me which room next to it could give up some space.')
+  assert.equal(stuck.reply, 'The kitchen cannot get bigger where it sits: the hallway next to it would be left too small.') // round 15, U12: one sentence
   assert.deepEqual(stuck.fixes, [])
   // a shrink keeps its own words (a minimum is a minimum)
   const tiny = decide({ ops: [{ op: 'resize', room: 'kitchen', w: 6, d: 6 }], reply: '', confidence: 1 }, roomy.rooms, roomy.program, style, kit, 'claude', roomy.lot)
@@ -415,7 +420,7 @@ test('Claude path: the prompt and the schema carry the four requests (count op, 
   // complex" once it had the two fields this round adds (16 optional), and a 14-optional variant took over two
   // minutes to compile on its first call
   const shapes = DIFF_SCHEMA.properties.ops.items.anyOf
-  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count'])
+  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count', 'windows']) // round 15, B6: bigger windows
   for (const s of [...shapes, DIFF_SCHEMA]) {
     assert.deepEqual([...s.required].sort(), Object.keys(s.properties).sort(), 'every field is required')
     assert.equal(s.additionalProperties, false)

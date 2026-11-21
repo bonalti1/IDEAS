@@ -14,6 +14,13 @@ const fmt = (ft) => {
   const i = total - f * 12
   return i ? `${f}'-${i}"` : `${f}'-0"`
 }
+/** A size as the plan view labels it: 11' for a whole foot, 12'-6" otherwise. */
+const fmtShort = (ft) => {
+  const total = Math.round(ft * 12)
+  const f = Math.floor(total / 12)
+  const i = total - f * 12
+  return i ? `${f}'-${i}"` : `${f}'`
+}
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const r1 = (v) => Math.round(v * 10) / 10
 
@@ -83,6 +90,43 @@ function fixtureSymbol(f, x, y, w, h) {
  * @param {object} opts    { title, date, labelFont (default 9), showFixtures (default true) }
  * @returns {{ svg: string, width: number, height: number, labels: Array<{id, x, y, w, h, text}>, dims: number, scaleNote: string }}
  */
+// Round 15, item U9: room labels read at 100% zoom in the plan view (PlanDrawing). The drawing is scaled down to fit the frame, so labels drawn at the
+// sheet's 9 units came out at 5 to 7 px on a 1440 x 900 screen. The labels are drawn at the size that shows as
+// LABEL_PX on the screen at the drawing's fit (the size line 0.85 of it), and a label never goes under MIN_PX: a long
+// name takes two lines first, and a room too small for even that names itself with a leader.
+export const LABEL_PX = 13
+export const MIN_PX = 10
+export const PREFER_PX = 12
+/** The drawing's scale on the screen when it is fitted to a w x h frame (the CSS keeps it within 96%, never above 1:1). */
+export const fitScale = (box, width, height, share = 0.96) => (box && box.w > 0 && box.h > 0 ? Math.min(1, (share * box.w) / width, (share * box.h) / height) : null)
+/** Label sizes in drawing units for a scale: LABEL_PX on the screen (at most 2.4 ft tall on the drawing), never under MIN_PX. */
+export function labelSizes(scale) {
+  if (!scale) return {}
+  const labelFont = Math.max(9, Math.min(LABEL_PX / scale, 29))
+  // a name keeps one line down to PREFER_PX; under that it takes two lines at full size first
+  return { labelFont, labelMin: Math.min(MIN_PX / scale, labelFont * 0.8), labelPrefer: Math.min(PREFER_PX / scale, labelFont), wrap: true }
+}
+/**
+ * The floor plan drawn for a frame of w x h px (the plan view): labels sized for the scale the drawing shows at. The
+ * drawing grows when a few names go below it with a leader, which makes it show a little smaller, so the labels are
+ * sized once more for that. Returns planSVG's answer plus `scale`, the drawing's scale on the screen at 100%.
+ */
+export function planForFrame(design, frame, share = 0.96, opts = {}) {
+  const first = planSVG(design, opts)
+  let scale = fitScale(frame, first.width, first.height, share)
+  if (!scale) return { ...first, scale: null }
+  let plan = planSVG(design, { ...opts, ...labelSizes(scale) })
+  // sized again (twice at most) until the drawing no longer grows under its own labels; a hair of slack so a label
+  // set for the scale is not read a fraction under it
+  for (let i = 0; i < 2; i++) {
+    const shown = fitScale(frame, plan.width, plan.height, share)
+    if (shown >= scale - 1e-6) break
+    scale = shown * 0.99
+    plan = planSVG(design, { ...opts, ...labelSizes(scale) })
+  }
+  return { ...plan, scale: fitScale(frame, plan.width, plan.height, share) }
+}
+
 /** A font size at which `text` fits `avail` units wide (no smaller than `min`); k is the mean glyph width as a share of the size. */
 export function fitFont(text, size, avail, min = size * 0.6, k = 0.6) {
   const need = Math.max(1, String(text).length) * k
@@ -138,7 +182,7 @@ export function planSVG(design, opts = {}) {
   const X = (ft) => (ft - minX + M) * IN
   const Y = (ft) => (ft - minZ + M + TOP) * IN
   const width = (maxX - minX + 2 * M) * IN
-  const height = (maxZ - minZ + 2 * M + TOP) * IN
+  let height = (maxZ - minZ + 2 * M + TOP) * IN
   const out = []
   const font = 'font-family="LiberationSans, Helvetica, Arial, sans-serif"'
 
@@ -270,6 +314,10 @@ export function planSVG(design, opts = {}) {
   // (the centre first, then outward), shrunk when the room is tight, a leader when nothing fits ──
   const labels = []
   const baseFont = opts.labelFont || 9
+  // round 15, item U9: the plan view asks for labels at a size that reads on the screen (labelFont, labelMin in drawing
+  // units for its scale) and lets a long name take two lines (wrap); the sheets keep the drafting sizes
+  const minFont = Math.min(opts.labelMin || 6, baseFont)
+  const wrap = !!opts.wrap
   const textW = (s, size) => s.length * size * 0.6
   const placed = []
   const fixBoxes = fixtures.map((f) => ({ room: f.room, x: X(f.x - f.w / 2), y: Y(f.z - f.d / 2), w: f.w * IN, h: f.d * IN }))
@@ -278,8 +326,11 @@ export function planSVG(design, opts = {}) {
     .sort((a, b) => b.w * b.d - a.w * a.d)
     .forEach((r) => {
       const name = r.name.toUpperCase()
-      const size = `${fmt(r.w)} × ${fmt(r.d)}`
-      const inner = { x: X(r.x - r.w / 2) + 4, y: Y(r.z - r.d / 2) + 4, w: r.w * IN - 8, h: r.d * IN - 8 }
+      // (in the plan view a whole foot reads 11' rather than 11'-0")
+      const size = wrap ? `${fmtShort(r.w)} × ${fmtShort(r.d)}` : `${fmt(r.w)} × ${fmt(r.d)}`
+      // (in the plan view a label keeps clear of the walls by a little more, so two rooms' names never run together across one)
+      const pad = wrap ? 7 : 4
+      const inner = { x: X(r.x - r.w / 2) + pad, y: Y(r.z - r.d / 2) + pad, w: r.w * IN - 2 * pad, h: r.d * IN - 2 * pad }
       const mine = fixBoxes.filter((b) => b.room === r.id)
       const clearAt = (box) => box.x >= inner.x - 0.01 && box.y >= inner.y - 0.01 && box.x + box.w <= inner.x + inner.w + 0.01 && box.y + box.h <= inner.y + inner.h + 0.01 && !mine.some((b) => overlapBox(b, box)) && !placed.some((p) => overlapBox(p.box, box))
       const cx = X(r.x)
@@ -312,44 +363,80 @@ export function planSVG(design, opts = {}) {
       }
       let f = baseFont
       let lines = [name, size]
+      let nameLines = 1
       let box = null
       let w = 0
       let h = 0
-      for (let size2 = baseFont; size2 >= 6 && !box; size2 -= 0.5) {
-        f = size2
-        w = Math.max(textW(name, f), textW(size, f * 0.85))
-        h = f * 2.3
-        box = spotFor(w, h)
-      }
-      if (!box) {
-        lines = [name]
-        for (let size2 = baseFont - 1; size2 >= 5 && !box; size2 -= 0.5) {
+      // a long name on two lines ("PRIMARY / BEDROOM"), split at the space nearest its middle
+      const words = name.split(' ')
+      const cut = words.length > 1 ? words.map((_, i) => i).slice(1).sort((a, b) => Math.abs(words.slice(0, a).join(' ').length - name.length / 2) - Math.abs(words.slice(0, b).join(' ').length - name.length / 2))[0] : 0
+      // (never "BEDROOM / 2": each line keeps at least 3 letters)
+      const twoLines = cut && words.slice(0, cut).join(' ').length >= 3 && words.slice(cut).join(' ').length >= 3 ? [words.slice(0, cut).join(' '), words.slice(cut).join(' ')] : null
+      let rot = false
+      const tryLines = (names, withSize, from, to, turned = false) => {
+        for (let size2 = from; size2 >= to && !box; size2 -= 0.5) {
           f = size2
-          w = textW(name, f)
-          h = f * 1.2
-          box = spotFor(w, h)
+          w = Math.max(...names.map((n) => textW(n, f)), withSize ? textW(size, f * 0.85) : 0)
+          h = f * (1.2 + (names.length - 1) * 1.1) + (withSize ? f * 1.1 : 0)
+          // a turned label reads up the room: its box on the drawing is h wide and w tall
+          box = turned ? spotFor(h, w) : spotFor(w, h)
+          if (box) {
+            lines = withSize ? [...names, size] : [...names]
+            nameLines = names.length
+            rot = turned
+          }
         }
+      }
+      // a room much taller than it is wide (a hall, a gallery, a closet along a wall) may carry its label turned
+      const tall = wrap && r.d > r.w * 1.6
+      if (wrap) {
+        tryLines([name], true, baseFont, Math.max(minFont, opts.labelPrefer || baseFont * 0.85))
+        if (!box && twoLines) tryLines(twoLines, true, baseFont, minFont)
+        if (!box) tryLines([name], true, baseFont, minFont)
+        if (!box && tall) tryLines([name], true, baseFont, minFont, true)
+        if (!box) tryLines([name], false, baseFont, minFont)
+        if (!box && twoLines) tryLines(twoLines, false, baseFont, minFont)
+        if (!box && tall) tryLines([name], false, baseFont, minFont, true)
+        // a small room crowded with fixtures: its name turned, on one line or two, before a leader
+        if (!box && !tall) tryLines([name], false, baseFont, minFont, true)
+        if (!box && twoLines) tryLines(twoLines, false, baseFont, minFont, true)
+      } else {
+        tryLines([name], true, baseFont, minFont)
+        if (!box) tryLines([name], false, baseFont - 1, Math.min(5, minFont))
       }
       let leader = null
       if (!box) {
         // nothing fits inside: the name outside the house with a leader, below the plan
-        f = 6
+        lines = [name]
+        nameLines = 1
+        f = wrap ? minFont : 6
         w = textW(name, f)
         h = f * 1.2
         const lx = cx
-        const ly = Y(maxZ) + 30 + placed.filter((p) => p.leader).length * 12
+        // (in the plan view the names sit below the dimension strings and the scale, a line each, and the drawing grows
+        // to hold them; on the sheets they stay where they were)
+        const ly = wrap ? Y(maxZ) + 7 * IN + h / 2 + placed.filter((p) => p.leader).length * (h + 4) : Y(maxZ) + 30 + placed.filter((p) => p.leader).length * 12
         box = { x: lx - w / 2, y: ly - h / 2, w, h }
         for (let tries = 0; tries < 40 && placed.some((p) => overlapBox(p.box, box)); tries++) box = { ...box, y: box.y + 3 }
         leader = [cx, cy, lx, box.y]
+        if (wrap) height = Math.max(height, box.y + box.h + IN)
       }
-      placed.push({ r, box, f, lines, leader, room: { x: inner.x - 4, y: inner.y - 4, w: inner.w + 8, h: inner.h + 8 } })
+      placed.push({ r, box, f, lines, nameLines, leader, rot: !leader && rot, room: { x: inner.x - pad, y: inner.y - pad, w: inner.w + 2 * pad, h: inner.h + 2 * pad } })
     })
-  placed.forEach(({ r, box, f, lines, leader, room }) => {
+  placed.forEach(({ r, box, f, lines, nameLines, leader, rot, room }) => {
     const cx = box.x + box.w / 2
-    const y0 = box.y + f
-    labels.push({ id: r.id, x: box.x, y: box.y, w: box.w, h: box.h, text: lines.join(' '), leader: !!leader, room })
+    const cyBox = box.y + box.h / 2
+    // a turned label is set out level about the box's centre, then turned a quarter about it
+    const y0 = rot ? cyBox - box.w / 2 + f : box.y + f
+    labels.push({ id: r.id, x: box.x, y: box.y, w: box.w, h: box.h, text: lines.join(' '), leader: !!leader, room, font: f, nameLines, turned: !!rot })
     if (leader) out.push(`<line class="leader" x1="${r1(leader[0])}" y1="${r1(leader[1])}" x2="${r1(leader[2])}" y2="${r1(leader[3])}" stroke="#555" stroke-width="0.6"/>`)
-    out.push(`<text class="label" data-id="${esc(r.id)}" x="${r1(cx)}" y="${r1(y0)}" text-anchor="middle" ${font} fill="#1a1a1a"><tspan font-size="${f}" font-weight="700" letter-spacing="0.06em">${esc(lines[0])}</tspan>${lines[1] ? `<tspan x="${r1(cx)}" dy="${r1(f * 1.1)}" font-size="${r1(f * 0.85)}">${esc(lines[1])}</tspan>` : ''}</text>`)
+    // the name (one line, or two), bold; the size under it a little smaller
+    const spans = lines.map((line, i) => {
+      const isName = i < nameLines
+      const at = i === 0 ? '' : ` x="${r1(cx)}" dy="${r1(f * 1.1)}"`
+      return isName ? `<tspan${at} font-size="${f}" font-weight="700" letter-spacing="0.06em">${esc(line)}</tspan>` : `<tspan${at} font-size="${r1(f * 0.85)}" class="size">${esc(line)}</tspan>`
+    })
+    out.push(`<text class="label" data-id="${esc(r.id)}" x="${r1(cx)}" y="${r1(y0)}" text-anchor="middle" ${font} fill="#1a1a1a"${rot ? ` transform="rotate(-90 ${r1(cx)} ${r1(cyBox)})"` : ''}>${spans.join('')}</text>`)
   })
 
   // ── exterior dimension strings: room breaks on each side, then the overall ──

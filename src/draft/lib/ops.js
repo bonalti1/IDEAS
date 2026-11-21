@@ -8,7 +8,9 @@ import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 import { isSpanish, fromSpanish, isUndoEs, COST_REPLY_ES } from './es.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count', 'windows']
+// the rooms whose windows "bigger windows" widens (round 15, B6)
+const WINDOW_ROOMS = ['living', 'dining', 'kitchen', 'master', 'bed', 'office', 'suite2']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -44,7 +46,8 @@ export function normalizeOps(ops, rooms) {
       if (o.op === 'count') {
         const kind = /bath/i.test(String(o.kind || '')) ? 'bath' : /bed|master|primary|suite/i.test(String(o.kind || '')) ? 'bed' : o.kind
         const count = Number.isFinite(+o.count) && o.count !== null && o.count !== '' ? Math.round(+o.count) : o.count
-        return { op: 'count', kind, count }
+        // "2.5 baths" (round 15, U3): two full baths and a half bath
+        return { op: 'count', kind, count, ...(kind === 'bath' && o.half ? { half: 1 } : {}) }
       }
       // a garage op without a bay count keeps the garage's bays ("make the garage side-load")
       if (o.op === 'garage' && !(o.cars >= 1)) {
@@ -70,8 +73,8 @@ export function validateOps(ops, rooms, kit) {
     if (!o || typeof o !== 'object') return errors.push('That change did not come through whole.')
     if (unsafe(o)) return errors.push('That change is not valid.')
     if (!OPS.includes(o.op)) return errors.push(`I do not know how to "${String(o.op ?? '')}" a room.`)
-    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
-    if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12)) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && o.op !== 'windows' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
+    if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12 && (o.half === undefined || (o.kind === 'bath' && o.half === 1)))) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
     if (o.op === 'scale' && !(typeof o.sqft === 'number' && o.sqft >= 600 && o.sqft <= 10000)) errors.push('Give a size between 600 and 10,000 sf.')
     if (o.op === 'swap' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to swap with.`)
     if (o.op === 'resize' && !(o.w > 0 && o.d > 0)) errors.push('A resize needs a width and a depth in feet.')
@@ -740,6 +743,35 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       const made = moveBeside(flat, kit, r.id, t.id)
       if (!made) throw new Error(`there is no sound spot for the ${r.name.toLowerCase()} against the ${t.name.toLowerCase()}${['garage', 'bed', 'master', 'suite2', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic'].includes(t.kind) ? `: it would only open into the ${t.name.toLowerCase()}, and it needs a door from the house` : ''}`)
       did.push(`Moved ${r.name.toLowerCase()} next to the ${t.name.toLowerCase()}`)
+    } else if (o.op === 'windows') {
+      // round 15, B6: "bigger windows": the windows of the rooms people live in grow wider in place, each centred
+      // where it is, as far as its wall allows (a foot clear of each corner and of any other door or window)
+      const grow = Math.min(3, Math.max(0.5, Number(o.grow) || 2))
+      const openings = flat.filter((e) => e.element && (e.kind === 'window' || e.kind === 'door'))
+      const grown = new Set()
+      let count = 0
+      for (const win of flat.filter((e) => e.element && e.kind === 'window' && WINDOW_ROOMS.includes(rs[e.room]?.kind))) {
+        const r = rs[win.room]
+        const h = win.axis === 'h'
+        const span = h ? win.w : win.d
+        const start = h ? win.x : win.y
+        const [lo, hi] = h ? [r.x + 1, r.x + r.w - 1] : [r.y + 1, r.y + r.d - 1]
+        const line = h ? win.y : win.x
+        // the other openings on the same wall: what this one may not run into
+        const others = openings.filter((e) => e !== win && e.axis === win.axis && Math.abs((h ? e.y : e.x) - line) < 0.75).map((e) => (h ? [e.x - 0.5, e.x + e.w + 0.5] : [e.y - 0.5, e.y + e.d + 0.5]))
+        for (const by of [grow, grow / 2]) {
+          const a = q(start - by / 2)
+          const b = q(start + span + by / 2)
+          if (a < lo - 0.01 || b > hi + 0.01 || others.some(([x0, x1]) => a < x1 && b > x0)) continue
+          if (h) Object.assign(win, { x: a, w: b - a, span: b - a })
+          else Object.assign(win, { y: a, d: b - a, span: b - a })
+          count++
+          grown.add(r.name.toLowerCase().replace(/^(living|dining)$/, '$1 room'))
+          break
+        }
+      }
+      if (!count) throw new Error('there is no wall room on this plan to make the windows wider')
+      did.push(`Made ${count} window${count === 1 ? '' : 's'} wider (${[...grown].join(', ')})`)
     } else if (o.op === 'add') {
       const t = kit.rooms[o.kind]
       const n = flat.filter((r) => r.kind === o.kind).length + 1
@@ -860,7 +892,7 @@ export function splitClauses(text) {
   const t = String(text || '')
   if (/\b(swap|switch|exchange|trade)\b/i.test(t)) return [t.trim()].filter(Boolean)
   return t
-    .split(/\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b|\bplus\b)\s*/i)
+    .split(/\s*(?:;|,(?!\d{3}\b)(?=\s*[A-Za-z])|\band then\b|\bthen\b|\band also\b|\balso\b|\band\b(?!\s+(?:a\s+)?half\b)|\bplus\b)\s*/i)
     .map((c) => c.trim())
     .filter((c) => c.length >= 2)
 }
@@ -877,7 +909,8 @@ export const isCostQuestion = (text) => COST_RE.test(String(text || ''))
 export const costReply = (q) => (typeof q === 'object' ? q?.spanish : SPANISH_RE.test(String(q || ''))) ? COST_REPLY_ES : COST_REPLY
 
 // ── typed undo, a request nobody can read, two wishes that pull against each other (round 13) ──────────────
-const UNDO_EN = /^\s*(?:please,? )?(?:undo(?: that| it| this| the last(?: change| one)?| my last change| the change)?|go back(?: one| a step| a version| to (?:how|the way) it was(?: before)?| to (?:the )?(?:previous|last|earlier) (?:version|one))?|put it back(?: (?:how|the way) it was)?|take (?:that|it) back|revert(?: that| it)?|change it back|(?:back )?to how it was(?: before)?)(?:,? please)?\s*[.!]?\s*$/i
+// round 15, P2: a question ("can you undo that?") or a please before or after, and the keyboard's "ctrl z"
+const UNDO_EN = /^\s*(?:(?:ok|okay|hey|oops|actually|no),? )?(?:please,? )?(?:(?:can|could|would|will) you(?: please)?,? |(?:can|could) we |i want to |i'd like to |let's |lets |just )?(?:please,? )?(?:undo(?: that| it| this| the last(?: change| one)?| my last change| the change| what you just did)?|go back(?: one| a step| a version| to (?:how|the way) it was(?: before)?| to (?:the )?(?:previous|last|earlier) (?:version|one))?|put it back(?: (?:how|the way) it was)?|take (?:that|it) back|revert(?: that| it)?|change it back|(?:back )?to how it was(?: before)?|(?:ctrl|control|cmd|command)\s*[-+ ]?\s*z)(?:,? please)?\s*[.!?]*\s*$/i
 /**
  * "undo", "undo that", "go back", "go back to how it was", "put it back", "deshaz eso", "regresa como estaba",
  * "quita el último cambio": the last change comes off and comes back to the plan, the way the Undo button does it.
@@ -955,9 +988,11 @@ export function countAsk(text) {
   t = t.toLowerCase()
   if (/\b(add|another|extra|more|fewer|less|put in|remove|delete|drop|get rid of|without|take out|bigger|larger|wider|deeper|longer|smaller|narrower|shorter|tighter|expand|enlarge|shrink|reduce|move|shift|swap|switch|next to|beside|closet|window|door)\b/.test(t)) return []
   if (/\d\s*(?:k\b)?\s*(?:sq\.? ?ft\.?|square feet|square foot|sf\b|sqft)/.test(t)) return []
-  // "2.5 baths" is a bath and a half bath, not a count this reads (and never "5 baths")
-  if (/\d[.,]\d+[\s-]*(?:full[\s-]+)?(?:bed|bath)/.test(t)) return []
-  const out = []
+  // round 15, U3: "2.5 baths", "two and a half baths", "2 1/2 bathrooms" are that many full baths and a half bath
+  const halves = halfBathCounts(t)
+  if (halves === null) return []
+  t = halves.rest
+  const out = [...halves.found]
   for (const m of t.matchAll(COUNT_RE)) {
     const kind = m[2].startsWith('bed') ? 'bed' : 'bath'
     const count = WORDS[m[1]] || +m[1]
@@ -968,6 +1003,30 @@ export function countAsk(text) {
     if (!had) out.push({ kind, count })
   }
   return out
+}
+
+const HALF_N = String.raw`(\d{1,2}|one|two|three|four|five|six)`
+const HALF_RE = [
+  // "2.5 baths", "2,5 baños", "2½ baths", "2 1/2 bathrooms", "two and a half baths", "2 and a half full baths"
+  new RegExp(String.raw`(?<![\d.,$#-])\b${HALF_N}\s*(?:[.,]5|½|\s1\/2|\s+and\s+(?:a\s+)?half)[\s-]*(?:full[\s-]+)?bath(?:room)?s?\b`, 'g'),
+  // "2 baths and a half", "two bathrooms and a half"
+  new RegExp(String.raw`(?<![\d.,$#-])\b${HALF_N}[\s-]*(?:full[\s-]+)?bath(?:room)?s?\s+and\s+(?:a\s+)?half\b(?!\s*bath)`, 'g'),
+]
+/**
+ * The bathroom counts with a half in them: { found: [{ kind: 'bath', count: full baths, half: 1 }], rest: the text
+ * with them taken out }, or null for a half that is not a count this reads ("3.7 baths").
+ */
+function halfBathCounts(t) {
+  const found = []
+  let rest = t
+  for (const re of HALF_RE)
+    rest = rest.replace(re, (m, n) => {
+      found.push({ kind: 'bath', count: WORDS[n] || +n, half: 1 })
+      return ' '
+    })
+  if (found.length > 1 && found.some((f) => f.count !== found[0].count)) return null
+  if (/\d[.,]\d+[\s-]*(?:full[\s-]+)?(?:bed|bath)/.test(rest)) return null // any other fraction is never read as a count
+  return { found: found.slice(0, 1), rest }
 }
 
 const OPEN_STRICT = /\bmore open\b|\bopen[- ]?(?:concept|plan|layout|floor ?plan)\b|\bopen(?:s|ed|ing)? (?:it|things|everything|the (?:house|home|plan|place|space|layout|floor ?plan|rooms?)) up\b|\bopen(?:s|ed|ing)? up\b|\bopen (?:the |up the )?[a-z &]{2,30}? (?:to|into|onto|with) the\b|\b(?:less|not so|too|so|feels?|feeling) (?:closed|boxy|boxed|chopped|cramped|shut)(?:[- ](?:in|up|off))?\b|\bclosed[- ](?:in|off)\b|\bair(?:y|ier)\b|\b(?:taller|higher|raised?|vaulted|cathedral)\b[a-z ]{0,12}\bceilings?\b|\bceilings?\b[a-z ]{0,12}\b(?:taller|higher|raised)\b|\b(?:remove|removing|take (?:out|down)|taking (?:out|down)|knock (?:out|down)|tear (?:out|down)|lose|get rid of|without|fewer|no) (?:a |an |the |that |those |some |any )?(?:[a-z&]+ ){0,3}?walls?\b/
@@ -1042,11 +1101,14 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   // "I want 4 bedrooms", "make it 3 bathrooms": the house is set to that many (rooms added, or a new draft)
   const counts = countAsk(t)
   if (counts.length) {
-    const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}`
-    return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
+    const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}${c.half ? ' and a half bath' : ''}`
+    return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count, ...(c.half ? { half: 1 } : {}) })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
   }
-  const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
-  const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
+  // "bigger windows", "ventanas más grandes" (round 15, B6): the windows of the rooms people live in, wider in place
+  if (/\b(?:windows|ventanas)\b/.test(t) && /\b(?:bigger|larger|wider|more light|grandes|anchas|amplias)\b/.test(t) && !/\b(?:smaller|fewer|remove|chicas|quita)\b/.test(t)) return { ops: [{ op: 'windows', grow: 2 }], reply: 'Making the windows wider.', confidence: 0.75 }
+  // round 15: "1 ft longer" (the words on our own buttons) grows; "shorter" and "narrower" shrink one way
+  const grow = /\b(bigger|larger|wider|deeper|longer|more room|expand|increase|enlarge)\b/.test(t)
+  const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower|shorter|shallower)\b/.test(t)
   const add = /\b(add|another|extra|one more|put in)\b|\b(?:\d+|two|three|four|five|six) more (?:bed|bath|office|room)/.test(t) // "2 more bedrooms" adds two; "2 more feet" does not
   const remove = /\b(remove|delete|drop|get rid of|without|take out|no longer)\b/.test(t)
   const much = /\b(much|a lot|way|double)\b/.test(t) ? 1.3 : 1.15
@@ -1191,11 +1253,11 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   }
   if (grow || shrink) {
     const f = grow ? much : 1 / much
-    const wider = /\bwider\b/.test(t)
-    const deeper = /\bdeeper|longer\b/.test(t)
+    const wider = /\b(wider|narrower)\b/.test(t)
+    const deeper = /\b(deeper|longer|shorter|shallower)\b/.test(t)
     const sign = grow ? 1 : -1
     const ops = targets.map((r) => ({ op: 'resize', room: r.id, w: by && wider ? r.w + sign * by : deeper ? r.w : by && !deeper ? r.w + sign * by : q(r.w * f), d: by && deeper ? r.d + sign * by : wider ? r.d : by ? r.d + sign * by : q(r.d * f), ...(by || wider || deeper ? {} : { soft: true }) }))
-    const how = by ? `${by} feet ${wider ? 'wider' : deeper ? 'deeper' : grow ? 'bigger each way' : 'smaller each way'}` : `about ${Math.round(Math.abs(f - 1) * 100)} percent ${grow ? 'bigger' : 'smaller'}`
+    const how = by ? `${by} ${by === 1 ? 'foot' : 'feet'} ${wider ? (grow ? 'wider' : 'narrower') : deeper ? (grow ? 'deeper' : 'shorter') : grow ? 'bigger each way' : 'smaller each way'}` : `about ${Math.round(Math.abs(f - 1) * 100)} percent ${grow ? 'bigger' : 'smaller'}`
     return { ops, reply: `${grow ? 'Making' : 'Making'} the ${last.name.toLowerCase()} ${how}.`, confidence: 0.7 }
   }
   return { ops: [], reply: 'Tell me what to do with that room: bigger, smaller, add one, or remove it.', confidence: 0.3 }

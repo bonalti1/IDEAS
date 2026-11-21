@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Stepper, Stat } from '../ui.jsx'
-import { kitFor, lotOf, programLimits } from '../lib/layout.js'
+import { kitFor, lotOf, programLimits, DEFAULT_PROGRAM } from '../lib/layout.js'
 import { fitsLot, startFrom } from '../lib/fit.js'
 import { turnLot, insideRect } from '../lib/lot.js'
 import { plainReason } from '../lib/plain.js'
 import { floorArea } from '../lib/layout.js'
 import { useLang, phrase } from '../lib/i18n.js'
+import { buildCouldFit, recentBuildOffer, lotIsTight, sameRooms } from '../lib/rooms-offer.js'
 
 const EXTRAS = [
   ['office', phrase('Office')],
@@ -53,24 +54,47 @@ const checkInWorker = (program, style, lot) =>
 /**
  * The fit check for the rooms step, run in a worker so the screen keeps painting: { check, checking }.
  * The last answer stays on screen while the next one is drawn; with no worker the check runs inline.
+ * No program (null): nothing is checked.
  */
 function useFitCheck(program, style, L) {
-  const [state, setState] = useState({ check: null, checking: true })
+  const [state, setState] = useState({ check: null, checking: !!program, of: null })
   const latest = useRef(0)
   useEffect(() => {
     const n = ++latest.current
     let alive = true
+    if (!program) {
+      setState({ check: null, checking: false, of: null })
+      return
+    }
     setState((s) => ({ ...s, checking: true }))
     checkInWorker(program, style, L)
       .catch(() => fitsLot(program, style, L))
       .then((check) => {
-        if (alive && latest.current === n) setState({ check, checking: false })
+        if (alive && latest.current === n) setState({ check, checking: false, of: program })
       })
     return () => {
       alive = false
     }
   }, [program, style, L])
-  return state
+  // round 15 (U10): an answer is for the rooms it was asked about. In the paint between new rooms and their check
+  // starting, the last answer (for the rooms just replaced) is still "checking", so its "does not fit" never flashes red
+  return { check: state.check, checking: state.checking || (!!program && state.of !== program) }
+}
+
+/**
+ * Round 15 (U10): the checks the rooms step will ask for, started as soon as the lot is taken, so the rooms that fit
+ * are ready when the homeowner gets there (the worker keeps each answer). Nothing is shown; a failure is ignored.
+ */
+export function prefetchFit(lot, style) {
+  try {
+    if (!lot?.envelope) return
+    const L = turnLot(lotOf(lot), 0)
+    checkInWorker(DEFAULT_PROGRAM, style, L).catch(() => {})
+    const ref = kitFor(style).reference
+    if (ref && buildCouldFit(ref, L)) checkInWorker({ ...ref.program }, style, L).catch(() => {})
+  } catch {
+    /* the rooms step checks on its own */
+  }
 }
 
 /**
@@ -119,6 +143,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
       setSendState(say(e.message) || t('We could not reach the office. Try again in a minute.'))
     }
   }
+  const sent = sendState === 'sent'
   const kit = kitFor(style)
   const limits = programLimits(style)
   const footprint = program.sqft / program.stories + (program.garage ? 22 * kit.rooms.garage.perCar * program.garage : 0)
@@ -126,14 +151,22 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
   const fit = footprint / maxFootprint
   const set = (k) => (v) => onChange({ ...program, [k]: v })
   const toggle = (k) => () => onChange({ ...program, [k]: !program[k] })
-  const ref = kit.reference
-  const matchesRef = !!ref && ['beds', 'baths', 'halfBath', 'suite2', 'office', 'garage', 'stories', 'sqft', 'frontPorch', 'rearPorch'].every((k) => (program[k] ?? false) === (ref.program[k] ?? false))
   // the real check: the first draft is drafted and run through the rules on this lot, in a worker (round 8: the
   // narrow lot's check took seconds and froze every tap); until the first answer the meter says it is checking
   const { check: checked, checking } = useFitCheck(program, style, L)
   const check = checked || { ok: false, checking: true, reasons: [], draft: { minSqft: 0, clamped: false, fitScale: 1, rooms: [] }, maxSqft: null, suggestion: null, need: null }
-  // the sample card shows what its draft comes out to, not the sheet's number
-  const sample = useMemo(() => (ref ? fitsLot({ ...ref.program }, style, L) : null), [ref, style, L])
+  // round 15 (U16): whether the lot is tight for our ready plans is the lot's answer, from our default rooms on it,
+  // not whatever rooms are on screen (a Kerria start trimmed to the narrow plan's 4 bed, 2 bath was called "tight")
+  const { check: lotCheck } = useFitCheck(DEFAULT_PROGRAM, style, L)
+  const tight = !!lotCheck && lotIsTight(lotCheck)
+  // round 15 (U5): the recent build is offered only where its house fits the lot. Its footprint is measured first
+  // (Kiskadee's largest house is about 37 by 43 ft: no card, no draft); then its rooms are checked in the worker
+  // (it was drafted here on the main thread, which froze a wedge lot's rooms step for seconds)
+  const ref = kit.reference
+  const refProgram = useMemo(() => (ref && buildCouldFit(ref, L) ? { ...ref.program } : null), [ref, L])
+  const { check: refCheck, checking: refChecking } = useFitCheck(refProgram, style, L)
+  const offer = refProgram && !refChecking ? recentBuildOffer(ref, refCheck) : null
+  const matchesRef = !!offer && sameRooms(program, offer.program)
   // round 12, item E: the rooms nobody has chosen yet start at what fits this lot. Until the homeowner changes
   // something, a default that does not fit is replaced by the fit's own answer, and never shown as "does not fit".
   const startWith = pristine && checked && !checking ? startFrom(checked, program) : null
@@ -145,13 +178,58 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
   const trimmed = check.ok && check.draft.fitScale < 0.995 ? Math.round((1 - check.draft.fitScale) * 100) : 0
   const oneStory = limits.stories[1] === 1
   const room = useMemo(() => insideRect(L), [L])
+  // round 15 (U10): the size bar is neutral until there is a real problem: red only once the check of the rooms on
+  // screen has answered that they do not fit (never while the rooms that fit are being found)
+  const realProblem = !check.ok && !checking && !settling && !!checked
+  const sentCard = (
+    <>
+      <h3>{t('Your lot is with our drafter')}</h3>
+      <p className="small">{t('We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest.')}</p>
+    </>
+  )
 
   return (
-    <div className="screen padded narrow">
+    <div className="screen padded narrow rooms-step">
       <div className="screen-head">
         <h2>{t('What goes in the house?')}</h2>
         <p className="muted">{t('{style}. Change anything later in plain language.', { style: t(style.name) })}</p>
       </div>
+      {/* round 12, item A: never a dead end. When none of our plans fits the lot, the lot goes to a drafter with the
+          rooms asked for. Round 15 (U1): this card, and the tight-lot one, are the first thing on the step */}
+      {!check.ok && !checking && check.deadEnd && (
+        <div className="card thin custom-lot" data-testid="custom-lot">
+          {sent ? (
+            sentCard
+          ) : (
+            <>
+              <h3>{t('This lot needs a house designed for it')}</h3>
+              <p className="small">{t('None of our ready plans fits the space you can build on here. That happens on narrow, shallow and pie-shaped lots. Send it to our drafter, who designs for this lot with the rooms you choose on this page.')}</p>
+              <Button primary disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot">
+                {sendState === 'sending' ? t('Sending…') : t('Send my lot to the drafter')}
+              </Button>
+              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
+            </>
+          )}
+        </div>
+      )}
+      {/* round 13: a lot our plans fit only just offers the drafter, as a button a homeowner can see. Round 15: only
+          when the lot really is tight (U16), at the top of the step where the first screen shows it (U1, U17) */}
+      {!(check.deadEnd && !check.ok && !checking) && (tight || (sent && !check.deadEnd)) && (
+        <div className="card thin custom-lot tight" data-testid="tight-lot">
+          {sent ? (
+            sentCard
+          ) : (
+            <>
+              <h3>{t('A tight lot for our ready plans')}</h3>
+              <p className="small">{t('You can go on with what fits here, or have our drafter design a house for this lot with the rooms you want.')}</p>
+              <Button primary disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot-tight">
+                {sendState === 'sending' ? t('Sending…') : t('Send my lot to the drafter')}
+              </Button>
+              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
+            </>
+          )}
+        </div>
+      )}
       {lot?.spec && lot.spec.kind !== 'reference' && (
         <div className="lot-strip" data-testid="lot-strip">
           <LotThumb lot={lot} />
@@ -163,18 +241,20 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
           </div>
         </div>
       )}
-      {ref && (
-        <button className={'preset' + (matchesRef ? ' on' : '')} onClick={() => onChange({ ...ref.program })} aria-pressed={matchesRef}>
+      {offer && (
+        <button className={'preset' + (matchesRef ? ' on' : '')} onClick={() => onChange({ ...offer.program })} aria-pressed={matchesRef} data-testid="recent-build">
           <span>{matchesRef ? t('Rooms set to a recent build') : t('Use the rooms of a recent build')}</span>
           <b>{t(ref.name)}</b>
           <small>
-            {[t('{n} bed', { n: ref.program.beds }), t('{n} bath', { n: `${ref.program.baths}${ref.program.halfBath ? '.5' : ''}` }), ref.program.suite2 ? t('mini primary') : null, ref.program.office ? t('office') : null, ref.program.garage ? t('{n}-car garage', { n: ref.program.garage }) : t('no garage'), ref.program.frontPorch && ref.program.rearPorch ? t('front and rear porches') : ref.program.frontPorch ? t('front porch') : ref.program.rearPorch ? t('rear porch') : null, ref.program.stories === 2 ? t('two story') : t('one story')].filter(Boolean).join(' · ')}
-            {sample?.ok && sample.draft?.rooms?.length ? ` · ${sf(floorArea(sample.draft.rooms, ref.program.stories || 1))}` : ` · ${sf(ref.livingSf)}`}
-            {matchesRef ? ` · ${t('this is what you will get')}` : ` · ${t('tap to set the rooms below to this; the rooms below are what you will get')}`}
+            {[t('{n} bed', { n: offer.program.beds }), t('{n} bath', { n: `${offer.program.baths}${offer.program.halfBath ? '.5' : ''}` }), offer.program.suite2 ? t('mini primary') : null, offer.program.office ? t('office') : null, offer.program.garage ? t('{n}-car garage', { n: offer.program.garage }) : t('no garage'), offer.program.frontPorch && offer.program.rearPorch ? t('front and rear porches') : offer.program.frontPorch ? t('front porch') : offer.program.rearPorch ? t('rear porch') : null, offer.program.stories === 2 ? t('two story') : t('one story')].filter(Boolean).join(' · ')}
+            {refCheck?.ok && refCheck.draft?.rooms?.length ? ` · ${sf(floorArea(refCheck.draft.rooms, offer.program.stories || 1))}` : ` · ${sf(offer.program.sqft)}`}
           </small>
+          {offer.without && <small className="fitted">{t('Fitted to your lot: {how}.', { how: say(offer.without) })}</small>}
+          <small>{matchesRef ? t('this is what you will get') : t('tap to set the rooms below to this; the rooms below are what you will get')}</small>
         </button>
       )}
-      <div className="card">
+      <div className={'card' + (settling ? ' settling' : '')} aria-busy={settling}>
+        {settling && <p className="muted fit-note settling-note">{t('Fitting the rooms to your lot…')}</p>}
         <Stepper label={t('Bedrooms')} value={program.beds} min={limits.beds[0]} max={limits.beds[1]} onChange={set('beds')} />
         <Stepper label={t('Full bathrooms')} value={program.baths} min={limits.baths[0]} max={limits.baths[1]} onChange={set('baths')} />
         <Stepper label={t('Garage')} value={program.garage} min={limits.garage[0]} max={limits.garage[1]} suffix={t('{n|-car|-car}', { n: program.garage })} onChange={set('garage')} />
@@ -193,7 +273,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
             <span className="stepper-val">{sf(program.sqft)}</span>
           </div>
         </div>
-        {check.draft.clamped && (
+        {check.draft.clamped && !settling && (
           <p className="fine warn">
             {t('With these rooms the plan does not go under {size}; that is what we will draft.', { size: sf(minSqft) })}{' '}
             <button className="linkish" onClick={() => set('sqft')(minSqft)}>
@@ -215,7 +295,7 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
       <div className="card stats">
         <Stat k={t('Footprint on lot')} v={sf(footprint)} />
         <div className="meter" aria-label={t('Lot fit')}>
-          <div className={'meter-fill' + (!check.ok ? ' over' : fit > 0.85 || trimmed ? ' tight' : '')} style={{ width: Math.min(100, fit * 100) + '%' }} />
+          <div className={'meter-fill' + (realProblem ? ' over' : '')} style={{ width: Math.min(100, fit * 100) + '%' }} />
         </div>
         {/* the last clause: right after we started the homeowner with what fits, the answer still on hand is the one for
             the rooms we replaced; its "does not fit, try that" must not flash while the new rooms are checked */}
@@ -258,54 +338,16 @@ export default function Program({ program, style, lot, onChange, onNext, onBack,
           </p>
         )}
       </div>
-      {/* round 12, item A: never a dead end. When none of our plans fits the lot, the lot goes to a drafter with the rooms asked for */}
-      {!check.ok && !checking && check.deadEnd && (
-        <div className="card thin custom-lot" data-testid="custom-lot">
-          {sendState === 'sent' ? (
-            <>
-              <h3>{t('Your lot is with our drafter')}</h3>
-              <p className="small">{t('We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest.')}</p>
-            </>
-          ) : (
-            <>
-              <h3>{t('This lot needs a house designed for it')}</h3>
-              <p className="small">{t('None of our ready plans fits the space you can build on here. That happens on narrow, shallow and pie-shaped lots. Send it to our drafter, who designs for this lot with the rooms you chose above.')}</p>
-              <Button primary disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot">
-                {sendState === 'sending' ? t('Sending…') : t('Send my lot to the drafter')}
-              </Button>
-              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
-            </>
-          )}
-        </div>
-      )}
-      {/* round 13: a lot our plans fit only just (the house turned, or cut down to a smaller start) also offers the
-          drafter, as a button a homeowner can see; before, that was said only when nothing fitted at all */}
-      {!checking && !check.deadEnd && (check.turn || check.suggestion || (!check.ok && check.maxSqft) || autoNote) && (
-        <div className="card thin custom-lot tight" data-testid="tight-lot">
-          {sendState === 'sent' ? (
-            <>
-              <h3>{t('Your lot is with our drafter')}</h3>
-              <p className="small">{t('We saved your lot and the rooms you asked for. A drafter designs a house for this lot and emails you, usually within two business days. You can keep changing the rooms here; the drafter sees the latest.')}</p>
-            </>
-          ) : (
-            <>
-              <h3>{t('A tight lot for our ready plans')}</h3>
-              <p className="small">{t('You can go on with what fits here, or have our drafter design a house for this lot with the rooms you want.')}</p>
-              <Button ghost disabled={sendState === 'sending'} onClick={sendLot} data-testid="send-lot-tight">
-                {sendState === 'sending' ? t('Sending…') : t('Send my lot to the drafter')}
-              </Button>
-              {sendState !== 'idle' && sendState !== 'sending' && <p className="fine bad">{sendState}</p>}
-            </>
-          )}
-        </div>
-      )}
       <div className="actions">
         <Button ghost onClick={onBack}>
           {t('Back')}
         </Button>
+        {/* round 15 (U17): once the lot is with the drafter, drafting one of our plans anyway is the quiet choice */}
         <Button
-          primary
+          primary={!sent}
+          ghost={sent}
           disabled={!check.ok || checking}
+          data-testid="draft-my-house"
           onClick={() => {
             // the plan does not go under its smallest size: that is what gets drafted, and the ask says so
             if (check.draft.clamped && program.sqft < minSqft) onChange({ ...program, sqft: minSqft })

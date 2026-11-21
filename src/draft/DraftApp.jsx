@@ -6,7 +6,7 @@ import { Mark } from './ui.jsx'
 import Start from './screens/Start.jsx'
 import Lot from './screens/Lot.jsx'
 import Style from './screens/Style.jsx'
-import Program from './screens/Program.jsx'
+import Program, { prefetchFit } from './screens/Program.jsx'
 import Draft from './screens/Draft.jsx'
 import Send from './screens/Send.jsx'
 // the office screens are their own chunk: the homeowner app never downloads the review, the dashboard or the rates (round 9, item 1)
@@ -244,9 +244,12 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
       setLot(p.lot && p.lot.envelope ? p.lot : null)
       setStyle(STYLES.find((s) => s.id === p.style?.id) || STYLES.find((s) => s.ready))
       setProgram(p.program && Object.keys(p.program).length ? p.program : DEFAULT_PROGRAM)
-      // rooms a homeowner chose are theirs; a saved lot still on the app's default starts at what fits
+      // rooms a homeowner chose are theirs; a saved lot still on the app's default starts at what fits.
+      // Round 15 (U11): rooms saved from the rooms step are the ones the homeowner chose and saw, even when they are
+      // our default rooms (4 bed, 3 bath, 2,800 sf, office, half bath): they come back exactly, never re-fitted
       const same = ['beds', 'baths', 'garage', 'sqft', 'office', 'halfBath', 'suite2'].every((k) => (p.program?.[k] ?? DEFAULT_PROGRAM[k]) === DEFAULT_PROGRAM[k])
-      setTouched(!!p.version || !same)
+      const chosen = !!p.program && Object.keys(p.program).length > 0 && (p.stage === 'rooms' || p.stage === 'draft')
+      setTouched(!!p.version || !same || chosen)
       setAutoNote(false)
       setRooms(p.rooms || [])
       setChangesLeft(p.changesLeft ?? CHANGES_PER_PLAN)
@@ -341,8 +344,9 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
   return (
     <LangProvider force={office ? 'en' : null}>
     <div className="dh">
-      <header className="dh-head">
-        <a className="brand" href="#" onClick={(e) => (e.preventDefault(), restart())}>
+      {/* round 15 (U13): on the Draft and Send steps a phone's header is one short row and the step's name */}
+      <header className={'dh-head' + (!office && (step === 4 || step === 5) ? ' at-plan' : '')}>
+        <a className="brand" translate="no" href="#" onClick={(e) => (e.preventDefault(), restart())}>
           <Mark size={24} />
           <span>Draft House</span>
         </a>
@@ -473,10 +477,18 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
                 setAutoNote(false)
               }
               go(2)
+              // round 15 (U10): the rooms that fit this lot are worked out while the style is picked
+              prefetchFit(taken, style || STYLES.find((x) => x.ready))
               // saved now, not at the Draft step: the lot is the homeowner's from here, and a parcel or plat lot is in the drafter's queue
               saveDraft({ lot: taken, program, ...(style ? { style: { id: style.id, name: style.name } } : {}) }, 'style')
             }}
             onBack={() => go(0)}
+            onPlatSaved={(platId) => {
+              // round 15, B5: a plat uploaded with nothing typed is a house in the drafter's queue at once; a house
+              // saved with its address only gets the plat too. A lot already taken keeps its own (it goes with the lot).
+              if (!user || projectRef.current?.lot) return
+              saveDraft({ platId, ...(intake?.address && !projectRef.current ? { address: intake.address } : {}) }, 'lot')
+            }}
           />
         )}
         {!office && step === 2 && (

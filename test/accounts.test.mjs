@@ -287,7 +287,7 @@ test('a fix the client clicked applies its ops without the interpreter and costs
   assert.equal(no.body.applied, false)
   assert.ok(no.body.reasons.length >= 1)
   assert.ok(no.body.fixes.length >= 1, 'a fix is offered')
-  assert.ok(no.body.fixes[0].label.endsWith('?'))
+  assert.match(no.body.fixes[0].label, /^Make the primary bedroom [\d.]+ ft wider$/) // round 15, U12: the most that fits, as a button (a command, not a question)
   assert.equal(no.body.changesLeft, 10, 'a refusal costs nothing')
   const yes = await j(await ana.post(`/api/projects/${prj.id}/change`, { text: no.body.fixes[0].label, ops: no.body.fixes[0].ops }))
   assert.equal(yes.body.applied, true, yes.body.reply)

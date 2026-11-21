@@ -114,10 +114,17 @@ test('a program that does not fit is refused before drafting, with the largest s
   assert.ok(f.maxSqft || f.suggestion, `max ${f.maxSqft}, suggestion ${f.suggestion?.label}`)
   const smaller = f.maxSqft ? { ...big, sqft: f.maxSqft } : f.suggestion.program
   assert.deepEqual(checkRules(generateRooms(smaller, style, lot90), smaller, style, lot90).reasons, [])
-  // 70 ft lot: the standard plan is 72 ft wide, so the step offers what the narrow plan holds (4 bed, 2 bath,
-  // 2-car, no office), and that drafts clean on the narrow plan
-  const lot = defaultLot('mcallen', { width: 70, depth: 120 })
+  // round 15: a 70 ft lot drafts the rooms as asked on the Valley plan (it was offered the narrow plan's 4 bed, 2 bath)
+  const lot70 = defaultLot('mcallen', { width: 70, depth: 120 })
   const p70 = { ...DEFAULT_PROGRAM, beds: 4, baths: 3, garage: 2, sqft: 2800 }
+  const v = fitsLot(p70, style, lot70)
+  assert.equal(v.ok, true, v.reasons.join(' | '))
+  const valley = generateRooms(p70, style, lot70)
+  assert.equal(valley.find((r) => r.kind === 'roof')?.plan, 'valley')
+  assert.deepEqual(checkRules(valley, p70, style, lot70).reasons, [])
+  // 55 ft lot: the standard plan is 72 ft wide and the Valley plan 51, so the step offers what the narrow plan holds
+  // (4 bed, 2 bath, 2-car, no office), and that drafts clean on the narrow plan
+  const lot = defaultLot('mcallen', { width: 55, depth: 120 })
   const g = fitsLot(p70, style, lot)
   assert.equal(g.ok, false)
   assert.ok(g.suggestion && /narrow plan/.test(g.suggestion.label), g.suggestion?.label)
