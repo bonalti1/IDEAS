@@ -83,6 +83,23 @@ export const api = {
   callMe: (id, note) => call(`/api/projects/${id}/call-me`, { method: 'POST', body: JSON.stringify({ note }) }),
   confirmLot: (id, body) => call(`/api/review/${id}/lot`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   platUrl: (platId) => API + `/api/lot/plat/${platId}` + (API_KEY ? `?key=${encodeURIComponent(API_KEY)}` : ''),
+  // round 15, B3: a plat opens only for its uploader, the owner of a house that uses it, or the office, so it is fetched
+  // with the account's token and shown from memory (a plain link carries no token)
+  openPlat: async (platId) => {
+    const win = window.open('', '_blank')
+    try {
+      const token = await tokenProvider()
+      const res = await fetch(API + `/api/lot/plat/${platId}`, { headers: { ...(API_KEY ? { 'x-api-key': API_KEY } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) } })
+      if (!res.ok) throw new Error(res.status === 404 ? 'That plat is not available to this account.' : `HTTP ${res.status}`)
+      const url = URL.createObjectURL(await res.blob())
+      if (win) win.location.href = url
+      else window.location.assign(url)
+      setTimeout(() => URL.revokeObjectURL(url), 120000)
+    } catch (e) {
+      if (win) win.close()
+      throw e
+    }
+  },
   // the office: a meeting (cost is covered there) or more changes; the plan's allowance is granted by the office
   meetingRequest: (id, body = {}) => call(`/api/projects/${id}/meeting-request`, { method: 'POST', body: JSON.stringify(body) }, 20000),
   grantAllowance: (id, add, note = '') => call(`/api/review/${id}/allowance`, { method: 'POST', body: JSON.stringify({ add, note }) }, 20000),

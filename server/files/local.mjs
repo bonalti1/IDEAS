@@ -14,7 +14,9 @@ export function localFiles(root) {
     async ping() {
       try {
         fs.accessSync(root, fs.constants.W_OK)
-        return { ok: true, detail: `${await this.count()} files on disk` }
+        const u = await this.usage()
+        const mb = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0)
+        return { ok: true, detail: `${u.files} files, ${mb(u.bytes)} MB on disk (uploaded plats: ${u.plats} files, ${mb(u.platBytes)} MB)` }
       } catch {
         return { ok: false, detail: `${root} not writable` }
       }
@@ -29,6 +31,24 @@ export function localFiles(root) {
       const f = path.join(full(design), safe(name))
       if (!fs.existsSync(f)) return null
       return { body: fs.createReadStream(f), size: fs.statSync(f).size }
+    },
+    /** Round 15, U7: how much the store holds, and how much of it is uploaded plats. */
+    async usage() {
+      const u = { files: 0, bytes: 0, plats: 0, platBytes: 0 }
+      const walk = (d, plats) =>
+        fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+          const f = path.join(d, e.name)
+          if (e.isDirectory()) return walk(f, plats || e.name === 'plats')
+          const n = fs.statSync(f).size
+          u.files++
+          u.bytes += n
+          if (plats) {
+            u.plats++
+            u.platBytes += n
+          }
+        })
+      walk(root, false)
+      return u
     },
     async count() {
       let n = 0

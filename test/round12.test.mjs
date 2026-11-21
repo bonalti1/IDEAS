@@ -54,6 +54,8 @@ async function startServer(t, env = {}) {
   }
   return { base, log: () => out, kill: () => proc.kill() }
 }
+// round 15, B2: a plat lot names a plat the office has, uploaded from the same account
+const platIdOf = async (w) => (await (await w.post('/api/lot/plat', { name: 'p.png', data: fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64') })).json()).platId
 async function who(base, email, extra = {}) {
   const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name: email.split('@')[0] }) })
   const { token } = await r.json()
@@ -189,7 +191,7 @@ test('3: a plat lot gets its zoning read when a drafter confirms it, shown to co
   const maria = await who(base, 'maria@drafthouse.test')
   const plat = (address, city) => ({ kind: 'plat', address, city, county: 'Hidalgo County', calls: [{ bearing: 'N 00°00\'00" E', distance: 150 }, { bearing: 'N 90°00\'00" E', distance: 100 }, { bearing: 'S 00°00\'00" E', distance: 150 }, { bearing: 'N 90°00\'00" W', distance: 100 }], front: 3, streets: [{ edge: 3, name: 'Cage Blvd' }], setbacks: {}, zoning: { district: 'R-1', residential: true } })
   const make = async (address, city) => {
-    const lot = buildLot(plat(address, city))
+    const lot = buildLot({ ...plat(address, city), platId: await platIdOf(ana) })
     const r = await ana.post('/api/projects', { lot, style: { id: style.id }, program: small, rooms: generateRooms(small, style, lot) })
     assert.equal(r.status, 201, await r.clone().text())
     return r.json()

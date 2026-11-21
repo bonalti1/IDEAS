@@ -46,7 +46,7 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat?.name ? `no address, plat "${String(p.lot.plat.name).slice(0, 60)}"` : 'no address')} ·{' '}
+          {p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat ? `no address · ${p.lot.plat.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.lot.plat.at ? `, ${String(p.lot.plat.at).slice(0, 10)}` : ''}` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
@@ -66,7 +66,7 @@ function Row({ p, onOpen }) {
         {p.lot?.spec?.confidence === 'pick' && !p.lot.spec.confirmed && <span className="pill ask">Parcel picked by hand</span>}
         {(p.lot?.spec?.typedBy === 'homeowner' || p.lot?.plat?.unread) && !p.lot.spec.confirmed && (
           <span className="pill stop" data-testid="row-plat-unread">
-            Plat not read
+            {p.lot?.plat?.unread || p.lot?.spec?.outlineGapFt === undefined ? `Plat not read${p.lot?.spec?.typed?.width ? `, homeowner typed ${p.lot.spec.typed.width} × ${p.lot.spec.typed.depth}` : ''}` : 'Outline differs from the plat'}
           </span>
         )}
         <span className={'pill ' + s.tone}>{s.label}</span>
@@ -275,7 +275,7 @@ export default function Review({ user }) {
                     <div className="check-row">
                       <span>
                         <b>The lot matches the plat or deed.</b>{' '}
-                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : spec.typedBy === 'homeowner' ? `Plat not read by the office: the homeowner typed ${spec.typed?.width} by ${spec.typed?.depth} ft from it. Open the plat and check the outline.` : 'Read from the plat: compare the calls with the plat.'}
+                        {!own ? 'Typed in by the homeowner: nothing to confirm.' : spec.confirmed ? `Confirmed by ${spec.confirmedBy}.` : spec.kind === 'parcel' ? 'From the county parcel map: compare the outline with the recorded plat or the deed.' : spec.typedBy === 'homeowner' && spec.outlineGapFt !== undefined && !open.lot?.plat?.unread ? 'The outline sent is not the one the office read from the plat. Open the plat and check the outline.' : spec.typedBy === 'homeowner' ? `Plat not read by the office: the homeowner typed ${spec.typed?.width} by ${spec.typed?.depth} ft from it. Open the plat and check the outline.` : 'Read from the plat: compare the calls with the plat.'}
                       </span>
                       {own && !spec.confirmed && (
                         <Button small primary disabled={busy} onClick={() => confirmLot(true)} data-testid="check-confirm-lot">
@@ -470,9 +470,14 @@ export default function Review({ user }) {
                 {open.lot.spec.calls?.length} calls, closes within {open.lot.closure} ft, {Math.round(open.lot.areaSf).toLocaleString()} sf, buildable {Math.round(open.lot.envelopeSf).toLocaleString()} sf.{open.lot.spec.kind !== 'plat' ? ' The parcel map is advisory: check it against the recorded plat or the survey.' : open.lot.spec.typedBy === 'homeowner' ? '' : ` Read with ${Math.round((open.lot.plat?.confidence || 0) * 100)}% confidence.`}
               </p>
               {/* round 14: a plat the office could not read. The outline is only what the homeowner typed off it. */}
-              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && (
+              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && (open.lot.plat?.unread || open.lot.spec.outlineGapFt === undefined) && (
                 <p className="warnline stopline" data-testid="plat-unread">
                   Plat not read by the office. The homeowner typed {open.lot.spec.typed?.width} by {open.lot.spec.typed?.depth} ft from it: open the plat and check the outline before confirming.
+                </p>
+              )}
+              {open.lot.spec.kind === 'plat' && open.lot.spec.typedBy === 'homeowner' && !open.lot.plat?.unread && open.lot.spec.outlineGapFt !== undefined && (
+                <p className="warnline stopline" data-testid="plat-outline-differs">
+                  The outline sent is not the one the office read from the plat{open.lot.spec.outlineGapFt != null ? ` (corners up to ${open.lot.spec.outlineGapFt} ft apart)` : ' (a different number of sides)'}{open.lot.spec.platAreaSf ? `; the plat reads ${Math.round(open.lot.spec.platAreaSf).toLocaleString()} sf` : ''}. Open the plat and check the outline before confirming.
                 </p>
               )}
               {open.lot.spec.kind === 'parcel' && open.lot.plat?.unread && (
@@ -494,9 +499,10 @@ export default function Review({ user }) {
               {open.lot.plat?.notes && <p className="fine">Reader: {open.lot.plat.notes}</p>}
               {open.lot.spec.platId && (
                 <p className="fine">
-                  <a href={api.platUrl(open.lot.spec.platId)} target="_blank" rel="noreferrer">
+                  <button className="linkish" data-testid="open-plat" onClick={() => api.openPlat(open.lot.spec.platId).catch((e) => setLotError(e.message))}>
                     {open.lot.plat?.ext && open.lot.plat.ext !== 'pdf' ? 'Open the plat photo' : 'Open the plat PDF'}
-                  </a>
+                  </button>
+                  {open.platFile?.name ? <span className="muted"> · uploaded as "{open.platFile.name}"</span> : null}
                 </p>
               )}
               {!open.lot.spec.confirmed && (

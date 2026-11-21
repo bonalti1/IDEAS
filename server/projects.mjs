@@ -6,6 +6,7 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
+import { forClient as platView } from './lots.mjs'
 import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
 import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
@@ -285,10 +286,32 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
      * outline (and the parcel it names) is the one already stored. A parcel lot that is new or changed gets its zoning
      * from the server's own read; a typed lot has none until a drafter confirms one.
      */
-    async ownerLot(lot, prev = null, { mayLookup } = {}) {
+    async ownerLot(lot, prev = null, { mayLookup, user = null } = {}) {
       if (!lot?.spec || typeof lot.spec !== 'object') return lot
-      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, listedAs, situs, outlineBy, addressGives, ...spec } = lot.spec
+      // round 15, B2: whether a plat was read, what was typed from it and how far an outline sits from it are the
+      // office's to say, never the browser's
+      const { confirmedBy, confirmedAt, confirmNote, zoning: fromBrowser, listedAs, situs, outlineBy, addressGives, typedBy: _typedBy, typed: _typed, outlineGapFt: _gap, platAreaSf: _platArea, ...spec } = lot.spec
       const was = prev?.spec || null
+      lot = { ...lot, plat: null }
+      // round 15, B2 and B3: the plat a lot names is the office's own record. An id the office does not have is
+      // refused; so is a plat another account uploaded (one attached before uploads had an owner stays with its house)
+      let platRec = null
+      if (spec.platId != null && spec.platId !== '') {
+        platRec = await lots.plat(spec.platId)
+        if (!platRec) throw fail(400, 'We do not have that plat. Upload it again, or type the lot in.')
+        const kept = !!was && was.platId === spec.platId
+        if (platRec.owner ? platRec.owner !== user?.id && !kept : !kept) throw fail(400, 'That plat was uploaded from another account. Upload it again from this account, or type the lot in.')
+        lot.plat = platView(platRec)
+      } else delete spec.platId
+      if (spec.kind === 'plat') {
+        if (!platRec) throw fail(400, 'A lot from a plat needs its plat. Upload the plat again, or type the lot in.')
+        if (platRec.unread) Object.assign(spec, { typedBy: 'homeowner', outlineBy: 'homeowner' })
+        else {
+          const gap = outlineGapFt(spec.calls, platRec.calls)
+          if (gap <= 1) spec.outlineBy = 'plat'
+          else Object.assign(spec, { typedBy: 'homeowner', outlineBy: 'homeowner', outlineGapFt: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null, platAreaSf: platRec.areaSf ?? null })
+        }
+      }
       if (spec.kind === 'parcel') {
         // round 12: a parcel lot is the county's record, not what the browser drew. The stored lot stays while the
         // browser sends the same parcel, address and outline (within a foot) and the stored one is the county's, a
@@ -313,7 +336,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
           }
           spec.zoning = await this.readZoning(spec, { mayLookup, own: own || undefined })
         }
-        return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
+        return { ...(await this.builtLot(lot, spec)), spec, plat: lot.plat, zoning: spec.zoning || null, confirmed: !!spec.confirmed }
       }
       const sameOutline = !!was && was.kind === spec.kind && JSON.stringify(was.calls || null) === JSON.stringify(spec.calls || null) && String(was.propId ?? '') === String(spec.propId ?? '')
       if (spec.kind === 'plat') {
@@ -323,7 +346,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (sameOutline && was.zoning) spec.zoning = was.zoning
       else if (was?.zoning?.confirmedBy && was.kind === spec.kind && spec.kind === 'manual') spec.zoning = was.zoning // a drafter's zoning on a typed lot stays with the plan
       else spec.zoning = null
-      return { ...(await this.builtLot(lot, spec)), spec, zoning: spec.zoning || null, ...(spec.kind === 'plat' ? { confirmed: !!spec.confirmed } : {}) }
+      const out = await this.builtLot(lot, spec)
+      if (spec.typedBy === 'homeowner') spec.typed = { width: Math.round(out.dims?.width || 0), depth: Math.round(out.dims?.depth || 0), frontStreet: String(spec.frontStreet || '').slice(0, 80) }
+      return { ...out, spec, plat: lot.plat, zoning: spec.zoning || null, ...(spec.kind === 'plat' ? { confirmed: !!spec.confirmed } : {}) }
     },
     /** A lot spec the office cannot build is refused at the door, not on the first change. */
     async checkLot(lot) {
@@ -380,6 +405,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         updatedAt: t,
       }
       await store.projects.add(p)
+      if (p.lot?.spec?.platId) await lots.platUsed(p.lot.spec.platId, p.id)
       if (hasRooms) await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
       await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
       return this.detail(p)
@@ -427,7 +453,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const [full, versions, reviews, job] = await Promise.all([withRooms(p), store.versions.list(p.id), store.reviews.list(p.id), p.jobId ? store.jobs.get(p.jobId) : null])
       const jobView = job ? { id: job.id, status: job.status, steps: job.steps?.slice(-1), outputs: job.outputs, error: job.error, warnings: job.warnings } : null
       if (!drafter) return ownerView(publicProject(full, { versions, reviews, job: jobView }))
-      return publicProject(full, { versions, reviews, audit: this.auditCached(full), job: jobView, changesLeft: changesLeft(full) })
+      const out = publicProject(full, { versions, reviews, audit: this.auditCached(full), job: jobView, changesLeft: changesLeft(full) })
+      // round 15, P4: the uploaded file's own name only inside the drafter's card (it can carry an owner's name)
+      const platId = full.lot?.plat?.platId || full.platId
+      if (platId) {
+        const rec = await lots.plat(platId)
+        if (rec) out.platFile = { name: rec.name || null, ext: rec.ext, at: rec.at, unread: !!rec.unread }
+      }
+      return out
     },
     /**
      * The office estimate for a plan (round 8, M2): the range, the rate line, the parts and the takeoff.
@@ -493,6 +526,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         await this.checkLot(body.lot)
         p.lot = body.lot
         p.address = body.lot.address || p.address
+        if (p.lot?.spec?.platId) await lots.platUsed(p.lot.spec.platId, p.id)
       }
       if (body.style?.id) p.style = { id: body.style.id, name: body.style.name || body.style.id }
       if (body.program) p.program = cleanProgram(body.program)

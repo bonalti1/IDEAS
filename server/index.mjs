@@ -52,7 +52,23 @@ const users = makeUsers({ store, dataDir: DATA })
 // In fixture mode nothing may reach a real host (round 10, item 2): the global fetch throws on one unless LIVE=1.
 if (fixtureMode()) guardNetwork()
 const fetchImpl = fixtureMode() ? fixtureFetch() : globalThis.fetch
-const lots = makeLots({ store, files, interpreter, event, fetchImpl })
+// test-only (DRAFTHOUSE_TEST_ROUTES=1 and DRAFTHOUSE_TEST_PLAT_READER_MS): a stand-in plat reader that answers a fixed
+// 80 by 140 ft outline after that many milliseconds and counts its reads, to prove the upload limit holds (round 15, B1)
+const testReader = /^(1|true)$/i.test(process.env.DRAFTHOUSE_TEST_ROUTES || '') && +process.env.DRAFTHOUSE_TEST_PLAT_READER_MS >= 0 && process.env.DRAFTHOUSE_TEST_PLAT_READER_MS !== undefined && process.env.DRAFTHOUSE_TEST_PLAT_READER_MS !== ''
+const testReads = { n: 0 }
+const platReader = testReader
+  ? {
+      ...interpreter,
+      configured: true,
+      async parseDocument() {
+        testReads.n++
+        await new Promise((r) => setTimeout(r, +process.env.DRAFTHOUSE_TEST_PLAT_READER_MS))
+        const C = (b, d) => ({ bearing: b, distance: d })
+        return { lotNumber: 'Lot 1', calls: [C(`N 90°00'00" E`, 80), C(`S 00°00'00" E`, 140), C(`N 90°00'00" W`, 80), C(`N 00°00'00" E`, 140)], streets: [{ edge: 2, name: 'Test St' }], front: 2, confidence: 0.9, cost: 0.03, usage: {}, ms: 1 }
+      },
+    }
+  : interpreter
+const lots = makeLots({ store, files, interpreter: platReader, event, fetchImpl })
 const parcels = makeParcels({ store, event, fetchImpl, geocode: (a) => lots.geocode(a) })
 const zoning = makeZoning({ store, fetchImpl })
 const wind = makeWind({ store, fetchImpl })
@@ -197,14 +213,14 @@ route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
   const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?', address: 'string?' })
   // the drafter's marks on a lot and its zoning never come from a browser (rounds 10 and 11): the server reads the
   // zoning of a parcel lot itself, within the homeowner's lookup limit
-  if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx) })
+  if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx), user: ctx.user })
   json(res, 201, await projects.create(ctx.user, body), req)
 })
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => {
   const prj = await projects.load(ctx.user, p.id)
   const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?', stage: 'string?' })
-  if (body.lot) body.lot = await projects.ownerLot(body.lot, prj.lot, { mayLookup: () => mayLookup(req, ctx) })
+  if (body.lot) body.lot = await projects.ownerLot(body.lot, prj.lot, { mayLookup: () => mayLookup(req, ctx), user: ctx.user })
   json(res, 200, await projects.update(prj, body), req)
 })
 route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
@@ -230,26 +246,51 @@ route('POST', '/api/projects/:id/call-me', 'user', async (req, res, p, ctx) => {
 // ── lots: city rules, plat reading, flood zone ─────────────────────────────
 route('GET', '/api/cities', 'app', async (req, res) => json(res, 200, await lots.table(), req))
 route('PUT', '/api/admin/cities/:id', 'drafter', async (req, res, p, ctx) => json(res, 200, await lots.setCity(p.id, await readJson(req, {}), ctx.user), req))
-// round 14: a plat upload is kept (and read, when the reader is on) for anyone with the app, signed in or not, so
-// it is counted: 8 per ten minutes for an account, 20 for one address, 30 for everyone without an account together.
-// PLAT_UPLOADS_PER_10MIN moves the per-account number (the others follow it).
+// Round 15 (office decision 2): uploading a plat needs an account. Each upload is kept, and read when the reader is on
+// (a paid call), so it is counted: 8 per ten minutes for an account and 20 for one address (PLAT_UPLOADS_PER_10MIN
+// moves the first; the address follows it), and 30 a day for an account (PLAT_UPLOADS_PER_DAY).
+// B1: the slot is taken BEFORE the read (the read takes about 18 s, so uploads sent together all passed a check made
+// before and a count made after); it is given back only when the file is refused as not a plat or too big.
 const PLATS_PER_WINDOW = Math.max(1, +(process.env.PLAT_UPLOADS_PER_10MIN || 8))
-const platUploads = makeWindow({ windowMs: 600000, limitFor: (key) => (key.includes(':u:anon') ? PLATS_PER_WINDOW * 4 : key.includes(':ip:') ? Math.ceil(PLATS_PER_WINDOW * 2.5) : PLATS_PER_WINDOW) })
-setInterval(() => platUploads.prune(), 600000).unref()
-route('POST', '/api/lot/plat', 'app', async (req, res, p, ctx) => {
+const PLATS_PER_DAY = Math.max(1, +(process.env.PLAT_UPLOADS_PER_DAY || 30))
+const platUploads = makeWindow({ windowMs: 600000, limitFor: (key) => (key.includes(':ip:') ? Math.ceil(PLATS_PER_WINDOW * 2.5) : PLATS_PER_WINDOW) })
+const platUploadsDay = makeWindow({ windowMs: 86400000, limitFor: () => PLATS_PER_DAY })
+setInterval(() => {
+  platUploads.prune()
+  platUploadsDay.prune()
+}, 600000).unref()
+const PLAT_LIMIT_MESSAGE = 'Too many files at once. Wait a few minutes and try again, or type the lot in.'
+route('POST', '/api/lot/plat', 'user', async (req, res, p, ctx) => {
   const keys = lookupKeys(req, ctx, 'plat')
-  if (keys.some((k) => platUploads.left(k) <= 0)) return json(res, 429, { error: 'Too many files at once. Wait a few minutes and try again, or type the lot in.', retryAfterS: 600 }, req)
-  const body = await readJson(req, { name: 'string?', data: 'string' })
-  const rec = await lots.readPlat(body)
-  keys.forEach((k) => platUploads.count(k))
-  json(res, 200, rec, req)
+  const day = `plat:day:u:${ctx.user.id}`
+  if (keys.some((k) => platUploads.left(k) <= 0) || platUploadsDay.left(day) <= 0) return json(res, 429, { error: PLAT_LIMIT_MESSAGE, retryAfterS: 600 }, req)
+  const tickets = [...keys.map((k) => [platUploads, k, platUploads.count(k)]), [platUploadsDay, day, platUploadsDay.count(day)]]
+  try {
+    const body = await readJson(req, { name: 'string?', data: 'string' })
+    json(res, 200, await lots.readPlat(body, { owner: ctx.user.id }), req)
+  } catch (e) {
+    // a file refused at the door (not a PDF or a photo, too big, a malformed body) gives the slot back; a read that
+    // was made keeps it
+    if (e?.status === 400 || e?.status === 413) tickets.forEach(([w, k, stamp]) => w.release(k, stamp))
+    throw e
+  }
 })
-route('GET', '/api/lot/plat/:id', 'any', async (req, res, p) => {
+/** Round 15, B3: who may open an uploaded plat: the account that uploaded it, the owner of a house that uses it, the office. */
+async function mayOpenPlat(rec, user) {
+  if (!rec || !user) return false
+  if (users.isDrafter(user)) return true
+  if (rec.owner && rec.owner === user.id) return true
+  const mine = await store.projects.listForUser(user.id)
+  return mine.some((prj) => prj.lot?.spec?.platId === rec.platId || prj.lot?.plat?.platId === rec.platId || prj.platId === rec.platId)
+}
+route('GET', '/api/lot/plat/:id', 'user', async (req, res, p, ctx) => {
   const rec = await lots.plat(safe(p.id))
-  const ext = rec?.ext || 'pdf'
-  const f = await files.get('plats', `${safe(p.id)}.${ext}`)
+  // another account's plat and a plat that does not exist answer alike, so an id cannot be probed
+  if (!(await mayOpenPlat(rec, ctx.user))) return json(res, 404, { error: 'not found' }, req)
+  const ext = rec.ext || 'pdf'
+  const f = await files.get('plats', `${rec.platId}.${ext}`)
   if (!f) return json(res, 404, { error: 'not found' }, req)
-  res.writeHead(200, { 'content-type': ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg', ...auth.cors(req) })
+  res.writeHead(200, { 'content-type': ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg', 'x-content-type-options': 'nosniff', 'content-disposition': `inline; filename="plat.${ext}"`, 'cache-control': 'private, no-store', ...auth.cors(req) })
   if (typeof f.body.pipe === 'function') f.body.pipe(res)
   else {
     for await (const chunk of f.body) res.write(chunk)
@@ -590,10 +631,11 @@ route('GET', '/api/interpret/log', 'drafter', async (req, res) => {
 // ── health & admin ─────────────────────────────────────────────────────────
 // test-only (DRAFTHOUSE_TEST_ROUTES=1): an unexpected error and an error that hides its words, to prove the 500 path
 if (/^(1|true)$/i.test(process.env.DRAFTHOUSE_TEST_ROUTES || '')) {
-  route('GET', '/api/_test/boom', 'public', async (req) => {
+  route('GET', '/api/_test/boom', 'public', async (req, res) => {
     const mode = new URL(req.url, 'http://x').searchParams.get('mode')
     if (mode === 'hidden') throw Object.assign(new Error('a detail the client must not see'), { status: 500, expose: false })
     if (mode === 'own') throw Object.assign(new Error('the plat reader is resting'), { status: 503 })
+    if (mode === 'reads') return json(res, 200, { reads: testReads.n }, req)
     throw new TypeError('boom: cannot read properties of undefined')
   })
 }
@@ -677,6 +719,12 @@ async function main() {
       const run = () => parcels.checkFields().catch((e) => console.error('parcel field check:', e.message)).then(() => parcels.dailyCheck({ requireOwner: DAILY_NEEDS_OWNER, email: alerts.email ? (subject, text) => alerts.email(subject, text) : null }).catch((e) => console.error('parcel daily check:', e.message)))
       setTimeout(run, 5 * 60000).unref()
       setInterval(run, 24 * 3600000).unref()
+    }
+    // round 15, U7: uploaded plats that no house uses are removed after 30 days, once a day (PLAT_PRUNE=0 turns it off)
+    if (process.env.PLAT_PRUNE !== '0') {
+      const prune = () => lots.prunePlats().catch((e) => console.error('plat clean-up:', e.message))
+      setTimeout(prune, 10 * 60000).unref()
+      setInterval(prune, 24 * 3600000).unref()
     }
     interpreter.probe()
     alerts.start()

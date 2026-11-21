@@ -34,6 +34,8 @@ async function startServer(t, env = {}) {
   }
   throw new Error('server did not start:\n' + out)
 }
+// round 15, B2: a plat lot names a plat the office has, uploaded from the same account
+const platIdOf = async (w) => (await (await w.post('/api/lot/plat', { name: 'p.png', data: fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64') })).json()).platId
 async function who(base, email, name) {
   const r = await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, name }) })
   const { token } = await r.json()
@@ -50,7 +52,7 @@ test('a lot spec the office cannot build is refused at the door: 400 with a plai
   const { base } = await startServer(t)
   const ana = await who(base, 'ana@example.com', 'Ana Garza')
   const rooms = generateRooms(program, style)
-  const bad = { address: 'somewhere', spec: { kind: 'plat', calls: [] } } // a plat with no boundary calls
+  const bad = { address: 'somewhere', spec: { kind: 'plat', calls: [], platId: await platIdOf(ana) } } // a plat with no boundary calls
   const r1 = await j(await ana.post('/api/projects', { lot: bad, style: { id: 'farmhouse' }, program, rooms, client: 'Ana' }))
   assert.equal(r1.status, 400, JSON.stringify(r1.body))
   assert.match(r1.body.error, /the lot cannot be built from what was sent \(plat\)/)

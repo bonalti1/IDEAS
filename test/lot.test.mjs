@@ -172,6 +172,8 @@ async function startServer(t, env = {}) {
   }
   throw new Error('server did not start')
 }
+// round 15, B2: a plat lot names a plat the office has, uploaded from the same account
+const platIdOf = async (w) => (await (await w.post('/api/lot/plat', { name: 'p.png', data: fs.readFileSync('test/fixtures/garza-site-plan.png').toString('base64') })).json()).platId
 const who = async (base, email) => {
   const { token } = await (await fetch(base + '/api/auth/dev-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) })).json()
   const h = { 'content-type': 'application/json', authorization: `Bearer ${token}` }
@@ -213,6 +215,7 @@ test('a plat lot blocks sending until a drafter confirms it; the confirmation ca
   const ana = await who(base, 'ana@example.com')
   const maria = await who(base, 'maria@drafthouse.test')
   const spec = { kind: 'plat', calls: referenceCalls(), streets: [{ edge: 4, name: 'Ida Blvd' }], front: 4, kinds: ['side', 'streetSide', 'streetSide', 'streetSide', 'front', 'rear', 'rear'], city: 'palmview', setbacks: { front: 10, side: 6, rear: 20, streetSide: 25 }, platId: 'plat_test', confirmed: false }
+  spec.platId = await platIdOf(ana)
   const lot = buildLot(spec)
   const prj = await (await ana.post('/api/projects', { lot, style: { id: 'farmhouse' }, program, rooms: generateRooms(program, style, lot) })).json()
   assert.equal(prj.lot.confirmed, false)
