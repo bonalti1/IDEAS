@@ -7,9 +7,10 @@ import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
 import { forClient as platView } from './lots.mjs'
-import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize } from '../src/draft/lib/interpret.js'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize, halfCountDiff, nicerOffer } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
 import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
+import { isSendLot, wantsNicer } from '../src/draft/lib/intents.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
@@ -52,6 +53,9 @@ export const MEETING_THANKS = `Thanks! The office will reach out within 1 busine
 export const MORE_CHANGES_THANKS = `Done. The office has your request and usually adds more within 1 business day. You can also call ${OFFICE_PHONE}.`
 export const OUT_OF_CHANGES = "You've used the free changes on this plan. The office will add more for you. Want me to let them know?"
 export const REQUEST_KINDS = ['meeting', 'more-changes']
+// what the chat says once the lot is in the drafter's queue (round 15, U2); the Draft screen says the same
+export const SENT_LOT = 'Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days. No change was used.'
+export const NO_LOT_TO_SEND = 'This plan has no lot of its own yet. Choose your lot first, and then a drafter can design a house for it. No change was used.'
 
 /**
  * How far apart two outlines are, in feet: the largest gap between matching corners when both are walked from the
@@ -571,17 +575,31 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     // is stored and logged stays as the plan code wrote it. Typed undo does what the Undo button does.
     async change(p, text, fixOps = null, opts = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
-      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
       const request = String(text || '').trim().slice(0, 500)
       if (!request) throw fail(400, 'text required')
       const isFix = Array.isArray(fixOps) && fixOps.length > 0
       const spanish = isSpanish(request)
-      const said = spanish && !isFix ? fromSpanish(request) : null
       const lang = opts.lang === 'es' || spanish ? 'es' : 'en'
-      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
       const out = (result) => localize(result, lang)
-      const left = changesLeft(p)
       const counts = () => ({ changesLeft: changesLeft(p), changesAllowed: p.changesAllowed, changesUsed: p.changesUsed })
+      // round 15, U2: "send my lot to the drafter", "mándale mi lote al dibujante": the lot goes to the drafter's queue,
+      // the way the button on the rooms step sends it. Read here as in the browser (one matcher), so the chat answers
+      // the same with a Claude key or without; no model is asked and no change is used
+      if (!isFix && isSendLot(request)) {
+        let sent
+        try {
+          sent = await this.needsCustom(p, { note: request })
+        } catch (e) {
+          if (e.status !== 409) throw e
+          return out({ applied: false, reply: NO_LOT_TO_SEND, source: 'fallback', reasons: ['no lot'], fixes: [], ...counts(), version: p.version })
+        }
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'send lot', reply: SENT_LOT, ops: [] })
+        return out({ applied: false, sendLot: true, reply: SENT_LOT, source: 'fallback', reasons: ['send lot'], fixes: [], ...counts(), version: p.version, project: sent })
+      }
+      if (!p.version) throw fail(409, 'choose your rooms first; there is no plan to change yet')
+      const said = spanish && !isFix ? fromSpanish(request) : null
+      const own = (t) => (said ? said.back(t) : t) // a clause in the client's own words
+      const left = changesLeft(p)
       // "undo", "go back to how it was", "deshaz eso": the last change comes off and comes back to the plan, the way
       // the Undo button does it; no model is asked, nothing is used, and it works at 0 left
       if (!isFix && isUndoRequest(request)) {
@@ -592,7 +610,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
           return out({ applied: false, undo: true, reply, source: 'fallback', reasons: ['nothing to undo'], fixes: [], ...counts(), version: p.version })
         }
         const back = await this.rollback(p, target)
-        const reply = `Back to version ${target}.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change used.'}`
+        // round 15, P1: plain words, no version number; in the language of the request (localized below)
+        const reply = `Done, the house is back to how it was.${back.refunded ? ` ${back.refunded} change${back.refunded === 1 ? '' : 's'} returned.` : ' No change was used.'}`
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'undo', reply, ops: [] })
         return out({ applied: true, undo: true, reply, source: 'fallback', rooms: back.rooms, changesLeft: back.changesLeft, changesAllowed: back.changesAllowed, changesUsed: back.changesUsed, version: back.version, refunded: back.refunded, project: back, ops: [] })
       }
@@ -641,10 +660,22 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'trade-off', reply: offer.reply, ops: [] })
         return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
       }
+      // "make it nicer", "hazla más bonita" (round 15, B6): bigger windows, a front porch, another style, as buttons;
+      // no model is asked and nothing is used
+      if (!isFix && (wantsNicer(request) || wantsNicer(split.text))) {
+        const nicer = nicerOffer(rooms, p.program, style, kit, 'fallback', lot, edits)
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'nicer', reply: nicer.reply, ops: [] })
+        return out({ applied: false, reply: nicer.reply, source: 'fallback', reasons: nicer.reasons, offer: nicer.offer, fixes: nicer.fixes, ...counts(), version: p.version, ...costTail(nicer) })
+      }
       const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
+      const halves = isFix ? null : halfCountDiff(split.text)
       if (isFix) {
         diff = { ops: fixOps.slice(0, 8), reply: '', confidence: 1 } // the answer says what was done, not the button's question
         source = 'fix'
+      } else if (halves) {
+        // "2.5 baths", "dos baños y medio" (round 15, U3): two full baths and a half bath, read the same in both modes
+        diff = halves
+        source = 'fallback'
       } else
       try {
         diff = await interpreter.ask({ request: asked, ...(lang === 'es' ? { lang } : {}), program: p.program, kit: kitMeta, rooms: summarizeRooms(rooms) })

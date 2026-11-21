@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import HouseScene, { camerasFor } from '../HouseScene.jsx'
 import PlanDrawing from '../PlanDrawing.jsx'
 import { Button, Stat } from '../ui.jsx'
-import { floorArea, isRoom, kitFor, programOf, programLine } from '../lib/layout.js'
+import { floorArea, kitFor, programOf, programLine } from '../lib/layout.js'
 import { optionTopic, optionsFor, optionsForAsync, TOPIC_NAMES } from '../lib/options.js'
-import { interpretRequest } from '../lib/interpret.js'
+import { interpretRequest, exampleFixes } from '../lib/interpret.js'
 import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
 import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
 import { isUndoRequest } from '../lib/ops.js'
+import { isSendLot } from '../lib/intents.js'
+import { isSpanish } from '../lib/es.js'
+import { stepHash } from '../lib/route.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = says(['Thanks! The office will reach out within 1 business day. You can also call {phone}.', { phone: TRUST.phone }])
@@ -16,33 +19,24 @@ const MORE_CHANGES_THANKS = says(['Done. The office has your request and usually
 const OUT_OF_CHANGES = says(["You've used the free changes on this plan. The office will add more for you. Want me to let them know?"])
 const ASK_LABEL = { meeting: phrase('Ask the office to set up my meeting'), 'more-changes': phrase('Ask the office for more changes') }
 
-/** Suggestions that fit the plan as it is right now. */
-function suggestionsFor(rooms, kit, t = (s) => s) {
-  const list = rooms.filter(isRoom)
-  const has = (k) => list.some((r) => r.kind === k)
-  const out = []
-  if (has('kitchen')) out.push(t('Make the kitchen bigger'))
-  if (!has('rearPorch')) out.push(t('Add a porch on the back'))
-  else out.push(t('Remove the rear porch'))
-  const garage = list.find((r) => r.kind === 'garage')
-  if (garage) {
-    // the same count the options use: a tandem garage already holds three
-    const tandem = !!garage.tandem || /tandem/i.test(garage.name || '')
-    const cars = tandem ? 3 : Math.max(1, Math.round(Math.max(garage.w, garage.d) / (kit.rooms.garage?.perCar || 11)))
-    if (cars < 3) out.push(t('Make the garage {n} cars', { n: cars + 1 }))
-  } else out.push(t('Add a 2-car garage'))
-  if (list.filter((r) => ['bed', 'master', 'suite2'].includes(r.kind)).length < 5) out.push(t('Add a bedroom'))
-  if (!has('office')) out.push(t('Add an office'))
-  if (has('mbath')) out.push(t('Bigger primary bath'))
-  if (!has('halfbath')) out.push(t('Add a half bath'))
-  return [...out.slice(0, 4), t('Show me garage options')]
+/**
+ * The example changes under the chat (round 15, U4): each one checked on THIS plan and lot before it is shown, the
+ * same way the chat's own offers are (lib/interpret.js exampleFixes), and sent with the ops that were checked, so a
+ * tap always applies. A "bigger" that does not fit shows as the growth that does ("Make the kitchen 1 ft longer").
+ * The garage options are offered when a garage change works here.
+ */
+const GARAGE_OPTIONS = 'options:garage' // the chip's key; its words are t('Show me garage options')
+function suggestionsFor(rooms, program, style, kit, lot) {
+  const list = exampleFixes(rooms, program, style, kit, lot, 5)
+  const garage = list.some((f) => f.ops.some((o) => o.op === 'garage' || (o.op === 'add' && o.kind === 'garage')))
+  return [...list.slice(0, 4), ...(garage ? [{ label: GARAGE_OPTIONS, options: true }] : [])]
 }
 
 /** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
 const standingEdits = (history) => history.flatMap((m, i) => (m.who === 'you' && !m.undone && history[i + 1]?.applied && history[i + 1].ops?.length ? [{ text: m.text, ops: history[i + 1].ops }] : []))
 
-// "send my lot to the drafter", "have the drafter design it" and the same in Spanish (round 13)
-export const SEND_LOT_RE = /^\s*(please\s+)?((send|give)\s+(my|the|this)\s+lot(\s+to\s+(the|a|your)\s+drafter)?|(have|let|get)\s+(the|a|your)\s+drafter\s+(to\s+)?(design|draw)\s+(it|this|one|my house|a house|the house)(\s+for\s+(me|this lot|my lot))?|i\s+want\s+(the|a)\s+drafter\s+to\s+(design|draw)\s+(it|my house|a house)|(manda|mande|envía|envia|envíe|envie)(le|r)?\s+mi\s+lote(\s+al\s+dibujante)?|que\s+(lo|la)\s+(diseñe|disene|dibuje)\s+(el|un)\s+dibujante|quiero\s+que\s+(el|un)\s+dibujante\s+(me\s+)?(lo|la)?\s*(diseñe|disene|dibuje)(\s+(la|mi|una)\s+casa)?)\s*[.!]?\s*$/i
+// "send my lot to the drafter", "mándale mi lote al dibujante": read on meaning by lib/intents.js (round 15, U2),
+// the same matcher the office's change route uses
 const UNDO_RE = /^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i
 // the same in Spanish (round 13): "deshacer", "deshaz eso", "regresa", "quita el último cambio"
 const UNDO_ES = /^\s*(deshacer|deshaz(lo| eso| el [uú]ltimo( cambio)?)?|regr[eé]sa(lo|le)?|quita el [uú]ltimo cambio|d[eé]jalo como estaba)\s*[.!]?\s*$/i
@@ -99,7 +93,23 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   }
 
   const area = floorArea(rooms, program.stories)
-  const suggestions = useMemo(() => suggestionsFor(rooms, kit, t), [rooms, kit, t])
+  // checked a moment after the plan changes, so the page draws first (each check draws the plan once)
+  const [suggestions, setSuggestions] = useState([])
+  useEffect(() => {
+    let live = true
+    const id = setTimeout(() => {
+      try {
+        const list = suggestionsFor(rooms, program, style, kit, lot)
+        if (live) setSuggestions(list)
+      } catch {
+        if (live) setSuggestions([])
+      }
+    }, 60)
+    return () => {
+      live = false
+      clearTimeout(id)
+    }
+  }, [rooms, program, style, lot])
 
   // "Ask the office…": a meeting (cost is covered there) or more changes; the office is emailed and the answer carries the phone
   const askOffice = async (kind) => {
@@ -145,7 +155,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
     }
     // round 13: "send my lot to the drafter", "have the drafter design it": the lot goes to the drafter's queue for a
     // house designed for it, exactly as the button on the rooms step does. Nothing is used.
-    if (!fix && SEND_LOT_RE.test(q)) {
+    if (!fix && isSendLot(q)) {
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!onSendLot) {
         setHistory((h) => [...h, { who: 'house', ...says(['Sign in first, so we can save your lot and send it to a drafter.']), applied: false, source: 'fallback' }])
@@ -163,12 +173,14 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
     }
     // "undo", "go back": the last change comes off and comes back to the plan; no model, nothing used
     if (!fix && (isUndoRequest(q) || UNDO_RE.test(q) || UNDO_ES.test(q))) {
+      // round 15, P1: answered in the language of the request ("deshaz eso" in Spanish on an English screen too)
+      const asked = isSpanish(q) ? 'es' : lang
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!canUndo) {
-        setHistory((h) => [...h, { who: 'house', ...says(['There is nothing to undo yet.']), applied: false, source: 'fallback' }])
+        setHistory((h) => [...h, { who: 'house', ...says(['There is nothing to undo yet.'], ['No change was used.']), lang: asked, applied: false, source: 'fallback' }])
         return
       }
-      undoLast()
+      undoLast(asked)
       return
     }
     setBusy(true)
@@ -180,11 +192,16 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         // the office runs the change, checks the rules and uses one of the plan's changes only when it applies
         const r = await api.change(project.id, q, fix?.ops, lang)
         res = r
+        // the office read it as "send my lot to the drafter" (round 15, U2): the plan comes back flagged for the drafter
+        if (r.sendLot && r.project) setProject(r.project)
         if (r.applied) setProject((p) => ({ ...p, changesLeft: r.changesLeft, changesUsed: r.changesUsed, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, used: 1, at: new Date().toISOString() }] }))
       } else {
         const opts = { lot, history: standingEdits(history), lang }
         if (fix) {
-          opts.interpreter = async () => ({ ops: fix.ops, reply: '', confidence: 1 }) // the answer says what was done, not the button's question
+          // the button's checked ops are taken as given and only the rules run (round 15: its label is never read as a
+          // request, the way the office takes a tapped button); the answer says what was done, not the button's words
+          opts.fixOps = fix.ops
+          opts.interpreter = async () => ({ ops: fix.ops, reply: '', confidence: 1 })
           opts.report = false
         }
         res = await interpretRequest(q, rooms, program, style, opts)
@@ -216,7 +233,9 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
   }
 
   // back to an earlier saved version; the changes used after it come back to the plan
-  const restore = async (n) => {
+  // `undo` (the Undo button, a typed undo): said in plain words, never as a version number (round 15, P1), in the
+  // language of a typed request when there was one
+  const restore = async (n, { undo = false, lang: asked } = {}) => {
     if (!project || busy) return
     setBusy(true)
     try {
@@ -224,18 +243,25 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
       setProject(p)
       setRooms(p.rooms)
       setChangesLeft(p.changesLeft)
-      setHistory((h) => [...h, { who: 'house', ...says(['Back to version {n}.', { n }], p.refunded ? ['{n} {n|change|changes} returned.', { n: p.refunded }] : null), applied: true, source: 'undo' }])
+      const line = undo ? (p.refunded ? says(['Done, the house is back to how it was. {n} {n|change|changes} returned.', { n: p.refunded }]) : says(['Done, the house is back to how it was. No change was used.'])) : says(['Back to version {n}.', { n }], p.refunded ? ['{n} {n|change|changes} returned.', { n: p.refunded }] : null)
+      setHistory((h) => [...h, { who: 'house', ...line, ...(asked ? { lang: asked } : {}), applied: true, source: 'undo' }])
     } catch (e) {
       setHistory((h) => [...h, { who: 'house', ...says(['Could not go back: {error}', { error: e.message }]), applied: false, source: 'fallback' }])
     }
     setBusy(false)
   }
+  // the style step, the way the address bar opens it (#/style/<id>): the app's own routing takes it from there
+  const toStyleStep = () => {
+    window.location.hash = stepHash(2, project?.id)
+    window.dispatchEvent(new PopStateEvent('popstate', { state: null }))
+  }
   const versions = project?.versions || []
   const current = versions[versions.length - 1]
   const canUndo = project ? current?.kind === 'change' && current.n > 1 : undo.length > 0
 
-  const undoLast = () => {
-    if (project) return restore(current.n - 1)
+  const undoLast = (asked) => {
+    const said = typeof asked === 'string' ? asked : undefined // the button passes its click event
+    if (project) return restore(current.n - 1, { undo: true, lang: said })
     const snap = undo[undo.length - 1]
     if (!snap) return
     setUndo((u) => u.slice(0, -1))
@@ -250,7 +276,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           break
         }
       }
-      return [...out, { who: 'house', ...says(['Undid "{text}". That change is back on your plan.', { text: snap.text }]), applied: true, source: 'undo' }]
+      return [...out, { who: 'house', ...says(['Done, the house is back to how it was. {n} {n|change|changes} returned.', { n: 1 }]), ...(said ? { lang: said } : {}), applied: true, source: 'undo' }]
     })
   }
 
@@ -332,7 +358,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
           )}
           {history.map((m, i) => (
             <div key={i} className={'msg ' + m.who + (m.applied === false && m.who === 'house' ? ' held' : '') + (m.undone ? ' undone' : '')}>
-              {m.who === 'house' ? houseText(m, lang) : m.text}
+              {m.who === 'house' ? houseText(m, m.lang || lang) : m.text}
               {m.meta && (
                 <span className="meta">
                   {Math.round(m.meta.sf) ? <b>{signed(m.meta.sf, ` ${t('sf')}`)}</b> : t('same size')} · {t('{n} change used', { n: m.meta.used ?? 1 })}
@@ -391,7 +417,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
               {m.fixes?.length > 0 && (
                 <span className="fixes">
                   {m.fixes.map((f) => (
-                    <button key={f.label} onClick={() => send(say(f.label).replace(/^¿|\?$/g, ''), f)} disabled={busy || changesLeft <= 0}>
+                    // "Choose another style" (round 15, B6) opens the style step; the other buttons are changes
+                    <button key={f.label} onClick={() => (f.goto === 'style' ? toStyleStep() : send(say(f.label).replace(/^¿|\?$/g, ''), f))} disabled={busy || (f.goto !== 'style' && changesLeft <= 0)}>
                       {say(f.label)}
                     </button>
                   ))}
@@ -403,8 +430,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         </div>
         <div className="chips">
           {suggestions.map((s) => (
-            <button key={s} onClick={() => send(s)} disabled={changesLeft <= 0 || busy}>
-              {s}
+            <button key={s.label} onClick={() => (s.options ? send(t('Show me garage options')) : send(say(s.label), { ops: s.ops, label: s.label }))} disabled={changesLeft <= 0 || busy}>
+              {s.options ? t('Show me garage options') : say(s.label)}
             </button>
           ))}
         </div>

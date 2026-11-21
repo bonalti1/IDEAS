@@ -228,7 +228,9 @@ for (const width of [1440, 390]) {
     // the suggestion chips are Spanish, and a tap sends what the chip says, with the language the homeowner reads
     const chip = page.locator('.chips button').first()
     const chipText = (await chip.innerText()).trim()
-    assert.equal(chipText, 'Haz la cocina más grande')
+    // round 15, U4/U15: the first chip is the change checked on this plan ("Haz la cocina 1 pie más de largo" where a bigger
+    // kitchen does not fit), said as a tú command
+    assert.match(chipText, /^(Haz|Agrega|Quita|Deja|Mueve|Muéstrame) /)
     await chip.click()
     await page.locator('.msg.you').last().waitFor({ timeout: 10000 })
     await page.locator('.msg.thinking').waitFor({ state: 'detached', timeout: 60000 }).catch(() => {})

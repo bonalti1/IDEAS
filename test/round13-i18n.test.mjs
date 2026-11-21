@@ -23,6 +23,8 @@ import { buildLot, lotProblem } from '../src/draft/lib/lot.js'
 import { lotMatchNotes } from '../src/draft/lib/parcel-spec.js'
 import { generateRooms, DEFAULT_PROGRAM, programLine, isRoom } from '../src/draft/lib/layout.js'
 import { historyFrom } from '../src/draft/lib/status.js'
+import { exampleFixes } from '../src/draft/lib/interpret.js'
+import { hasEnglish } from '../src/draft/lib/es.js'
 
 const farmhouse = STYLES.find((s) => s.id === 'farmhouse')
 const has = (k) => Object.prototype.hasOwnProperty.call(es, k)
@@ -420,9 +422,15 @@ test('6: the options the chat offers read in Spanish, and the suggestion chips a
   // the chips: one Spanish sentence each, shown and sent; the screen does not keep an English copy to send
   const chips = ['Make the kitchen bigger', 'Add a porch on the back', 'Remove the rear porch', 'Make the garage {n} cars', 'Add a 2-car garage', 'Add a bedroom', 'Add an office', 'Bigger primary bath', 'Add a half bath', 'Show me garage options']
   for (const c of chips) assert.ok(has(c) && es[c] !== c, c)
+  // round 15, U4: the chips are the changes checked on this plan (exampleFixes), shown and sent in the homeowner's
+  // language through say(), with the ops that were checked
   const draft = fs.readFileSync('src/draft/screens/Draft.jsx', 'utf8')
-  for (const c of chips) assert.ok(draft.includes(`t('${c}'`), `the chip "${c}" is written through t(...)`)
-  assert.match(draft, /suggestions\.map\(\(s\) => \(\s*<button key=\{s\} onClick=\{\(\) => send\(s\)\}/, 'the chip sends the words it shows')
+  assert.match(draft, /exampleFixes\(rooms, program, style, kit, lot/)
+  assert.match(draft, /send\(say\(s\.label\), \{ ops: s\.ops, label: s\.label \}\)/, 'the chip sends the words it shows, and its checked ops')
+  for (const f of exampleFixes(rooms, DEFAULT_PROGRAM, farmhouse, KIT, lot, 8)) {
+    assert.notEqual(sentence(f.label, 'es'), f.label, f.label)
+    assert.equal(hasEnglish(sentence(f.label, 'es')), false, `${f.label} → ${sentence(f.label, 'es')}`)
+  }
   assert.equal(translate('es', 'Make the garage {n} cars', { n: 3 }), 'Haz la cochera para 3 carros')
 })
 

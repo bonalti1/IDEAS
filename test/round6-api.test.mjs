@@ -181,7 +181,7 @@ test('round 8: the stored program follows the drawn plan after a 5-step chat (Re
   assert.equal(undo.status, 200, JSON.stringify(undo.body))
   assert.equal(undo.body.applied, true)
   assert.equal(undo.body.undo, true)
-  assert.match(undo.body.reply, /^Back to version \d+\./)
+  assert.equal(undo.body.reply, 'Done, the house is back to how it was. 1 change returned.') // round 15, P1
   assert.equal(undo.body.changesLeft, before.changesLeft + 1, 'the change that was undone came back to the plan')
   const after = await j(await ana.get(`/api/projects/${id}`))
   assert.equal(after.body.versions[after.body.versions.length - 1].kind, 'rollback')

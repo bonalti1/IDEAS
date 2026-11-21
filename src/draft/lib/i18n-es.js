@@ -656,4 +656,8 @@ export const es = {
   'Front Porch': 'Porche del frente',
   'Rear Porch': 'Porche de atrás',
   'Covered Patio': 'Patio techado',
+  // round 15, chat
+  'Done, the house is back to how it was. {n} {n|change|changes} returned.': 'Listo, la casa quedó como estaba. Te devolvimos {n} {n|cambio|cambios}.',
+  'Done, the house is back to how it was. No change was used.': 'Listo, la casa quedó como estaba. No se usó ningún cambio.',
+  'No change was used.': 'No se usó ningún cambio.',
 }
