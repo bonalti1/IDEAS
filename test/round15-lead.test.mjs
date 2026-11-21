@@ -140,3 +140,12 @@ test('U19 (drafter, 1440): two houses of the same client are told apart by stree
   assert.ok((await page.getByRole('button', { name: /^Confirm R-|^Confirm [A-Z]{1,3}-?\d/ }).count()) <= 1, 'the read zoning is confirmed once')
   await page.screenshot({ path: path.join(OUT, 'lead-u19-card-1440.png'), fullPage: true })
 })
+
+test('P (k02): on a phone the words on the lot map are drawn half as big again; beside a house in 3D they stay small', async () => {
+  const { groundTextScale } = await import('../src/draft/lib/camera.js')
+  assert.equal(groundTextScale({ phone: true }), 1.5)
+  assert.equal(groundTextScale({ phone: false }), 1)
+  assert.equal(groundTextScale({ house: true, view: '3d', phone: true }), 0.45)
+  assert.equal(groundTextScale({ house: true, view: 'top', phone: true }), 1.5)
+  assert.match(fs.readFileSync('src/draft/HouseScene.jsx', 'utf8'), /groundTextScale\(\{ house: [^}]*phone \}\)/)
+})

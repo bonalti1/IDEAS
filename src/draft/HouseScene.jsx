@@ -13,7 +13,7 @@ import { splitWalls } from './lib/openings.js'
 import { kitFor, isRoom } from './lib/layout.js'
 import { drivewaySlabs, walkSlabs } from './lib/site.js'
 import { WINDOW_SILL, WINDOW_HEAD, DOOR_HEAD } from '../kits/modern-farmhouse.js'
-import { camerasFor, topHeight } from './lib/camera.js'
+import { camerasFor, topHeight, groundTextScale } from './lib/camera.js'
 import './scene.css'
 
 export { camerasFor }
@@ -523,7 +523,8 @@ export default function HouseScene({ rooms = [], style, view = '3d', highlightKi
   // the picture in the page until the canvas has drawn
   const [drawn, setDrawn] = useState(false)
   // the words on the ground are for reading the lot; beside a house in the 3D view they are kept small
-  const groundText = showHouse && roomList.length > 0 && view !== 'top' ? 0.45 : 1
+  const phone = typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 720px)').matches
+  const groundText = groundTextScale({ house: showHouse && roomList.length > 0, view, phone })
   return (
     <>
       {/* the top view is always north-up: its north mark is fixed in the corner of the picture, whole at any width

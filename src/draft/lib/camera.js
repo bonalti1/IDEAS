@@ -22,6 +22,16 @@ export function edgeLabelOffset(setbackFt, textFt) {
   return room + textFt * 0.9
 }
 
+/**
+ * Round 15 (polish, k02): how big the words on the ground are drawn. Beside a house in the 3D view they are kept small
+ * (full-size lettering was as tall as a door). On a phone the lot is drawn about 300 px wide, so 4 ft letters came out
+ * about 7 px: there they are drawn half as big again, about 11 px.
+ */
+export function groundTextScale({ house = false, view = 'top', phone = false } = {}) {
+  if (house && view !== 'top') return 0.45
+  return phone ? 1.5 : 1
+}
+
 export function streetNamePoints(lot) {
   const out = []
   for (const st of lot.streets || []) {
