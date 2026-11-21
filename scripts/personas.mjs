@@ -38,8 +38,8 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-san
 
 const W = { 1440: { width: 1440, height: 900 }, 390: { width: 390, height: 844 } }
 const PERSONAS = [
-  { id: 'maria', name: 'Maria', address: '1201 Kerria Ave, McAllen, TX 78501', runs: [[1440, 'en'], [390, 'es']], signOut: true, chat: { en: ['Make the kitchen bigger', 'add an office', 'undo that', 'Add a covered patio in the back'], es: ['la cocina más grande', 'agrega una oficina', 'deshaz eso', 'quiero un porche atrás'] } },
-  { id: 'rosa', name: 'Rosa', address: '1201 Kerria Ave, McAllen, TX 78501', runs: [[1440, 'es'], [390, 'en']], signOut: true, chat: { es: ['dos baños y medio', 'hazla más bonita', 'deshaz eso', 'la sala 3 pies más ancha'], en: ['two and a half baths', 'make it nicer', 'undo that', 'make the living room 3 ft wider'] } },
+  { id: 'maria', name: 'Maria', address: '1201 Kerria Ave, McAllen, TX 78501', runs: [[1440, 'en'], [390, 'es']], signOut: true, chat: { en: ['Add a covered patio in the back', 'undo that', 'Make the kitchen bigger', 'add an office'], es: ['quiero un porche atrás', 'deshaz eso', 'la cocina más grande', 'agrega una oficina'] } },
+  { id: 'rosa', name: 'Rosa', address: '1201 Kerria Ave, McAllen, TX 78501', runs: [[1440, 'es'], [390, 'en']], signOut: true, chat: { es: ['dos baños y medio', 'deshaz eso', 'hazla más bonita', 'la sala 3 pies más ancha'], en: ['two and a half baths', 'undo that', 'make it nicer', 'make the living room 3 ft wider'] } },
   { id: 'jose', name: 'Jose', address: '2002 Kiskadee Ln, Mission, TX 78572', runs: [[1440, 'en'], [390, 'es']], tight: true, chat: { en: ['Send my lot to the drafter please'], es: ['mándale mi lote al dibujante'] } },
   { id: 'mike', name: 'Mike', address: '2218 Royal Palm Dr, Mission, TX 78572', runs: [[390, 'en'], [1440, 'es']], signOut: true, chat: { en: ['Add a covered patio in the back', 'can you undo that?', 'Make the kitchen bigger'], es: ['quiero un porche atrás', '¿puedes deshacer eso?', 'la cocina más grande'] } },
   { id: 'ana', name: 'Ana', plat: 'test/fixtures/garza-site-plan.png', typed: { width: '60', depth: '120', street: 'Showers Rd' }, runs: [[1440, 'en'], [390, 'es']], chat: { en: ['Make the kitchen bigger', 'undo'], es: ['la cocina más grande', 'deshacer'] } },
@@ -217,7 +217,10 @@ async function homeowner(per, size, lang) {
       run.chat.push({ ask, reply: reply.slice(0, 400), changesLeft: now })
       await step(`chat-${i + 1}`)
       if (NOT_UNDERSTOOD.test(reply)) issue('ugly', /baños y medio|half baths|bonita|nicer/.test(ask) ? 'U12/B6' : 'chat', `"${ask}" not understood`)
-      if (/undo|deshacer|deshaz/i.test(ask) && !(now > was)) issue('blocker', 'undo', `"${ask}" did not give the change back (${was} → ${now})`)
+      // a typed undo after a change that went through gives that change back; with nothing to undo it says so
+      const used = run.chat.slice(0, -1).some((c, k) => k > 0 ? c.changesLeft < run.chat[k - 1].changesLeft : c.changesLeft < 10)
+      if (/undo|deshacer|deshaz/i.test(ask) && used && !(now > was)) issue('blocker', 'undo', `"${ask}" did not give the change back (${was} → ${now})`)
+      if (/undo|deshacer|deshaz/i.test(ask) && !used && NOT_UNDERSTOOD.test(reply)) issue('ugly', 'undo', `"${ask}" not read as undo`)
       if (lang === 'es' && /\b(Back to version|There is nothing to undo|Done, the house)\b/.test(reply)) issue('ugly', 'P1', `"${ask}" answered in English`)
       if (/smaller step|paso más chico/i.test(reply) && /office|oficina/i.test(ask)) issue('ugly', 'U4', '"add an office" refused with "a smaller step"')
       if (/baños y medio|half baths/.test(ask) && /4 (full )?bath|4 baños/i.test(reply)) issue('ugly', 'U3', 'half bath read as two full baths')
