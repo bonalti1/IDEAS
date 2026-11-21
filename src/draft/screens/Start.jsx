@@ -81,6 +81,9 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
                     <span className="pill wait" data-testid="house-custom">{t('With a drafter: a design for your lot')}</span>
                   ) : !p.version && !p.lot ? (
                     <span className="pill" data-testid="house-address-only">{t('Address saved, lot not chosen yet')}</span>
+                  ) : !p.version && p.stage === 'rooms' && p.program && Object.keys(p.program).length > 0 ? (
+                    // round 15 (U11): the real step: rooms saved from the rooms step, not drafted yet
+                    <span className="pill" data-testid="house-rooms-chosen">{t('Rooms chosen, ready to draft')}</span>
                   ) : !p.version ? (
                     <span className="pill" data-testid="house-lot-only">{t('Lot saved, rooms not chosen yet')}</span>
                   ) : (

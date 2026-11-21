@@ -294,7 +294,6 @@ export const es = {
   '{area} sf lot. The largest house that fits the space you can build on is about {w} by {d} ft.': 'Lote de {area} pies². La casa más grande que cabe en el espacio donde puedes construir mide como {w} por {d} pies.',
   'Rooms set to a recent build': 'Cuartos iguales a los de una casa reciente',
   'Use the rooms of a recent build': 'Usar los cuartos de una casa reciente',
-  'Garza residence, Rio Grande City': 'Residencia Garza, Rio Grande City',
   '{n} bed': '{n} {n|recámara|recámaras}',
   '{n} bath': '{n} {n|baño|baños}',
   'mini primary': 'segunda suite chica',
@@ -522,7 +521,6 @@ export const es = {
   'Download IFC': 'Descargar IFC',
   'Sheet set the drafter receives': 'Juego de planos que recibe el dibujante',
   "Plates {a}' and {b}' · roof {pitch} · {overhang} overhang · {ext} exterior, {plumb} plumbing walls.": "Alturas de muro de {a}' y {b}' · techo {pitch} · alero de {overhang} · muros exteriores {ext}, muros con tubería {plumb}.",
-  [`Columns marked "set" are the numbers on the Garza drawings. Differences are the gap between the packer and a drafter's plan.`]: 'Las columnas marcadas «juego» son los números de los planos de la casa Garza. Las diferencias son lo que hay entre el acomodo automático y el plano de un dibujante.',
   'Keep editing': 'Seguir editando',
   'The office calls you about the zoning first': 'Primero la oficina te llama por lo de la zonificación',
   'Fix the problems listed above first': 'Primero corrige los problemas de la lista de arriba',
@@ -652,4 +650,12 @@ export const es = {
   'Front Porch': 'Porche del frente',
   'Rear Porch': 'Porche de atrás',
   'Covered Patio': 'Patio techado',
+
+  // round 15, screens
+  'Recent build, Rio Grande City': 'Casa reciente, Rio Grande City',
+  [`Columns marked "set" are the numbers on the recent build's drawings. Differences are the gap between the packer and a drafter's plan.`]: 'Las columnas marcadas «juego» son los números de los planos de la casa reciente. Las diferencias son lo que hay entre el acomodo automático y el plano de un dibujante.',
+  'None of our ready plans fits the space you can build on here. That happens on narrow, shallow and pie-shaped lots. Send it to our drafter, who designs for this lot with the rooms you choose on this page.': 'Ninguno de nuestros planos listos cabe en el espacio donde puedes construir aquí. Eso pasa en lotes angostos, de poco fondo o en forma de rebanada. Envíalo a nuestro dibujante, que diseña para este lote con los cuartos que elijas en esta página.',
+  'Fitted to your lot: {how}.': 'Ajustada a tu lote: {how}.',
+  'Fitting the rooms to your lot…': 'Ajustando los cuartos a tu lote…',
+  'Rooms chosen, ready to draft': 'Cuartos elegidos, lista para el borrador',
 }

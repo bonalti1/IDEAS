@@ -171,7 +171,8 @@ test('screens houses and tight lot: signing out on the lot step, the rooms step 
   await page.waitForTimeout(1200)
   await signOut(page)
   await signIn(page, 'Maria Homeowner', 'maria.h@example.com')
-  await page.getByTestId('house-lot-only').waitFor({ timeout: 20000 })
+  // round 15 (U11) asks the card to say the real step: rooms saved on the rooms step are "Rooms chosen, ready to draft"
+  await page.getByTestId('house-rooms-chosen').waitFor({ timeout: 20000 })
   assert.equal(await page.locator('.houses .house').count(), 1, 'the same house, not a second one')
   await page.locator('.houses .house').first().click()
   await page.getByTestId('lot-strip').waitFor({ timeout: 30000 })

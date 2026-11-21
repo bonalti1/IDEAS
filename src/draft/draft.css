@@ -626,3 +626,19 @@ details.more.card > summary { font-weight: 600; }
 .warnline.stopline { background: #fdecea; border-color: #b3261e; color: #8c1d18; font-weight: 600; }
 .checklist label.check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
 @media (max-width: 820px) { .inbox-side { max-width: none; justify-content: flex-start; } }
+
+/* ── round 15, screens ───────────────────────────────────── */
+/* U1, U17: the tight-lot card is the first thing on the rooms step; its button is a full-size one */
+.rooms-step .custom-lot { margin-top: 0; margin-bottom: 14px; }
+.rooms-step .custom-lot h3 { font-size: 13px; color: #7a5200; }
+.rooms-step .custom-lot .small { font-size: 14px; line-height: 1.5; margin: 0 0 12px; }
+/* U10: the recent build reads at a normal size */
+.preset { gap: 4px; padding: 16px 18px; }
+.preset span { font-size: 12px; }
+.preset b { font-size: 17px; }
+.preset small { font-size: 14px; line-height: 1.45; }
+.preset small.fitted { color: #2e6b3a; }
+/* U10: while the rooms that fit are found, the rooms card waits quietly (no red, no numbers that are about to change) */
+.card.settling > :not(.settling-note) { opacity: 0.45; pointer-events: none; }
+.settling-note { font-size: 13px; margin: 0 0 6px; }
+.meter-fill.tight { background: var(--brand-brown); }

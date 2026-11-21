@@ -334,7 +334,7 @@ export const KIT = {
 
   // ── Reference program: the Garza house, for comparing app output to sheet 200
   reference: {
-    name: 'Garza residence, Rio Grande City',
+    name: 'Recent build, Rio Grande City', // round 15, office decision 1: no family name on a homeowner screen
     livingSf: 2533,
     frontPorchSf: 162,
     rearPorchSf: 175,
