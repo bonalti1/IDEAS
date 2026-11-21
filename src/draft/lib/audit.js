@@ -18,6 +18,13 @@ const GARAGE_DOOR_ROOMS = ['mud', 'laundry', 'hall', 'foyer']
 const SERVICE = ['pantry', 'laundry', 'mud', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic']
 const SERVICE_HALL = ['mud', 'laundry']
 export const EGRESS = { sf: 5.7, heightIn: 24, widthIn: 20, sillIn: 44 }
+/** Feet as the plan prints them: 55.25 → 55'-3". */
+const feetInches = (ft) => {
+  const total = Math.round(ft * 12)
+  const f = Math.floor(total / 12)
+  const i = total - f * 12
+  return `${f}'-${i}"`
+}
 export const CLEAR = { hallFt: 3.5, closetIn: 24, walkInFt: 5, deadEndFt: 10, circulationWarn: 0.12, circulationFail: 0.18, jogFt: 2, voidSf: 4, toiletFrontIn: 21, toiletSideIn: 15, showerFrontIn: 24, aisleIn: 42, triangleMaxFt: 26, triangleGoodFt: 22, legMinFt: 4, legMaxFt: 9, approachIn: 30, hallLongFt: 35, swingRoomSf: 25, sideYardFt: 10, garageSnoutWarnFt: 12, garageSnoutGoalFt: 10, hotWaterFt: 100, hotWaterRouting: 1.25, wetSpreadFt: 40 }
 // NKBA bath planning guidelines (kb.nkba.org, 2022): the warning line above the IRC errors (round 8, item 34)
 export const NKBA = { toiletFrontIn: 30, toiletSideIn: 18, showerFrontIn: 30, showerFt: 3 }
@@ -541,11 +548,15 @@ export function auditPlan(rooms, program, kit, lot) {
     })
     return Math.max(best, h1 - at)
   }
+  // Round 15, item U19: a hall is measured the way it is drawn. The drafter's card printed a 4'-3" x 55'-3" hallway
+  // while this check passed it at its 22 ft enclosed run (the rest open to the kitchen and the dining room). A hall
+  // drawn over 35 ft is warned whatever it is open to; the enclosed run is kept in the measures for the drafter.
   const hallRun = {}
   halls.forEach((h) => {
-    const len = runOf(h)
-    hallRun[h.id] = len
-    if (len > CLEAR.hallLongFt + 0.05) say('hall-long', 'warn', h, `${h.name} is ${len.toFixed(1)} ft long; a hall over ${CLEAR.hallLongFt} ft is a corridor (split the plan or put rooms on both sides).`)
+    const run = runOf(h)
+    hallRun[h.id] = run
+    const drawn = Math.max(h.w, h.d)
+    if (drawn > CLEAR.hallLongFt + 0.05) say('hall-long', 'warn', h, `${h.name} is ${feetInches(Math.min(h.w, h.d))} x ${feetInches(drawn)} as drawn; a hall over ${CLEAR.hallLongFt} ft is a corridor (split the plan or put rooms on both sides).`)
   })
 
   // k) the primary suite is entered from a private hall or the living side, never from the service hall
@@ -863,8 +874,9 @@ export function auditPlan(rooms, program, kit, lot) {
     }
   }
 
-  // a hall whose whole length is open to a public room has no enclosed run: it is listed at its drawn length, never 0
-  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round((hallRun[r.id] || Math.max(r.w, r.d)) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, enclosed: !!hallRun[r.id], deadEndFt: deadEnds[r.id] ?? null }))
+  // round 15, item U19: a hall's length is its drawn length (what the plan and the drafter's card print); the walled
+  // stretch, without what is open to a public room, is kept as enclosedFt
+  measures.halls = R.filter((r) => r.kind === 'hall').map((r) => ({ name: r.name, clearIn: Math.round((Math.min(r.w, r.d) - wallFt) * 12), lengthFt: Math.round(Math.max(r.w, r.d) * 10) / 10, drawnFt: Math.round(Math.max(r.w, r.d) * 10) / 10, enclosedFt: Math.round((hallRun[r.id] || 0) * 10) / 10, enclosed: !!hallRun[r.id], deadEndFt: deadEnds[r.id] ?? null }))
   measures.doors = doors.filter((d) => !d.cased).map((d) => ({ id: d.id, room: byId[d.room]?.name || d.room, widthIn: Math.round((d.span || Math.max(d.w, d.d)) * 12), size: d.size || null }))
   const errors = findings.filter((f) => f.severity === 'error')
   const warnings = findings.filter((f) => f.severity === 'warn')
