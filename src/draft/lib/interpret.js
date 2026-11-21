@@ -7,6 +7,7 @@ import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitCla
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES } from './es.js'
+import { isSendLot } from './intents.js'
 
 const MIN_CONFIDENCE = 0.5
 const MAX_PARTS = 3 // parts applied from one message; one change is used however many applied (round 8, item 29)
@@ -52,6 +53,9 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const say = (result) => localize(result, lang)
   // a button the client tapped (opts.fixOps): its ops are taken as given and only the rules run; the label is not read
   if (Array.isArray(opts.fixOps) && opts.fixOps.length) return say(decide({ ops: opts.fixOps.slice(0, 8), reply: '', confidence: 1 }, rooms, program, style, kit, 'fix', lotOf(opts.lot), { history: opts.history || [] }))
+  // round 15, U2: "send my lot to the drafter" is not a change: with no account there is no saved lot to send yet
+  // (the Draft screen sends it itself when someone is signed in, and so does the office)
+  if (isSendLot(asked)) return say({ applied: false, sendLot: true, rooms, reply: 'Sign in first, so we can save your lot and send it to a drafter. No change was used.', source: 'fallback', ops: [], reasons: ['send lot'] })
   // "undo", "go back to how it was", "deshaz eso": the Undo button's job; the screen keeps the versions, so here the
   // answer only points to it (the office API does the undo itself for a saved plan)
   if (isUndoRequest(asked)) return say({ applied: false, undo: true, rooms, reply: opts.history?.length ? 'Tap Undo below the chat to take the last change off; it comes back to your plan.' : 'There is nothing to undo yet. No change was used.', source: 'fallback', ops: [], reasons: ['undo'] })

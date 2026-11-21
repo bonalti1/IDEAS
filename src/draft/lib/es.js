@@ -639,6 +639,12 @@ S(String.raw`Done\. The office has your request and usually adds more within 1 b
 S(String.raw`Sign in with your email first so the office knows which house is yours\. Then this button sends your request\. You can also call ([^.]+)\.`, (m) => `Primero inicie sesión con su correo para que la oficina sepa cuál casa es la suya. Después este botón envía su solicitud. También puede llamar al ${m[1]}.`)
 S(String.raw`The office did not get that just now\. Try again in a moment, or call ([^.]+)\.`, (m) => `La oficina no recibió eso en este momento. Intente de nuevo en un momento, o llame al ${m[1]}.`)
 
+// round 15, U2: "send my lot to the drafter"
+F('Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days.', 'Tu lote ya está con nuestro dibujante. Un dibujante diseña una casa para este lote y te escribe por correo, por lo general en dos días hábiles.')
+F('This plan has no lot of its own yet. Choose your lot first, and then a drafter can design a house for it.', 'Este plano todavía no tiene un lote propio. Primero escoge tu lote, y después un dibujante puede diseñar una casa para él.')
+F('Sign in first, so we can save your lot and send it to a drafter.', 'Primero inicia sesión, para que podamos guardar tu lote y enviarlo a un dibujante.')
+F('We could not reach the office. Try again in a minute.', 'No pudimos comunicarnos con la oficina. Intenta de nuevo en un minuto.')
+
 // ── what the chat cannot take ──
 S(String.raw`(.+?) is one story for now; a second story is on the list, not drawn yet\.`, (m) => `Por ahora el estilo ${m[1]} es de un solo piso; el segundo piso está en la lista, pero todavía no se dibuja.`)
 S(String.raw`That nets out to no change: making the (.+?) (bigger and then smaller|smaller and then bigger) again leaves it as it is\.`, (m) => `Eso se cancela solo: ${m[2].startsWith('bigger') ? 'agrandar y luego achicar' : 'achicar y luego agrandar'} ${el(m[1])} ${fem(m[1]) ? 'la' : 'lo'} deja como está.`)

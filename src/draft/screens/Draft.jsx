@@ -9,6 +9,7 @@ import { api } from '../lib/api.js'
 import { TRUST } from '../lib/trust.js'
 import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '../lib/i18n.js'
 import { isUndoRequest } from '../lib/ops.js'
+import { isSendLot } from '../lib/intents.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = says(['Thanks! The office will reach out within 1 business day. You can also call {phone}.', { phone: TRUST.phone }])
@@ -41,8 +42,8 @@ function suggestionsFor(rooms, kit, t = (s) => s) {
 /** The edits still standing in the chat, oldest first: a re-draft (a new size, a garage the plan cannot add in place) puts them back. */
 const standingEdits = (history) => history.flatMap((m, i) => (m.who === 'you' && !m.undone && history[i + 1]?.applied && history[i + 1].ops?.length ? [{ text: m.text, ops: history[i + 1].ops }] : []))
 
-// "send my lot to the drafter", "have the drafter design it" and the same in Spanish (round 13)
-export const SEND_LOT_RE = /^\s*(please\s+)?((send|give)\s+(my|the|this)\s+lot(\s+to\s+(the|a|your)\s+drafter)?|(have|let|get)\s+(the|a|your)\s+drafter\s+(to\s+)?(design|draw)\s+(it|this|one|my house|a house|the house)(\s+for\s+(me|this lot|my lot))?|i\s+want\s+(the|a)\s+drafter\s+to\s+(design|draw)\s+(it|my house|a house)|(manda|mande|envía|envia|envíe|envie)(le|r)?\s+mi\s+lote(\s+al\s+dibujante)?|que\s+(lo|la)\s+(diseñe|disene|dibuje)\s+(el|un)\s+dibujante|quiero\s+que\s+(el|un)\s+dibujante\s+(me\s+)?(lo|la)?\s*(diseñe|disene|dibuje)(\s+(la|mi|una)\s+casa)?)\s*[.!]?\s*$/i
+// "send my lot to the drafter", "mándale mi lote al dibujante": read on meaning by lib/intents.js (round 15, U2),
+// the same matcher the office's change route uses
 const UNDO_RE = /^\s*(undo( that| it| the last( change| one)?)?|go back( one| a step)?|put it back|take (that|it) back|revert( that)?)\s*[.!]?\s*$/i
 // the same in Spanish (round 13): "deshacer", "deshaz eso", "regresa", "quita el último cambio"
 const UNDO_ES = /^\s*(deshacer|deshaz(lo| eso| el [uú]ltimo( cambio)?)?|regr[eé]sa(lo|le)?|quita el [uú]ltimo cambio|d[eé]jalo como estaba)\s*[.!]?\s*$/i
@@ -145,7 +146,7 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
     }
     // round 13: "send my lot to the drafter", "have the drafter design it": the lot goes to the drafter's queue for a
     // house designed for it, exactly as the button on the rooms step does. Nothing is used.
-    if (!fix && SEND_LOT_RE.test(q)) {
+    if (!fix && isSendLot(q)) {
       setHistory((h) => [...h, { who: 'you', text: q }])
       if (!onSendLot) {
         setHistory((h) => [...h, { who: 'house', ...says(['Sign in first, so we can save your lot and send it to a drafter.']), applied: false, source: 'fallback' }])
@@ -180,6 +181,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
         // the office runs the change, checks the rules and uses one of the plan's changes only when it applies
         const r = await api.change(project.id, q, fix?.ops, lang)
         res = r
+        // the office read it as "send my lot to the drafter" (round 15, U2): the plan comes back flagged for the drafter
+        if (r.sendLot && r.project) setProject(r.project)
         if (r.applied) setProject((p) => ({ ...p, changesLeft: r.changesLeft, changesUsed: r.changesUsed, version: r.version, versions: [...(p.versions || []), { n: r.version, kind: 'change', text: q, used: 1, at: new Date().toISOString() }] }))
       } else {
         const opts = { lot, history: standingEdits(history), lang }
