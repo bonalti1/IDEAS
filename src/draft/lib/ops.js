@@ -1106,8 +1106,9 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   }
   // "bigger windows", "ventanas más grandes" (round 15, B6): the windows of the rooms people live in, wider in place
   if (/\b(?:windows|ventanas)\b/.test(t) && /\b(?:bigger|larger|wider|more light|grandes|anchas|amplias)\b/.test(t) && !/\b(?:smaller|fewer|remove|chicas|quita)\b/.test(t)) return { ops: [{ op: 'windows', grow: 2 }], reply: 'Making the windows wider.', confidence: 0.75 }
-  const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
-  const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
+  // round 15: "1 ft longer" (the words on our own buttons) grows; "shorter" and "narrower" shrink one way
+  const grow = /\b(bigger|larger|wider|deeper|longer|more room|expand|increase|enlarge)\b/.test(t)
+  const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower|shorter|shallower)\b/.test(t)
   const add = /\b(add|another|extra|one more|put in)\b|\b(?:\d+|two|three|four|five|six) more (?:bed|bath|office|room)/.test(t) // "2 more bedrooms" adds two; "2 more feet" does not
   const remove = /\b(remove|delete|drop|get rid of|without|take out|no longer)\b/.test(t)
   const much = /\b(much|a lot|way|double)\b/.test(t) ? 1.3 : 1.15
@@ -1252,11 +1253,11 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
   }
   if (grow || shrink) {
     const f = grow ? much : 1 / much
-    const wider = /\bwider\b/.test(t)
-    const deeper = /\bdeeper|longer\b/.test(t)
+    const wider = /\b(wider|narrower)\b/.test(t)
+    const deeper = /\b(deeper|longer|shorter|shallower)\b/.test(t)
     const sign = grow ? 1 : -1
     const ops = targets.map((r) => ({ op: 'resize', room: r.id, w: by && wider ? r.w + sign * by : deeper ? r.w : by && !deeper ? r.w + sign * by : q(r.w * f), d: by && deeper ? r.d + sign * by : wider ? r.d : by ? r.d + sign * by : q(r.d * f), ...(by || wider || deeper ? {} : { soft: true }) }))
-    const how = by ? `${by} feet ${wider ? 'wider' : deeper ? 'deeper' : grow ? 'bigger each way' : 'smaller each way'}` : `about ${Math.round(Math.abs(f - 1) * 100)} percent ${grow ? 'bigger' : 'smaller'}`
+    const how = by ? `${by} ${by === 1 ? 'foot' : 'feet'} ${wider ? (grow ? 'wider' : 'narrower') : deeper ? (grow ? 'deeper' : 'shorter') : grow ? 'bigger each way' : 'smaller each way'}` : `about ${Math.round(Math.abs(f - 1) * 100)} percent ${grow ? 'bigger' : 'smaller'}`
     return { ops, reply: `${grow ? 'Making' : 'Making'} the ${last.name.toLowerCase()} ${how}.`, confidence: 0.7 }
   }
   return { ops: [], reply: 'Tell me what to do with that room: bigger, smaller, add one, or remove it.', confidence: 0.3 }

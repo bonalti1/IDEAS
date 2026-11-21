@@ -240,7 +240,9 @@ test('I: the words on the ground are sized by the scene, and small beside a hous
   const scene = fs.readFileSync('src/draft/HouseScene.jsx', 'utf8')
   const site = fs.readFileSync('src/components/SitePlan.jsx', 'utf8')
   // the 3D view with a house passes a scale under a half; the Lot step's top view of the lot keeps full size
-  const m = scene.match(/const groundText = showHouse && roomList\.length > 0 && view !== 'top' \? ([\d.]+) : 1/)
+  // (round 15: the scale moved to camera.js's groundTextScale, which also draws it half as big again on a phone)
+  assert.match(scene, /const groundText = groundTextScale\(\{ house: showHouse && roomList\.length > 0, view, phone \}\)/)
+  const m = fs.readFileSync('src/draft/lib/camera.js', 'utf8').match(/if \(house && view !== 'top'\) return ([\d.]+)/)
   assert.ok(m, 'the scene sets the ground text scale')
   assert.ok(+m[1] > 0.2 && +m[1] <= 0.5, `the scale is ${m[1]}`)
   assert.match(scene, /<SitePlan lot=\{L\} problem=\{lotProblem\} northArrow=\{view !== 'top'\} textScale=\{groundText\} \/>/)

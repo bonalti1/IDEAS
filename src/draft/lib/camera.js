@@ -78,14 +78,47 @@ export function camerasFor(lot = DEFAULT_LOT, rooms = []) {
   }
   const cos = Math.cos(lot.angle || 0)
   const sin = Math.sin(lot.angle || 0)
+  // round 15 (polish): with a house, the 3D view holds the house and the lot's street side too. A house turned to sit
+  // in the widest part of a pie lot (Kiskadee) had its curved frontage cut off at the bottom of the picture.
+  let C3 = [CX, CZ]
+  let span3 = span
+  let hold3 = null
+  if (solid.length) {
+    const b = lot.boundary || []
+    const front = (lot.edges || []).flatMap((e, i) => (e.kind === 'front' && b.length ? [b[i], b[(i + 1) % b.length]] : [])).filter(Boolean)
+    if (front.length) {
+      const xs = solid.flatMap((r) => [r.center[0] - r.w / 2 - r.d / 2, r.center[0] + r.w / 2 + r.d / 2]).concat(front.map((p) => p[0]))
+      const zs = solid.flatMap((r) => [r.center[1] - r.w / 2 - r.d / 2, r.center[1] + r.w / 2 + r.d / 2]).concat(front.map((p) => p[1]))
+      C3 = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2]
+      span3 = Math.max(span, Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) * 0.95)
+      hold3 = front.concat(solid.map((r) => r.center))
+    }
+  }
   // the 3D view looks from the street side (local +z) toward the rear
-  const back = (lx, lz) => [CX + lx * cos - lz * sin, CZ + lx * sin + lz * cos]
-  const d3 = solid.length ? Math.max(120, span * 1.3) : span
+  const back = (lx, lz) => [C3[0] + lx * cos - lz * sin, C3[1] + lx * sin + lz * cos]
+  let d3 = solid.length ? Math.max(120, span3 * 1.3) : span
+  // the street side is nearest the camera, so the picture's bottom edge cuts it first: step back until it is in
+  // (a square picture, the narrowest the 3D view is shown in)
+  for (let k = 0; hold3 && k < 12 && !hold3.every((p) => inView3(back(-d3 * 0.55, d3 * 0.75), d3 * 0.55, C3, p)); k++) d3 *= 1.1
   const [px, pz] = back(-d3 * 0.55, d3 * 0.75)
   return {
     top: { position: [CX, span * 1.25, CZ + 0.5], target: [CX, 0, CZ], ...(hold ? { hold } : {}) },
-    '3d': { position: [px, d3 * 0.55, pz], target: [CX, 0, CZ] },
+    '3d': { position: [px, d3 * 0.55, pz], target: [C3[0], 0, C3[1]] },
   }
+}
+
+/** Is ground point p in the picture of a camera at (pos, height) looking at the ground point t? A square picture, a little air. */
+function inView3([x, z], y, t, p) {
+  const f = [t[0] - x, -y, t[1] - z]
+  const fl = Math.hypot(...f)
+  const F = f.map((v) => v / fl)
+  const rl = Math.hypot(F[2], F[0])
+  const R = [-F[2] / rl, 0, F[0] / rl]
+  const U = [R[1] * F[2] - R[2] * F[1], R[2] * F[0] - R[0] * F[2], R[0] * F[1] - R[1] * F[0]]
+  const v = [p[0] - x, -y, p[1] - z]
+  const d = v[0] * F[0] + v[1] * F[1] + v[2] * F[2]
+  const lim = HALF * 0.94
+  return d > 0 && Math.abs((v[0] * U[0] + v[1] * U[1] + v[2] * U[2]) / d) <= lim && Math.abs((v[0] * R[0] + v[2] * R[2]) / d) <= lim
 }
 
 /** How much of the ground a camera looking straight down from `height` shows, in feet, in a picture `aspect` wide for 1 tall. */

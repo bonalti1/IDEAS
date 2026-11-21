@@ -91,6 +91,9 @@ const RE = {
   shrink: /\bmas (?:chi(?:c|qu)[oa]s?|chiquit[oa]s?|pequen[oa]s?|angost[oa]s?|cort[oa]s?|reducid[oa]s?|compact[oa]s?)\b|\bmenos (?:grande|anch[oa]|larg[oa]|espacio)\b|\b(?:achic\w+|reduc\w+|encog\w+|recort\w+|acort\w+)\b|\bmenos de (?:ancho|largo|fondo)\b/,
   wide: /\banch[oa]s?\b|\bensanch|\bde ancho\b/,
   deep: /\blarg[oa]s?\b|\bprofund|\bhond[oa]|\balarg|\bde (?:largo|fondo|profundidad)\b/,
+  // round 15: "más angosta" is narrower, "más corta" shorter (one way), not smaller each way
+  narrow: /\bangost[oa]s?\b|\bmenos anch[oa]\b|\bmenos de ancho\b/,
+  short: /\bcort[oa]s?\b|\bacort\w+|\bmenos larg[oa]\b|\bmenos de (?:largo|fondo)\b/,
   much: /\bmuch(?:o|isimo) mas\b|\bbastante mas\b|\bel doble\b|\bmucho\b/,
   cars: /\b(\d|un|una)\s*(?:carros?|coches?|autos?|automoviles?|vehiculos?|trocas?|camionetas?)\b/,
   side: /\b(?:de lado|de ladito|lateral|por (?:el|un) lado|por (?:el|un) costado|de costado|entrada (?:lateral|de lado|por (?:el|un) lado))\b/,
@@ -216,7 +219,7 @@ function clauseEn(clause, ctx) {
     let how
     if (size) how = `${size[1]} by ${size[2]}`
     else if (absolute && !growing && !shrinking) how = `${absolute[1]} ft ${absolute[2] === 'ancho' ? 'wide' : 'deep'}`
-    else how = `${RE.much.test(s) && !by ? 'much ' : ''}${by}${growing ? (RE.wide.test(s) ? 'wider' : RE.deep.test(s) ? 'deeper' : 'bigger') : 'smaller'}`
+    else how = `${RE.much.test(s) && !by ? 'much ' : ''}${by}${growing ? (RE.wide.test(s) ? 'wider' : RE.deep.test(s) ? 'deeper' : 'bigger') : RE.narrow.test(s) ? 'narrower' : RE.short.test(s) ? 'shorter' : 'smaller'}`
     const action = { kind: 'resize', how }
     if (others.length > 1 && !size && !absolute) return say(others.map((r) => `make the ${r.en} ${how}`).join(' and '), action)
     return say(`make ${target} ${how}`, action)
@@ -717,7 +720,7 @@ F('Tell me what you would like instead.', 'Dime qué te gustaría mejor.')
 F('That change did not work out on this plan. Tell me what you would like instead.', 'Ese cambio no funcionó en este plano. Dime qué te gustaría mejor.')
 S(String.raw`The (.+?) in this kit goes up to (${N})' by (${N})'; (${N})' by (${N})' is past that\.`, (m) => `En este estilo ${el(m[1])} llega hasta ${m[2]} por ${m[3]} pies; ${m[4]} por ${m[5]} pies se pasa de eso.`)
 S(String.raw`Making the (.+?) about (\d+) percent (bigger|smaller)\.`, (m) => `Hice ${el(m[1])} más o menos un ${m[2]} por ciento más ${m[3] === 'bigger' ? 'grande' : fem(m[1]) ? 'chica' : 'chico'}.`)
-S(String.raw`Making the (.+?) (${N}) feet (wider|deeper|bigger each way|smaller each way)\.`, (m) => `Hice ${el(m[1])} ${pies(m[2])} ${m[3] === 'wider' ? `más ${fem(m[1]) ? 'ancha' : 'ancho'}` : m[3] === 'deeper' ? `más ${fem(m[1]) ? 'larga' : 'largo'}` : m[3].startsWith('bigger') ? 'más grande por cada lado' : `más ${fem(m[1]) ? 'chica' : 'chico'} por cada lado`}.`)
+S(String.raw`Making the (.+?) (${N}) (?:feet|foot) (wider|deeper|narrower|shorter|bigger each way|smaller each way)\.`, (m) => `Hice ${el(m[1])} ${pies(m[2])} ${m[3] === 'wider' ? `más ${fem(m[1]) ? 'ancha' : 'ancho'}` : m[3] === 'deeper' ? `más ${fem(m[1]) ? 'larga' : 'largo'}` : m[3] === 'narrower' ? `más ${fem(m[1]) ? 'angosta' : 'angosto'}` : m[3] === 'shorter' ? `más ${fem(m[1]) ? 'corta' : 'corto'}` : m[3].startsWith('bigger') ? 'más grande por cada lado' : `más ${fem(m[1]) ? 'chica' : 'chico'} por cada lado`}.`)
 S(String.raw`Making the (.+?) (${N}) by (${N}) feet\.`, (m) => `Dejé ${el(m[1])} de ${m[2]} por ${m[3]} pies.`)
 S(String.raw`(.+?) is now (${N})' by (${N})' \(was (${N})' by (${N})'\)\.`, (m) => `${cap(el(m[1]))} ahora mide ${m[2]} por ${m[3]} pies (antes ${m[4]} por ${m[5]}).`)
 

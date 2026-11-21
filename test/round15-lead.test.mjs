@@ -149,3 +149,59 @@ test('P (k02): on a phone the words on the lot map are drawn half as big again; 
   assert.equal(groundTextScale({ house: true, view: 'top', phone: true }), 1.5)
   assert.match(fs.readFileSync('src/draft/HouseScene.jsx', 'utf8'), /groundTextScale\(\{ house: [^}]*phone \}\)/)
 })
+
+test('chat: "1 ft longer" (the words on our own buttons) grows the room one way; "2 ft narrower", "2 ft shorter" and "2 pies más angosta" shrink it one way', async () => {
+  const { interpretRequest } = await import('../src/draft/lib/interpret.js')
+  const { PLANS, style } = await import('./round13-requests.mjs')
+  const plan = PLANS.roomy
+  const off = async () => {
+    throw new Error('no api')
+  }
+  const ask = (text) => interpretRequest(text, plan.rooms, plan.program, style, { lot: plan.lot, interpreter: off, report: false })
+  const kitchen = plan.rooms.find((r) => /kitchen/i.test(r.name))
+  const living = plan.rooms.find((r) => /^living/i.test(r.name))
+  const after = (r, room) => r.rooms.find((x) => x.id === room.id)
+  for (const [text, room, dw, dd, said] of [
+    ['make the kitchen 1 ft longer', kitchen, 0, 1, /1 foot deeper/],
+    ['make the kitchen 2 ft narrower', kitchen, -2, 0, /2 feet narrower/],
+    ['make the living room 2 ft shorter', living, 0, -2, /2 feet shorter/],
+    ['haz la sala 2 pies más angosta', living, -2, 0, /2 pies más angosta/],
+  ]) {
+    const r = await ask(text)
+    assert.equal(r.applied, true, `${text}: ${r.reply}`)
+    const got = after(r, room)
+    assert.equal(+(got.w - room.w).toFixed(2), dw, `${text}: width`)
+    assert.equal(+(got.d - room.d).toFixed(2), dd, `${text}: depth`)
+    assert.match(r.reply, said)
+  }
+})
+
+test('P (3D): on Kiskadee the 3D view holds the house and the whole curved street side; on Kerria it still holds the house', async () => {
+  const { camerasFor, FOV } = await import('../src/draft/lib/camera.js')
+  const { plans } = await import('./round15-lots.mjs')
+  const P = await plans()
+  const half = Math.tan(((FOV / 2) * Math.PI) / 180)
+  const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+  const unit = (a) => a.map((x) => x / Math.hypot(...a))
+  const inView = (cam, p, aspect) => {
+    const f = unit(sub3(cam.target, cam.position))
+    const r = unit(cross(f, [0, 1, 0]))
+    const u = cross(r, f)
+    const v = sub3([p[0], 0, p[1]], cam.position)
+    const z = dot(v, f)
+    return z > 0 && Math.abs(dot(v, u) / z) <= half && Math.abs(dot(v, r) / z) <= half * aspect
+  }
+  for (const name of ['kiskadee', 'kerria']) {
+    const { lot, rooms } = P[name]
+    const cam = camerasFor(lot, rooms)['3d']
+    const b = lot.boundary
+    const front = lot.edges.flatMap((e, i) => (e.kind === 'front' ? [b[i], b[(i + 1) % b.length]] : []))
+    assert.ok(front.length >= 2, `${name}: the lot has a street side`)
+    for (const aspect of [1.2, 1.3]) {
+      for (const p of front) assert.ok(inView(cam, p, aspect), `${name} at ${aspect}: a point of the street side (${p.map(Math.round)}) is out of the picture`)
+      for (const r of rooms.filter((x) => x.center && x.w)) assert.ok(inView(cam, r.center, aspect), `${name}: ${r.name} is out of the picture`)
+    }
+  }
+})
