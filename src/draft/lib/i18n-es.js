@@ -653,3 +653,9 @@ export const es = {
   'Rear Porch': 'Porche de atrás',
   'Covered Patio': 'Patio techado',
 }
+
+// round 15, house: the room names of the Valley plan and the narrow plan's two halls
+Object.assign(es, {
+  Entry: 'Entrada',
+  'Rear Hall': 'Pasillo de atrás',
+})
