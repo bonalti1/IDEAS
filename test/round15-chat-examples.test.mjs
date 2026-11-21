@@ -103,9 +103,22 @@ test('U12 (Kerria, Kiskadee, a tight lot): a refused "make the kitchen bigger" i
     }
   }
   assert.ok(offered >= 2, 'the smaller option is offered where one fits')
-  const ker = await basic('make the kitchen bigger', (await plans()).kerria)
-  assert.match(ker.reply, /^The kitchen can only grow 1 ft longer here: .+\.$/)
-  assert.equal(ker.fixes[0].label, 'Make the kitchen 1 ft longer')
+  // Kerria drafts the Valley plan (round 15): the kitchen grows as asked; a wider kitchen than the hall allows is
+  // refused in one sentence with the widest that fits as the button
+  const kerria = (await plans()).kerria
+  const ker = await basic('make the kitchen bigger', kerria)
+  assert.equal(ker.applied, true, ker.reply)
+  const before = kerria.rooms.find((r) => r.id === 'kitchen')
+  const after = ker.rooms.find((r) => r.id === 'kitchen')
+  assert.ok(after.w * after.d >= before.w * before.d + 19, `the kitchen grows by a foot or more (${before.w} x ${before.d} → ${after.w} x ${after.d})`)
+  sound(ker, kerria, 'the bigger kitchen on Kerria')
+  const wider = await basic('make the kitchen 2 ft wider', kerria)
+  assert.equal(wider.applied, false)
+  assert.match(wider.reply, /^The kitchen can only grow [\d.]+ ft wider here: .+\.$/)
+  assert.match(wider.fixes[0].label, /^Make the kitchen [\d.]+ ft wider$/)
+  const done = await tap(wider.fixes[0], kerria)
+  assert.equal(done.applied, true, done.reply)
+  sound(done, kerria, `"${wider.fixes[0].label}"`)
 })
 
 test('P3: "la sala 3 pies más ancha" refused offers the widest that fits as the button; a foot more than that does not fit', async () => {
