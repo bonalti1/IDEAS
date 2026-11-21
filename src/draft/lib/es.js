@@ -372,7 +372,7 @@ const hadEs = (n, kind, named, half) => (named || half ? countHalfEs(n, kind, ha
 const STYLE_ES = { 'Modern Farmhouse': 'Farmhouse moderno', Modern: 'Moderno', Spanish: 'Español', Ranch: 'Rancho', Transitional: 'Transicional', Tuscan: 'Toscano', Coastal: 'Costero', 'This style': 'este' }
 const styleEs = (name) => STYLE_ES[String(name).trim()] || String(name).trim()
 const carsEs = (n) => `cochera para ${n} carro${String(n) === '1' ? '' : 's'}`
-const PLAN_ES = { standard: 'el plano estándar', compact: 'el plano compacto', 'narrow-lot': 'el plano para lote angosto', narrow: 'el plano para lote angosto', 'garage-forward': 'el plano con la cochera al frente', frontgarage: 'el plano con la cochera al frente', same: 'el mismo plano' }
+const PLAN_ES = { standard: 'el plano estándar', compact: 'el plano compacto', 'narrow-lot': 'el plano para lote angosto', narrow: 'el plano para lote angosto', 'garage-forward': 'el plano con la cochera al frente', frontgarage: 'el plano con la cochera al frente', Valley: 'el plano del Valle', valley: 'el plano del Valle', same: 'el mismo plano' }
 const planEs = (p) => PLAN_ES[p] || `el plano ${p}`
 const WAY_ES = { east: 'hacia el este', west: 'hacia el oeste', 'toward the street': 'hacia la calle', 'toward the back': 'hacia atrás', left: 'a la izquierda', right: 'a la derecha', north: 'hacia atrás', south: 'hacia la calle', street: 'hacia la calle', back: 'hacia atrás', front: 'hacia la calle', rear: 'hacia atrás' }
 const wayEs = (w) => WAY_ES[String(w).trim().toLowerCase()] || String(w)
@@ -669,7 +669,7 @@ F('Making the windows wider.', 'Hice las ventanas más anchas.')
 F('Choose another style', 'Escoge otro estilo para la casa')
 F('Add a front porch', 'Agrega un porche al frente')
 S(String.raw`Add a front porch, (${N}) ft by (${N}) ft`, (m) => `Agrega un porche al frente, de ${m[1]} por ${m[2]} pies`)
-S(String.raw`Make the front porch (${N}) ft deeper`, (m) => `Haz el porche del frente ${pies(m[1])} más hondo`)
+S(String.raw`Make the front porch (${N}) ft deeper`, (m) => `Haz el porche del frente ${pies(m[1])} más profundo`)
 S(String.raw`Made (\d+) windows? wider \((.+?)\)\.`, (m) => `Hice ${m[1] === '1' ? 'una ventana más ancha' : `${m[1]} ventanas más anchas`} (${listEs(m[2])}).`)
 
 // round 15, U2: "send my lot to the drafter"

@@ -205,3 +205,19 @@ test('P (3D): on Kiskadee the 3D view holds the house and the whole curved stree
     }
   }
 })
+
+test('chat (walkthrough): a redraw names the Valley plan in plain words ("el plano del Valle", not "el plano valley"); the porch button says "más profundo"', async () => {
+  const { interpretRequest } = await import('../src/draft/lib/interpret.js')
+  const { plans, style } = await import('./round15-lots.mjs')
+  const P = (await plans()).kerria
+  const off = async () => {
+    throw new Error('no api')
+  }
+  const ask = (text) => interpretRequest(text, P.rooms, P.program, style, { lot: P.lot, interpreter: off, report: false })
+  const es = await ask('dos baños y medio')
+  assert.match(es.reply, /en el plano del Valle\./)
+  assert.doesNotMatch(es.reply, /valley/)
+  assert.match((await ask('two and a half baths')).reply, /on the Valley plan\./)
+  const nicer = await ask('hazla más bonita')
+  assert.ok(nicer.fixes.some((f) => /porche del frente \d+ pies más profundo/.test(f.label)), nicer.fixes.map((f) => f.label).join(' / '))
+})

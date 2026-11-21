@@ -220,7 +220,7 @@ export function growSwaps(ops, rooms, kit) {
   })
 }
 
-const PLAN_WORDS = { standard: 'standard', compact: 'compact', narrow: 'narrow-lot', frontgarage: 'garage-forward' }
+const PLAN_WORDS = { standard: 'standard', compact: 'compact', narrow: 'narrow-lot', frontgarage: 'garage-forward', valley: 'Valley' }
 const PROGRAM_KINDS = ['bed', 'bath', 'halfbath', 'jackjill', 'office', 'garage', 'frontPorch', 'rearPorch', 'suite2']
 const num = (n) => Math.round(n).toLocaleString()
 

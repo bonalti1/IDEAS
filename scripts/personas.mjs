@@ -237,7 +237,8 @@ async function homeowner(per, size, lang) {
       await page.getByRole('button', { name: /Download your summary|Descargar tu resumen/ }).waitFor({ timeout: 60000 }).catch(() => {})
       await page.waitForTimeout(1500)
       const after = await step('sent')
-      run.outcome = /Download your summary|Descargar tu resumen/.test(after) ? 'sent' : 'pressed Send, no confirmation'
+      // (buttons are drawn in capitals: the page text says DOWNLOAD YOUR SUMMARY)
+      run.outcome = /Download your summary|Descargar tu resumen/i.test(after) ? 'sent' : 'pressed Send, no confirmation'
       if (run.outcome !== 'sent') issue('blocker', 'B4', 'Send gave no confirmation')
     } else {
       run.outcome = 'Send off: ' + s.slice(0, 120)
@@ -267,8 +268,10 @@ async function drafter() {
   await page.screenshot({ path: path.join(OUT, `drafter-01-inbox.png`), fullPage: true })
   const inbox = await page.evaluate(() => document.body.innerText)
   d.rows = (await page.locator('.inbox-row').allInnerTexts()).map((r) => r.replace(/\s+/g, ' ').slice(0, 200))
-  if (!/Plat not read/.test(inbox)) d.issues.push({ sev: 'blocker', item: 'B5', what: 'the plat-only homeowner is not marked in the queue' })
-  if (/Waiting for you \(0\)/i.test(inbox) && /DRAFTING/.test(inbox) && report.runs.some((r) => r.outcome === 'sent')) d.issues.push({ sev: 'ugly', item: 'U19', what: 'plans were sent but "Waiting for you" is 0' })
+  // the plat-only homeowner is in the queue: marked "Plat not read" when the office could not read it, or with the
+  // address printed on the plat when it could (the real key reads the sample plat)
+  if (!/Plat not read|printed on the plat/i.test(inbox)) d.issues.push({ sev: 'blocker', item: 'B5', what: 'the plat-only homeowner is not in the queue' })
+  if (/Waiting for you \(0\)/i.test(inbox) && /DRAFTING/i.test(inbox) && report.runs.some((r) => r.outcome === 'sent')) d.issues.push({ sev: 'ugly', item: 'U19', what: 'plans were sent but "Waiting for you" is 0' })
   // every row: open, confirm the lot, open the plan, approve or note
   for (let i = 0; i < 20; i++) {
     const rows = page.locator('.inbox-row')
