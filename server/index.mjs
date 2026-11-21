@@ -210,7 +210,7 @@ route('GET', '/api/me', 'user', async (req, res, p, ctx) => json(res, 200, { use
 route('GET', '/api/projects', 'user', async (req, res, p, ctx) => json(res, 200, await projects.list(ctx.user), req))
 route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
   // round 12, item B: rooms and style are optional when a lot is saved on its own
-  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?', address: 'string?' })
+  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', stage: 'string?', address: 'string?', platId: 'string?' })
   // the drafter's marks on a lot and its zoning never come from a browser (rounds 10 and 11): the server reads the
   // zoning of a parcel lot itself, within the homeowner's lookup limit
   if (body.lot) body.lot = await projects.ownerLot(body.lot, null, { mayLookup: () => mayLookup(req, ctx), user: ctx.user })

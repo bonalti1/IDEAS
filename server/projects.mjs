@@ -381,7 +381,14 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       // nothing ("Your houses" lists it and opens the lot step again). It has no lot yet, so no drafter sees it.
       const typed = String(body.address || '').replace(/\s+/g, ' ').trim().slice(0, 200)
       const addressOnly = !hasRooms && !lotOnly && !body.lot && typed.length >= 5
-      if (!hasRooms && !lotOnly && !addressOnly) throw fail(400, 'rooms required (or a lot, or an address, to save on its own)')
+      // round 15, B5: a plat uploaded with no address and no size typed yet is saved too, so the drafter sees it at once
+      const platOnly = !hasRooms && !lotOnly && !body.lot && !addressOnly && typeof body.platId === 'string'
+      let platRec = null
+      if (platOnly) {
+        platRec = await lots.plat(body.platId)
+        if (!platRec || platRec.owner !== user.id) throw fail(400, 'We do not have that plat for this account. Upload it again, or type the lot in.')
+      }
+      if (!hasRooms && !lotOnly && !addressOnly && !platOnly) throw fail(400, 'rooms required (or a lot, or an address, to save on its own)')
       if (hasRooms && !body.style?.id) throw fail(400, 'style required')
       await this.checkLot(body.lot)
       const t = now()
@@ -396,7 +403,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         program: cleanProgram(body.program) || {},
         status: 'drafting',
         // where the homeowner is: 'style', 'rooms' or 'draft' (resume opens that step)
-        stage: hasRooms ? 'draft' : addressOnly ? 'lot' : stageOf(body.stage, 'style'),
+        stage: hasRooms ? 'draft' : addressOnly || platOnly ? 'lot' : stageOf(body.stage, 'style'),
+        ...(platOnly ? { platId: platRec.platId, plat: platView(platRec) } : {}),
         changesAllowed: await allowanceDefault(),
         changesUsed: 0,
         allowanceLog: [],
@@ -405,9 +413,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         updatedAt: t,
       }
       await store.projects.add(p)
-      if (p.lot?.spec?.platId) await lots.platUsed(p.lot.spec.platId, p.id)
+      if (p.lot?.spec?.platId || p.platId) await lots.platUsed(p.lot?.spec?.platId || p.platId, p.id)
       if (hasRooms) await store.versions.add({ projectId: p.id, n: 1, at: t, kind: 'initial', text: 'First draft', used: 0, rooms: body.rooms })
-      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
+      await event('project', hasRooms ? `${p.client}: started a ${p.style.name} on ${p.address || 'a lot'}` : addressOnly ? `${p.client}: typed the address ${p.address} (lot not taken yet)` : platOnly ? `${p.client}: uploaded a plat (${p.platId}), lot not typed yet` : `${p.client}: saved the lot at ${p.address || 'an address to be set'} (rooms not chosen yet)`, { projectId: p.id })
       return this.detail(p)
     },
     /**
@@ -756,7 +764,8 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const recent = await asBuilt(await store.projects.listByStatus(['returned', 'approved', 'built'], 30))
       const open = await store.projects.listByStatus(['drafting', 'returned', 'in_review'], 200)
       for (const p of open) await withAllowance(p)
-      const lots = open.filter((p) => p.status !== 'in_review' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed)
+      // round 15, B5: a plat uploaded with nothing typed yet is a lot to look at too
+      const lots = open.filter((p) => p.status !== 'in_review' && (((p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed) || (!p.lot && p.platId)))
       // round 12, item A: lots no standard plan fits, sent by the homeowner for a custom design, oldest first
       const custom = open.filter((p) => p.needsCustom).sort((a, b) => Date.parse(a.needsCustom.at) - Date.parse(b.needsCustom.at))
       // what clients asked the office for (a meeting, more changes), newest first, and every open plan's allowance

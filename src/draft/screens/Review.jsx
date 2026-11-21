@@ -46,13 +46,18 @@ function Row({ p, onOpen }) {
       <span className="inbox-main">
         <b>{p.client}</b>
         <span className="muted small">
-          {p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat ? `no address · ${p.lot.plat.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.lot.plat.at ? `, ${String(p.lot.plat.at).slice(0, 10)}` : ''}` : 'no address')} ·{' '}
+          {!p.lot && p.platId ? `no address · ${p.plat?.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.plat?.at ? `, ${String(p.plat.at).slice(0, 10)}` : ''} · nothing typed yet` : p.address || (p.lot?.plat?.address ? `${String(p.lot.plat.address).slice(0, 80)} (printed on the plat)` : p.lot?.plat ? `no address · ${p.lot.plat.ext === 'pdf' ? 'Plat (PDF)' : 'Plat (photo)'}${p.lot.plat.at ? `, ${String(p.lot.plat.at).slice(0, 10)}` : ''}` : 'no address')} ·{' '}
           {p.version ? `${p.style?.name || 'style to be chosen'} · ${programLine(p.asBuilt || p.program || {}, ', ').replace(/, \d story$/, '')} · ${p.version === 1 ? 'first draft' : `${p.version - 1} version${p.version - 1 === 1 ? '' : 's'} after the first draft`}` : 'lot saved, the homeowner has not chosen rooms yet'}
         </span>
       </span>
       <span className="inbox-side">
         <Asks p={p} />
         {p.needsCustom && <span className="pill ask">Needs a house designed</span>}
+        {!p.lot && p.platId && (
+          <span className="pill stop" data-testid="row-plat-only">
+            Plat not read, nothing typed yet
+          </span>
+        )}
         {p.status === 'in_review' && (p.lot?.spec?.kind === 'plat' || p.lot?.spec?.kind === 'parcel') && !p.lot.spec.confirmed && (
           <span className="pill stop" data-testid="row-lot-and-plan">
             Lot to confirm + plan
@@ -465,6 +470,19 @@ export default function Review({ user }) {
               </>
             )}
           </div>
+          {/* round 15, B5: a plat uploaded with nothing typed yet: the drafter sees it at once and can open it */}
+          {!open.lot && open.platId && (
+            <div className="card thin lotcard pending" data-testid="plat-only-card">
+              <h3>Plat uploaded · nothing typed yet</h3>
+              <p className="warnline stopline">Plat not read by the office. The homeowner uploaded it with no address and has not typed the lot yet: open the plat, and contact them or wait for the size.</p>
+              <p className="fine">
+                <button className="linkish" data-testid="open-plat" onClick={() => api.openPlat(open.platId).catch((e) => setLotError(e.message))}>
+                  {open.plat?.ext && open.plat.ext !== 'pdf' ? 'Open the plat photo' : 'Open the plat PDF'}
+                </button>
+                {open.platFile?.name ? <span className="muted"> · uploaded as "{open.platFile.name}"</span> : null}
+              </p>
+            </div>
+          )}
           {(open.lot?.spec?.kind === 'plat' || open.lot?.spec?.kind === 'parcel') && (
             <div className={'card thin lotcard' + (open.lot.spec.confirmed ? '' : ' pending')} data-testid="lot-card">
               <h3>
