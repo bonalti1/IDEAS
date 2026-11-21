@@ -120,6 +120,15 @@ function ImagePreview({ file, read }) {
   )
 }
 
+/**
+ * Round 15 (U15): where the parcel came from, in plain words: "From the Hidalgo County Appraisal District" /
+ * "Fuente: el distrito de avalúos del condado de Hidalgo". How the office reaches it ("via RGV911") is the office's.
+ */
+const sourceLine = (name, t) => {
+  const m = /^(.+?) County Appraisal District\b/.exec(String(name || ''))
+  return m ? t('From the {county} County Appraisal District', { county: m[1] }) : t('From the {source}', { source: t('county appraisal district') })
+}
+
 /** The city an address names, or null when it names none: nothing is picked for the homeowner (round 15, U18). */
 const cityNamed = (text) => {
   const id = guessCity(text || '')
@@ -522,7 +531,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
             {!parcel.large && parcel.corner && <p className="fine">{t('A corner lot: the side on {streets} keeps the wider open space the city asks for along a street.', { streets: (parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(` ${t('and')} `) })}</p>}
             {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">{t('The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.')}</p>}
             <p className="fine">
-              {t('From the {source}', { source: parcel.source?.name || t('county appraisal district') })}
+              {sourceLine(parcel.source?.name, t)}
               {parcel.source?.fetchedAt ? `, ${t('read {date}', { date: String(parcel.source.fetchedAt).slice(0, 10) })}` : ''}. {t('The parcel map is advisory: a drafter checks it against the recorded plat or your survey before anything is built.')}
             </p>
             {parcelAnswer !== 'yes' && (

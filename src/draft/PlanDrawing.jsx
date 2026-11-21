@@ -4,19 +4,22 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildDesign } from './lib/contract.js'
 import { planSVG, sitePlanSVG } from './lib/plan-svg.js'
 import { useLang, roomName } from './lib/i18n.js'
+import { drawingEs } from './lib/drawing-es.js'
 
 export default function PlanDrawing({ rooms, program, style, lot, client, api, highlightKind, mode = 'plan' }) {
+  const { lang, t: tr } = useLang() // `t` is the pan and zoom here
   const { svg, design } = useMemo(() => {
     try {
       const design = buildDesign({ rooms, program, style, lot, client })
-      return { svg: (mode === 'site' ? sitePlanSVG(design) : planSVG(design)).svg, design }
+      const drawn = (mode === 'site' ? sitePlanSVG(design) : planSVG(design)).svg
+      // round 15 (U15): on a Spanish screen the drawing's own words are Spanish too (the drafter's sheets stay English)
+      return { svg: lang === 'es' ? drawingEs(drawn) : drawn, design }
     } catch (e) {
       return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text font-size="2" y="5">${String(e.message)}</text></svg>`, design: null }
     }
-  }, [rooms, program, style, lot, client, mode])
+  }, [rooms, program, style, lot, client, mode, lang])
   const [t, setT] = useState({ k: 1, x: 0, y: 0 })
   const [tip, setTip] = useState(null) // { x, y, name, size }
-  const { lang, t: tr } = useLang() // `t` is the pan and zoom here
   const pointers = useRef(new Map())
   const drag = useRef(null)
   const pinch = useRef(null)

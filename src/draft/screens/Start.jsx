@@ -27,7 +27,7 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
     <div className="screen start">
       <div className="hero">
         <Mark size={64} />
-        <h1 className="wordmark-text">
+        <h1 className="wordmark-text" translate="no">
           <span>Draft</span>
           <i className="rule" />
           <span>House</span>
@@ -127,6 +127,8 @@ export default function Start({ user, projects = [], onSignedIn, onSkip, onResum
               </span>
             )}
           </label>
+          {/* round 15 (U15): the two words, said once in plain words where they are first asked for */}
+          <p className="fine plat-words" data-testid="plat-words">{t('A plat is the drawing of your lot recorded with the county; a survey is the drawing of your lot a surveyor measured.')}</p>
           {file && !a && <p className="fine" data-testid="start-file-only">{t('Add the address too if the lot has one. With it we find the lot on the county map and check the flood map.')}</p>}
           <Button primary disabled={!ready} onClick={() => onNext({ address: a, file, client: (name || user?.name || '').trim() || user?.email || 'Client' })}>
             {t('Find my lot')}
