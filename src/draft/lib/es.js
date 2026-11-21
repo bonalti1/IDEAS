@@ -496,6 +496,7 @@ function partEs(text) {
   if ((m = t.match(/^(\d+) (bed|bath)rooms?( and a half bath)?$/))) return countHalfEs(m[1], m[2], m[3])
   if (/^a new draft/.test(t)) return newDraftEs(t)
   if (t === 'that change') return 'ese cambio'
+  if (t === 'wider windows') return 'ventanas más anchas'
   return t
 }
 /** "a new draft with a 3-car garage and 4 bedrooms at 2,400 sf" → "un nuevo dibujo con cochera para 3 carros y 4 recámaras, de 2,400 pies²". */
@@ -653,6 +654,17 @@ S(String.raw`Thanks! The office will reach out within 1 business day\. You can a
 S(String.raw`Done\. The office has your request and usually adds more within 1 business day\. You can also call ([^.]+)\.`, (m) => `Listo. La oficina ya tiene su solicitud y normalmente agrega más cambios en 1 día hábil. También puede llamar al ${m[1]}.`)
 S(String.raw`Sign in with your email first so the office knows which house is yours\. Then this button sends your request\. You can also call ([^.]+)\.`, (m) => `Primero inicie sesión con su correo para que la oficina sepa cuál casa es la suya. Después este botón envía su solicitud. También puede llamar al ${m[1]}.`)
 S(String.raw`The office did not get that just now\. Try again in a moment, or call ([^.]+)\.`, (m) => `La oficina no recibió eso en este momento. Intente de nuevo en un momento, o llame al ${m[1]}.`)
+
+// round 15, B6: "make it nicer"
+F('Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes.', 'Aquí tienes algunas maneras de dejarla más bonita en este plano. Toca una; escoger otro estilo no usa nada, y solo se usa un cambio cuando el plano cambia.')
+F('The windows and the porch cannot grow on this plan as it sits on this lot; another style is the way to change its look. Choosing a style is free.', 'Las ventanas y el porche no pueden crecer en este plano tal como queda en este lote; otro estilo es la manera de cambiar cómo se ve. Escoger un estilo no usa nada.')
+F('Make the windows bigger', 'Haz las ventanas más grandes')
+F('Making the windows wider.', 'Hice las ventanas más anchas.')
+F('Choose another style', 'Escoge otro estilo para la casa')
+F('Add a front porch', 'Agrega un porche al frente')
+S(String.raw`Add a front porch, (${N}) ft by (${N}) ft`, (m) => `Agrega un porche al frente, de ${m[1]} por ${m[2]} pies`)
+S(String.raw`Make the front porch (${N}) ft deeper`, (m) => `Haz el porche del frente ${pies(m[1])} más hondo`)
+S(String.raw`Made (\d+) windows? wider \((.+?)\)\.`, (m) => `Hice ${m[1] === '1' ? 'una ventana más ancha' : `${m[1]} ventanas más anchas`} (${listEs(m[2])}).`)
 
 // round 15, U2: "send my lot to the drafter"
 F('Your lot is with our drafter now. A drafter designs a house for this lot and emails you, usually within two business days.', 'Tu lote ya está con nuestro dibujante. Un dibujante diseña una casa para este lote y te escribe por correo, por lo general en dos días hábiles.')

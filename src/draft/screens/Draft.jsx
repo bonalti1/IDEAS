@@ -11,6 +11,7 @@ import { useLang, says, houseText, programLineEs, optionLabel, phrase } from '..
 import { isUndoRequest } from '../lib/ops.js'
 import { isSendLot } from '../lib/intents.js'
 import { isSpanish } from '../lib/es.js'
+import { stepHash } from '../lib/route.js'
 
 // what the office says when a homeowner asks for a meeting or for more changes (round 8, M4/M8)
 const MEETING_THANKS = says(['Thanks! The office will reach out within 1 business day. You can also call {phone}.', { phone: TRUST.phone }])
@@ -246,6 +247,11 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
     }
     setBusy(false)
   }
+  // the style step, the way the address bar opens it (#/style/<id>): the app's own routing takes it from there
+  const toStyleStep = () => {
+    window.location.hash = stepHash(2, project?.id)
+    window.dispatchEvent(new PopStateEvent('popstate', { state: null }))
+  }
   const versions = project?.versions || []
   const current = versions[versions.length - 1]
   const canUndo = project ? current?.kind === 'change' && current.n > 1 : undo.length > 0
@@ -408,7 +414,8 @@ export default function Draft({ style, program, rooms, setRooms, changesLeft, se
               {m.fixes?.length > 0 && (
                 <span className="fixes">
                   {m.fixes.map((f) => (
-                    <button key={f.label} onClick={() => send(say(f.label).replace(/^¿|\?$/g, ''), f)} disabled={busy || changesLeft <= 0}>
+                    // "Choose another style" (round 15, B6) opens the style step; the other buttons are changes
+                    <button key={f.label} onClick={() => (f.goto === 'style' ? toStyleStep() : send(say(f.label).replace(/^¿|\?$/g, ''), f))} disabled={busy || (f.goto !== 'style' && changesLeft <= 0)}>
                       {say(f.label)}
                     </button>
                   ))}

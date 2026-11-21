@@ -6,10 +6,10 @@
 import crypto from 'node:crypto'
 import { zoningBlocksSend, traverse } from '../src/draft/lib/lot.js'
 import { parcelSpec } from '../src/draft/lib/parcel-spec.js'
-import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize, halfCountDiff } from '../src/draft/lib/interpret.js'
+import { decide, dropUnsupported, editsOf, netsToNothing, tradeOffer, markUnclear, localize, halfCountDiff, nicerOffer } from '../src/draft/lib/interpret.js'
 import { regexOps, summarizeRooms, replaceOnLot, splitCost, costReply, isUndoRequest, tradeOffAsk } from '../src/draft/lib/ops.js'
 import { isSpanish, fromSpanish } from '../src/draft/lib/es.js'
-import { isSendLot } from '../src/draft/lib/intents.js'
+import { isSendLot, wantsNicer } from '../src/draft/lib/intents.js'
 import { kitFor, programOf, floorArea } from '../src/draft/lib/layout.js'
 import { checkRules } from '../src/draft/lib/rules.js'
 import { auditSummary } from '../src/draft/lib/audit.js'
@@ -617,6 +617,13 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       if (offer) {
         logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'trade-off', reply: offer.reply, ops: [] })
         return out({ applied: false, reply: offer.reply, source: 'fallback', reasons: offer.reasons, offer: offer.offer, fixes: offer.fixes || [], ...counts(), version: p.version, ...costTail(offer) })
+      }
+      // "make it nicer", "hazla más bonita" (round 15, B6): bigger windows, a front porch, another style, as buttons;
+      // no model is asked and nothing is used
+      if (!isFix && (wantsNicer(request) || wantsNicer(split.text))) {
+        const nicer = nicerOffer(rooms, p.program, style, kit, 'fallback', lot, edits)
+        logInterpret({ request, client: p.email, projectId: p.id, source: 'fallback', verdict: 'nicer', reply: nicer.reply, ops: [] })
+        return out({ applied: false, reply: nicer.reply, source: 'fallback', reasons: nicer.reasons, offer: nicer.offer, fixes: nicer.fixes, ...counts(), version: p.version, ...costTail(nicer) })
       }
       const asked = own(split.text) // Claude reads the client's own words; the basic rules read Spanish themselves
       const halves = isFix ? null : halfCountDiff(split.text)

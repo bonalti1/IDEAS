@@ -26,6 +26,7 @@ export const OP_SHAPES = {
   scale: { sqft: num('the living area the whole house should come to') },
   swap: { room: str('room id'), target: str('room id of the room it trades places with') },
   count: { kind: { type: 'string', enum: ['bed', 'bath'] }, count: num('how many bedrooms or bathrooms the house should have in all ("I want 4 bedrooms" is 4)') },
+  windows: { grow: num('feet wider each window of the rooms people live in gets, 1 to 3; 2 when the client gave no size') },
 }
 export const DIFF_SCHEMA = {
   type: 'object',
@@ -67,6 +68,7 @@ Rules:
 - A patio, a covered patio, a lanai or a back porch is the kit's rearPorch: an add op with kind "rearPorch", and name "Covered Patio" when the client said patio. Put a size in w and d only when the client gave one. Never answer that the kit has no patio, and never refuse it for lack of room: the plan checker finds the wall for it and, when it does not fit, offers the client what does.
 - "Bigger" or "smaller" with no size given: set soft true on the resize. Never set soft when the client stated a size.
 - "Make it feel more open", "open it up", "open concept", "open the kitchen to the living room", "take out the dining wall", "taller ceilings": there is no op for walls or ceiling heights, and the kit already draws the kitchen, the dining room and the living room with no walls between them. Return no ops, intent "open", confidence 0.9 and a one-sentence reply. The plan checker then tells the client what is already open and offers the changes that do apply as buttons. Never remove or resize a room on your own to make a plan feel open.
+- "Bigger windows", "wider windows", "ventanas más grandes": one windows op with grow 2 (feet), or the feet the client gave. The plan code widens the windows of the living room, kitchen, dining room, office and bedrooms where their walls allow.
 - Removing a room removes what is in it. Do not remove the kitchen, the living room, the last bedroom or the last bathroom; set confidence low and explain instead.
 - If the request is unclear, or not about the floor plan, return no ops, a question in reply, and confidence below 0.5.
 - Never state or estimate any price, cost, rate or total. If asked, say cost is covered at the meeting with the South Texas Builders office.

@@ -506,7 +506,7 @@ test('1c (Claude path): the prompt tells the model to read Spanish and to answer
   // the shape did not grow: one shape per op, every field required, the intent as it was (round 12: an optional
   // field more and the API refuses the schema as too complex)
   const shapes = DIFF_SCHEMA.properties.ops.items.anyOf
-  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count'])
+  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count', 'windows']) // round 15, B6: bigger windows
   for (const s of [...shapes, DIFF_SCHEMA]) {
     assert.deepEqual([...s.required].sort(), Object.keys(s.properties).sort(), 'every field is required')
     assert.equal(s.additionalProperties, false)
@@ -748,7 +748,8 @@ test('3 (basic rules): "make the house smaller but add 2 bedrooms" explains the 
 })
 
 test('3 (basic rules): "asdf", "make it nicer", "hmm": "I did not catch that" and three example buttons that fit the plan as it is; nothing applied; each button applies', async () => {
-  for (const [text, es] of [['asdf', false], ['make it nicer', false], ['hmm', false], ['hazla mas bonita', true], ['no se', true]]) {
+  // round 15, B6: "make it nicer" and "hazla más bonita" now get their own three buttons (test/round15-chat-nicer.test.mjs)
+  for (const [text, es] of [['asdf', false], ['whatever you think', false], ['hmm', false], ['lo que tú digas', true], ['no se', true]]) {
     for (const name of ['roomy', 'tight']) {
       const plan = PLANS[name]
       const what = `${name}: ${text}`
@@ -784,7 +785,7 @@ test('3 (basic rules): "asdf", "make it nicer", "hmm": "I did not catch that" an
   assert.equal((await basic('haz la casa mas grande', PLANS.roomy)).reply, '¿De qué tamaño quiere la casa? Dígame el área habitable que quiere, por ejemplo "que la casa sea de 2,400 pies²".')
   // the model coming back unsure on such a request gets the same answer; its question stands when a room was named
   const unsure = async () => ({ ops: [], reply: 'Which room do you mean?', confidence: 0.2 })
-  const viaModel = await interpretRequest('make it nicer', PLANS.roomy.rooms, PLANS.roomy.program, style, { lot: PLANS.roomy.lot, interpreter: unsure, report: false })
+  const viaModel = await interpretRequest('whatever you think', PLANS.roomy.rooms, PLANS.roomy.program, style, { lot: PLANS.roomy.lot, interpreter: unsure, report: false })
   assert.equal(viaModel.source, 'claude')
   assert.equal(viaModel.offer, 'examples')
   assert.equal(viaModel.fixes.length, 3)
@@ -823,7 +824,7 @@ async function vagueOverHttp(o, mode) {
     if (es) spanish(d.reply, `${what}: the answer to the tap`)
   }
   const id = await o.start(PLANS.roomy)
-  for (const [text, es] of [['asdf', false], ['make it nicer', false], ['hmm', false], ['hazla mas bonita', true]]) {
+  for (const [text, es] of [['asdf', false], ['whatever you think', false], ['hmm', false], ['lo que tú digas', true]]) { // round 15, B6: "make it nicer" has its own buttons now
     const r = await o.change(id, text)
     const what = `${mode}: ${text}`
     assert.equal(r.applied, false, what)
@@ -857,5 +858,6 @@ test('3 (office API over HTTP, Claude stubbed): the same answers when the model 
   await vagueOverHttp(officeClaude, 'office, Claude')
   const asked = claude.calls.slice(from).map((c) => c.input.request)
   assert.ok(!asked.some((t) => /smaller|chica/.test(t)), 'the trade-off is answered before any model is asked')
-  assert.ok(asked.includes('asdf') && asked.includes('make it nicer') && asked.includes('hmm'), 'the unclear requests went to the model, which came back unsure')
+  assert.ok(asked.includes('asdf') && asked.includes('whatever you think') && asked.includes('hmm'), 'the unclear requests went to the model, which came back unsure')
+  assert.ok(!asked.includes('make it nicer'), 'round 15, B6: "make it nicer" is answered before any model')
 })

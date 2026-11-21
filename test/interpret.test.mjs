@@ -126,7 +126,7 @@ test('a fake Claude resize past what the roof allows is rejected, a sane one app
 
 test('low confidence or unknown ids never apply', async () => {
   const unsure = async () => ({ ops: [], reply: 'Which room do you mean?', confidence: 0.2 })
-  const r1 = await ask('make it nicer', fresh(), unsure)
+  const r1 = await ask('whatever you think', fresh(), unsure) // round 15, B6: "make it nicer" has its own three buttons
   assert.equal(r1.applied, false)
   // round 13, item 3: a request with nothing in it the chat acts on ("make it nicer") gets the plan code's own answer
   // with example buttons in both modes; the model's question still stands when the request names a room

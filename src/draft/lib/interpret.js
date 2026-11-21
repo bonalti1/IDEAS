@@ -7,7 +7,7 @@ import { validateOps, applyOps, regexOps, summarizeRooms, normalizeOps, splitCla
 import { checkRules } from './rules.js'
 import { fitsLot } from './fit.js'
 import { isSpanish, fromSpanish, toSpanish, untranslated, ASK_LABEL_ES } from './es.js'
-import { isSendLot } from './intents.js'
+import { isSendLot, wantsNicer } from './intents.js'
 
 const MIN_CONFIDENCE = 0.5
 const MAX_PARTS = 3 // parts applied from one message; one change is used however many applied (round 8, item 29)
@@ -81,6 +81,8 @@ export async function interpretRequest(text, rooms, program, style, opts = {}) {
   const trade = tradeOffAsk(split.text)
   const offer = trade ? tradeOffer(trade, rooms, program, style, kit, 'fallback', lotOf(opts.lot), opts.history || []) : null
   if (offer) return say(withCost(offer))
+  // "make it nicer", "hazla más bonita": three things that do that, as buttons, the same in both modes (round 15, B6)
+  if (wantsNicer(asked) || wantsNicer(split.text)) return say(withCost(nicerOffer(rooms, program, style, kit, 'fallback', opts.lot, opts.history || [])))
   text = own(split.text)
   const interpreter = opts.interpreter || claudeInterpreter
   let diff
@@ -320,6 +322,8 @@ export function describeOp(o, rooms, kit) {
       return `swapping the ${name(o.room)} and the ${name(o.target)}`
     case 'count':
       return countWords(o.kind, o.count, o.half)
+    case 'windows':
+      return 'wider windows'
     case 'redraft': {
       const p = o.program || {}
       const withs = [p.garage !== undefined ? `a ${p.garage}-car garage` : null, p.beds !== undefined ? countWords('bed', p.beds) : null, p.baths !== undefined ? countWords('bath', p.baths, p.halfBath === true ? 1 : 0) : null, p.rearPorch === true ? 'a covered porch at the back' : null, p.frontPorch === true ? 'a front porch' : null].filter(Boolean)
@@ -1140,7 +1144,46 @@ export function exampleFixes(rooms, program, style, kit, lot, want = 3) {
   return out
 }
 
-/** "asdf", "make it nicer", "hmm": the chat says it did not catch that and shows changes that work here. Nothing is used. */
+/**
+ * "Make it nicer", "hazla más bonita", "más bonita" (round 15, B6): three things that make a house look nicer, as
+ * buttons, each checked on this plan: bigger windows, a front porch (or a deeper one, or a smaller one that fits),
+ * and another style (the style step; nothing is used). Nothing is changed until a button is tapped.
+ */
+export function nicerOffer(rooms, program, style, kit, source, lot, edits = []) {
+  const L = lotOf(lot)
+  const fixes = []
+  const windows = [{ op: 'windows', grow: 2 }]
+  if (passes(windows, rooms, program, style, kit, L)) fixes.push({ label: 'Make the windows bigger', ops: windows })
+  else if (passes([{ op: 'windows', grow: 1 }], rooms, program, style, kit, L)) fixes.push({ label: 'Make the windows bigger', ops: [{ op: 'windows', grow: 1 }] })
+  const porch = rooms.find((r) => isRoom(r) && r.kind === 'frontPorch')
+  if (porch) {
+    for (const more of [2, 1]) {
+      const ops = [{ op: 'resize', room: porch.id, w: porch.w, d: porch.d + more }]
+      if (!passes(ops, rooms, program, style, kit, L)) continue
+      fixes.push({ label: `Make the front porch ${more} ft deeper`, ops })
+      break
+    }
+  } else {
+    const t = kit.rooms.frontPorch || {}
+    const sizes = [null, [Math.max(10, Math.floor((t.w || 16) * 0.75)), Math.max(6, kit.porch?.minDepthFt || 6)], [10, Math.max(5, kit.porch?.minDepthFt || 5)]]
+    for (const size of sizes) {
+      const ops = [{ op: 'add', kind: 'frontPorch', ...(size ? { w: size[0], d: size[1] } : {}) }]
+      if (!passes(ops, rooms, program, style, kit, L)) continue
+      fixes.push({ label: size ? `Add a front porch, ${ft(size[0])} ft by ${ft(size[1])} ft` : 'Add a front porch', ops })
+      break
+    }
+    if (!fixes.some((f) => /porch/.test(f.label))) {
+      const over = { frontPorch: true }
+      const r = redraft(null, rooms, program, style, L, edits, over)
+      if (r.ok && r.rooms.some((x) => isRoom(x) && x.kind === 'frontPorch')) fixes.push({ label: 'Draw the house again with a front porch', ops: [{ op: 'redraft', program: over }] })
+    }
+  }
+  fixes.push({ label: 'Choose another style', goto: 'style', ops: [] })
+  const reply = fixes.length > 1 ? 'Here are some ways to make it nicer on this plan. Tap one; choosing a style is free, and a change is used only when the plan changes.' : 'The windows and the porch cannot grow on this plan as it sits on this lot; another style is the way to change its look. Choosing a style is free.'
+  return { applied: false, rooms, reply, source, ops: [], reasons: ['nicer'], offer: 'nicer', fixes }
+}
+
+/** "asdf", "hmm": the chat says it did not catch that and shows changes that work here. Nothing is used. */
 function unclearOffer(rooms, program, style, kit, source, L) {
   const fixes = exampleFixes(rooms, program, style, kit, L)
   const reply = fixes.length

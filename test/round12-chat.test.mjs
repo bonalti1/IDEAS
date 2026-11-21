@@ -417,7 +417,7 @@ test('Claude path: the prompt and the schema carry the four requests (count op, 
   // complex" once it had the two fields this round adds (16 optional), and a 14-optional variant took over two
   // minutes to compile on its first call
   const shapes = DIFF_SCHEMA.properties.ops.items.anyOf
-  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count'])
+  assert.deepEqual(shapes.map((s) => s.properties.op.enum[0]), ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'count', 'windows']) // round 15, B6: bigger windows
   for (const s of [...shapes, DIFF_SCHEMA]) {
     assert.deepEqual([...s.required].sort(), Object.keys(s.properties).sort(), 'every field is required')
     assert.equal(s.additionalProperties, false)

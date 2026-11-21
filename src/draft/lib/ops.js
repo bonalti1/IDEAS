@@ -8,7 +8,9 @@ import { roofSurfaces, dormerWalls } from './roof.js'
 import { FIXTURE_H, FIXTURE_NAME, WINDOW_SILL, WINDOW_HEAD } from '../../kits/modern-farmhouse.js'
 import { isSpanish, fromSpanish, isUndoEs, COST_REPLY_ES } from './es.js'
 
-export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count']
+export const OPS = ['resize', 'add', 'remove', 'move', 'moveBeside', 'garage', 'scale', 'swap', 'redraft', 'count', 'windows']
+// the rooms whose windows "bigger windows" widens (round 15, B6)
+const WINDOW_ROOMS = ['living', 'dining', 'kitchen', 'master', 'bed', 'office', 'suite2']
 const q = (v) => Math.round(v * 4) / 4
 
 /**
@@ -71,7 +73,7 @@ export function validateOps(ops, rooms, kit) {
     if (!o || typeof o !== 'object') return errors.push('That change did not come through whole.')
     if (unsafe(o)) return errors.push('That change is not valid.')
     if (!OPS.includes(o.op)) return errors.push(`I do not know how to "${String(o.op ?? '')}" a room.`)
-    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
+    if (o.op !== 'add' && o.op !== 'garage' && o.op !== 'scale' && o.op !== 'redraft' && o.op !== 'count' && o.op !== 'windows' && !ids.has(o.room)) errors.push(`There is no room ${roomWord(o.room)} in this plan.`)
     if (o.op === 'count' && !((o.kind === 'bed' || o.kind === 'bath') && Number.isInteger(o.count) && o.count >= 1 && o.count <= 12 && (o.half === undefined || (o.kind === 'bath' && o.half === 1)))) errors.push('Say how many bedrooms or bathrooms the house should have, like "4 bedrooms".')
     if (o.op === 'scale' && !(typeof o.sqft === 'number' && o.sqft >= 600 && o.sqft <= 10000)) errors.push('Give a size between 600 and 10,000 sf.')
     if (o.op === 'swap' && !ids.has(o.target)) errors.push(`There is no room ${roomWord(o.target)} to swap with.`)
@@ -741,6 +743,35 @@ export function applyOps(ops, rooms, kit, stories = 1, lot = DEFAULT_LOT, { star
       const made = moveBeside(flat, kit, r.id, t.id)
       if (!made) throw new Error(`there is no sound spot for the ${r.name.toLowerCase()} against the ${t.name.toLowerCase()}${['garage', 'bed', 'master', 'suite2', 'bath', 'mbath', 'jackjill', 'halfbath', 'wic', 'mwic'].includes(t.kind) ? `: it would only open into the ${t.name.toLowerCase()}, and it needs a door from the house` : ''}`)
       did.push(`Moved ${r.name.toLowerCase()} next to the ${t.name.toLowerCase()}`)
+    } else if (o.op === 'windows') {
+      // round 15, B6: "bigger windows": the windows of the rooms people live in grow wider in place, each centred
+      // where it is, as far as its wall allows (a foot clear of each corner and of any other door or window)
+      const grow = Math.min(3, Math.max(0.5, Number(o.grow) || 2))
+      const openings = flat.filter((e) => e.element && (e.kind === 'window' || e.kind === 'door'))
+      const grown = new Set()
+      let count = 0
+      for (const win of flat.filter((e) => e.element && e.kind === 'window' && WINDOW_ROOMS.includes(rs[e.room]?.kind))) {
+        const r = rs[win.room]
+        const h = win.axis === 'h'
+        const span = h ? win.w : win.d
+        const start = h ? win.x : win.y
+        const [lo, hi] = h ? [r.x + 1, r.x + r.w - 1] : [r.y + 1, r.y + r.d - 1]
+        const line = h ? win.y : win.x
+        // the other openings on the same wall: what this one may not run into
+        const others = openings.filter((e) => e !== win && e.axis === win.axis && Math.abs((h ? e.y : e.x) - line) < 0.75).map((e) => (h ? [e.x - 0.5, e.x + e.w + 0.5] : [e.y - 0.5, e.y + e.d + 0.5]))
+        for (const by of [grow, grow / 2]) {
+          const a = q(start - by / 2)
+          const b = q(start + span + by / 2)
+          if (a < lo - 0.01 || b > hi + 0.01 || others.some(([x0, x1]) => a < x1 && b > x0)) continue
+          if (h) Object.assign(win, { x: a, w: b - a, span: b - a })
+          else Object.assign(win, { y: a, d: b - a, span: b - a })
+          count++
+          grown.add(r.name.toLowerCase().replace(/^(living|dining)$/, '$1 room'))
+          break
+        }
+      }
+      if (!count) throw new Error('there is no wall room on this plan to make the windows wider')
+      did.push(`Made ${count} window${count === 1 ? '' : 's'} wider (${[...grown].join(', ')})`)
     } else if (o.op === 'add') {
       const t = kit.rooms[o.kind]
       const n = flat.filter((r) => r.kind === o.kind).length + 1
@@ -1073,6 +1104,8 @@ function regexOne(text, rooms, kit, lot = DEFAULT_LOT) {
     const say = (c) => `${c.count} ${c.kind === 'bed' ? 'bedroom' : 'bathroom'}${c.count === 1 ? '' : 's'}${c.half ? ' and a half bath' : ''}`
     return { ops: counts.map((c) => ({ op: 'count', kind: c.kind, count: c.count, ...(c.half ? { half: 1 } : {}) })), reply: `Setting the house to ${counts.map(say).join(' and ')}.`, confidence: 0.75 }
   }
+  // "bigger windows", "ventanas más grandes" (round 15, B6): the windows of the rooms people live in, wider in place
+  if (/\b(?:windows|ventanas)\b/.test(t) && /\b(?:bigger|larger|wider|more light|grandes|anchas|amplias)\b/.test(t) && !/\b(?:smaller|fewer|remove|chicas|quita)\b/.test(t)) return { ops: [{ op: 'windows', grow: 2 }], reply: 'Making the windows wider.', confidence: 0.75 }
   const grow = /\b(bigger|larger|wider|deeper|more room|expand|increase|enlarge)\b/.test(t)
   const shrink = /\b(smaller|tighter|reduce|shrink|less|narrower)\b/.test(t)
   const add = /\b(add|another|extra|one more|put in)\b|\b(?:\d+|two|three|four|five|six) more (?:bed|bath|office|room)/.test(t) // "2 more bedrooms" adds two; "2 more feet" does not
