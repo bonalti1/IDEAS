@@ -2,7 +2,7 @@
 // zoom on a phone, a tap on a room for its name and size, and a double tap to fit. `api` ref gets { fit }.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildDesign } from './lib/contract.js'
-import { planSVG, sitePlanSVG, fitScale, labelSizes } from './lib/plan-svg.js'
+import { planSVG, sitePlanSVG, planForFrame } from './lib/plan-svg.js'
 import { useLang, roomName } from './lib/i18n.js'
 
 export default function PlanDrawing({ rooms, program, style, lot, client, api, highlightKind, mode = 'plan' }) {
@@ -11,10 +11,9 @@ export default function PlanDrawing({ rooms, program, style, lot, client, api, h
     try {
       const design = buildDesign({ rooms, program, style, lot, client })
       if (mode === 'site') return { svg: sitePlanSVG(design).svg, design }
-      const first = planSVG(design)
+      // round 15, item U9: the room labels sized to read at 100% in this frame (the CSS fits the drawing at 96%, 100% on a phone)
       const phone = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 720px)').matches
-      const scale = fitScale(frame, first.width, first.height, phone ? 1 : 0.96)
-      return { svg: scale ? planSVG(design, labelSizes(scale)).svg : first.svg, design }
+      return { svg: frame ? planForFrame(design, frame, phone ? 1 : 0.96).svg : planSVG(design).svg, design }
     } catch (e) {
       return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text font-size="2" y="5">${String(e.message)}</text></svg>`, design: null }
     }

@@ -86,8 +86,8 @@ export const VALLEY_PLAN = {
     // longest; a lower hip over the suite at the rear-right and another over the garage at the front: three hips
     // stepping down, so the ridge line breaks (the third bedroom's bump-out gets a lean-to from the layout)
     { id: 'main', kind: 'gable', x0: 0, x1: 34, y0: 0, y1: 52.5, ridge: 'ns', plate: 9, pitch: 7, ends: [] },
-    { id: 'suite', kind: 'gable', x0: 31, x1: 51, y0: 0, y1: 34, ridge: 'ns', plate: 9, pitch: 6, ends: [] },
-    { id: 'garage', kind: 'gable', x0: 30, x1: 51, y0: 31, y1: 60, ridge: 'ns', plate: 9.5, pitch: 6, ends: [] },
+    { id: 'suite', kind: 'gable', x0: 31, x1: 51, y0: 0, y1: 34, ridge: 'ns', plate: 9, pitch: 7, ends: [] },
+    { id: 'garage', kind: 'gable', x0: 30, x1: 51, y0: 31, y1: 60, ridge: 'ns', plate: 9.5, pitch: 4, ends: [] },
     { id: 'frontPorch', kind: 'shed', x0: 11, x1: 30, y0: 52.5, y1: 60, high: 'n', plate: 8.5, pitch: 3, material: 'metal roof' },
     { id: 'rearPorch', kind: 'shed', x0: 15, x1: 34, y0: -10, y1: 0, high: 's', plate: 8, pitch: 3, material: 'metal roof' },
     // metal awnings over the west windows (the Valley sun)

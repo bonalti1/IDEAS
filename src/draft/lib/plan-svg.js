@@ -14,6 +14,13 @@ const fmt = (ft) => {
   const i = total - f * 12
   return i ? `${f}'-${i}"` : `${f}'-0"`
 }
+/** A size as the plan view labels it: 11' for a whole foot, 12'-6" otherwise. */
+const fmtShort = (ft) => {
+  const total = Math.round(ft * 12)
+  const f = Math.floor(total / 12)
+  const i = total - f * 12
+  return i ? `${f}'-${i}"` : `${f}'`
+}
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const r1 = (v) => Math.round(v * 10) / 10
 
@@ -89,13 +96,35 @@ function fixtureSymbol(f, x, y, w, h) {
 // name takes two lines first, and a room too small for even that names itself with a leader.
 export const LABEL_PX = 13
 export const MIN_PX = 10
+export const PREFER_PX = 12
 /** The drawing's scale on the screen when it is fitted to a w x h frame (the CSS keeps it within 96%, never above 1:1). */
 export const fitScale = (box, width, height, share = 0.96) => (box && box.w > 0 && box.h > 0 ? Math.min(1, (share * box.w) / width, (share * box.h) / height) : null)
 /** Label sizes in drawing units for a scale: LABEL_PX on the screen (at most 2.4 ft tall on the drawing), never under MIN_PX. */
 export function labelSizes(scale) {
   if (!scale) return {}
   const labelFont = Math.max(9, Math.min(LABEL_PX / scale, 29))
-  return { labelFont, labelMin: Math.min(MIN_PX / scale, labelFont * 0.8), wrap: true }
+  // a name keeps one line down to PREFER_PX; under that it takes two lines at full size first
+  return { labelFont, labelMin: Math.min(MIN_PX / scale, labelFont * 0.8), labelPrefer: Math.min(PREFER_PX / scale, labelFont), wrap: true }
+}
+/**
+ * The floor plan drawn for a frame of w x h px (the plan view): labels sized for the scale the drawing shows at. The
+ * drawing grows when a few names go below it with a leader, which makes it show a little smaller, so the labels are
+ * sized once more for that. Returns planSVG's answer plus `scale`, the drawing's scale on the screen at 100%.
+ */
+export function planForFrame(design, frame, share = 0.96, opts = {}) {
+  const first = planSVG(design, opts)
+  let scale = fitScale(frame, first.width, first.height, share)
+  if (!scale) return { ...first, scale: null }
+  let plan = planSVG(design, { ...opts, ...labelSizes(scale) })
+  // sized again (twice at most) until the drawing no longer grows under its own labels; a hair of slack so a label
+  // set for the scale is not read a fraction under it
+  for (let i = 0; i < 2; i++) {
+    const shown = fitScale(frame, plan.width, plan.height, share)
+    if (shown >= scale - 1e-6) break
+    scale = shown * 0.99
+    plan = planSVG(design, { ...opts, ...labelSizes(scale) })
+  }
+  return { ...plan, scale: fitScale(frame, plan.width, plan.height, share) }
 }
 
 /** A font size at which `text` fits `avail` units wide (no smaller than `min`); k is the mean glyph width as a share of the size. */
@@ -297,8 +326,11 @@ export function planSVG(design, opts = {}) {
     .sort((a, b) => b.w * b.d - a.w * a.d)
     .forEach((r) => {
       const name = r.name.toUpperCase()
-      const size = `${fmt(r.w)} × ${fmt(r.d)}`
-      const inner = { x: X(r.x - r.w / 2) + 4, y: Y(r.z - r.d / 2) + 4, w: r.w * IN - 8, h: r.d * IN - 8 }
+      // (in the plan view a whole foot reads 11' rather than 11'-0")
+      const size = wrap ? `${fmtShort(r.w)} × ${fmtShort(r.d)}` : `${fmt(r.w)} × ${fmt(r.d)}`
+      // (in the plan view a label keeps clear of the walls by a little more, so two rooms' names never run together across one)
+      const pad = wrap ? 7 : 4
+      const inner = { x: X(r.x - r.w / 2) + pad, y: Y(r.z - r.d / 2) + pad, w: r.w * IN - 2 * pad, h: r.d * IN - 2 * pad }
       const mine = fixBoxes.filter((b) => b.room === r.id)
       const clearAt = (box) => box.x >= inner.x - 0.01 && box.y >= inner.y - 0.01 && box.x + box.w <= inner.x + inner.w + 0.01 && box.y + box.h <= inner.y + inner.h + 0.01 && !mine.some((b) => overlapBox(b, box)) && !placed.some((p) => overlapBox(p.box, box))
       const cx = X(r.x)
@@ -358,7 +390,7 @@ export function planSVG(design, opts = {}) {
       // a room much taller than it is wide (a hall, a gallery, a closet along a wall) may carry its label turned
       const tall = wrap && r.d > r.w * 1.6
       if (wrap) {
-        tryLines([name], true, baseFont, Math.max(minFont, baseFont * 0.85))
+        tryLines([name], true, baseFont, Math.max(minFont, opts.labelPrefer || baseFont * 0.85))
         if (!box && twoLines) tryLines(twoLines, true, baseFont, minFont)
         if (!box) tryLines([name], true, baseFont, minFont)
         if (!box && tall) tryLines([name], true, baseFont, minFont, true)
@@ -389,7 +421,7 @@ export function planSVG(design, opts = {}) {
         leader = [cx, cy, lx, box.y]
         if (wrap) height = Math.max(height, box.y + box.h + IN)
       }
-      placed.push({ r, box, f, lines, nameLines, leader, rot: !leader && rot, room: { x: inner.x - 4, y: inner.y - 4, w: inner.w + 8, h: inner.h + 8 } })
+      placed.push({ r, box, f, lines, nameLines, leader, rot: !leader && rot, room: { x: inner.x - pad, y: inner.y - pad, w: inner.w + 2 * pad, h: inner.h + 2 * pad } })
     })
   placed.forEach(({ r, box, f, lines, nameLines, leader, rot, room }) => {
     const cx = box.x + box.w / 2
