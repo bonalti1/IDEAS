@@ -90,8 +90,12 @@ test('screens: parcel offered, taken, rules panel, flood at the parcel, review c
   // the default rooms may not fit an 80 ft lot: take the size the rooms step offers, then draft
   // (round 12, item E: the rooms start at what fits this lot; the homeowner is told so and never meets "does not fit" first)
   const draftBtn = page.getByRole('button', { name: /Draft my house/ })
-  await page.getByTestId('auto-start').waitFor({ timeout: 60000 })
-  assert.match(await page.getByTestId('auto-start').innerText(), /We started you with what fits this lot; you can change it\./)
+  // round 15: on Kerria the default rooms fit as asked (the Valley plan), so nothing is trimmed and no start card shows;
+  // a lot that does need it still says "We started you with what fits this lot" (round12.test.mjs, item E)
+  await draftBtn.waitFor({ timeout: 60000 })
+  await page.waitForFunction(() => !/Checking the lot…/.test(document.body.innerText), null, { timeout: 120000 })
+  await page.waitForTimeout(1000)
+  if (await page.getByTestId('auto-start').count()) assert.match(await page.getByTestId('auto-start').innerText(), /We started you with what fits this lot; you can change it\./)
   assert.doesNotMatch(await page.locator('main').innerText(), /Does not fit/)
   assert.equal(await draftBtn.isEnabled(), true)
   await shot(page, 'rooms-start-fits-1440')

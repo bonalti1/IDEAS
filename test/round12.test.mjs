@@ -700,9 +700,12 @@ test('E: on every recorded lot the homeowner starts from a program that fits, or
     table.push(`${address.split(',')[0]}: starts at ${start.beds} bed, ${start.baths} bath, ${start.garage ? start.garage + '-car' : 'no garage'}${start.office ? ', office' : ''}, ${start.sqft} sf${f.turn ? `, turned ${f.turn} deg` : ''}`)
   }
   console.log(table.join('\n'))
-  assert.ok(trimmed >= 8, 'round 11: the default 4 bed, 3 bath, office, 2-car met "does not fit" on most real lots')
-  // 3305 N 27th St, the lot of the real-customer test
-  assert.match(table.find((l) => /3305 N 27th/.test(l)), /starts at/)
+  // round 11: the default met "does not fit" on most real lots (11 of these 14 started trimmed in round 14); round 15:
+  // the Valley plan takes the default as asked on the 60 to 80 ft lots, and the rest still start trimmed
+  assert.ok(trimmed >= 5, `${trimmed} lots start trimmed`)
+  assert.ok(table.filter((l) => /the default fits/.test(l)).length >= 6, table.join(' | '))
+  // 3305 N 27th St, the lot of the real-customer test: the default rooms as asked (round 14 started it trimmed)
+  assert.match(table.find((l) => /3305 N 27th/.test(l)), /the default fits/)
   const step = fs.readFileSync('src/draft/screens/Program.jsx', 'utf8')
   assert.match(step, /We started you with what fits this lot; you can change it\./)
   assert.match(step, /startFrom\(checked, program\)/)
