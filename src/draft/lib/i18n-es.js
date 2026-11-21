@@ -193,6 +193,15 @@ export const es = {
   'Space the city keeps open along each edge': 'Espacio que la ciudad mantiene libre a lo largo de cada orilla',
   '(a drafter checks these)': '(un dibujante los revisa)',
   // round 14: a plat on file that could not be read, and a lot that came with no address
+  // round 15, lead (D2, U6)
+  'Sign in to send your plat': 'Entra para enviar tu plat',
+  'We keep the plat on your account for the drafter, so it needs an email. The file you picked stays here while you sign in.': 'Guardamos el plat en tu cuenta para el dibujante, por eso necesitamos tu correo. El archivo que elegiste se queda aquí mientras entras.',
+  'Go on without the plat': 'Seguir sin el plat',
+  'kept here while you sign in': 'se queda aquí mientras entras',
+  'Plat (PDF)': 'Plat en PDF',
+  'Plat (photo)': 'Plat en foto',
+  'To upload your plat, sign in with your email: we keep it on your account for the drafter.': 'Para subir tu plat, entra con tu correo: lo guardamos en tu cuenta para el dibujante.',
+  'We found {listed}. The street is spelled a little differently from what you typed: check that it is your lot; the drafter checks it too.': 'Encontramos {listed}. La calle se escribe un poco distinto de como la escribiste: revisa que sea tu lote; el dibujante también lo revisa.',
   // round 15, send (lead)
   "Our drafter will check your lot first, usually within 1 business day. You don't need to do anything.": 'Nuestro dibujante revisa tu lote primero, por lo general en 1 día hábil. No tienes que hacer nada.',
   'We corrected your lot from the county records or your plat. Look at the plan on the corrected lot, then send it again.': 'Corregimos tu lote con los registros del condado o con tu plat. Revisa el plano sobre el lote corregido y vuelve a enviarlo.',

@@ -387,8 +387,9 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
       const addressOnly = !hasRooms && !lotOnly && !body.lot && typed.length >= 5
       // round 15, B5: a plat uploaded with no address and no size typed yet is saved too, so the drafter sees it at once
       const platOnly = !hasRooms && !lotOnly && !body.lot && !addressOnly && typeof body.platId === 'string'
+      const withPlat = !hasRooms && !lotOnly && !body.lot && typeof body.platId === 'string' // an address and a plat, or a plat alone
       let platRec = null
-      if (platOnly) {
+      if (withPlat) {
         platRec = await lots.plat(body.platId)
         if (!platRec || platRec.owner !== user.id) throw fail(400, 'We do not have that plat for this account. Upload it again, or type the lot in.')
       }
@@ -408,7 +409,7 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
         status: 'drafting',
         // where the homeowner is: 'style', 'rooms' or 'draft' (resume opens that step)
         stage: hasRooms ? 'draft' : addressOnly || platOnly ? 'lot' : stageOf(body.stage, 'style'),
-        ...(platOnly ? { platId: platRec.platId, plat: platView(platRec) } : {}),
+        ...(withPlat ? { platId: platRec.platId, plat: platView(platRec) } : {}),
         changesAllowed: await allowanceDefault(),
         changesUsed: 0,
         allowanceLog: [],
@@ -532,8 +533,19 @@ export function makeProjects({ env = process.env, store, interpreter, event, log
     },
 
     // lot, style, program, and (when the program changed) regenerated rooms as a free version
-    async update(p, body) {
+    async update(p, body, { user = null } = {}) {
       if (!EDITABLE.includes(p.status)) throw fail(409, 'the design is with the drafters; it cannot change now')
+      // round 15, B5: a plat uploaded on a house that has only its address so far (no lot taken) goes with the house,
+      // so the drafter sees it in the queue at once. Only the account's own plat.
+      if (typeof body.platId === 'string' && !body.lot) {
+        const rec = await lots.plat(body.platId)
+        if (!rec || !user || rec.owner !== user.id) throw fail(400, 'We do not have that plat for this account. Upload it again, or type the lot in.')
+        if (!p.lot) {
+          p.platId = rec.platId
+          p.plat = platView(rec)
+          await lots.platUsed(rec.platId, p.id)
+        }
+      }
       if (body.lot) {
         await this.checkLot(body.lot)
         p.lot = body.lot

@@ -483,6 +483,12 @@ export default function DraftApp({ admin = false, review = false, lot514 = false
               saveDraft({ lot: taken, program, ...(style ? { style: { id: style.id, name: style.name } } : {}) }, 'style')
             }}
             onBack={() => go(0)}
+            onPlatSaved={(platId) => {
+              // round 15, B5: a plat uploaded with nothing typed is a house in the drafter's queue at once; a house
+              // saved with its address only gets the plat too. A lot already taken keeps its own (it goes with the lot).
+              if (!user || projectRef.current?.lot) return
+              saveDraft({ platId, ...(intake?.address && !projectRef.current ? { address: intake.address } : {}) }, 'lot')
+            }}
           />
         )}
         {!office && step === 2 && (

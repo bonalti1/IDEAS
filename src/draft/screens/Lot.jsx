@@ -11,6 +11,7 @@ import RulesPanel from '../RulesPanel.jsx'
 import { parcelSpec, lotSides } from '../lib/parcel-spec.js'
 import { plainReason } from '../lib/plain.js'
 import { useLang, placeName } from '../lib/i18n.js'
+import { platKind } from '../lib/pending-plat.js'
 
 export { parcelSpec }
 
@@ -183,7 +184,7 @@ const plain = (err, wrap, say = (s) => s) => {
   return s[0].toUpperCase() + s.slice(1) + '.'
 }
 
-export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
+export default function Lot({ intake, lot: saved, onNext, onBack, user, onPlatSaved }) {
   // round 14: the county map, the address service and the flood map answer only for an account. A visitor trying
   // the app without one is told so once, in a line with the way in; they got "(sign in first)" three times.
   const guest = !user
@@ -312,6 +313,8 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
     setReadErr('')
     try {
       const res = await api.readPlat({ name: f.name, data: await fileToBase64(f) })
+      // round 15, B5: the plat is on file for the drafter now; the house is saved with it before anything is typed
+      if (res.platId) onPlatSaved?.(res.platId)
       if (res.unread || !(res.calls?.length >= 3)) {
         // the file is kept for the drafter; the homeowner goes on by the address or by the size printed on the plat.
         // A lot already found on the county map stays; numbers typed and ticked stay; the 100 by 150 guess does not.
@@ -327,7 +330,7 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
       }
     } catch (e) {
       // the server's own sentence when it gave one (too big, not a PDF or a photo); never a browser error like "Failed to fetch"
-      setReadErr(e.status === 400 || e.status === 413 || e.status === 429 ? e.message : t('We could not send the file just now. Check your connection and try again, or type the lot in.'))
+      setReadErr(e.status === 401 ? t('To upload your plat, sign in with your email: we keep it on your account for the drafter.') : e.status === 400 || e.status === 413 || e.status === 429 ? e.message : t('We could not send the file just now. Check your connection and try again, or type the lot in.'))
     }
     setReading(false)
   }
@@ -490,7 +493,8 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
             {addressOk === false && <p className="fine">{t('Then we did not find your address. Type the lot in below, or go back and check the street number and the direction (N, S, E, W).')}</p>}
           </div>
         )}
-        {geo && !geo.found && <p className="fine warn">{say(geo.note)}</p>}
+        {/* round 15, U6: the county map found the lot (a street one letter off): its card says so; no "could not find" above it */}
+        {geo && !geo.found && parcel?.match !== 'one' && <p className="fine warn" data-testid="geo-not-found">{say(geo.note)}</p>}
         {!geo && address && !geoErr && !saved?.spec && !guest && <p className="fine">{t('Looking the address up…')}</p>}
         {guest && address && !saved?.spec && (
           <p className="fine warn" data-testid="guest-lookup">
@@ -529,7 +533,13 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
                 <span className="muted">{t('Left and right are as you face the lot from the street.')}</span>
               </div>
             )}
-            {parcel.confidence === 'near' && parcel.listedAs && <p className="fine warn" data-testid="listed-as">{t('The county address map puts {address} on this parcel; the appraisal district lists it as {listed}. Check that it is your lot; the drafter checks it too.', { address: String(address).split(',')[0], listed: parcel.listedAs })}</p>}
+            {/* round 15, U6: a street one letter off ("Kiskade"): said plainly, the county's spelling shown */}
+            {parcel.confidence === 'near' && parcel.listedAs && parcel.nearWhy === 'street' && (
+              <p className="fine warn" data-testid="listed-as-street">
+                {t('We found {listed}. The street is spelled a little differently from what you typed: check that it is your lot; the drafter checks it too.', { listed: parcel.listedAs })}
+              </p>
+            )}
+            {parcel.confidence === 'near' && parcel.listedAs && parcel.nearWhy !== 'street' && <p className="fine warn" data-testid="listed-as">{t('The county address map puts {address} on this parcel; the appraisal district lists it as {listed}. Check that it is your lot; the drafter checks it too.', { address: String(address).split(',')[0], listed: parcel.listedAs })}</p>}
             {!parcel.large && parcel.corner && <p className="fine">{t('A corner lot: the side on {streets} keeps the wider open space the city asks for along a street.', { streets: (parcel.streets || []).filter((s) => s.role === 'side').map((s) => s.name).join(` ${t('and')} `) })}</p>}
             {!parcel.large && parcel.frontBy && parcel.frontBy !== 'named-road' && <p className="fine warn">{t('The street map did not show which side faces the street, so the street side is our best guess; the drafter checks it.')}</p>}
             <p className="fine">
@@ -652,10 +662,21 @@ export default function Lot({ intake, lot: saved, onNext, onBack, user }) {
 
         {mode === 'plat' && (
           <>
-            <label className={'drop' + (file ? ' has-file' : '')}>
-              <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => readFile(e.target.files?.[0] || null)} hidden />
-              <span>{reading ? t('Reading the plat…') : file ? <b>{file.name}</b> : <b>{t('Upload the plat or survey (PDF or photo)')}</b>}</span>
-            </label>
+            {/* round 15, D2: a plat is uploaded only from an account; without one, a plain line with the way in, never a
+                drop zone that ends in an error */}
+            {guest ? (
+              <p className="fine" data-testid="plat-guest">
+                {t('To upload your plat, sign in with your email: we keep it on your account for the drafter.')}{' '}
+                <button className="linkish" onClick={onBack} data-testid="plat-guest-sign-in">
+                  {t('Sign in')}
+                </button>
+              </p>
+            ) : (
+              <label className={'drop' + (file ? ' has-file' : '')}>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => readFile(e.target.files?.[0] || null)} hidden />
+                <span>{reading ? t('Reading the plat…') : file ? <b>{platKind(file) === 'Plat (PDF)' ? t('Plat (PDF)') : t('Plat (photo)')}</b> : <b>{t('Upload the plat or survey (PDF or photo)')}</b>}</span>
+              </label>
+            )}
             {readErr && <p className="fine bad">{say(readErr)}</p>}
             {read && (
               <div className="card thin">

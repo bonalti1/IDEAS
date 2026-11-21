@@ -219,9 +219,9 @@ route('POST', '/api/projects', 'user', async (req, res, p, ctx) => {
 route('GET', '/api/projects/:id', 'user', async (req, res, p, ctx) => json(res, 200, await projects.detail(await projects.load(ctx.user, p.id, { drafter: users.isDrafter(ctx.user) }), { drafter: users.isDrafter(ctx.user) }), req))
 route('PUT', '/api/projects/:id', 'user', async (req, res, p, ctx) => {
   const prj = await projects.load(ctx.user, p.id)
-  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?', stage: 'string?' })
+  const body = await readJson(req, { rooms: 'array?', style: 'object?', program: 'object?', lot: 'object?', client: 'string?', note: 'string?', stage: 'string?', platId: 'string?' })
   if (body.lot) body.lot = await projects.ownerLot(body.lot, prj.lot, { mayLookup: () => mayLookup(req, ctx), user: ctx.user })
-  json(res, 200, await projects.update(prj, body), req)
+  json(res, 200, await projects.update(prj, body, { user: ctx.user }), req)
 })
 route('POST', '/api/projects/:id/change', 'user', async (req, res, p, ctx) => {
   // lang: the language of the client's screen ('es' or 'en'); without it the answer follows the language of the text (round 13)

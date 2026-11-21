@@ -24,7 +24,7 @@ const CHROME = chromePath()
 const skip = !CHROME && 'no Chrome found (set CHROME=/path/to/chrome)'
 const OUT = shotDir('round14')
 const PLAT = 'test/fixtures/garza-site-plan.png'
-const OFFICE_WORDS = /Claude|API key|office key|reader needs|503|Census geocoder|unverified|Lot 514|Villa-Rama/i
+const OFFICE_WORDS = /Claude|API key|office key|reader needs|\b503\b|Census geocoder|unverified|Lot 514|Villa-Rama/i
 
 async function startApi(t, env = {}) {
   const port = await freePort()
